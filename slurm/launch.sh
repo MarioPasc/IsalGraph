@@ -128,6 +128,8 @@ submit_benchmark() {
         --mem=${mem_gb}G \
         --constraint=${CONSTRAINT} \
         --account=${ACCOUNT} \
+        --chdir=${REPO_DIR} \
+        --export=ALL,ISALGRAPH_REPO_DIR=${REPO_DIR} \
         ${worker_script}"
 
     echo "[${bench_name}]"
