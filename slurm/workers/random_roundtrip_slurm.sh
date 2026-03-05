@@ -27,11 +27,11 @@ with open('slurm/config.yaml') as f:
 print(cfg['results_dir'])
 ")
 BENCH_CFG=$(python3 -c "
-import yaml, json
+import yaml, json, sys
 with open('slurm/config.yaml') as f:
     cfg = yaml.safe_load(f)
 json.dump(cfg['benchmarks']['random_roundtrip'], sys.stdout)
-" 2>/dev/null || echo '{}')
+")
 
 NUM_TESTS=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('num_tests', 10000))")
 MAX_STRING_LEN=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('max_string_len', 100))")
