@@ -221,5 +221,5 @@ class TestGraphDistance:
         g.add_edge(0, 1)
         # Node 2 is disconnected
 
-        with pytest.raises(ValueError, match="reachable"):
+        with pytest.raises(ValueError, match="reach all"):
             canonical_string(g)

@@ -25,7 +25,7 @@ def _make_relabeled_pair(
     nodes = list(g.nodes())
     perm = list(nodes)
     rng.shuffle(perm)
-    mapping = dict(zip(nodes, perm))
+    mapping = dict(zip(nodes, perm, strict=True))
     g2 = nx.relabel_nodes(g, mapping)
     return g, g2
 
