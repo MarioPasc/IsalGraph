@@ -10,7 +10,7 @@ results_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph
 conda_env: isalgraph
 
 # SLURM defaults
-constraint: sr            # AMD EPYC 128-core, 439GB RAM
+constraint: cpu           # Any CPU node (Picasso recommended default)
 account: tic_163_uma
 
 # Per-benchmark configuration
