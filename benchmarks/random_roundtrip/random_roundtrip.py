@@ -372,7 +372,7 @@ def run_benchmark(
     max_nodes: int,
     seed: int,
     output_dir: str,
-) -> BenchmarkSummary:
+) -> tuple[BenchmarkSummary, list[TestResult]]:
     """Run the full Phase 2 random round-trip benchmark.
 
     Args:
@@ -383,7 +383,7 @@ def run_benchmark(
         output_dir: Directory for saving results JSON.
 
     Returns:
-        BenchmarkSummary with aggregate statistics.
+        Tuple of (BenchmarkSummary, list of individual TestResults).
     """
     rng = random.Random(seed)
     summary = BenchmarkSummary()
@@ -581,7 +581,354 @@ def run_benchmark(
         json.dump(results_json, f, indent=2)
     print(f"Results saved to: {output_path}")
 
-    return summary
+    return summary, all_results
+
+
+# ---------------------------------------------------------------------------
+# Parallel execution support
+# ---------------------------------------------------------------------------
+
+
+def _parallel_roundtrip_string(
+    args_tuple: tuple[int, str, bool],
+) -> TestResult:
+    """Worker for ProcessPoolExecutor: roundtrip from string."""
+    test_id, instr_string, directed = args_tuple
+    return _roundtrip_from_string(test_id, instr_string, directed)
+
+
+def _parallel_roundtrip_nx(
+    args_tuple: tuple[int, str, Any, bool],
+) -> TestResult:
+    """Worker for ProcessPoolExecutor: roundtrip from NX graph."""
+    test_id, source_name, nx_graph, directed = args_tuple
+    return _roundtrip_from_nx(test_id, source_name, nx_graph, directed)
+
+
+def run_benchmark_parallel(
+    num_tests: int,
+    max_string_len: int,
+    max_nodes: int,
+    seed: int,
+    output_dir: str,
+    n_workers: int = 4,
+) -> tuple[BenchmarkSummary, list[TestResult]]:
+    """Run benchmark with ProcessPoolExecutor parallelization.
+
+    Same logic as run_benchmark but distributes tests across workers.
+    """
+    rng = random.Random(seed)
+    all_results: list[TestResult] = []
+    test_id = 0
+
+    n_string_tests = max(num_tests * 2 // 5, 10)
+
+    print(f"Phase 2 Random Round-Trip (parallel, {n_workers} workers)")
+    print(f"{'=' * 60}")
+    print(f"Total tests target: {num_tests}, Seed: {seed}")
+    print()
+
+    # ---- Prepare all tasks ----
+    string_tasks: list[tuple[int, str, bool]] = []
+    for _ in range(n_string_tests):
+        length = rng.randint(1, max_string_len)
+        directed = rng.choice([True, False])
+        instr_string = _generate_random_string(rng, length)
+        string_tasks.append((test_id, instr_string, directed))
+        test_id += 1
+
+    nx_tasks: list[tuple[int, str, Any, bool]] = []
+    n_nx_tests = num_tests - n_string_tests
+    n_per_generator = max(n_nx_tests // 6, 2)
+
+    trees = _nx_tree_graphs(rng, n_per_generator, max_nodes)
+    for source_name, g in trees:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
+    gnp_graphs = _nx_gnp_graphs(rng, n_per_generator * 2, max_nodes, directed=False)
+    for source_name, g in gnp_graphs[:n_per_generator]:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
+    ba_graphs = _nx_ba_graphs(rng, n_per_generator, max_nodes)
+    for source_name, g in ba_graphs:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
+    special = _nx_special_graphs(max_nodes)
+    for source_name, g in special:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
+    ws_graphs = _nx_watts_strogatz_graphs(rng, n_per_generator * 2, max_nodes)
+    for source_name, g in ws_graphs[:n_per_generator]:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
+    gnp_dir = _nx_gnp_graphs(rng, n_per_generator * 2, max_nodes, directed=True)
+    for source_name, g in gnp_dir[:n_per_generator]:
+        nx_tasks.append((test_id, source_name, g, True))
+        test_id += 1
+
+    # ---- Execute in parallel ----
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    print(f"Submitting {len(string_tasks)} string tasks + {len(nx_tasks)} NX tasks...")
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        string_futures = {
+            executor.submit(_parallel_roundtrip_string, t): t[0] for t in string_tasks
+        }
+        nx_futures = {executor.submit(_parallel_roundtrip_nx, t): t[0] for t in nx_tasks}
+
+        total = len(string_futures) + len(nx_futures)
+        for done_count, fut in enumerate(as_completed({**string_futures, **nx_futures}), 1):
+            all_results.append(fut.result())
+            if done_count % max(1, total // 20) == 0:
+                print(f"  ... {done_count}/{total} done")
+
+    # ---- Aggregate (same as run_benchmark) ----
+    summary = BenchmarkSummary()
+    summary.total_tests = len(all_results)
+    summary.total_time_s = sum(r.time_s for r in all_results)
+
+    for r in all_results:
+        if r.passed:
+            summary.passed += 1
+        elif "Exception" in r.error:
+            summary.errors += 1
+        else:
+            summary.failed += 1
+
+        if r.source not in summary.results_by_source:
+            summary.results_by_source[r.source] = {"total": 0, "passed": 0, "failed": 0}
+        summary.results_by_source[r.source]["total"] += 1
+        if r.passed:
+            summary.results_by_source[r.source]["passed"] += 1
+        else:
+            summary.results_by_source[r.source]["failed"] += 1
+
+        if not r.passed:
+            summary.failures.append(
+                {
+                    "test_id": r.test_id,
+                    "source": r.source,
+                    "directed": r.directed,
+                    "num_nodes": r.num_nodes,
+                    "num_edges": r.num_edges,
+                    "error": r.error,
+                }
+            )
+
+    pass_rate = summary.passed / max(1, summary.total_tests) * 100
+    print(f"\nPassed: {summary.passed}/{summary.total_tests} ({pass_rate:.1f}%)")
+    print(f"Total time: {summary.total_time_s:.2f}s")
+
+    # Save JSON
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "random_roundtrip_results.json")
+    with open(output_path, "w") as f:
+        json.dump(
+            {
+                "benchmark": "random_roundtrip",
+                "config": {
+                    "num_tests": num_tests,
+                    "max_string_len": max_string_len,
+                    "max_nodes": max_nodes,
+                    "seed": seed,
+                    "n_workers": n_workers,
+                },
+                "summary": {
+                    "total_tests": summary.total_tests,
+                    "passed": summary.passed,
+                    "failed": summary.failed,
+                    "pass_rate_pct": round(pass_rate, 2),
+                    "total_time_s": round(summary.total_time_s, 4),
+                },
+                "results_by_source": summary.results_by_source,
+                "failures": summary.failures,
+            },
+            f,
+            indent=2,
+        )
+    print(f"Results saved to: {output_path}")
+    return summary, all_results
+
+
+# ---------------------------------------------------------------------------
+# CSV / Figure / Table generation
+# ---------------------------------------------------------------------------
+
+
+def save_csv(results: list[TestResult], output_dir: str) -> str:
+    """Save raw results as CSV."""
+    import pandas as pd
+
+    rows = []
+    for r in results:
+        rows.append(
+            {
+                "test_id": r.test_id,
+                "source": r.source,
+                "directed": r.directed,
+                "num_nodes": r.num_nodes,
+                "num_edges": r.num_edges,
+                "original_string_len": len(r.original_string),
+                "roundtrip_string_len": len(r.roundtrip_string),
+                "passed": r.passed,
+                "error": r.error,
+                "time_s": r.time_s,
+            }
+        )
+    df = pd.DataFrame(rows)
+    path = os.path.join(output_dir, "random_roundtrip_results.csv")
+    os.makedirs(output_dir, exist_ok=True)
+    df.to_csv(path, index=False)
+    print(f"CSV saved to: {path}")
+    return path
+
+
+def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
+    """Generate publication figure: 1x2 (pass rate by family + timing)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    import matplotlib.pyplot as plt  # noqa: E402
+    import numpy as np  # noqa: E402
+    from plotting_styles import (  # noqa: E402
+        FAMILY_COLORS,
+        PLOT_SETTINGS,
+        apply_ieee_style,
+        binomial_ci,
+        get_figure_size,
+        render_colored_string,
+        save_figure,
+    )
+
+    apply_ieee_style()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.45))
+
+    # ---- Panel A: Pass rate by family with CI ----
+    source_stats: dict[str, dict[str, list[Any]]] = {}
+    for r in results:
+        key = r.source
+        if key not in source_stats:
+            source_stats[key] = {"passed": [], "times": []}
+        source_stats[key]["passed"].append(r.passed)
+        source_stats[key]["times"].append(r.time_s)
+
+    families = sorted(source_stats.keys())
+    x_pos = np.arange(len(families))
+    rates = []
+    ci_lows = []
+    ci_highs = []
+    colors = []
+
+    for fam in families:
+        p_list = source_stats[fam]["passed"]
+        k = sum(p_list)
+        n = len(p_list)
+        rate = k / n
+        lo, hi = binomial_ci(k, n)
+        rates.append(rate * 100)
+        ci_lows.append((rate - lo) * 100)
+        ci_highs.append((hi - rate) * 100)
+        colors.append(FAMILY_COLORS.get(fam, "#888888"))
+
+    ax1.bar(
+        x_pos,
+        rates,
+        color=colors,
+        alpha=PLOT_SETTINGS["bar_alpha"],
+        yerr=[ci_lows, ci_highs],
+        capsize=PLOT_SETTINGS["errorbar_capsize"],
+        error_kw={"linewidth": PLOT_SETTINGS["errorbar_linewidth"]},
+    )
+    ax1.set_xticks(x_pos)
+    ax1.set_xticklabels(families, rotation=45, ha="right", fontsize=7)
+    ax1.set_ylabel("Pass Rate (%)")
+    ax1.set_ylim(95, 101)
+    ax1.set_title("(a) Round-Trip Pass Rate by Family")
+
+    # ---- Panel B: Execution time by family (box plot, log scale) ----
+    time_data = [source_stats[fam]["times"] for fam in families]
+    bp = ax2.boxplot(
+        time_data,
+        tick_labels=families,
+        patch_artist=True,
+        widths=PLOT_SETTINGS["boxplot_width"],
+        flierprops={"markersize": PLOT_SETTINGS["boxplot_flier_size"]},
+    )
+    for patch, color in zip(bp["boxes"], colors, strict=False):
+        patch.set_facecolor(color)
+        patch.set_alpha(PLOT_SETTINGS["bar_alpha"])
+    ax2.set_yscale("log")
+    ax2.set_ylabel("Time per test (s)")
+    ax2.set_title("(b) Execution Time by Family")
+    ax2.tick_params(axis="x", rotation=45)
+    for label in ax2.get_xticklabels():
+        label.set_fontsize(7)
+        label.set_ha("right")
+
+    # ---- Bonus: colored string inset ----
+    passed_results = [r for r in results if r.passed and r.roundtrip_string]
+    if passed_results:
+        longest = max(passed_results, key=lambda r: len(r.roundtrip_string))
+        sample_str = longest.roundtrip_string[:40]
+        inset_ax = fig.add_axes([0.55, 0.02, 0.4, 0.06])
+        inset_ax.set_xlim(0, 1)
+        inset_ax.set_ylim(0, 1)
+        inset_ax.axis("off")
+        render_colored_string(inset_ax, sample_str, 0.02, 0.3, fontsize=6)
+
+    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    paths = save_figure(fig, os.path.join(output_dir, "random_roundtrip_figure"))
+    plt.close(fig)
+    print(f"Figure saved: {paths}")
+    return paths
+
+
+def generate_table(results: list[TestResult], output_dir: str) -> str:
+    """Generate LaTeX table: pass rate and timing by family."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    import pandas as pd  # noqa: E402
+    from plotting_styles import binomial_ci, save_latex_table  # noqa: E402
+
+    rows = []
+    source_stats: dict[str, list[TestResult]] = {}
+    for r in results:
+        source_stats.setdefault(r.source, []).append(r)
+
+    for fam in sorted(source_stats):
+        fam_results = source_stats[fam]
+        n = len(fam_results)
+        k = sum(1 for r in fam_results if r.passed)
+        rate = k / n
+        lo, hi = binomial_ci(k, n)
+        times = [r.time_s for r in fam_results]
+        max_nodes = max(r.num_nodes for r in fam_results)
+        max_edges = max(r.num_edges for r in fam_results)
+        rows.append(
+            {
+                "Family": fam,
+                "N_tests": n,
+                "Pass_rate": f"{rate * 100:.1f}\\%",
+                "95\\% CI": f"[{lo * 100:.1f}, {hi * 100:.1f}]",
+                "Mean_time_ms": f"{sum(times) / len(times) * 1000:.1f}",
+                "Median_time_ms": f"{sorted(times)[len(times) // 2] * 1000:.1f}",
+                "Max_nodes": max_nodes,
+                "Max_edges": max_edges,
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    path = os.path.join(output_dir, "random_roundtrip_table.tex")
+    save_latex_table(
+        df,
+        path,
+        caption="Round-trip pass rate and execution time by graph family.",
+        label="tab:roundtrip",
+    )
+    print(f"Table saved to: {path}")
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -624,16 +971,54 @@ def main() -> None:
         default=DEFAULT_OUTPUT_DIR,
         help=f"Output directory for results JSON (default: {DEFAULT_OUTPUT_DIR}).",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["local", "picasso"],
+        default="local",
+        help="Execution mode (default: local).",
+    )
+    parser.add_argument(
+        "--n-workers",
+        type=int,
+        default=1,
+        help="Number of parallel workers (default: 1 = sequential).",
+    )
+    parser.add_argument("--csv", action="store_true", help="Save results as CSV.")
+    parser.add_argument("--plot", action="store_true", help="Generate publication figure.")
+    parser.add_argument("--table", action="store_true", help="Generate LaTeX table.")
 
     args = parser.parse_args()
 
-    summary = run_benchmark(
-        num_tests=args.num_tests,
-        max_string_len=args.max_string_len,
-        max_nodes=args.max_nodes,
-        seed=args.seed,
-        output_dir=args.output_dir,
-    )
+    # In picasso mode, default to all outputs
+    if args.mode == "picasso":
+        args.csv = True
+        args.plot = True
+        args.table = True
+
+    if args.n_workers > 1:
+        summary, all_results = run_benchmark_parallel(
+            num_tests=args.num_tests,
+            max_string_len=args.max_string_len,
+            max_nodes=args.max_nodes,
+            seed=args.seed,
+            output_dir=args.output_dir,
+            n_workers=args.n_workers,
+        )
+    else:
+        summary, all_results = run_benchmark(
+            num_tests=args.num_tests,
+            max_string_len=args.max_string_len,
+            max_nodes=args.max_nodes,
+            seed=args.seed,
+            output_dir=args.output_dir,
+        )
+
+    if args.csv:
+        save_csv(all_results, args.output_dir)
+    if args.plot:
+        generate_figure(all_results, args.output_dir)
+    if args.table:
+        generate_table(all_results, args.output_dir)
 
     # Exit with non-zero code if any test failed (useful for CI).
     if summary.failed > 0:

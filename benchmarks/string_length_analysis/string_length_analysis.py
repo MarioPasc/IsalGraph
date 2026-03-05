@@ -284,7 +284,7 @@ def run_analysis(
     output_dir: str,
     max_nodes: int = 100,
     compute_canonical: bool = True,
-) -> AnalysisSummary:
+) -> tuple[AnalysisSummary, list[dict[str, Any]]]:
     """Run the full string length analysis."""
     rng = random.Random(seed)
     summary = AnalysisSummary()
@@ -396,7 +396,297 @@ def run_analysis(
         )
     print(f"Results saved to: {output_path}")
 
-    return summary
+    return summary, summary.records
+
+
+# ---------------------------------------------------------------------------
+# CSV output
+# ---------------------------------------------------------------------------
+
+
+def save_csv(records: list[dict[str, Any]], output_dir: str) -> str:
+    """Save analysis records as CSV using pandas.
+
+    Args:
+        records: List of record dicts from AnalysisSummary.records.
+        output_dir: Directory to write the CSV file.
+
+    Returns:
+        Path to the saved CSV file.
+    """
+    import pandas as pd
+
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "string_length_analysis.csv")
+    df = pd.DataFrame(records)
+    df.to_csv(path, index=False)
+    print(f"CSV saved to: {path}")
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Figure generation (2x2 panel)
+# ---------------------------------------------------------------------------
+
+
+def _get_family_color(family: str) -> str:
+    """Resolve a family name to its color from FAMILY_COLORS.
+
+    Falls back to grey for unknown families. Handles gnp_pX.X -> gnp mapping.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from plotting_styles import FAMILY_COLORS  # noqa: E402
+
+    if family in FAMILY_COLORS:
+        return FAMILY_COLORS[family]
+    # Try prefix matching (e.g. gnp_p0.3 -> gnp, ws_k4 -> watts_strogatz)
+    prefix_map = {
+        "gnp_p": "gnp",
+        "ws_k": "watts_strogatz",
+        "ba_m": "barabasi_albert",
+    }
+    for prefix, key in prefix_map.items():
+        if family.startswith(prefix):
+            # Check if exact family key exists first (e.g. ba_m1)
+            if family in FAMILY_COLORS:
+                return FAMILY_COLORS[family]
+            return FAMILY_COLORS.get(key, "#BBBBBB")
+    return "#BBBBBB"
+
+
+def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]:
+    """Generate a 2x2 publication-quality figure of string length analysis.
+
+    Panel A (top-left): Log-log scatter of greedy_length_best vs num_nodes.
+    Panel B (top-right): Scatter of compression_ratio vs density.
+    Panel C (bottom-left): Bar chart of mean compression ratio by family.
+    Panel D (bottom-right): Canonical vs greedy length scatter.
+
+    Args:
+        records: List of record dicts from AnalysisSummary.records.
+        output_dir: Directory to save the figure.
+
+    Returns:
+        List of saved file paths.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    import matplotlib.pyplot as plt  # noqa: E402
+    import numpy as np  # noqa: E402
+    from plotting_styles import (  # noqa: E402
+        PLOT_SETTINGS,
+        apply_ieee_style,
+        get_figure_size,
+        save_figure,
+    )
+
+    apply_ieee_style()
+
+    fig, axes = plt.subplots(2, 2, figsize=get_figure_size("double", 0.85))
+    ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+
+    # Collect unique families and their colors
+    families_seen: dict[str, str] = {}
+    for r in records:
+        fam = r["family"]
+        if fam not in families_seen:
+            families_seen[fam] = _get_family_color(fam)
+
+    # ---- Panel A: Log-log scatter (greedy_length_best vs num_nodes) ----
+    for fam, color in families_seen.items():
+        fam_recs = [r for r in records if r["family"] == fam and r["greedy_length_best"] >= 0]
+        if not fam_recs:
+            continue
+        xs = [r["num_nodes"] for r in fam_recs]
+        ys = [r["greedy_length_best"] for r in fam_recs]
+        ax_a.scatter(
+            xs,
+            ys,
+            c=color,
+            label=fam,
+            s=PLOT_SETTINGS["scatter_size"],
+            alpha=PLOT_SETTINGS["scatter_alpha"],
+            edgecolors="white",
+            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
+        )
+
+    # Reference lines
+    all_nodes = [r["num_nodes"] for r in records if r["greedy_length_best"] >= 0]
+    if all_nodes:
+        x_ref = np.linspace(max(min(all_nodes), 2), max(all_nodes), 100)
+        ax_a.plot(x_ref, x_ref, "--", color="0.5", linewidth=0.8, label=r"$y = N$")
+        ax_a.plot(x_ref, x_ref**2, ":", color="0.3", linewidth=0.8, label=r"$y = N^2$")
+
+    ax_a.set_xscale("log")
+    ax_a.set_yscale("log")
+    ax_a.set_xlabel("Number of nodes $N$")
+    ax_a.set_ylabel("Greedy string length $|w|$")
+    ax_a.set_title("(A) String length vs graph size")
+    ax_a.legend(fontsize=6, ncol=2, loc="upper left")
+
+    # ---- Panel B: Scatter (compression_ratio vs density) ----
+    for fam, color in families_seen.items():
+        fam_recs = [r for r in records if r["family"] == fam and r["compression_ratio"] >= 0]
+        if not fam_recs:
+            continue
+        xs = [r["density"] for r in fam_recs]
+        ys = [r["compression_ratio"] for r in fam_recs]
+        ax_b.scatter(
+            xs,
+            ys,
+            c=color,
+            label=fam,
+            s=PLOT_SETTINGS["scatter_size"],
+            alpha=PLOT_SETTINGS["scatter_alpha"],
+            edgecolors="white",
+            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
+        )
+
+    ax_b.set_xlabel("Edge density $\\rho$")
+    ax_b.set_ylabel("Compression ratio $|w| / N^2$")
+    ax_b.set_title("(B) Compression vs density")
+    ax_b.legend(fontsize=6, ncol=2, loc="upper left")
+
+    # ---- Panel C: Bar chart (mean compression ratio by family) ----
+    family_ratios: dict[str, list[float]] = {}
+    for r in records:
+        if r["compression_ratio"] >= 0:
+            family_ratios.setdefault(r["family"], []).append(r["compression_ratio"])
+
+    # Only families with >= 3 data points
+    bar_families = [f for f, vals in family_ratios.items() if len(vals) >= 3]
+    bar_families.sort(key=lambda f: sum(family_ratios[f]) / len(family_ratios[f]))
+    bar_means = [sum(family_ratios[f]) / len(family_ratios[f]) for f in bar_families]
+    bar_colors = [_get_family_color(f) for f in bar_families]
+
+    ax_c.barh(
+        range(len(bar_families)),
+        bar_means,
+        color=bar_colors,
+        alpha=PLOT_SETTINGS["bar_alpha"],
+        edgecolor="white",
+    )
+    ax_c.set_yticks(range(len(bar_families)))
+    ax_c.set_yticklabels(bar_families, fontsize=7)
+    ax_c.set_xlabel("Mean compression ratio $|w| / N^2$")
+    ax_c.set_title("(C) Mean compression by family")
+
+    # ---- Panel D: Canonical vs Greedy ----
+    can_recs = [r for r in records if r["canonical_length"] >= 0]
+    if can_recs:
+        can_xs = [r["canonical_length"] for r in can_recs]
+        can_ys = [r["greedy_length_best"] for r in can_recs]
+        can_colors = [_get_family_color(r["family"]) for r in can_recs]
+        ax_d.scatter(
+            can_xs,
+            can_ys,
+            c=can_colors,
+            s=PLOT_SETTINGS["scatter_size"] * 2,
+            alpha=PLOT_SETTINGS["scatter_alpha"],
+            edgecolors="white",
+            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
+        )
+        # y=x reference line
+        max_val = max(max(can_xs), max(can_ys))
+        ref_line = np.linspace(0, max_val * 1.1, 50)
+        ax_d.plot(ref_line, ref_line, "--", color="0.5", linewidth=0.8, label="$y = x$")
+
+        total_saved = sum(g - c for g, c in zip(can_ys, can_xs, strict=True))
+        ax_d.annotate(
+            f"Total saved: {total_saved} chars",
+            xy=(0.05, 0.95),
+            xycoords="axes fraction",
+            fontsize=PLOT_SETTINGS["annotation_fontsize"],
+            verticalalignment="top",
+        )
+        ax_d.legend(fontsize=7)
+    else:
+        ax_d.text(
+            0.5,
+            0.5,
+            "No canonical data\n(N too large)",
+            transform=ax_d.transAxes,
+            ha="center",
+            va="center",
+            fontsize=PLOT_SETTINGS["annotation_fontsize"],
+        )
+
+    ax_d.set_xlabel("Canonical string length $|w^*|$")
+    ax_d.set_ylabel("Greedy string length $|w|$")
+    ax_d.set_title("(D) Canonical vs greedy")
+
+    fig.tight_layout()
+
+    os.makedirs(output_dir, exist_ok=True)
+    base_path = os.path.join(output_dir, "string_length_analysis")
+    saved = save_figure(fig, base_path)
+    plt.close(fig)
+    print(f"Figure saved to: {saved}")
+    return saved
+
+
+# ---------------------------------------------------------------------------
+# LaTeX table generation
+# ---------------------------------------------------------------------------
+
+
+def generate_table(records: list[dict[str, Any]], output_dir: str) -> str:
+    """Generate a LaTeX summary table grouped by family.
+
+    Columns: Family, N_range, Mean_|w|, Mean_ratio, Best_ratio, Mean_time_s.
+
+    Args:
+        records: List of record dicts from AnalysisSummary.records.
+        output_dir: Directory to save the .tex file.
+
+    Returns:
+        Path to the saved .tex file.
+    """
+    import pandas as pd
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from plotting_styles import save_latex_table  # noqa: E402
+
+    # Group by family
+    family_data: dict[str, list[dict[str, Any]]] = {}
+    for r in records:
+        family_data.setdefault(r["family"], []).append(r)
+
+    rows = []
+    for family in sorted(family_data.keys()):
+        recs = family_data[family]
+        nodes = [r["num_nodes"] for r in recs]
+        lengths = [r["greedy_length_best"] for r in recs if r["greedy_length_best"] >= 0]
+        ratios = [r["compression_ratio"] for r in recs if r["compression_ratio"] >= 0]
+        times = [r["time_s"] for r in recs]
+
+        n_range = f"{min(nodes)}--{max(nodes)}" if len(nodes) > 1 else str(nodes[0])
+        mean_len = sum(lengths) / len(lengths) if lengths else -1.0
+        mean_ratio = sum(ratios) / len(ratios) if ratios else -1.0
+        best_ratio = min(ratios) if ratios else -1.0
+        mean_time = sum(times) / len(times) if times else 0.0
+
+        rows.append(
+            {
+                "Family": family,
+                "N_range": n_range,
+                "Mean_|w|": round(mean_len, 1),
+                "Mean_ratio": round(mean_ratio, 4),
+                "Best_ratio": round(best_ratio, 4),
+                "Mean_time_s": round(mean_time, 4),
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "string_length_analysis.tex")
+    save_latex_table(
+        df,
+        path,
+        caption="String length analysis by graph family.",
+        label="tab:string_length_analysis",
+    )
+    print(f"LaTeX table saved to: {path}")
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -413,14 +703,48 @@ def main() -> None:
     parser.add_argument("--output-dir", type=str, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--max-nodes", type=int, default=100)
     parser.add_argument("--no-canonical", action="store_true")
+    parser.add_argument(
+        "--mode",
+        choices=["local", "picasso"],
+        default="local",
+        help="Execution mode: local (default) or picasso (HPC).",
+    )
+    parser.add_argument(
+        "--n-workers",
+        type=int,
+        default=1,
+        help="Number of workers (kept for interface consistency).",
+    )
+    parser.add_argument("--csv", action="store_true", help="Save results as CSV.")
+    parser.add_argument("--plot", action="store_true", help="Generate 2x2 figure.")
+    parser.add_argument("--table", action="store_true", help="Generate LaTeX table.")
     args = parser.parse_args()
 
-    summary = run_analysis(
+    # In picasso mode, default all outputs to True
+    if args.mode == "picasso":
+        if not args.csv:
+            args.csv = True
+        if not args.plot:
+            args.plot = True
+        if not args.table:
+            args.table = True
+
+    summary, records = run_analysis(
         seed=args.seed,
         output_dir=args.output_dir,
         max_nodes=args.max_nodes,
         compute_canonical=not args.no_canonical,
     )
+
+    if args.csv:
+        save_csv(records, args.output_dir)
+
+    if args.plot:
+        generate_figure(records, args.output_dir)
+
+    if args.table:
+        generate_table(records, args.output_dir)
+
     if summary.errors:
         sys.exit(1)
 

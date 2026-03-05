@@ -147,9 +147,40 @@ proper typing, and comprehensive test coverage.
   starting node. This is acceptable for correctness verification but would need
   pruning/heuristics for production use on larger graphs.
 
+## Picasso HPC Scaling
+
+| # | Component | Status | Notes |
+|---|-----------|--------|-------|
+| 28 | `slurm/config.yaml` | DONE | Central config: paths, SLURM defaults, per-benchmark params |
+| 29 | `slurm/launch.sh` | DONE | Master executor: reads config, dispatches sbatch, --dry-run |
+| 30 | `slurm/workers/*_login.sh` (x4) | DONE | Login-node prep: validate env, install deps |
+| 31 | `slurm/workers/*_slurm.sh` (x4) | DONE | Compute workers: module load, run benchmark |
+| 32 | Benchmark --mode/--csv/--plot/--table | DONE | All 4 benchmarks support Picasso mode |
+| 33 | ProcessPoolExecutor parallelization | DONE | 3 benchmarks (roundtrip, canonical, levenshtein) |
+| 34 | `plotting_styles.py` extensions | DONE | INSTRUCTION_COLORS, FAMILY_COLORS, binomial_ci, bootstrap_ci, save_figure, save_latex_table |
+| 35 | Benchmark README.md (x4) | DONE | Scientific claim, method, figure/table description, running instructions |
+| 36 | `docs/DEVELOPMENT.md` | DONE | Updated with Picasso coding standards |
+
+### Per-Benchmark Outputs
+
+Each benchmark now generates (with --csv --plot --table flags):
+- **JSON**: Raw results (always)
+- **CSV**: Tabular data for downstream analysis
+- **PDF + PNG**: Publication-quality IEEE figure (Paul Tol colorblind-safe palette)
+- **LaTeX .tex**: Table ready for paper inclusion
+
+### SLURM Resource Allocation
+
+| Benchmark | Time | CPUs | RAM | Notes |
+|-----------|------|------|-----|-------|
+| random_roundtrip | 4h | 32 | 32G | 10K tests, max_nodes=50 |
+| canonical_invariance | 2d | 64 | 64G | 2K tests, max_nodes=8 |
+| string_length_analysis | 8h | 16 | 16G | max_nodes=200 |
+| levenshtein_vs_ged | 2d | 64 | 64G | 500 pairs, max_nodes=8 |
+
 ## Environment
 
 - Python 3.11 (conda env: isalgraph)
 - PyTorch 2.6.0+cu124 (CUDA 12.4, RTX 4060 8GB)
 - PyTorch Geometric 2.7.0
-- NetworkX, python-igraph, hypothesis installed
+- NetworkX, python-igraph, hypothesis, pandas, scipy, matplotlib, pyyaml installed

@@ -1,0 +1,52 @@
+# IsalGraph Benchmark Configuration for Picasso HPC
+# ===================================================
+#
+# Central config read by slurm/launch.sh and individual worker scripts.
+# Paths assume the Picasso filesystem layout.
+
+# Paths
+repo_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalGraph
+results_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph
+conda_env: isalgraph
+
+# SLURM defaults
+constraint: sr            # AMD EPYC 128-core, 439GB RAM
+account: tic_163_uma
+
+# Per-benchmark configuration
+benchmarks:
+  random_roundtrip:
+    enabled: true
+    num_tests: 10000
+    max_string_len: 100
+    max_nodes: 50
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 32
+    mem_gb: 32
+
+  canonical_invariance:
+    enabled: true
+    num_tests: 2000
+    max_nodes: 8
+    seed: 42
+    time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 64
+
+  string_length_analysis:
+    enabled: true
+    max_nodes: 200
+    seed: 42
+    time_limit: "08:00:00"
+    cpus: 16
+    mem_gb: 16
+
+  levenshtein_vs_ged:
+    enabled: true
+    max_nodes: 8
+    num_random_pairs: 500
+    seed: 42
+    time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 64
