@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from isalgraph.core.canonical import canonical_string, graph_distance, levenshtein
+from isalgraph.core.canonical import (
+    canonical_string,
+    graph_distance,
+    levenshtein,
+)
 from isalgraph.core.sparse_graph import SparseGraph
 
 # ======================================================================
@@ -223,3 +227,123 @@ class TestGraphDistance:
 
         with pytest.raises(ValueError, match="reach all"):
             canonical_string(g)
+
+
+# ======================================================================
+# Directed canonical string (exercises the 'c' branch, lines 329-345)
+# ======================================================================
+
+
+class TestCanonicalDirected:
+    """Test canonical string on directed graphs.
+
+    These tests exercise the 'c' instruction branch in _step (lines 329-345)
+    and the _is_reachable returning True for n<=1 (line 124).
+    """
+
+    def test_single_node_directed(self) -> None:
+        """Single node directed graph: canonical string is empty.
+
+        This exercises _is_reachable returning True for n<=1 (line 124)
+        via the n==0 path in canonical_string, but let's be explicit.
+        """
+        g = SparseGraph(1, directed_graph=True)
+        g.add_node()
+        assert canonical_string(g) == ""
+
+    def test_two_node_directed(self) -> None:
+        """Directed edge 0->1: canonical string should be 'V'."""
+        g = SparseGraph(2, directed_graph=True)
+        g.add_node()
+        g.add_node()
+        g.add_edge(0, 1)
+        w = canonical_string(g)
+        assert w == "V"
+
+    def test_directed_triangle_canonical(self) -> None:
+        """Directed triangle 0->1->2->0: exercises the c instruction.
+
+        The cycle 0->1->2->0 requires a back-edge (c instruction) since
+        the last edge 2->0 goes from a later node to the initial node,
+        requiring a secondary->primary edge direction.
+        """
+        g = SparseGraph(3, directed_graph=True)
+        for _ in range(3):
+            g.add_node()
+        g.add_edge(0, 1)
+        g.add_edge(1, 2)
+        g.add_edge(2, 0)
+        w = canonical_string(g)
+        # Must contain c or C for the back-edge
+        assert "c" in w or "C" in w
+        # Verify round-trip
+        from isalgraph.core.string_to_graph import StringToGraph
+
+        stg = StringToGraph(w, directed_graph=True)
+        g2, _ = stg.run()
+        assert g.is_isomorphic(g2)
+
+    def test_directed_canonical_invariance(self) -> None:
+        """Two isomorphic directed graphs have same canonical string.
+
+        g1: 0->1, 0->2, 1->2
+        g2: 0->2, 0->1, 2->1 (relabeling: 1<->2)
+        """
+        g1 = SparseGraph(3, directed_graph=True)
+        for _ in range(3):
+            g1.add_node()
+        g1.add_edge(0, 1)
+        g1.add_edge(0, 2)
+        g1.add_edge(1, 2)
+
+        g2 = SparseGraph(3, directed_graph=True)
+        for _ in range(3):
+            g2.add_node()
+        g2.add_edge(0, 2)
+        g2.add_edge(0, 1)
+        g2.add_edge(2, 1)
+
+        assert canonical_string(g1) == canonical_string(g2)
+
+    def test_directed_with_bidirectional_edges(self) -> None:
+        """Directed graph with edges in both directions.
+
+        0->1, 1->0, 0->2: exercises c branch for the 1->0 back-edge.
+        """
+        g = SparseGraph(3, directed_graph=True)
+        for _ in range(3):
+            g.add_node()
+        g.add_edge(0, 1)
+        g.add_edge(1, 0)
+        g.add_edge(0, 2)
+        w = canonical_string(g)
+        # Verify round-trip
+        from isalgraph.core.string_to_graph import StringToGraph
+
+        stg = StringToGraph(w, directed_graph=True)
+        g2, _ = stg.run()
+        assert g.is_isomorphic(g2)
+
+
+# ======================================================================
+# Direct _is_reachable tests (line 124: n <= 1 early return)
+# ======================================================================
+
+
+class TestIsReachable:
+    """Direct tests for _is_reachable to hit the n<=1 early return (line 124)."""
+
+    def test_empty_graph_reachable(self) -> None:
+        """Empty graph (0 nodes): _is_reachable returns True for n<=1."""
+        from isalgraph.core.canonical import _is_reachable  # noqa: PLC2701
+
+        g = SparseGraph(0, directed_graph=False)
+        assert _is_reachable(g, 0) is True
+
+    def test_single_node_reachable(self) -> None:
+        """Single node: _is_reachable returns True for n<=1."""
+        from isalgraph.core.canonical import _is_reachable  # noqa: PLC2701
+
+        g = SparseGraph(1, directed_graph=False)
+        g.add_node()
+        assert _is_reachable(g, 0) is True

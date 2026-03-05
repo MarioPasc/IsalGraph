@@ -130,3 +130,34 @@ class TestStringToGraphInvalid:
         _, trace = stg.run(trace=True)
         # Initial state + 3 instructions = 4 snapshots.
         assert len(trace) == 4
+
+
+class TestStringToGraphPropertyAccessors:
+    """Test cdll, primary_ptr, secondary_ptr properties."""
+
+    def test_cdll_property(self) -> None:
+        stg = StringToGraph("V", directed_graph=False)
+        stg.run()
+        cdll = stg.cdll
+        # After "V": CDLL has 2 nodes (initial node + one from V).
+        assert cdll.size() == 2
+
+    def test_primary_ptr_property(self) -> None:
+        stg = StringToGraph("VN", directed_graph=False)
+        stg.run()
+        ptr = stg.primary_ptr
+        # After "VN": primary moved next from initial. ptr is a valid CDLL index.
+        assert ptr >= 0
+
+    def test_secondary_ptr_property(self) -> None:
+        stg = StringToGraph("Vn", directed_graph=False)
+        stg.run()
+        ptr = stg.secondary_ptr
+        # After "Vn": secondary moved next from initial. ptr is a valid CDLL index.
+        assert ptr >= 0
+
+    def test_ptrs_before_run(self) -> None:
+        stg = StringToGraph("V", directed_graph=False)
+        # Before run, pointers are -1 (uninitialized).
+        assert stg.primary_ptr == -1
+        assert stg.secondary_ptr == -1

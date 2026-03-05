@@ -143,3 +143,108 @@ class TestSparseGraphIsomorphism:
         g1.add_node()
         g2.add_node()
         assert g1.is_isomorphic(g2)
+
+
+class TestSparseGraphHasEdgeErrors:
+    """has_edge with invalid node IDs."""
+
+    def test_has_edge_invalid_source(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        g.add_node()
+        with pytest.raises(IndexError, match="source"):
+            g.has_edge(5, 0)
+
+    def test_has_edge_negative_source(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        with pytest.raises(IndexError, match="source"):
+            g.has_edge(-1, 0)
+
+    def test_has_edge_invalid_target(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        g.add_node()
+        with pytest.raises(IndexError, match="target"):
+            g.has_edge(0, 5)
+
+    def test_has_edge_negative_target(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        with pytest.raises(IndexError, match="target"):
+            g.has_edge(0, -1)
+
+
+class TestSparseGraphAddEdgeErrors:
+    """add_edge with invalid node IDs."""
+
+    def test_add_edge_invalid_source(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        with pytest.raises(IndexError, match="source"):
+            g.add_edge(5, 0)
+
+    def test_add_edge_negative_source(self) -> None:
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        with pytest.raises(IndexError, match="source"):
+            g.add_edge(-1, 0)
+
+
+class TestSparseGraphIsomorphismEdgeCases:
+    """Edge cases for the backtracking isomorphism checker."""
+
+    def test_not_isomorphic_with_non_sparsegraph(self) -> None:
+        """is_isomorphic returns False when other is not a SparseGraph."""
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        assert not g.is_isomorphic("not a graph")  # type: ignore[arg-type]
+
+    def test_not_isomorphic_different_directed_flag(self) -> None:
+        """is_isomorphic returns False when directed flags differ."""
+        g1 = SparseGraph(2, directed_graph=True)
+        g2 = SparseGraph(2, directed_graph=False)
+        g1.add_node()
+        g2.add_node()
+        assert not g1.is_isomorphic(g2)
+
+    def test_not_isomorphic_different_degree_sequence(self) -> None:
+        """is_isomorphic returns False when degree sequences differ."""
+        # g1: star graph (center degree 3)
+        g1 = SparseGraph(4, directed_graph=False)
+        for _ in range(4):
+            g1.add_node()
+        g1.add_edge(0, 1)
+        g1.add_edge(0, 2)
+        g1.add_edge(0, 3)
+
+        # g2: path graph (max degree 2)
+        g2 = SparseGraph(4, directed_graph=False)
+        for _ in range(4):
+            g2.add_node()
+        g2.add_edge(0, 1)
+        g2.add_edge(1, 2)
+        g2.add_edge(2, 3)
+
+        assert not g1.is_isomorphic(g2)
+
+
+class TestSparseGraphRepr:
+    """String representation."""
+
+    def test_repr_undirected(self) -> None:
+        g = SparseGraph(5, directed_graph=False)
+        g.add_node()
+        g.add_node()
+        g.add_edge(0, 1)
+        r = repr(g)
+        assert "SparseGraph" in r
+        assert "nodes=2" in r
+        assert "edges=1" in r
+        assert "directed=False" in r
+
+    def test_repr_directed(self) -> None:
+        g = SparseGraph(5, directed_graph=True)
+        g.add_node()
+        r = repr(g)
+        assert "directed=True" in r

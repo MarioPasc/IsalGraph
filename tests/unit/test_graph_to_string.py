@@ -99,3 +99,39 @@ class TestGraphToStringEdgesOnly:
         c_count = s.count("C") + s.count("c")
         assert v_count == 2
         assert c_count == 1
+
+
+class TestGraphToStringReachability:
+    """Verify reachability checking (lines 332-333)."""
+
+    def test_directed_unreachable_raises(self) -> None:
+        """Directed graph where not all nodes reachable from initial_node."""
+        # 0 -> 1, 2 -> 0 (node 2 not reachable from 0)
+        g = SparseGraph(3, directed_graph=True)
+        g.add_node()
+        g.add_node()
+        g.add_node()
+        g.add_edge(0, 1)
+        g.add_edge(2, 0)
+        gts = GraphToString(g)
+        with pytest.raises(ValueError, match="Unreachable nodes"):
+            gts.run(0)
+
+    def test_undirected_disconnected_raises(self) -> None:
+        """Undirected disconnected graph raises."""
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        g.add_node()
+        g.add_node()
+        g.add_edge(0, 1)
+        # node 2 is disconnected
+        gts = GraphToString(g)
+        with pytest.raises(ValueError, match="Unreachable nodes"):
+            gts.run(0)
+
+    def test_negative_initial_node(self) -> None:
+        g = SparseGraph(2, directed_graph=False)
+        g.add_node()
+        gts = GraphToString(g)
+        with pytest.raises(ValueError, match="out of range"):
+            gts.run(-1)

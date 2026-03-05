@@ -117,3 +117,22 @@ class TestCdllSetValue:
         n = cdll.insert_after(-1, 10)
         cdll.set_value(n, 42)
         assert cdll.get_value(n) == 42
+
+
+class TestCdllRepr:
+    """String representation."""
+
+    def test_repr_empty(self) -> None:
+        cdll = CircularDoublyLinkedList(5)
+        r = repr(cdll)
+        assert "CircularDoublyLinkedList" in r
+        assert "capacity=5" in r
+        assert "size=0" in r
+
+    def test_repr_nonempty(self) -> None:
+        cdll = CircularDoublyLinkedList(10)
+        cdll.insert_after(-1, 1)
+        cdll.insert_after(0, 2)
+        r = repr(cdll)
+        assert "size=2" in r
+        assert "capacity=10" in r
