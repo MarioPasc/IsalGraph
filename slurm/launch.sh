@@ -13,6 +13,7 @@
 #
 set -euo pipefail
 
+CONDA_ENV_NAME="isalgraph"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${SCRIPT_DIR}/config.yaml"
 
@@ -42,8 +43,10 @@ done
 # ---------------------------------------------------------------------------
 # Parse config.yaml using Python (available on Picasso login nodes)
 # ---------------------------------------------------------------------------
-conda activate isalgraph
-
+if command -v conda >/dev/null 2>&1; then
+    eval "$(conda shell.bash hook 2>/dev/null)" || true
+    conda activate "${CONDA_ENV_NAME}" 2>/dev/null || true
+fi
 parse_config() {
     python3 -c "
 import yaml, json, sys
