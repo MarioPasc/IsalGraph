@@ -42,6 +42,8 @@ done
 # ---------------------------------------------------------------------------
 # Parse config.yaml using Python (available on Picasso login nodes)
 # ---------------------------------------------------------------------------
+conda activate isalgraph
+
 parse_config() {
     python3 -c "
 import yaml, json, sys
