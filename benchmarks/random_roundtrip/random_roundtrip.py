@@ -789,97 +789,196 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
 
 
 def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
-    """Generate publication figure: 1x2 (pass rate by family + timing)."""
+    """Generate publication figure: 1x2 (time vs nodes scatter + violin).
+
+    Panel (a): Scatter plot of execution time vs number of nodes, colored
+    by graph family with power-law fit line.
+    Panel (b): Violin plot of execution time distribution by family.
+
+    Only the 6 main families (>=1000 tests each) are shown.
+    """
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     import matplotlib.pyplot as plt  # noqa: E402
     import numpy as np  # noqa: E402
     from plotting_styles import (  # noqa: E402
         FAMILY_COLORS,
+        FAMILY_MARKERS,
         PLOT_SETTINGS,
         apply_ieee_style,
-        binomial_ci,
+        family_display,
         get_figure_size,
-        render_colored_string,
         save_figure,
     )
 
     apply_ieee_style()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.45))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.5))
 
-    # ---- Panel A: Pass rate by family with CI ----
+    # ---- Aggregate data by family ----
     source_stats: dict[str, dict[str, list[Any]]] = {}
     for r in results:
         key = r.source
         if key not in source_stats:
-            source_stats[key] = {"passed": [], "times": []}
-        source_stats[key]["passed"].append(r.passed)
+            source_stats[key] = {"nodes": [], "times": []}
+        source_stats[key]["nodes"].append(r.num_nodes)
         source_stats[key]["times"].append(r.time_s)
 
-    families = sorted(source_stats.keys())
-    x_pos = np.arange(len(families))
-    rates = []
-    ci_lows = []
-    ci_highs = []
-    colors = []
-
-    for fam in families:
-        p_list = source_stats[fam]["passed"]
-        k = sum(p_list)
-        n = len(p_list)
-        rate = k / n
-        lo, hi = binomial_ci(k, n)
-        rates.append(rate * 100)
-        ci_lows.append((rate - lo) * 100)
-        ci_highs.append((hi - rate) * 100)
-        colors.append(FAMILY_COLORS.get(fam, "#888888"))
-
-    ax1.bar(
-        x_pos,
-        rates,
-        color=colors,
-        alpha=PLOT_SETTINGS["bar_alpha"],
-        yerr=[ci_lows, ci_highs],
-        capsize=PLOT_SETTINGS["errorbar_capsize"],
-        error_kw={"linewidth": PLOT_SETTINGS["errorbar_linewidth"]},
+    # Select only families with >= 1000 tests
+    main_families = sorted(
+        [fam for fam, data in source_stats.items() if len(data["times"]) >= 1000]
     )
-    ax1.set_xticks(x_pos)
-    ax1.set_xticklabels(families, rotation=45, ha="right", fontsize=7)
-    ax1.set_ylabel("Pass Rate (%)")
-    ax1.set_ylim(95, 101)
-    ax1.set_title("(a) Round-Trip Pass Rate by Family")
 
-    # ---- Panel B: Execution time by family (box plot, log scale) ----
-    time_data = [source_stats[fam]["times"] for fam in families]
-    bp = ax2.boxplot(
-        time_data,
-        tick_labels=families,
-        patch_artist=True,
-        widths=PLOT_SETTINGS["boxplot_width"],
-        flierprops={"markersize": PLOT_SETTINGS["boxplot_flier_size"]},
+    total_tests = len(results)
+    total_passed = sum(1 for r in results if r.passed)
+
+    # ---- Panel (a): Scatter of time vs num_nodes, colored by family ----
+    all_nodes: list[float] = []
+    all_times: list[float] = []
+    for fam in main_families:
+        nodes = np.array(source_stats[fam]["nodes"])
+        times = np.array(source_stats[fam]["times"])
+        color = FAMILY_COLORS.get(fam, "#888888")
+        marker = FAMILY_MARKERS.get(fam, "o")
+        ax1.scatter(
+            nodes,
+            times,
+            c=color,
+            marker=marker,
+            s=PLOT_SETTINGS["scatter_size"],
+            alpha=0.4,
+            edgecolors="none",
+            label=family_display(fam),
+            rasterized=True,
+        )
+        all_nodes.extend(nodes.tolist())
+        all_times.extend(times.tolist())
+
+    # Power-law fit: log(t) = a * log(n) + b  =>  t = e^b * n^a
+    all_nodes_arr = np.array(all_nodes)
+    all_times_arr = np.array(all_times)
+    # Filter out zero/negative values for log fitting
+    mask = (all_nodes_arr > 0) & (all_times_arr > 0)
+    log_n = np.log(all_nodes_arr[mask])
+    log_t = np.log(all_times_arr[mask])
+    if len(log_n) > 2:
+        coeffs = np.polyfit(log_n, log_t, 1)
+        exponent, log_prefactor = coeffs[0], coeffs[1]
+        n_fit = np.linspace(all_nodes_arr[mask].min(), all_nodes_arr[mask].max(), 200)
+        t_fit = np.exp(log_prefactor) * n_fit**exponent
+        ax1.plot(
+            n_fit,
+            t_fit,
+            color="0.3",
+            linewidth=PLOT_SETTINGS["line_width_thick"],
+            linestyle="--",
+            label=f"Fit: $t \\propto n^{{{exponent:.2f}}}$",
+            zorder=5,
+        )
+
+    ax1.set_xscale("log")
+    ax1.set_yscale("log")
+    ax1.set_xlabel("Number of nodes ($n$)")
+    ax1.set_ylabel("Execution time (s)")
+    ax1.grid(axis="y")
+    ax1.legend(
+        fontsize=PLOT_SETTINGS["legend_fontsize"] - 1,
+        loc="upper left",
+        frameon=True,
+        framealpha=0.9,
+        edgecolor="0.8",
+        handletextpad=0.3,
+        borderpad=0.3,
+        labelspacing=0.3,
     )
-    for patch, color in zip(bp["boxes"], colors, strict=False):
-        patch.set_facecolor(color)
-        patch.set_alpha(PLOT_SETTINGS["bar_alpha"])
+
+    # Text box annotation with test count and pass rate
+    pass_pct = 100.0 * total_passed / total_tests if total_tests > 0 else 0.0
+    info_text = f"$N$ = {total_tests:,} | {pass_pct:.0f}% pass rate"
+    ax1.text(
+        0.97,
+        0.03,
+        info_text,
+        transform=ax1.transAxes,
+        fontsize=PLOT_SETTINGS["annotation_fontsize"],
+        ha="right",
+        va="bottom",
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="white",
+            edgecolor="0.7",
+            alpha=0.9,
+        ),
+    )
+
+    # Panel label (above axes to avoid legend overlap)
+    ax1.text(
+        -0.02,
+        1.05,
+        "(a)",
+        transform=ax1.transAxes,
+        fontsize=PLOT_SETTINGS["panel_label_fontsize"],
+        fontweight="bold",
+        va="bottom",
+        ha="left",
+    )
+
+    # ---- Panel (b): Violin plot of execution time by family ----
+    violin_data = [source_stats[fam]["times"] for fam in main_families]
+    violin_colors = [FAMILY_COLORS.get(fam, "#888888") for fam in main_families]
+
+    parts = ax2.violinplot(
+        violin_data,
+        positions=range(len(main_families)),
+        showmedians=True,
+        showextrema=False,
+    )
+
+    # Style violin bodies
+    for i, body in enumerate(parts["bodies"]):
+        body.set_facecolor(violin_colors[i])
+        body.set_edgecolor("0.3")
+        body.set_linewidth(0.6)
+        body.set_alpha(PLOT_SETTINGS["bar_alpha"])
+
+    # Style median lines
+    parts["cmedians"].set_edgecolor("white")
+    parts["cmedians"].set_linewidth(1.5)
+
+    # Add white median dots for clarity
+    for i, fam in enumerate(main_families):
+        median_val = float(np.median(source_stats[fam]["times"]))
+        ax2.scatter(
+            [i],
+            [median_val],
+            color="white",
+            edgecolors="0.3",
+            s=20,
+            zorder=4,
+            linewidths=0.5,
+        )
+
     ax2.set_yscale("log")
-    ax2.set_ylabel("Time per test (s)")
-    ax2.set_title("(b) Execution Time by Family")
-    ax2.tick_params(axis="x", rotation=45)
-    for label in ax2.get_xticklabels():
-        label.set_fontsize(7)
-        label.set_ha("right")
+    ax2.set_xticks(range(len(main_families)))
+    ax2.set_xticklabels(
+        [family_display(fam) for fam in main_families],
+        rotation=30,
+        ha="right",
+    )
+    ax2.set_ylabel("Execution time (s)")
+    ax2.grid(axis="y")
 
-    # ---- Bonus: colored string inset ----
-    passed_results = [r for r in results if r.passed and r.roundtrip_string]
-    if passed_results:
-        longest = max(passed_results, key=lambda r: len(r.roundtrip_string))
-        sample_str = longest.roundtrip_string[:40]
-        inset_ax = fig.add_axes([0.55, 0.02, 0.4, 0.06])
-        inset_ax.set_xlim(0, 1)
-        inset_ax.set_ylim(0, 1)
-        inset_ax.axis("off")
-        render_colored_string(inset_ax, sample_str, 0.02, 0.3, fontsize=6)
+    # Panel label (above axes)
+    ax2.text(
+        -0.02,
+        1.05,
+        "(b)",
+        transform=ax2.transAxes,
+        fontsize=PLOT_SETTINGS["panel_label_fontsize"],
+        fontweight="bold",
+        va="bottom",
+        ha="left",
+    )
 
-    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    fig.tight_layout()
     paths = save_figure(fig, os.path.join(output_dir, "random_roundtrip_figure"))
     plt.close(fig)
     print(f"Figure saved: {paths}")

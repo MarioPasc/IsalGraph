@@ -333,6 +333,70 @@ FAMILY_COLORS: dict[str, str] = {
     "random_string": "#332288",
 }
 
+# =============================================================================
+# Display Names (human-readable labels for plots)
+# =============================================================================
+
+FAMILY_DISPLAY_NAMES: dict[str, str] = {
+    "tree": "Tree",
+    "path": "Path",
+    "star": "Star",
+    "cycle": "Cycle",
+    "complete": "Complete",
+    "barabasi_albert": "Barabási–Albert",
+    "ba_m1": "BA (m=1)",
+    "ba_m2": "BA (m=2)",
+    "ba_m3": "BA (m=3)",
+    "gnp": "GNP",
+    "gnp_directed": "GNP (dir.)",
+    "watts_strogatz": "Watts–Strogatz",
+    "grid": "Grid",
+    "ladder": "Ladder",
+    "petersen": "Petersen",
+    "wheel": "Wheel",
+    "random_string": "Random string",
+}
+
+EXPERIMENT_DISPLAY_NAMES: dict[str, str] = {
+    "edge_edit": "Edge edit",
+    "family_pair": "Family pair",
+    "random_pair": "Random pair",
+}
+
+# Marker shapes for families (useful when colors alone are insufficient)
+FAMILY_MARKERS: dict[str, str] = {
+    "tree": "o",
+    "path": "s",
+    "star": "^",
+    "cycle": "D",
+    "complete": "v",
+    "ba_m1": "P",
+    "ba_m2": "X",
+    "ba_m3": "h",
+    "gnp": "d",
+    "gnp_directed": "<",
+    "watts_strogatz": ">",
+    "grid": "p",
+    "ladder": "H",
+    "petersen": "*",
+    "wheel": "8",
+    "random_string": "H",
+}
+
+
+def family_display(name: str) -> str:
+    """Return human-readable display name for a graph family."""
+    if name in FAMILY_DISPLAY_NAMES:
+        return FAMILY_DISPLAY_NAMES[name]
+    # Handle parameterized families: gnp_p0.3 -> "GNP p=0.3", ws_k4 -> "WS k=4"
+    if name.startswith("gnp_p"):
+        return f"GNP p={name[5:]}"
+    if name.startswith("ws_k"):
+        return f"WS k={name[4:]}"
+    if name.startswith("ba_m"):
+        return f"BA m={name[4:]}"
+    return name.replace("_", " ").title()
+
 
 # =============================================================================
 # IsalGraph-specific helper functions

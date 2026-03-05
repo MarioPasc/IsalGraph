@@ -454,13 +454,41 @@ def _get_family_color(family: str) -> str:
     return "#BBBBBB"
 
 
+def _get_family_marker(family: str) -> str:
+    """Resolve a family name to its marker from FAMILY_MARKERS.
+
+    Falls back to 'o' for unknown families. Handles gnp_pX.X and ws_kX
+    prefix matching.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from plotting_styles import FAMILY_MARKERS  # noqa: E402
+
+    if family in FAMILY_MARKERS:
+        return FAMILY_MARKERS[family]
+    # Prefix matching for parametric families
+    prefix_map = {
+        "gnp_p": "gnp",
+        "ws_k": "watts_strogatz",
+        "ba_m": "barabasi_albert",
+    }
+    for prefix, key in prefix_map.items():
+        if family.startswith(prefix):
+            return FAMILY_MARKERS.get(key, "o")
+    return "o"
+
+
 def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]:
     """Generate a 2x2 publication-quality figure of string length analysis.
 
-    Panel A (top-left): Log-log scatter of greedy_length_best vs num_nodes.
-    Panel B (top-right): Scatter of compression_ratio vs density.
-    Panel C (bottom-left): Bar chart of mean compression ratio by family.
-    Panel D (bottom-right): Canonical vs greedy length scatter.
+    Panel (a) top-left: Log-log scatter of greedy_length_best vs num_nodes,
+        with per-family markers and colors. Shared legend placed at figure
+        bottom.
+    Panel (b) top-right: Scatter of compression_ratio vs density (no legend,
+        shared from panel a).
+    Panel (c) bottom-left: Horizontal bar chart of mean compression ratio by
+        family with std-dev error bars and break-even reference line.
+    Panel (d) bottom-right: Canonical vs greedy length scatter with per-family
+        coloring.
 
     Args:
         records: List of record dicts from AnalysisSummary.records.
@@ -475,56 +503,86 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
     from plotting_styles import (  # noqa: E402
         PLOT_SETTINGS,
         apply_ieee_style,
+        family_display,
         get_figure_size,
         save_figure,
     )
 
     apply_ieee_style()
 
-    fig, axes = plt.subplots(2, 2, figsize=get_figure_size("double", 0.85))
+    fig, axes = plt.subplots(2, 2, figsize=get_figure_size("double", 0.9))
     ax_a, ax_b, ax_c, ax_d = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
 
-    # Collect unique families and their colors
-    families_seen: dict[str, str] = {}
+    scatter_size = 25
+    scatter_alpha = 0.75
+
+    # Collect unique families preserving insertion order
+    families_seen: list[str] = []
     for r in records:
         fam = r["family"]
         if fam not in families_seen:
-            families_seen[fam] = _get_family_color(fam)
+            families_seen.append(fam)
 
-    # ---- Panel A: Log-log scatter (greedy_length_best vs num_nodes) ----
-    for fam, color in families_seen.items():
+    # Legend handles collected from Panel (a) only
+    legend_handles: list[Any] = []
+    legend_labels: list[str] = []
+
+    # ---- Panel (a): Log-log scatter (greedy_length_best vs num_nodes) ----
+    for fam in families_seen:
+        color = _get_family_color(fam)
+        marker = _get_family_marker(fam)
         fam_recs = [r for r in records if r["family"] == fam and r["greedy_length_best"] >= 0]
         if not fam_recs:
             continue
         xs = [r["num_nodes"] for r in fam_recs]
         ys = [r["greedy_length_best"] for r in fam_recs]
-        ax_a.scatter(
+        h = ax_a.scatter(
             xs,
             ys,
             c=color,
-            label=fam,
-            s=PLOT_SETTINGS["scatter_size"],
-            alpha=PLOT_SETTINGS["scatter_alpha"],
+            marker=marker,
+            s=scatter_size,
+            alpha=scatter_alpha,
             edgecolors="white",
-            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
+            linewidths=0.5,
+            zorder=3,
         )
+        legend_handles.append(h)
+        legend_labels.append(family_display(fam))
 
-    # Reference lines
+    # Reference lines y=N and y=N^2
     all_nodes = [r["num_nodes"] for r in records if r["greedy_length_best"] >= 0]
     if all_nodes:
         x_ref = np.linspace(max(min(all_nodes), 2), max(all_nodes), 100)
-        ax_a.plot(x_ref, x_ref, "--", color="0.5", linewidth=0.8, label=r"$y = N$")
-        ax_a.plot(x_ref, x_ref**2, ":", color="0.3", linewidth=0.8, label=r"$y = N^2$")
+        (l1,) = ax_a.plot(x_ref, x_ref, "--", color="0.5", linewidth=0.8, zorder=2)
+        (l2,) = ax_a.plot(x_ref, x_ref**2, ":", color="0.3", linewidth=0.8, zorder=2)
+        legend_handles.extend([l1, l2])
+        legend_labels.extend([r"$|w| = N$", r"$|w| = N^2$"])
 
     ax_a.set_xscale("log")
     ax_a.set_yscale("log")
     ax_a.set_xlabel("Number of nodes $N$")
     ax_a.set_ylabel("Greedy string length $|w|$")
-    ax_a.set_title("(A) String length vs graph size")
-    ax_a.legend(fontsize=6, ncol=2, loc="upper left")
+    ax_a.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax_a.grid(axis="x", visible=False)
+    ax_a.text(
+        -0.15,
+        1.05,
+        "(a)",
+        transform=ax_a.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
 
-    # ---- Panel B: Scatter (compression_ratio vs density) ----
-    for fam, color in families_seen.items():
+    # ---- Panel (b): Scatter (compression_ratio vs density) ----
+    for fam in families_seen:
+        color = _get_family_color(fam)
+        marker = _get_family_marker(fam)
         fam_recs = [r for r in records if r["family"] == fam and r["compression_ratio"] >= 0]
         if not fam_recs:
             continue
@@ -534,76 +592,141 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
             xs,
             ys,
             c=color,
-            label=fam,
-            s=PLOT_SETTINGS["scatter_size"],
-            alpha=PLOT_SETTINGS["scatter_alpha"],
+            marker=marker,
+            s=scatter_size,
+            alpha=scatter_alpha,
             edgecolors="white",
-            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
+            linewidths=0.5,
+            zorder=3,
         )
 
     ax_b.set_xlabel("Edge density $\\rho$")
     ax_b.set_ylabel("Compression ratio $|w| / N^2$")
-    ax_b.set_title("(B) Compression vs density")
-    ax_b.legend(fontsize=6, ncol=2, loc="upper left")
+    ax_b.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax_b.grid(axis="x", visible=False)
+    ax_b.text(
+        -0.15,
+        1.05,
+        "(b)",
+        transform=ax_b.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
 
-    # ---- Panel C: Bar chart (mean compression ratio by family) ----
+    # ---- Panel (c): Horizontal bar chart (mean compression ratio) ----
     family_ratios: dict[str, list[float]] = {}
     for r in records:
         if r["compression_ratio"] >= 0:
             family_ratios.setdefault(r["family"], []).append(r["compression_ratio"])
 
-    # Only families with >= 3 data points
-    bar_families = [f for f, vals in family_ratios.items() if len(vals) >= 3]
+    # Include all families with data (>= 1 point)
+    bar_families = [f for f in family_ratios]
     bar_families.sort(key=lambda f: sum(family_ratios[f]) / len(family_ratios[f]))
     bar_means = [sum(family_ratios[f]) / len(family_ratios[f]) for f in bar_families]
+    bar_stds = [
+        (
+            (sum((v - bar_means[i]) ** 2 for v in family_ratios[f]) / len(family_ratios[f])) ** 0.5
+            if len(family_ratios[f]) > 1
+            else 0.0
+        )
+        for i, f in enumerate(bar_families)
+    ]
     bar_colors = [_get_family_color(f) for f in bar_families]
+    bar_display = [family_display(f) for f in bar_families]
 
+    y_pos = list(range(len(bar_families)))
     ax_c.barh(
-        range(len(bar_families)),
+        y_pos,
         bar_means,
+        xerr=bar_stds,
         color=bar_colors,
         alpha=PLOT_SETTINGS["bar_alpha"],
         edgecolor="white",
+        capsize=PLOT_SETTINGS["errorbar_capsize"],
+        error_kw={
+            "linewidth": PLOT_SETTINGS["errorbar_linewidth"],
+            "capthick": PLOT_SETTINGS["errorbar_capthick"],
+            "ecolor": "0.3",
+        },
     )
-    ax_c.set_yticks(range(len(bar_families)))
-    ax_c.set_yticklabels(bar_families, fontsize=7)
+    # Break-even reference line at ratio = 1.0
+    ax_c.axvline(x=1.0, color="0.5", linestyle="--", linewidth=0.8, zorder=2)
+    ax_c.set_yticks(y_pos)
+    ax_c.set_yticklabels(bar_display, fontsize=7)
     ax_c.set_xlabel("Mean compression ratio $|w| / N^2$")
-    ax_c.set_title("(C) Mean compression by family")
+    ax_c.grid(axis="y", visible=False)
+    ax_c.grid(
+        axis="x",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax_c.text(
+        -0.15,
+        1.05,
+        "(c)",
+        transform=ax_c.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
 
-    # ---- Panel D: Canonical vs Greedy ----
+    # ---- Panel (d): Canonical vs Greedy ----
     can_recs = [r for r in records if r["canonical_length"] >= 0]
     if can_recs:
-        can_xs = [r["canonical_length"] for r in can_recs]
-        can_ys = [r["greedy_length_best"] for r in can_recs]
-        can_colors = [_get_family_color(r["family"]) for r in can_recs]
-        ax_d.scatter(
-            can_xs,
-            can_ys,
-            c=can_colors,
-            s=PLOT_SETTINGS["scatter_size"] * 2,
-            alpha=PLOT_SETTINGS["scatter_alpha"],
-            edgecolors="white",
-            linewidths=PLOT_SETTINGS["scatter_edgewidth"],
-        )
+        for fam in families_seen:
+            color = _get_family_color(fam)
+            marker = _get_family_marker(fam)
+            fam_can = [r for r in can_recs if r["family"] == fam]
+            if not fam_can:
+                continue
+            cx = [r["canonical_length"] for r in fam_can]
+            cy = [r["greedy_length_best"] for r in fam_can]
+            ax_d.scatter(
+                cx,
+                cy,
+                c=color,
+                marker=marker,
+                s=30,
+                alpha=scatter_alpha,
+                edgecolors="white",
+                linewidths=0.5,
+                zorder=3,
+            )
         # y=x reference line
-        max_val = max(max(can_xs), max(can_ys))
+        all_cx = [r["canonical_length"] for r in can_recs]
+        all_cy = [r["greedy_length_best"] for r in can_recs]
+        max_val = max(max(all_cx), max(all_cy))
         ref_line = np.linspace(0, max_val * 1.1, 50)
-        ax_d.plot(ref_line, ref_line, "--", color="0.5", linewidth=0.8, label="$y = x$")
+        ax_d.plot(
+            ref_line,
+            ref_line,
+            "--",
+            color="0.5",
+            linewidth=0.8,
+            label="$y = x$",
+            zorder=2,
+        )
 
-        total_saved = sum(g - c for g, c in zip(can_ys, can_xs, strict=True))
+        total_saved = sum(g - c for g, c in zip(all_cy, all_cx, strict=True))
         ax_d.annotate(
             f"Total saved: {total_saved} chars",
-            xy=(0.05, 0.95),
+            xy=(0.95, 0.05),
             xycoords="axes fraction",
             fontsize=PLOT_SETTINGS["annotation_fontsize"],
-            verticalalignment="top",
+            verticalalignment="bottom",
+            horizontalalignment="right",
         )
-        ax_d.legend(fontsize=7)
+        ax_d.legend(fontsize=7, loc="upper left")
     else:
         ax_d.text(
             0.5,
             0.5,
-            "No canonical data\n(N too large)",
+            "No canonical data\n($N$ too large)",
             transform=ax_d.transAxes,
             ha="center",
             va="center",
@@ -612,9 +735,37 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
 
     ax_d.set_xlabel("Canonical string length $|w^*|$")
     ax_d.set_ylabel("Greedy string length $|w|$")
-    ax_d.set_title("(D) Canonical vs greedy")
+    ax_d.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax_d.grid(axis="x", visible=False)
+    ax_d.text(
+        -0.15,
+        1.05,
+        "(d)",
+        transform=ax_d.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
 
+    # ---- Shared legend at figure bottom ----
     fig.tight_layout()
+    fig.subplots_adjust(hspace=0.35, wspace=0.3, bottom=0.15)
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.02),
+        ncol=6,
+        fontsize=6.5,
+        frameon=False,
+        columnspacing=1.0,
+        handletextpad=0.4,
+        markerscale=1.2,
+    )
 
     os.makedirs(output_dir, exist_ok=True)
     base_path = os.path.join(output_dir, "string_length_analysis")

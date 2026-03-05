@@ -734,13 +734,13 @@ def save_csv(records: list[dict[str, Any]], output_dir: str) -> str:
 
 
 def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]:
-    """Generate publication figure: 1x3 (scatter, locality, ratio boxplot).
+    """Generate publication figure: 1x3 (scatter, locality, strip+box).
 
-    Panel A: Scatter of Levenshtein distance vs GED, colored by experiment type.
-             OLS regression line + Pearson r annotation.
-    Panel B: Mean Levenshtein distance vs edge-edit count k (locality property).
-             Error bands = 95% CI.
-    Panel C: Box plot of Levenshtein/GED ratio by experiment type.
+    Panel (a): Scatter of Levenshtein distance vs GED with jitter to reduce
+               overplotting. OLS regression line + Pearson r annotation.
+    Panel (b): Locality — mean Levenshtein vs edge-edit count k. Strip plot
+               of individual points with mean ± 1 SE error bars.
+    Panel (c): Strip + box overlay for Lev/GED ratio by experiment type.
 
     Args:
         records: List of record dicts from BenchmarkSummary.records.
@@ -753,6 +753,7 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
     import matplotlib.pyplot as plt  # noqa: E402
     import numpy as np  # noqa: E402
     from plotting_styles import (  # noqa: E402
+        EXPERIMENT_DISPLAY_NAMES,
         PAUL_TOL_BRIGHT,
         PLOT_SETTINGS,
         apply_ieee_style,
@@ -761,7 +762,9 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
     )
 
     apply_ieee_style()
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=get_figure_size("double", 0.4))
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=get_figure_size("double", 0.5))
+
+    rng = np.random.default_rng(42)
 
     # ---- Color map by experiment type ----
     exp_colors: dict[str, str] = {
@@ -769,13 +772,8 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
         "family_pair": PAUL_TOL_BRIGHT["red"],
         "random_pair": PAUL_TOL_BRIGHT["green"],
     }
-    exp_labels: dict[str, str] = {
-        "edge_edit": "Edge edit",
-        "family_pair": "Family pair",
-        "random_pair": "Random pair",
-    }
 
-    # ---- Panel A: Scatter — Levenshtein vs GED ----
+    # ---- Panel (a): Scatter — Levenshtein vs GED with jitter ----
     all_lev = np.array([r["levenshtein_dist"] for r in records], dtype=float)
     all_ged = np.array([r["ged"] for r in records], dtype=float)
 
@@ -783,18 +781,21 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
         mask = np.array([r["experiment"] == exp_name for r in records])
         if not mask.any():
             continue
+        n_pts = int(mask.sum())
+        jitter_x = rng.uniform(-0.15, 0.15, size=n_pts)
+        jitter_y = rng.uniform(-0.15, 0.15, size=n_pts)
         ax1.scatter(
-            all_ged[mask],
-            all_lev[mask],
+            all_ged[mask] + jitter_x,
+            all_lev[mask] + jitter_y,
             c=exp_colors[exp_name],
-            label=exp_labels[exp_name],
-            alpha=PLOT_SETTINGS["scatter_alpha"],
-            s=PLOT_SETTINGS["scatter_size"],
+            label=EXPERIMENT_DISPLAY_NAMES.get(exp_name, exp_name),
+            alpha=0.5,
+            s=20,
             edgecolors="none",
             zorder=2,
         )
 
-    # OLS regression line
+    # OLS regression line + Pearson annotation (on un-jittered data)
     if len(all_ged) >= 3:
         from scipy import stats as sp_stats  # noqa: E402
 
@@ -806,7 +807,7 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
             color="0.3",
             linewidth=PLOT_SETTINGS["line_width"],
             linestyle="--",
-            zorder=1,
+            zorder=3,
         )
         ax1.text(
             0.05,
@@ -820,35 +821,49 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
 
     ax1.set_xlabel("Graph Edit Distance")
     ax1.set_ylabel("Levenshtein Distance")
-    ax1.set_title("(a) Levenshtein vs GED")
     ax1.legend(fontsize=PLOT_SETTINGS["legend_fontsize"], loc="lower right")
+    ax1.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax1.text(-0.12, 1.08, "(a)", transform=ax1.transAxes, fontsize=12, fontweight="bold")
 
-    # ---- Panel B: Locality — mean Lev vs k for edge_edit ----
+    # ---- Panel (b): Locality — mean Lev vs k with strip + error bars ----
     edge_edit_recs = [r for r in records if r["experiment"] == "edge_edit"]
     k_values = sorted({r["edit_k"] for r in edge_edit_recs})
 
     if k_values:
         k_means = []
-        k_ci_lower = []
-        k_ci_upper = []
+        k_se = []
         for k in k_values:
-            levs = [float(r["levenshtein_dist"]) for r in edge_edit_recs if r["edit_k"] == k]
-            mean_val = np.mean(levs)
-            k_means.append(mean_val)
-            # 95% CI using standard error * 1.96
+            levs = np.array(
+                [float(r["levenshtein_dist"]) for r in edge_edit_recs if r["edit_k"] == k]
+            )
+            k_means.append(float(np.mean(levs)))
             if len(levs) >= 2:
-                se = np.std(levs, ddof=1) / np.sqrt(len(levs))
-                k_ci_lower.append(mean_val - 1.96 * se)
-                k_ci_upper.append(mean_val + 1.96 * se)
+                k_se.append(float(np.std(levs, ddof=1) / np.sqrt(len(levs))))
             else:
-                k_ci_lower.append(mean_val)
-                k_ci_upper.append(mean_val)
+                k_se.append(0.0)
 
-        k_arr = np.array(k_values)
+            # Strip plot: individual points with horizontal jitter
+            strip_jitter = rng.uniform(-0.12, 0.12, size=len(levs))
+            ax2.scatter(
+                np.full(len(levs), k) + strip_jitter,
+                levs,
+                c=exp_colors["edge_edit"],
+                alpha=0.3,
+                s=12,
+                edgecolors="none",
+                zorder=1,
+            )
+
+        k_arr = np.array(k_values, dtype=float)
         k_means_arr = np.array(k_means)
-        k_ci_lower_arr = np.array(k_ci_lower)
-        k_ci_upper_arr = np.array(k_ci_upper)
+        k_se_arr = np.array(k_se)
 
+        # Mean line (thick)
         ax2.plot(
             k_arr,
             k_means_arr,
@@ -856,23 +871,55 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
             color=exp_colors["edge_edit"],
             linewidth=PLOT_SETTINGS["line_width_thick"],
             markersize=PLOT_SETTINGS["marker_size"],
-            zorder=2,
+            zorder=3,
         )
-        ax2.fill_between(
+        # Error bars: mean ± 1 SE
+        ax2.errorbar(
             k_arr,
-            k_ci_lower_arr,
-            k_ci_upper_arr,
-            alpha=PLOT_SETTINGS["error_band_alpha"],
-            color=exp_colors["edge_edit"],
-            zorder=1,
+            k_means_arr,
+            yerr=k_se_arr,
+            fmt="none",
+            ecolor=exp_colors["edge_edit"],
+            elinewidth=PLOT_SETTINGS["errorbar_linewidth"],
+            capsize=PLOT_SETTINGS["errorbar_capsize"],
+            capthick=PLOT_SETTINGS["errorbar_capthick"],
+            zorder=2,
         )
         ax2.set_xticks(k_values)
 
-    ax2.set_xlabel("Edge edits ($k$)")
-    ax2.set_ylabel("Mean Levenshtein Distance")
-    ax2.set_title("(b) Locality Property")
+        # Jonckheere-Terpstra trend test annotation
+        try:
+            from scipy.stats import jonckheere_terpstra  # noqa: E402
 
-    # ---- Panel C: Box plot — Lev/GED ratio by experiment type ----
+            groups = [
+                [float(r["levenshtein_dist"]) for r in edge_edit_recs if r["edit_k"] == k]
+                for k in k_values
+            ]
+            jt_result = jonckheere_terpstra(groups, alternative="increasing")
+            ax2.text(
+                0.95,
+                0.05,
+                f"JT $p = {jt_result.pvalue:.1e}$",
+                transform=ax2.transAxes,
+                fontsize=PLOT_SETTINGS["annotation_fontsize"],
+                ha="right",
+                va="bottom",
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.8},
+            )
+        except (ImportError, AttributeError):
+            pass
+
+    ax2.set_xlabel("Edge edits ($k$)")
+    ax2.set_ylabel("Levenshtein Distance")
+    ax2.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax2.text(-0.12, 1.08, "(b)", transform=ax2.transAxes, fontsize=12, fontweight="bold")
+
+    # ---- Panel (c): Strip + box overlay — Lev/GED ratio by experiment ----
     ratio_data: dict[str, list[float]] = {}
     for r in records:
         if r["ged"] > 0:
@@ -882,28 +929,56 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
 
     exp_order = ["edge_edit", "family_pair", "random_pair"]
     box_data = [ratio_data.get(e, []) for e in exp_order]
-    box_labels = [exp_labels.get(e, e) for e in exp_order]
+    box_labels = [EXPERIMENT_DISPLAY_NAMES.get(e, e) for e in exp_order]
     box_colors = [exp_colors.get(e, "#888888") for e in exp_order]
 
+    # Box plot with transparent fill (no outlier markers — strip shows them)
     bp = ax3.boxplot(
         box_data,
         labels=box_labels,
         patch_artist=True,
         widths=PLOT_SETTINGS["boxplot_width"],
-        flierprops={"markersize": PLOT_SETTINGS["boxplot_flier_size"]},
+        showfliers=False,
+        zorder=2,
     )
     for patch, color in zip(bp["boxes"], box_colors, strict=False):
         patch.set_facecolor(color)
-        patch.set_alpha(PLOT_SETTINGS["bar_alpha"])
+        patch.set_alpha(0.3)
+    for element in ("whiskers", "caps", "medians"):
+        for line in bp[element]:
+            line.set_color("0.3")
+            line.set_linewidth(PLOT_SETTINGS["boxplot_linewidth"])
 
-    ax3.set_ylabel("Levenshtein / GED Ratio")
-    ax3.set_title("(c) Distance Ratio")
+    # Strip overlay: jittered individual points
+    for i, (data_pts, color) in enumerate(zip(box_data, box_colors, strict=False)):
+        if not data_pts:
+            continue
+        pts = np.array(data_pts)
+        strip_jitter = rng.uniform(-0.15, 0.15, size=len(pts))
+        ax3.scatter(
+            np.full(len(pts), i + 1) + strip_jitter,
+            pts,
+            c=color,
+            alpha=0.5,
+            s=15,
+            edgecolors="none",
+            zorder=3,
+        )
+
+    ax3.set_ylabel("Levenshtein / GED")
+    ax3.grid(
+        axis="y",
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
     ax3.tick_params(axis="x", rotation=30)
     for label in ax3.get_xticklabels():
         label.set_fontsize(PLOT_SETTINGS["tick_labelsize"] - 1)
         label.set_ha("right")
+    ax3.text(-0.12, 1.08, "(c)", transform=ax3.transAxes, fontsize=12, fontweight="bold")
 
-    plt.tight_layout()
+    fig.tight_layout()
     os.makedirs(output_dir, exist_ok=True)
     paths = save_figure(fig, os.path.join(output_dir, "levenshtein_vs_ged_figure"))
     plt.close(fig)

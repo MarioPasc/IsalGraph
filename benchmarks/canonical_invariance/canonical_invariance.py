@@ -776,11 +776,12 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
 
 
 def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
-    """Generate publication figure: 1x2 (pass rate by family + timing vs size).
+    """Generate publication figure: 1x2 (timing violin + string length box).
 
-    Panel A: Grouped bar chart -- pass rate by family with 95% Clopper-Pearson CI.
-    Panel B: Box plot -- computation time vs graph size (num_nodes), log y-axis.
-    Bonus inset: Two colored canonical strings from an isomorphic pair.
+    Panel (a): Violin + strip plot of computation time vs num_nodes with
+               exponential fit overlay. Log-scale y-axis.
+    Panel (b): Box plot of canonical string length vs num_nodes, colored by
+               test_type (invariance vs discrimination).
 
     Args:
         results: List of TestResult objects.
@@ -793,119 +794,231 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     import matplotlib.pyplot as plt  # noqa: E402
     import numpy as np  # noqa: E402
     from plotting_styles import (  # noqa: E402
-        FAMILY_COLORS,
+        PAUL_TOL_BRIGHT,
         PLOT_SETTINGS,
         apply_ieee_style,
-        binomial_ci,
         get_figure_size,
-        render_colored_string,
         save_figure,
     )
 
     apply_ieee_style()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.45))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.5))
 
-    # ---- Panel A: Grouped bar chart -- pass rate by family with CI ----
-    # Group by (test_type, source)
-    group_stats: dict[str, dict[str, list[bool]]] = {}  # source -> test_type -> [passed]
+    # ---- Shared data: group by num_nodes ----
+    node_times: dict[int, list[float]] = {}
+    node_lens_inv: dict[int, list[int]] = {}
+    node_lens_disc: dict[int, list[int]] = {}
     for r in results:
-        if r.source not in group_stats:
-            group_stats[r.source] = {}
-        if r.test_type not in group_stats[r.source]:
-            group_stats[r.source][r.test_type] = []
-        group_stats[r.source][r.test_type].append(r.passed)
+        node_times.setdefault(r.num_nodes, []).append(r.time_s)
+        c_len = max(len(r.canonical_1), len(r.canonical_2))
+        if r.test_type == "invariance":
+            node_lens_inv.setdefault(r.num_nodes, []).append(c_len)
+        else:
+            node_lens_disc.setdefault(r.num_nodes, []).append(c_len)
 
-    families = sorted(group_stats.keys())
-    test_types = ["invariance", "discrimination"]
-    x_pos = np.arange(len(families))
-    bar_width = PLOT_SETTINGS["bar_width"]
+    sizes = sorted(node_times.keys())
+    x_positions = np.arange(1, len(sizes) + 1)
+    violin_color = PAUL_TOL_BRIGHT["blue"]
 
-    for i, tt in enumerate(test_types):
-        rates = []
-        ci_lows = []
-        ci_highs = []
-        colors = []
-        for fam in families:
-            p_list = group_stats[fam].get(tt, [])
-            n = len(p_list)
-            k = sum(p_list)
-            if n > 0:
-                rate = k / n
-                lo, hi = binomial_ci(k, n)
-            else:
-                rate, lo, hi = 0.0, 0.0, 0.0
-            rates.append(rate * 100)
-            ci_lows.append((rate - lo) * 100)
-            ci_highs.append((hi - rate) * 100)
-            colors.append(FAMILY_COLORS.get(fam, "#888888"))
+    # ================================================================
+    # Panel (a): Violin + strip plot of computation time vs num_nodes
+    # ================================================================
+    time_data = [node_times[s] for s in sizes]
 
-        offset = (i - 0.5) * bar_width
-        ax1.bar(
-            x_pos + offset,
-            rates,
-            width=bar_width,
-            color=colors if i == 0 else [c + "88" for c in colors],
-            alpha=PLOT_SETTINGS["bar_alpha"],
-            yerr=[ci_lows, ci_highs],
-            capsize=PLOT_SETTINGS["errorbar_capsize"],
-            error_kw={"linewidth": PLOT_SETTINGS["errorbar_linewidth"]},
-            label=tt,
-        )
-
-    ax1.set_xticks(x_pos)
-    ax1.set_xticklabels(families, rotation=45, ha="right", fontsize=7)
-    ax1.set_ylabel("Pass Rate (%)")
-    ax1.set_ylim(90, 101)
-    ax1.set_title("(a) Canonical String Pass Rate by Family")
-    ax1.legend(fontsize=7, loc="lower left")
-
-    # ---- Panel B: Box plot -- time vs graph size (num_nodes), log y ----
-    # Bin by num_nodes
-    node_time: dict[int, list[float]] = {}
-    for r in results:
-        node_time.setdefault(r.num_nodes, []).append(r.time_s)
-
-    sizes = sorted(node_time.keys())
-    time_data = [node_time[s] for s in sizes]
-    bp = ax2.boxplot(
+    vp = ax1.violinplot(
         time_data,
-        labels=[str(s) for s in sizes],
-        patch_artist=True,
-        widths=PLOT_SETTINGS["boxplot_width"],
-        flierprops={"markersize": PLOT_SETTINGS["boxplot_flier_size"]},
+        positions=x_positions,
+        showmeans=False,
+        showmedians=True,
+        showextrema=False,
+        widths=0.7,
     )
-    for patch in bp["boxes"]:
-        patch.set_facecolor(FAMILY_COLORS.get("tree", "#4477AA"))
-        patch.set_alpha(PLOT_SETTINGS["bar_alpha"])
-    ax2.set_yscale("log")
-    ax2.set_xlabel("Number of Nodes")
-    ax2.set_ylabel("Time per test (s)")
-    ax2.set_title("(b) Computation Time vs Graph Size")
-    ax2.tick_params(axis="x", rotation=45)
-    for label in ax2.get_xticklabels():
-        label.set_fontsize(7)
-        label.set_ha("right")
+    # Style violins
+    for body in vp["bodies"]:
+        body.set_facecolor(violin_color)
+        body.set_edgecolor(PAUL_TOL_BRIGHT["blue"])
+        body.set_alpha(0.3)
+        body.set_linewidth(0.8)
+    vp["cmedians"].set_color(PAUL_TOL_BRIGHT["blue"])
+    vp["cmedians"].set_linewidth(1.2)
 
-    # ---- Bonus inset: colored canonical strings from isomorphic pair ----
-    inv_passed = [r for r in results if r.test_type == "invariance" and r.passed and r.canonical_1]
-    if inv_passed:
-        # Pick one with a reasonably long canonical string
-        sample = max(inv_passed, key=lambda r: len(r.canonical_1))
-        sample_str = sample.canonical_1[:40]
-        inset_ax = fig.add_axes([0.55, 0.01, 0.4, 0.07])
-        inset_ax.set_xlim(0, 1)
-        inset_ax.set_ylim(0, 1)
-        inset_ax.axis("off")
-        inset_ax.text(
-            0.02,
-            0.7,
-            "Isomorphic pair (same canonical):",
-            fontsize=5,
-            transform=inset_ax.transAxes,
+    # Strip plot: jittered individual points
+    rng = np.random.default_rng(42)
+    for pos, data in zip(x_positions, time_data, strict=True):
+        jitter = rng.uniform(-0.15, 0.15, size=len(data))
+        ax1.scatter(
+            pos + jitter,
+            data,
+            s=PLOT_SETTINGS["scatter_size"] * 0.6,
+            color=violin_color,
+            alpha=0.4,
+            edgecolors="none",
+            zorder=3,
         )
-        render_colored_string(inset_ax, sample_str, 0.02, 0.15, fontsize=5)
 
-    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    # Exponential fit: log(time) ~ a * N + b  =>  time ~ exp(b) * exp(a*N)
+    all_nodes = np.array([r.num_nodes for r in results], dtype=float)
+    all_times = np.array([r.time_s for r in results], dtype=float)
+    # Filter out zero/negative times for log fit
+    mask = all_times > 0
+    log_times = np.log(all_times[mask])
+    nodes_masked = all_nodes[mask]
+    # Linear regression: log(t) = a * N + b
+    a_fit, b_fit = np.polyfit(nodes_masked, log_times, 1)
+    n_smooth = np.linspace(min(sizes), max(sizes), 200)
+    # Map graph node values to x-axis positions for the fit line
+    pos_smooth = np.interp(
+        n_smooth,
+        np.array(sizes, dtype=float),
+        x_positions.astype(float),
+    )
+    t_fit = np.exp(b_fit) * np.exp(a_fit * n_smooth)
+    ax1.plot(
+        pos_smooth,
+        t_fit,
+        color=PAUL_TOL_BRIGHT["red"],
+        linewidth=PLOT_SETTINGS["line_width_thick"],
+        linestyle="--",
+        label=f"Fit: $t \\approx {np.exp(b_fit):.1e} \\cdot e^{{{a_fit:.2f}N}}$",
+        zorder=4,
+    )
+
+    ax1.set_yscale("log")
+    ax1.set_xticks(x_positions)
+    ax1.set_xticklabels([str(s) for s in sizes])
+    ax1.set_xlabel("Number of nodes $N$")
+    ax1.set_ylabel("Computation time (s)")
+    ax1.yaxis.grid(
+        True,
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax1.xaxis.grid(False)
+    ax1.legend(fontsize=PLOT_SETTINGS["legend_fontsize"], loc="upper left")
+
+    # Text box: pass count
+    total = len(results)
+    passed = sum(1 for r in results if r.passed)
+    ax1.text(
+        0.97,
+        0.03,
+        f"{passed}/{total} tests passed",
+        transform=ax1.transAxes,
+        fontsize=PLOT_SETTINGS["annotation_fontsize"],
+        ha="right",
+        va="bottom",
+        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "edgecolor": "0.7", "alpha": 0.9},
+    )
+
+    # Panel label
+    ax1.text(
+        -0.12,
+        1.05,
+        "(a)",
+        transform=ax1.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    # ================================================================
+    # Panel (b): Box plot of canonical string length vs num_nodes
+    #            colored by test_type
+    # ================================================================
+    color_inv = PAUL_TOL_BRIGHT["blue"]
+    color_disc = PAUL_TOL_BRIGHT["red"]
+    box_width = 0.35
+
+    # Prepare data arrays for each test type at each node count
+    inv_data = [node_lens_inv.get(s, []) for s in sizes]
+    disc_data = [node_lens_disc.get(s, []) for s in sizes]
+
+    # Draw invariance boxes (left offset)
+    bp_inv = ax2.boxplot(
+        inv_data,
+        positions=x_positions - box_width / 2 - 0.02,
+        widths=box_width,
+        patch_artist=True,
+        flierprops={
+            "markersize": PLOT_SETTINGS["boxplot_flier_size"],
+            "marker": ".",
+            "markerfacecolor": color_inv,
+            "markeredgecolor": "none",
+            "alpha": 0.5,
+        },
+        medianprops={"color": "black", "linewidth": 1.0},
+        whiskerprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+        capprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+        boxprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+    )
+    for patch in bp_inv["boxes"]:
+        patch.set_facecolor(color_inv)
+        patch.set_alpha(0.6)
+
+    # Draw discrimination boxes (right offset)
+    bp_disc = ax2.boxplot(
+        disc_data,
+        positions=x_positions + box_width / 2 + 0.02,
+        widths=box_width,
+        patch_artist=True,
+        flierprops={
+            "markersize": PLOT_SETTINGS["boxplot_flier_size"],
+            "marker": ".",
+            "markerfacecolor": color_disc,
+            "markeredgecolor": "none",
+            "alpha": 0.5,
+        },
+        medianprops={"color": "black", "linewidth": 1.0},
+        whiskerprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+        capprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+        boxprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+    )
+    for patch in bp_disc["boxes"]:
+        patch.set_facecolor(color_disc)
+        patch.set_alpha(0.6)
+
+    ax2.set_xticks(x_positions)
+    ax2.set_xticklabels([str(s) for s in sizes])
+    ax2.set_xlabel("Number of nodes $N$")
+    ax2.set_ylabel("Canonical string length")
+    ax2.yaxis.grid(
+        True,
+        alpha=PLOT_SETTINGS["grid_alpha"],
+        linestyle=PLOT_SETTINGS["grid_linestyle"],
+        linewidth=PLOT_SETTINGS["grid_linewidth"],
+    )
+    ax2.xaxis.grid(False)
+
+    # Legend with proxy patches
+    from matplotlib.patches import Patch
+
+    legend_handles = [
+        Patch(facecolor=color_inv, alpha=0.6, edgecolor="black", linewidth=0.5, label="Invariance"),
+        Patch(
+            facecolor=color_disc,
+            alpha=0.6,
+            edgecolor="black",
+            linewidth=0.5,
+            label="Discrimination",
+        ),
+    ]
+    ax2.legend(
+        handles=legend_handles,
+        fontsize=PLOT_SETTINGS["legend_fontsize"],
+        loc="upper left",
+    )
+
+    # Panel label
+    ax2.text(
+        -0.12,
+        1.05,
+        "(b)",
+        transform=ax2.transAxes,
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    fig.tight_layout()
     paths = save_figure(fig, os.path.join(output_dir, "canonical_invariance_figure"))
     plt.close(fig)
     print(f"Figure saved: {paths}")
