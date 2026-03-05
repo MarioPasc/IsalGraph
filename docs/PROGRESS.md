@@ -56,6 +56,8 @@ proper typing, and comprehensive test coverage.
 |---|--------|--------|-------|
 | 24 | `benchmarks/random_roundtrip.py` | DONE | 945/945 pass (100%), 12 graph families, 3.28s |
 | 25 | `benchmarks/canonical_invariance.py` | DONE | 71/71 pass (100%), invariance + discrimination, 175s |
+| 26 | `benchmarks/string_length_analysis.py` | DONE | 105 graphs, compression analysis, canonical vs greedy |
+| 27 | `benchmarks/levenshtein_vs_ged.py` | DONE | 85 pairs, Pearson r=0.83, locality confirmed |
 
 ## Code Quality
 
@@ -85,6 +87,26 @@ proper typing, and comprehensive test coverage.
 - 22 discrimination tests (non-isomorphic pairs): 100%
 - Graph families: trees, cycles, complete, star, wheel, GNP, Barabasi-Albert, ladder
 - Total time: 175.25s (avg 2.47s/test — exhaustive backtracking is expensive)
+
+### String Length Analysis (105 graphs, seed=42, max_nodes=50)
+
+- **105 graphs analyzed, 0 errors**
+- Compression ratio |w|/N²: mean=0.66, min=0.04 (star-50), max=1.95 (complete-20)
+- Sparse graphs compress well: trees 4-8% of N², BA-m1 7-10%
+- Dense graphs can exceed N²: complete at ~1.9×, dense GNP at ~1.5×
+- Stars achieve optimal compression (N-1 chars for N nodes)
+- Canonical vs greedy: nearly identical lengths (only 3 chars saved across all small graphs)
+- Theoretical Eq. 9 from preprint overestimates string length for our CDLL-based algorithm
+  on sparse graphs, and underestimates on dense graphs (expected: different instruction set)
+
+### Levenshtein vs Graph Edit Distance (85 pairs, seed=42, max_nodes=7)
+
+- **85 pairs tested, 0 errors**
+- Overall correlation: Pearson r=0.83 (p<10⁻²²), Spearman r=0.59 (p<10⁻⁹)
+- Family pairs: Pearson r=0.88 — excellent structural correlation
+- Random GNP pairs: Pearson r=0.84 — strong
+- **Locality confirmed**: k=1 edge edit → mean Levenshtein 4.2; k=4 → 6.1 (monotonically increasing)
+- Validates preprint Section 2.3: "small changes in graph → small changes in string"
 
 ## Bug Tracker
 

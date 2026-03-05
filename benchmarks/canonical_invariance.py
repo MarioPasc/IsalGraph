@@ -98,7 +98,7 @@ def _random_relabeling(g: nx.Graph | nx.DiGraph, rng: random.Random) -> nx.Graph
     nodes = list(g.nodes())
     perm = list(range(len(nodes)))
     rng.shuffle(perm)
-    mapping = {old: new for old, new in zip(nodes, perm)}
+    mapping = dict(zip(nodes, perm, strict=True))
     return nx.relabel_nodes(g, mapping)
 
 

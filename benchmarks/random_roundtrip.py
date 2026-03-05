@@ -122,10 +122,7 @@ def _generate_random_string(rng: random.Random, length: int) -> str:
             if node_count >= 2:
                 pool.extend(_EDGE_INSTRS)
             # Bias toward V/v to produce richer graphs
-            if rng.random() < 0.4:
-                instr = rng.choice(_NODE_INSTRS)
-            else:
-                instr = rng.choice(pool)
+            instr = rng.choice(_NODE_INSTRS) if rng.random() < 0.4 else rng.choice(pool)
 
         instructions.append(instr)
         if instr in ("V", "v"):
