@@ -14,10 +14,10 @@ if [[ ! -d "$REPO_DIR/src/isalgraph" ]]; then
     exit 1
 fi
 
-# Check conda env
-if ! conda env list 2>/dev/null | grep -q isalgraph; then
-    echo "WARNING: conda env 'isalgraph' not found. Creating..."
-    conda create -n isalgraph python=3.11 -y
+CONDA_ENV_NAME="isalgraph"
+if command -v conda >/dev/null 2>&1; then
+    eval "$(conda shell.bash hook 2>/dev/null)" || true
+    conda activate "${CONDA_ENV_NAME}" 2>/dev/null || true
 fi
 
 # Install package

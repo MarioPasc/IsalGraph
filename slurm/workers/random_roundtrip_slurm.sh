@@ -11,9 +11,11 @@ echo "Node:   $(hostname)"
 echo "CPUs:   ${SLURM_CPUS_PER_TASK:-1}"
 echo "Start:  $(date)"
 
-# Environment setup
-module load conda 2>/dev/null || true
-conda activate isalgraph
+CONDA_ENV_NAME="isalgraph"
+if command -v conda >/dev/null 2>&1; then
+    eval "$(conda shell.bash hook 2>/dev/null)" || true
+    conda activate "${CONDA_ENV_NAME}" 2>/dev/null || true
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
