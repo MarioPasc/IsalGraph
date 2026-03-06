@@ -184,7 +184,7 @@ def _generate_test_graphs(seed: int) -> list[tuple[str, nx.Graph]]:
 
     # Grid
     for side in [3, 4, 5, 6, 8, 10]:
-        _add("grid", nx.grid_2d_graph(side, side))
+        _add("grid", nx.convert_node_labels_to_integers(nx.grid_2d_graph(side, side)))
 
     # Wheel
     for n in [5, 10, 20, 50]:
