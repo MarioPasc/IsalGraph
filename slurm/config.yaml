@@ -11,7 +11,7 @@ conda_env: isalgraph
 
 # SLURM defaults
 constraint: cpu           # Any CPU node (Picasso recommended default)
-account: tic_163_uma
+account: tic_163_uma/mpascual
 
 # Per-benchmark configuration
 benchmarks:
@@ -48,5 +48,33 @@ benchmarks:
     num_random_pairs: 500
     seed: 42
     time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 64
+
+  greedy_optimality_gap:
+    enabled: true
+    seed: 42
+    time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 64
+
+  starting_node_sensitivity:
+    enabled: true
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 32
+    mem_gb: 32
+
+  roundtrip_fixed_point:
+    enabled: true
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 32
+    mem_gb: 32
+
+  alphabet_entropy:
+    enabled: true
+    seed: 42
+    time_limit: "1-00:00:00"
     cpus: 64
     mem_gb: 64
