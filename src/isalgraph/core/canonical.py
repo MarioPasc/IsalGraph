@@ -45,7 +45,9 @@ def canonical_string(graph: SparseGraph) -> str:
         ValueError: If no starting node can reach all other nodes.
     """
     n = graph.node_count()
-    if n <= 1:
+    if n == 0:
+        return ""
+    if n == 1 and graph.logical_edge_count() == 0:
         return ""
 
     best: str | None = None
@@ -164,6 +166,7 @@ def _undo_edge(og: SparseGraph, source: int, target: int) -> None:
 def _undo_node(og: SparseGraph) -> None:
     """Remove the last added node (reverse of add_node)."""
     og._node_count -= 1  # noqa: SLF001
+    og._adjacency[og._node_count].clear()  # noqa: SLF001
 
 
 def _canonical_g2s(input_graph: SparseGraph, start_node: int) -> str:

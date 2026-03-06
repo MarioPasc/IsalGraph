@@ -31,6 +31,8 @@ import networkx as nx
 
 from isalgraph.adapters.networkx_adapter import NetworkXAdapter
 from isalgraph.core.canonical import canonical_string
+from isalgraph.core.graph_to_string import GraphToString
+from isalgraph.core.string_to_graph import StringToGraph
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -61,6 +63,7 @@ class TestResult:
     passed: bool
     error: str = ""
     time_s: float = 0.0
+    greedy_length: int = -1
 
 
 @dataclass
@@ -76,6 +79,8 @@ class BenchmarkSummary:
     invariance_passed: int = 0
     discrimination_tests: int = 0
     discrimination_passed: int = 0
+    greedy_vs_canonical_tests: int = 0
+    greedy_vs_canonical_passed: int = 0
     results_by_source: dict[str, dict[str, int]] = field(default_factory=dict)
     failures: list[dict[str, Any]] = field(default_factory=list)
 
@@ -180,6 +185,36 @@ def _generate_invariance_graphs(
         g = nx.ladder_graph(n)
         g2 = _random_relabeling(g, rng)
         pairs.append(("ladder", g, g2))
+
+    # Directed GNP (~10% of invariance tests)
+    n_directed = max(n_per_family // 2, 1)
+    attempts = 0
+    generated = 0
+    while generated < n_directed and attempts < n_directed * 10:
+        attempts += 1
+        n = rng.randint(3, max_nodes)
+        p = rng.uniform(0.3, 0.7)
+        seed = rng.randint(0, 2**31)
+        g = nx.gnp_random_graph(n, p, seed=seed, directed=True)
+        # Check that at least one node can reach all others
+        reachable = False
+        for v in range(n):
+            if len(nx.descendants(g, v)) + 1 == n:
+                reachable = True
+                break
+        if reachable:
+            g2 = _random_relabeling(g, rng)
+            pairs.append(("directed_gnp", g, g2))
+            generated += 1
+
+    # Directed cycles
+    for n in range(3, min(max_nodes + 1, 3 + max(n_directed, 2))):
+        g = nx.DiGraph()
+        g.add_nodes_from(range(n))
+        for i in range(n):
+            g.add_edge(i, (i + 1) % n)
+        g2 = _random_relabeling(g, rng)
+        pairs.append(("directed_cycle", g, g2))
 
     return pairs
 
@@ -354,6 +389,106 @@ def _test_discrimination(
         )
 
 
+def _test_greedy_vs_canonical(
+    test_id: int,
+    string_length: int,
+    rng: random.Random,
+    canonical_limit: int = 10,
+) -> TestResult:
+    """Test whether the greedy G2S best string matches the canonical string.
+
+    Generates a random valid IsalGraph string, decodes it to a graph, then
+    compares the best greedy string (minimum over all starting nodes) against
+    the exhaustive canonical string.
+
+    Args:
+        test_id: Test identifier.
+        string_length: Length of the random string to generate.
+        rng: Seeded Random instance.
+        canonical_limit: Maximum graph size for canonical computation.
+
+    Returns:
+        TestResult with test_type="greedy_vs_canonical".
+    """
+    t0 = time.perf_counter()
+    try:
+        # Generate a random string and decode it
+        raw_string = "".join(rng.choices("NnPpVvCcW", k=string_length))
+
+        s2g = StringToGraph(raw_string, directed_graph=False)
+        sg, _ = s2g.run()
+
+        n_nodes = sg.node_count()
+        n_edges = sg.logical_edge_count()
+
+        # Skip trivial or too-large graphs
+        if n_nodes < 3 or n_nodes > canonical_limit:
+            elapsed = time.perf_counter() - t0
+            return TestResult(
+                test_id=test_id,
+                test_type="greedy_vs_canonical",
+                source="random_string",
+                num_nodes=n_nodes,
+                num_edges=n_edges,
+                canonical_1="",
+                canonical_2="",
+                passed=True,
+                greedy_length=-1,
+                time_s=elapsed,
+            )
+
+        # Greedy best: try all starting nodes, keep shortest (then lexmin)
+        greedy_best: str | None = None
+        for v in range(n_nodes):
+            g2s = GraphToString(sg)
+            w, _ = g2s.run(initial_node=v)
+            if greedy_best is None or (len(w), w) < (len(greedy_best), greedy_best):
+                greedy_best = w
+
+        assert greedy_best is not None
+
+        # Canonical (exhaustive backtracking)
+        w_canonical = canonical_string(sg)
+
+        passed = greedy_best == w_canonical
+        error = ""
+        if not passed:
+            error = (
+                f"Greedy best (len={len(greedy_best)}) != canonical (len={len(w_canonical)}). "
+                f"Greedy: '{greedy_best[:80]}', Canonical: '{w_canonical[:80]}'"
+            )
+
+        elapsed = time.perf_counter() - t0
+        return TestResult(
+            test_id=test_id,
+            test_type="greedy_vs_canonical",
+            source="random_string",
+            num_nodes=n_nodes,
+            num_edges=n_edges,
+            canonical_1=greedy_best,
+            canonical_2=w_canonical,
+            passed=passed,
+            error=error,
+            greedy_length=len(raw_string),
+            time_s=elapsed,
+        )
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        return TestResult(
+            test_id=test_id,
+            test_type="greedy_vs_canonical",
+            source="random_string",
+            num_nodes=0,
+            num_edges=0,
+            canonical_1="",
+            canonical_2="",
+            passed=False,
+            error=f"Exception: {exc!r}",
+            greedy_length=string_length,
+            time_s=elapsed,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Main benchmark
 # ---------------------------------------------------------------------------
@@ -419,6 +554,29 @@ def run_benchmark(
         if (i + 1) % max(1, len(disc_pairs) // 10) == 0:
             print(f"  ... {i + 1}/{len(disc_pairs)} done")
 
+    # ---- Part C: Greedy vs Canonical tests ----
+    # Test: rand(w) -> G -> w_greedy vs w_canonical
+    greedy_lengths = [5, 10, 15, 20, 25, 30, 40, 50]
+    tests_per_length = 7
+    n_greedy_total = len(greedy_lengths) * tests_per_length
+    print(f"\n[C] Running greedy vs canonical tests ({n_greedy_total} target)...")
+
+    greedy_done = 0
+    greedy_valid = 0
+    for str_len in greedy_lengths:
+        for _ in range(tests_per_length):
+            result = _test_greedy_vs_canonical(test_id, str_len, rng, canonical_limit=max_nodes)
+            all_results.append(result)
+            test_id += 1
+            greedy_done += 1
+            if result.greedy_length > 0:
+                greedy_valid += 1
+
+            if greedy_done % max(1, n_greedy_total // 10) == 0:
+                print(f"  ... {greedy_done}/{n_greedy_total} done ({greedy_valid} valid graphs)")
+
+    print(f"    Completed {greedy_done} tests ({greedy_valid} produced valid graphs).")
+
     # ---- Aggregate results ----
     total_time = sum(r.time_s for r in all_results)
     summary.total_tests = len(all_results)
@@ -436,10 +594,14 @@ def run_benchmark(
             summary.invariance_tests += 1
             if r.passed:
                 summary.invariance_passed += 1
-        else:
+        elif r.test_type == "discrimination":
             summary.discrimination_tests += 1
             if r.passed:
                 summary.discrimination_passed += 1
+        elif r.test_type == "greedy_vs_canonical":
+            summary.greedy_vs_canonical_tests += 1
+            if r.passed:
+                summary.greedy_vs_canonical_passed += 1
 
         # Track per-source stats
         key = f"{r.test_type}/{r.source}"
@@ -489,6 +651,11 @@ def run_benchmark(
     print(
         f"Discrimination tests:  {summary.discrimination_tests} "
         f"(passed: {summary.discrimination_passed}, rate: {disc_rate:.1f}%)"
+    )
+    gvc_rate = summary.greedy_vs_canonical_passed / max(1, summary.greedy_vs_canonical_tests) * 100
+    print(
+        f"Greedy vs Canonical:   {summary.greedy_vs_canonical_tests} "
+        f"(passed: {summary.greedy_vs_canonical_passed}, rate: {gvc_rate:.1f}%)"
     )
     print()
 
@@ -541,6 +708,8 @@ def run_benchmark(
             "invariance_passed": summary.invariance_passed,
             "discrimination_tests": summary.discrimination_tests,
             "discrimination_passed": summary.discrimination_passed,
+            "greedy_vs_canonical_tests": summary.greedy_vs_canonical_tests,
+            "greedy_vs_canonical_passed": summary.greedy_vs_canonical_passed,
         },
         "results_by_source": summary.results_by_source,
         "failures": summary.failures,
@@ -572,6 +741,15 @@ def _parallel_discrimination(
     """Worker for ProcessPoolExecutor: discrimination test."""
     test_id, source_name, g1, g2 = args_tuple
     return _test_discrimination(test_id, source_name, g1, g2)
+
+
+def _parallel_greedy_vs_canonical(
+    args_tuple: tuple[int, int, int, int],
+) -> TestResult:
+    """Worker for ProcessPoolExecutor: greedy vs canonical test."""
+    test_id, string_length, seed, canonical_limit = args_tuple
+    rng = random.Random(seed)
+    return _test_greedy_vs_canonical(test_id, string_length, rng, canonical_limit)
 
 
 def run_benchmark_parallel(
@@ -621,16 +799,31 @@ def run_benchmark_parallel(
         disc_tasks.append((test_id, source_name, g1, g2))
         test_id += 1
 
+    # ---- Prepare greedy vs canonical tasks ----
+    greedy_lengths = [5, 10, 15, 20, 25, 30, 40, 50]
+    tests_per_length = 7
+    gvc_tasks: list[tuple[int, int, int, int]] = []
+    for str_len in greedy_lengths:
+        for _ in range(tests_per_length):
+            task_seed = rng.randint(0, 2**31)
+            gvc_tasks.append((test_id, str_len, task_seed, max_nodes))
+            test_id += 1
+
     # ---- Execute in parallel ----
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
-    print(f"Submitting {len(inv_tasks)} invariance + {len(disc_tasks)} discrimination tasks...")
+    print(
+        f"Submitting {len(inv_tasks)} invariance + {len(disc_tasks)} discrimination "
+        f"+ {len(gvc_tasks)} greedy_vs_canonical tasks..."
+    )
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         inv_futures = {executor.submit(_parallel_invariance, t): t[0] for t in inv_tasks}
         disc_futures = {executor.submit(_parallel_discrimination, t): t[0] for t in disc_tasks}
+        gvc_futures = {executor.submit(_parallel_greedy_vs_canonical, t): t[0] for t in gvc_tasks}
 
-        total = len(inv_futures) + len(disc_futures)
-        for done_count, fut in enumerate(as_completed({**inv_futures, **disc_futures}), 1):
+        total = len(inv_futures) + len(disc_futures) + len(gvc_futures)
+        all_futures = {**inv_futures, **disc_futures, **gvc_futures}
+        for done_count, fut in enumerate(as_completed(all_futures), 1):
             all_results.append(fut.result())
             if done_count % max(1, total // 20) == 0:
                 print(f"  ... {done_count}/{total} done")
@@ -652,10 +845,14 @@ def run_benchmark_parallel(
             summary.invariance_tests += 1
             if r.passed:
                 summary.invariance_passed += 1
-        else:
+        elif r.test_type == "discrimination":
             summary.discrimination_tests += 1
             if r.passed:
                 summary.discrimination_passed += 1
+        elif r.test_type == "greedy_vs_canonical":
+            summary.greedy_vs_canonical_tests += 1
+            if r.passed:
+                summary.greedy_vs_canonical_passed += 1
 
         key = f"{r.test_type}/{r.source}"
         if key not in summary.results_by_source:
@@ -708,6 +905,8 @@ def run_benchmark_parallel(
                     "invariance_passed": summary.invariance_passed,
                     "discrimination_tests": summary.discrimination_tests,
                     "discrimination_passed": summary.discrimination_passed,
+                    "greedy_vs_canonical_tests": summary.greedy_vs_canonical_tests,
+                    "greedy_vs_canonical_passed": summary.greedy_vs_canonical_passed,
                 },
                 "results_by_source": summary.results_by_source,
                 "failures": summary.failures,
@@ -750,6 +949,7 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
                 "canonical_match": r.canonical_1 == r.canonical_2,
                 "passed": r.passed,
                 "time_s": r.time_s,
+                "greedy_length": r.greedy_length,
             }
         )
 
@@ -766,6 +966,7 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
         "canonical_match",
         "passed",
         "time_s",
+        "greedy_length",
     ]
     with open(path, "w", newline="") as f:
         writer = csv_mod.DictWriter(f, fieldnames=fieldnames)
@@ -776,12 +977,13 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
 
 
 def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
-    """Generate publication figure: 1x2 (timing violin + string length box).
+    """Generate publication figure: 1x2 (string length scatter + compression box).
 
-    Panel (a): Violin + strip plot of computation time vs num_nodes with
-               exponential fit overlay. Log-scale y-axis.
-    Panel (b): Box plot of canonical string length vs num_nodes, colored by
-               test_type (invariance vs discrimination).
+    Panel (a): Scatter of canonical string length |w*| vs N (number of nodes),
+               colored by graph family on log-log scale with reference lines
+               |w*| = N (dashed) and |w*| = N^2 (dotted).
+    Panel (b): Box plot of compression factor N^2/|w*| by family
+               (invariance tests only).
 
     Args:
         results: List of TestResult objects.
@@ -794,9 +996,11 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     import matplotlib.pyplot as plt  # noqa: E402
     import numpy as np  # noqa: E402
     from plotting_styles import (  # noqa: E402
-        PAUL_TOL_BRIGHT,
+        FAMILY_COLORS,
+        FAMILY_MARKERS,
         PLOT_SETTINGS,
         apply_ieee_style,
+        family_display,
         get_figure_size,
         save_figure,
     )
@@ -804,90 +1008,104 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     apply_ieee_style()
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.5))
 
-    # ---- Shared data: group by num_nodes ----
-    node_times: dict[int, list[float]] = {}
-    node_lens_inv: dict[int, list[int]] = {}
-    node_lens_disc: dict[int, list[int]] = {}
+    # -- Fallback color/marker for families not in plotting_styles --
+    _default_color = "#555555"
+    _default_marker = "o"
+    _extra_colors: dict[str, str] = {
+        "barabasi_albert": FAMILY_COLORS.get("barabasi_albert", "#AA3377"),
+        "gnp_different": FAMILY_COLORS.get("gnp", "#DDCC77"),
+        "cycle_vs_path": FAMILY_COLORS.get("cycle", "#CCBB44"),
+        "star_vs_path": FAMILY_COLORS.get("star", "#228833"),
+        "complete_vs_cycle": FAMILY_COLORS.get("complete", "#EE6677"),
+    }
+    _extra_markers: dict[str, str] = {
+        "barabasi_albert": "P",
+        "gnp_different": "d",
+        "cycle_vs_path": "D",
+        "star_vs_path": "^",
+        "complete_vs_cycle": "v",
+    }
+
+    def _get_color(family: str) -> str:
+        if family in FAMILY_COLORS:
+            return FAMILY_COLORS[family]
+        if family in _extra_colors:
+            return _extra_colors[family]
+        return _default_color
+
+    def _get_marker(family: str) -> str:
+        if family in FAMILY_MARKERS:
+            return FAMILY_MARKERS[family]
+        if family in _extra_markers:
+            return _extra_markers[family]
+        return _default_marker
+
+    # ================================================================
+    # Panel (a): Scatter of |w*| vs N, colored by family (log-log)
+    # ================================================================
+
+    # Collect (N, |w*|, family) tuples for all results
+    scatter_data: dict[str, list[tuple[int, int]]] = {}
     for r in results:
-        node_times.setdefault(r.num_nodes, []).append(r.time_s)
-        c_len = max(len(r.canonical_1), len(r.canonical_2))
+        family = r.source
+        if r.test_type == "greedy_vs_canonical":
+            continue
         if r.test_type == "invariance":
-            node_lens_inv.setdefault(r.num_nodes, []).append(c_len)
-        else:
-            node_lens_disc.setdefault(r.num_nodes, []).append(c_len)
+            if len(r.canonical_1) > 0:
+                scatter_data.setdefault(family, []).append((r.num_nodes, len(r.canonical_1)))
+        elif r.test_type == "discrimination":
+            if len(r.canonical_1) > 0:
+                scatter_data.setdefault(family, []).append((r.num_nodes, len(r.canonical_1)))
+            if len(r.canonical_2) > 0:
+                scatter_data.setdefault(family, []).append((r.num_nodes, len(r.canonical_2)))
 
-    sizes = sorted(node_times.keys())
-    x_positions = np.arange(1, len(sizes) + 1)
-    violin_color = PAUL_TOL_BRIGHT["blue"]
-
-    # ================================================================
-    # Panel (a): Violin + strip plot of computation time vs num_nodes
-    # ================================================================
-    time_data = [node_times[s] for s in sizes]
-
-    vp = ax1.violinplot(
-        time_data,
-        positions=x_positions,
-        showmeans=False,
-        showmedians=True,
-        showextrema=False,
-        widths=0.7,
-    )
-    # Style violins
-    for body in vp["bodies"]:
-        body.set_facecolor(violin_color)
-        body.set_edgecolor(PAUL_TOL_BRIGHT["blue"])
-        body.set_alpha(0.3)
-        body.set_linewidth(0.8)
-    vp["cmedians"].set_color(PAUL_TOL_BRIGHT["blue"])
-    vp["cmedians"].set_linewidth(1.2)
-
-    # Strip plot: jittered individual points
-    rng = np.random.default_rng(42)
-    for pos, data in zip(x_positions, time_data, strict=True):
-        jitter = rng.uniform(-0.15, 0.15, size=len(data))
-        ax1.scatter(
-            pos + jitter,
-            data,
-            s=PLOT_SETTINGS["scatter_size"] * 0.6,
-            color=violin_color,
-            alpha=0.4,
+    # Plot each family with its color and marker; collect handles for legend
+    legend_handles: list[Any] = []
+    legend_labels: list[str] = []
+    for family in sorted(scatter_data.keys()):
+        pts = scatter_data[family]
+        ns = [p[0] for p in pts]
+        lens = [p[1] for p in pts]
+        h = ax1.scatter(
+            ns,
+            lens,
+            c=_get_color(family),
+            marker=_get_marker(family),
+            s=PLOT_SETTINGS["scatter_size"] * 1.5,
+            alpha=PLOT_SETTINGS["scatter_alpha"],
             edgecolors="none",
             zorder=3,
         )
+        legend_handles.append(h)
+        legend_labels.append(family_display(family))
 
-    # Exponential fit: log(time) ~ a * N + b  =>  time ~ exp(b) * exp(a*N)
-    all_nodes = np.array([r.num_nodes for r in results], dtype=float)
-    all_times = np.array([r.time_s for r in results], dtype=float)
-    # Filter out zero/negative times for log fit
-    mask = all_times > 0
-    log_times = np.log(all_times[mask])
-    nodes_masked = all_nodes[mask]
-    # Linear regression: log(t) = a * N + b
-    a_fit, b_fit = np.polyfit(nodes_masked, log_times, 1)
-    n_smooth = np.linspace(min(sizes), max(sizes), 200)
-    # Map graph node values to x-axis positions for the fit line
-    pos_smooth = np.interp(
-        n_smooth,
-        np.array(sizes, dtype=float),
-        x_positions.astype(float),
-    )
-    t_fit = np.exp(b_fit) * np.exp(a_fit * n_smooth)
-    ax1.plot(
-        pos_smooth,
-        t_fit,
-        color=PAUL_TOL_BRIGHT["red"],
-        linewidth=PLOT_SETTINGS["line_width_thick"],
+    # Reference lines: |w*| = N (dashed) and |w*| = N^2 (dotted)
+    all_n = [r.num_nodes for r in results if r.test_type != "greedy_vs_canonical"]
+    n_min, n_max = max(min(all_n), 1), max(all_n)
+    n_ref = np.linspace(n_min, n_max * 1.2, 200)
+    (l1,) = ax1.plot(
+        n_ref,
+        n_ref,
+        color="0.4",
+        linewidth=PLOT_SETTINGS["line_width"],
         linestyle="--",
-        label=f"Fit: $t \\approx {np.exp(b_fit):.1e} \\cdot e^{{{a_fit:.2f}N}}$",
-        zorder=4,
+        zorder=1,
     )
+    (l2,) = ax1.plot(
+        n_ref,
+        n_ref**2,
+        color="0.4",
+        linewidth=PLOT_SETTINGS["line_width"],
+        linestyle=":",
+        zorder=1,
+    )
+    legend_handles.extend([l1, l2])
+    legend_labels.extend(["$|w^*| = N$", "$|w^*| = N^2$"])
 
+    ax1.set_xscale("log")
     ax1.set_yscale("log")
-    ax1.set_xticks(x_positions)
-    ax1.set_xticklabels([str(s) for s in sizes])
     ax1.set_xlabel("Number of nodes $N$")
-    ax1.set_ylabel("Computation time (s)")
+    ax1.set_ylabel("Canonical string length $|w^*|$")
     ax1.yaxis.grid(
         True,
         alpha=PLOT_SETTINGS["grid_alpha"],
@@ -895,9 +1113,8 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
         linewidth=PLOT_SETTINGS["grid_linewidth"],
     )
     ax1.xaxis.grid(False)
-    ax1.legend(fontsize=PLOT_SETTINGS["legend_fontsize"], loc="upper left")
 
-    # Text box: pass count
+    # Text annotation: pass count (bottom-right, white box)
     total = len(results)
     passed = sum(1 for r in results if r.passed)
     ax1.text(
@@ -908,7 +1125,12 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
         fontsize=PLOT_SETTINGS["annotation_fontsize"],
         ha="right",
         va="bottom",
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "edgecolor": "0.7", "alpha": 0.9},
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "edgecolor": "0.7",
+            "alpha": 0.9,
+        },
     )
 
     # Panel label
@@ -922,27 +1144,33 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     )
 
     # ================================================================
-    # Panel (b): Box plot of canonical string length vs num_nodes
-    #            colored by test_type
+    # Panel (b): Box plot of compression factor N^2/|w*| by family
+    #            (invariance tests only)
     # ================================================================
-    color_inv = PAUL_TOL_BRIGHT["blue"]
-    color_disc = PAUL_TOL_BRIGHT["red"]
-    box_width = 0.35
 
-    # Prepare data arrays for each test type at each node count
-    inv_data = [node_lens_inv.get(s, []) for s in sizes]
-    disc_data = [node_lens_disc.get(s, []) for s in sizes]
+    # Collect compression factors grouped by family (invariance only)
+    compression_by_family: dict[str, list[float]] = {}
+    for r in results:
+        if r.test_type != "invariance":
+            continue
+        c_len = len(r.canonical_1)
+        if c_len > 0:
+            factor = (r.num_nodes**2) / c_len
+            compression_by_family.setdefault(r.source, []).append(factor)
 
-    # Draw invariance boxes (left offset)
-    bp_inv = ax2.boxplot(
-        inv_data,
-        positions=x_positions - box_width / 2 - 0.02,
-        widths=box_width,
+    # Sort families alphabetically for consistent ordering
+    families_sorted = sorted(compression_by_family.keys())
+    box_data = [compression_by_family[f] for f in families_sorted]
+    x_pos = np.arange(1, len(families_sorted) + 1)
+
+    bp = ax2.boxplot(
+        box_data,
+        positions=x_pos,
+        widths=PLOT_SETTINGS["boxplot_width"],
         patch_artist=True,
         flierprops={
             "markersize": PLOT_SETTINGS["boxplot_flier_size"],
             "marker": ".",
-            "markerfacecolor": color_inv,
             "markeredgecolor": "none",
             "alpha": 0.5,
         },
@@ -951,36 +1179,31 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
         capprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
         boxprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
     )
-    for patch in bp_inv["boxes"]:
-        patch.set_facecolor(color_inv)
+    for patch, family in zip(bp["boxes"], families_sorted, strict=True):
+        patch.set_facecolor(_get_color(family))
         patch.set_alpha(0.6)
+    # Color fliers to match their family
+    for flier, family in zip(bp["fliers"], families_sorted, strict=True):
+        flier.set_markerfacecolor(_get_color(family))
 
-    # Draw discrimination boxes (right offset)
-    bp_disc = ax2.boxplot(
-        disc_data,
-        positions=x_positions + box_width / 2 + 0.02,
-        widths=box_width,
-        patch_artist=True,
-        flierprops={
-            "markersize": PLOT_SETTINGS["boxplot_flier_size"],
-            "marker": ".",
-            "markerfacecolor": color_disc,
-            "markeredgecolor": "none",
-            "alpha": 0.5,
-        },
-        medianprops={"color": "black", "linewidth": 1.0},
-        whiskerprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
-        capprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
-        boxprops={"linewidth": PLOT_SETTINGS["boxplot_linewidth"]},
+    # Horizontal dashed line at factor = 1 (break-even)
+    ax2.axhline(
+        y=1.0,
+        color="0.4",
+        linewidth=PLOT_SETTINGS["line_width"],
+        linestyle="--",
+        zorder=1,
     )
-    for patch in bp_disc["boxes"]:
-        patch.set_facecolor(color_disc)
-        patch.set_alpha(0.6)
 
-    ax2.set_xticks(x_positions)
-    ax2.set_xticklabels([str(s) for s in sizes])
-    ax2.set_xlabel("Number of nodes $N$")
-    ax2.set_ylabel("Canonical string length")
+    ax2.set_xticks(x_pos)
+    ax2.set_xticklabels(
+        [family_display(f) for f in families_sorted],
+        rotation=45,
+        ha="right",
+        fontsize=PLOT_SETTINGS["tick_labelsize"],
+    )
+    ax2.set_xlabel("")
+    ax2.set_ylabel("Compression factor $N^2/|w^*|$")
     ax2.yaxis.grid(
         True,
         alpha=PLOT_SETTINGS["grid_alpha"],
@@ -988,25 +1211,6 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
         linewidth=PLOT_SETTINGS["grid_linewidth"],
     )
     ax2.xaxis.grid(False)
-
-    # Legend with proxy patches
-    from matplotlib.patches import Patch
-
-    legend_handles = [
-        Patch(facecolor=color_inv, alpha=0.6, edgecolor="black", linewidth=0.5, label="Invariance"),
-        Patch(
-            facecolor=color_disc,
-            alpha=0.6,
-            edgecolor="black",
-            linewidth=0.5,
-            label="Discrimination",
-        ),
-    ]
-    ax2.legend(
-        handles=legend_handles,
-        fontsize=PLOT_SETTINGS["legend_fontsize"],
-        loc="upper left",
-    )
 
     # Panel label
     ax2.text(
@@ -1019,6 +1223,19 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     )
 
     fig.tight_layout()
+    fig.subplots_adjust(bottom=0.22)
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.01),
+        ncol=5,
+        fontsize=7,
+        frameon=False,
+        columnspacing=0.8,
+        handletextpad=0.3,
+        markerscale=1.2,
+    )
     paths = save_figure(fig, os.path.join(output_dir, "canonical_invariance_figure"))
     plt.close(fig)
     print(f"Figure saved: {paths}")

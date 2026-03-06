@@ -199,6 +199,27 @@ def _nx_special_graphs(max_nodes: int) -> list[tuple[str, nx.Graph]]:
     return graphs
 
 
+def _nx_self_loop_graphs(
+    rng: random.Random, count: int, max_nodes: int
+) -> list[tuple[str, nx.Graph]]:
+    """Generate random undirected graphs with self-loops added."""
+    graphs: list[tuple[str, nx.Graph]] = []
+    for _ in range(count):
+        n = rng.randint(3, max_nodes)
+        p = rng.uniform(0.2, 0.5)
+        seed = rng.randint(0, 2**31)
+        g = nx.gnp_random_graph(n, p, seed=seed)
+        if not nx.is_connected(g):
+            continue
+        # Add 1-3 self-loops to random nodes
+        n_loops = rng.randint(1, min(3, n))
+        loop_nodes = rng.sample(range(n), n_loops)
+        for node in loop_nodes:
+            g.add_edge(node, node)
+        graphs.append(("self_loop", g))
+    return graphs
+
+
 def _nx_watts_strogatz_graphs(
     rng: random.Random, count: int, max_nodes: int
 ) -> list[tuple[str, nx.Graph]]:
@@ -464,6 +485,15 @@ def run_benchmark(
         all_results.append(result)
         test_id += 1
 
+    # Self-loop graphs
+    n_self_loop = max(n_per_generator // 2, 2)
+    print(f"  Generating self-loop graphs ({n_self_loop})...")
+    sl_graphs = _nx_self_loop_graphs(rng, n_self_loop * 2, max_nodes)
+    for source_name, g in sl_graphs[:n_self_loop]:
+        result = _roundtrip_from_nx(test_id, source_name, g, directed=False)
+        all_results.append(result)
+        test_id += 1
+
     # ---- Part C: NetworkX graph families (directed) ----
     print("\n[C] NetworkX directed graphs...")
 
@@ -666,6 +696,12 @@ def run_benchmark_parallel(
         nx_tasks.append((test_id, source_name, g, False))
         test_id += 1
 
+    n_self_loop = max(n_per_generator // 2, 2)
+    sl_graphs = _nx_self_loop_graphs(rng, n_self_loop * 2, max_nodes)
+    for source_name, g in sl_graphs[:n_self_loop]:
+        nx_tasks.append((test_id, source_name, g, False))
+        test_id += 1
+
     gnp_dir = _nx_gnp_graphs(rng, n_per_generator * 2, max_nodes, directed=True)
     for source_name, g in gnp_dir[:n_per_generator]:
         nx_tasks.append((test_id, source_name, g, True))
@@ -789,20 +825,20 @@ def save_csv(results: list[TestResult], output_dir: str) -> str:
 
 
 def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
-    """Generate publication figure: 1x2 (time vs nodes scatter + violin).
+    """Generate publication figure: 1x2 (compression + instruction composition).
 
-    Panel (a): Scatter plot of execution time vs number of nodes, colored
-    by graph family with power-law fit line.
-    Panel (b): Violin plot of execution time distribution by family.
-
-    Only the 6 main families (>=1000 tests each) are shown.
+    Panel (a): Scatter of roundtrip string length |w'| vs original string
+    length |w| for random-string tests. Points below y=x show that greedy
+    G2S compresses redundant random strings. Color encodes graph size.
+    Panel (b): Stacked horizontal bar of mean instruction composition
+    (node V/v, edge C/c, navigation N/P/n/p) in roundtrip strings by
+    graph family.
     """
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     import matplotlib.pyplot as plt  # noqa: E402
     import numpy as np  # noqa: E402
     from plotting_styles import (  # noqa: E402
-        FAMILY_COLORS,
-        FAMILY_MARKERS,
+        PAUL_TOL_BRIGHT,
         PLOT_SETTINGS,
         apply_ieee_style,
         family_display,
@@ -813,103 +849,80 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
     apply_ieee_style()
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=get_figure_size("double", 0.5))
 
-    # ---- Aggregate data by family ----
-    source_stats: dict[str, dict[str, list[Any]]] = {}
-    for r in results:
-        key = r.source
-        if key not in source_stats:
-            source_stats[key] = {"nodes": [], "times": []}
-        source_stats[key]["nodes"].append(r.num_nodes)
-        source_stats[key]["times"].append(r.time_s)
-
-    # Select only families with >= 1000 tests
-    main_families = sorted(
-        [fam for fam, data in source_stats.items() if len(data["times"]) >= 1000]
-    )
-
     total_tests = len(results)
     total_passed = sum(1 for r in results if r.passed)
 
-    # ---- Panel (a): Scatter of time vs num_nodes, colored by family ----
-    all_nodes: list[float] = []
-    all_times: list[float] = []
-    for fam in main_families:
-        nodes = np.array(source_stats[fam]["nodes"])
-        times = np.array(source_stats[fam]["times"])
-        color = FAMILY_COLORS.get(fam, "#888888")
-        marker = FAMILY_MARKERS.get(fam, "o")
-        ax1.scatter(
-            nodes,
-            times,
-            c=color,
-            marker=marker,
+    # ================================================================
+    # Panel (a): Compression scatter -- |w'| vs |w| for random strings
+    # ================================================================
+    random_results = [
+        r
+        for r in results
+        if r.source == "random_string"
+        and r.passed
+        and len(r.original_string) > 0
+        and len(r.roundtrip_string) > 0
+    ]
+
+    if random_results:
+        orig_lens = np.array([len(r.original_string) for r in random_results])
+        rt_lens = np.array([len(r.roundtrip_string) for r in random_results])
+        nodes = np.array([r.num_nodes for r in random_results])
+
+        sc = ax1.scatter(
+            orig_lens,
+            rt_lens,
+            c=nodes,
+            cmap="viridis",
             s=PLOT_SETTINGS["scatter_size"],
-            alpha=0.4,
+            alpha=0.5,
             edgecolors="none",
-            label=family_display(fam),
             rasterized=True,
         )
-        all_nodes.extend(nodes.tolist())
-        all_times.extend(times.tolist())
+        cbar = fig.colorbar(sc, ax=ax1, pad=0.02, aspect=30)
+        cbar.set_label("Nodes $N$", fontsize=PLOT_SETTINGS["axes_labelsize"] - 1)
 
-    # Power-law fit: log(t) = a * log(n) + b  =>  t = e^b * n^a
-    all_nodes_arr = np.array(all_nodes)
-    all_times_arr = np.array(all_times)
-    # Filter out zero/negative values for log fitting
-    mask = (all_nodes_arr > 0) & (all_times_arr > 0)
-    log_n = np.log(all_nodes_arr[mask])
-    log_t = np.log(all_times_arr[mask])
-    if len(log_n) > 2:
-        coeffs = np.polyfit(log_n, log_t, 1)
-        exponent, log_prefactor = coeffs[0], coeffs[1]
-        n_fit = np.linspace(all_nodes_arr[mask].min(), all_nodes_arr[mask].max(), 200)
-        t_fit = np.exp(log_prefactor) * n_fit**exponent
+        # y=x reference line
+        max_val = float(max(orig_lens.max(), rt_lens.max()) * 1.05)
         ax1.plot(
-            n_fit,
-            t_fit,
-            color="0.3",
-            linewidth=PLOT_SETTINGS["line_width_thick"],
-            linestyle="--",
-            label=f"Fit: $t \\propto n^{{{exponent:.2f}}}$",
-            zorder=5,
+            [0, max_val],
+            [0, max_val],
+            "--",
+            color="0.4",
+            linewidth=PLOT_SETTINGS["line_width"],
+            zorder=1,
+            label="$|w'| = |w|$",
         )
 
-    ax1.set_xscale("log")
-    ax1.set_yscale("log")
-    ax1.set_xlabel("Number of nodes ($n$)")
-    ax1.set_ylabel("Execution time (s)")
+        # Annotation: compression statistics
+        ratios = rt_lens / np.maximum(orig_lens, 1)
+        compressed_count = int(np.sum(rt_lens < orig_lens))
+        pct_compressed = 100.0 * compressed_count / len(random_results)
+        median_ratio = float(np.median(ratios))
+
+        info = f"{pct_compressed:.0f}% compressed\nMedian $|w'|/|w| = {median_ratio:.2f}$"
+        ax1.text(
+            0.97,
+            0.03,
+            info,
+            transform=ax1.transAxes,
+            fontsize=PLOT_SETTINGS["annotation_fontsize"],
+            ha="right",
+            va="bottom",
+            bbox=dict(
+                boxstyle="round,pad=0.3",
+                facecolor="white",
+                edgecolor="0.7",
+                alpha=0.9,
+            ),
+        )
+
+    ax1.set_xlabel("Original string length $|w|$")
+    ax1.set_ylabel("Roundtrip string length $|w'|$")
+    ax1.legend(fontsize=PLOT_SETTINGS["legend_fontsize"], loc="upper left")
     ax1.grid(axis="y")
-    ax1.legend(
-        fontsize=PLOT_SETTINGS["legend_fontsize"] - 1,
-        loc="upper left",
-        frameon=True,
-        framealpha=0.9,
-        edgecolor="0.8",
-        handletextpad=0.3,
-        borderpad=0.3,
-        labelspacing=0.3,
-    )
 
-    # Text box annotation with test count and pass rate
-    pass_pct = 100.0 * total_passed / total_tests if total_tests > 0 else 0.0
-    info_text = f"$N$ = {total_tests:,} | {pass_pct:.0f}% pass rate"
-    ax1.text(
-        0.97,
-        0.03,
-        info_text,
-        transform=ax1.transAxes,
-        fontsize=PLOT_SETTINGS["annotation_fontsize"],
-        ha="right",
-        va="bottom",
-        bbox=dict(
-            boxstyle="round,pad=0.3",
-            facecolor="white",
-            edgecolor="0.7",
-            alpha=0.9,
-        ),
-    )
-
-    # Panel label (above axes to avoid legend overlap)
+    # Panel label
     ax1.text(
         -0.02,
         1.05,
@@ -921,52 +934,98 @@ def generate_figure(results: list[TestResult], output_dir: str) -> list[str]:
         ha="left",
     )
 
-    # ---- Panel (b): Violin plot of execution time by family ----
-    violin_data = [source_stats[fam]["times"] for fam in main_families]
-    violin_colors = [FAMILY_COLORS.get(fam, "#888888") for fam in main_families]
+    # ================================================================
+    # Panel (b): Instruction composition stacked bar by family
+    # ================================================================
+    family_stats: dict[str, dict[str, list[float]]] = {}
+    for r in results:
+        if not r.passed or not r.roundtrip_string:
+            continue
+        s = r.roundtrip_string
+        n_chars = len(s)
+        if n_chars == 0:
+            continue
+        node_frac = sum(1 for c in s if c in "Vv") / n_chars
+        edge_frac = sum(1 for c in s if c in "Cc") / n_chars
+        nav_frac = sum(1 for c in s if c in "NnPp") / n_chars
 
-    parts = ax2.violinplot(
-        violin_data,
-        positions=range(len(main_families)),
-        showmedians=True,
-        showextrema=False,
+        family_stats.setdefault(r.source, {"node": [], "edge": [], "nav": []})
+        family_stats[r.source]["node"].append(node_frac)
+        family_stats[r.source]["edge"].append(edge_frac)
+        family_stats[r.source]["nav"].append(nav_frac)
+
+    # Sort families by total structural fraction (node + edge)
+    families = sorted(
+        family_stats.keys(),
+        key=lambda f: np.mean(family_stats[f]["node"]) + np.mean(family_stats[f]["edge"]),
+    )
+    mean_node = [float(np.mean(family_stats[f]["node"])) for f in families]
+    mean_edge = [float(np.mean(family_stats[f]["edge"])) for f in families]
+    mean_nav = [float(np.mean(family_stats[f]["nav"])) for f in families]
+
+    y_pos = np.arange(len(families))
+    node_color = PAUL_TOL_BRIGHT["green"]
+    edge_color = PAUL_TOL_BRIGHT["red"]
+    nav_color = PAUL_TOL_BRIGHT["blue"]
+
+    ax2.barh(
+        y_pos,
+        mean_node,
+        color=node_color,
+        alpha=PLOT_SETTINGS["bar_alpha"],
+        label="Node (V/v)",
+    )
+    ax2.barh(
+        y_pos,
+        mean_edge,
+        left=mean_node,
+        color=edge_color,
+        alpha=PLOT_SETTINGS["bar_alpha"],
+        label="Edge (C/c)",
+    )
+    left_nav = [n + e for n, e in zip(mean_node, mean_edge, strict=True)]
+    ax2.barh(
+        y_pos,
+        mean_nav,
+        left=left_nav,
+        color=nav_color,
+        alpha=PLOT_SETTINGS["bar_alpha"],
+        label="Nav (N/P/n/p)",
     )
 
-    # Style violin bodies
-    for i, body in enumerate(parts["bodies"]):
-        body.set_facecolor(violin_colors[i])
-        body.set_edgecolor("0.3")
-        body.set_linewidth(0.6)
-        body.set_alpha(PLOT_SETTINGS["bar_alpha"])
+    ax2.set_yticks(y_pos)
+    ax2.set_yticklabels(
+        [family_display(f) for f in families],
+        fontsize=PLOT_SETTINGS["tick_labelsize"] - 2,
+    )
+    ax2.set_xlabel("Fraction of instructions")
+    ax2.set_xlim(0, 1)
+    ax2.legend(
+        fontsize=PLOT_SETTINGS["legend_fontsize"] - 1,
+        loc="lower right",
+    )
+    ax2.grid(axis="x")
+    ax2.grid(axis="y", visible=False)
 
-    # Style median lines
-    parts["cmedians"].set_edgecolor("white")
-    parts["cmedians"].set_linewidth(1.5)
-
-    # Add white median dots for clarity
-    for i, fam in enumerate(main_families):
-        median_val = float(np.median(source_stats[fam]["times"]))
-        ax2.scatter(
-            [i],
-            [median_val],
-            color="white",
-            edgecolors="0.3",
-            s=20,
-            zorder=4,
-            linewidths=0.5,
-        )
-
-    ax2.set_yscale("log")
-    ax2.set_xticks(range(len(main_families)))
-    ax2.set_xticklabels(
-        [family_display(fam) for fam in main_families],
-        rotation=30,
+    # Pass rate annotation
+    pass_pct = 100.0 * total_passed / total_tests if total_tests > 0 else 0.0
+    ax2.text(
+        0.97,
+        0.97,
+        f"$N$ = {total_tests:,} | {pass_pct:.0f}% pass",
+        transform=ax2.transAxes,
+        fontsize=PLOT_SETTINGS["annotation_fontsize"],
         ha="right",
+        va="top",
+        bbox=dict(
+            boxstyle="round,pad=0.3",
+            facecolor="white",
+            edgecolor="0.7",
+            alpha=0.9,
+        ),
     )
-    ax2.set_ylabel("Execution time (s)")
-    ax2.grid(axis="y")
 
-    # Panel label (above axes)
+    # Panel label
     ax2.text(
         -0.02,
         1.05,

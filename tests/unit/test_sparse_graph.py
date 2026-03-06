@@ -78,6 +78,43 @@ class TestSparseGraphBasics:
             g.neighbors(0)  # no nodes yet
 
 
+class TestSparseGraphSelfLoop:
+    """Self-loop edge counting and semantics."""
+
+    def test_self_loop_undirected(self) -> None:
+        """Undirected self-loop: add_edge(0,0) stores one set entry, edge_count=2."""
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        g.add_edge(0, 0)
+        assert g.has_edge(0, 0)
+        assert g.neighbors(0) == {0}
+        # Undirected: both directions stored, but source==target so only 1 set entry.
+        # edge_count incremented by 2 (forward + reverse), logical = 2//2 = 1.
+        assert g.edge_count() == 2
+        assert g.logical_edge_count() == 1
+
+    def test_self_loop_directed(self) -> None:
+        """Directed self-loop: add_edge(0,0) stores one entry, edge_count=1."""
+        g = SparseGraph(3, directed_graph=True)
+        g.add_node()
+        g.add_edge(0, 0)
+        assert g.has_edge(0, 0)
+        assert g.neighbors(0) == {0}
+        assert g.edge_count() == 1
+        assert g.logical_edge_count() == 1
+
+    def test_self_loop_duplicate(self) -> None:
+        """Duplicate self-loop guarded by B9 fix: counts unchanged on second add."""
+        g = SparseGraph(3, directed_graph=False)
+        g.add_node()
+        g.add_edge(0, 0)
+        ec = g.edge_count()
+        lec = g.logical_edge_count()
+        g.add_edge(0, 0)  # duplicate, should be no-op
+        assert g.edge_count() == ec
+        assert g.logical_edge_count() == lec
+
+
 class TestSparseGraphIsomorphism:
     """Backtracking isomorphism checker."""
 

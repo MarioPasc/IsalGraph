@@ -71,6 +71,37 @@ class TestGraphToStringBasics:
         assert len(trace) >= 2  # at least initial + final
 
 
+class TestGeneratePairsOrdering:
+    """Detailed ordering verification for generate_pairs_sorted_by_sum."""
+
+    def test_pair_ordering_m3(self) -> None:
+        """For m=3, verify: first pair is (0,0), cost groups are monotone,
+        and within each cost group pairs are sorted by (|a|, |b|) then (a, b)."""
+        pairs = generate_pairs_sorted_by_sum(3)
+        # First pair must be (0, 0) with cost 0
+        assert pairs[0] == (0, 0)
+
+        # Group by cost and verify monotone cost ordering
+        prev_cost = -1
+        for a, b in pairs:
+            cost = abs(a) + abs(b)
+            assert cost >= prev_cost, f"Cost decreased: {prev_cost} -> {cost} at ({a}, {b})"
+            prev_cost = cost
+
+        # Within each cost group, verify deterministic tiebreaker: (|a|, (a, b))
+        from itertools import groupby
+
+        for cost, group in groupby(pairs, key=lambda p: abs(p[0]) + abs(p[1])):
+            group_list = list(group)
+            expected = sorted(group_list, key=lambda p: (abs(p[0]), p))
+            assert group_list == expected, (
+                f"Within cost={cost}, ordering mismatch: {group_list} != {expected}"
+            )
+
+        # Total count: range [-3, 3] = 7 values per axis -> 49 pairs
+        assert len(pairs) == 49
+
+
 class TestGraphToStringPointerUpdate:
     """Verify that pointers are properly updated after operations (B4)."""
 

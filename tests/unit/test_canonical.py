@@ -326,6 +326,89 @@ class TestCanonicalDirected:
 
 
 # ======================================================================
+# Self-loop canonical string
+# ======================================================================
+
+
+class TestCanonicalSelfLoop:
+    """Canonical string for graphs with self-loops."""
+
+    def test_self_loop_single_node(self) -> None:
+        """Single node with self-loop: canonical string must contain 'C'."""
+        g = SparseGraph(1, directed_graph=False)
+        g.add_node()
+        g.add_edge(0, 0)
+        w = canonical_string(g)
+        assert "C" in w
+
+    def test_self_loop_round_trip(self) -> None:
+        """Graph with self-loop: canonical round-trips correctly."""
+        from isalgraph.core.string_to_graph import StringToGraph
+
+        g = SparseGraph(2, directed_graph=False)
+        for _ in range(2):
+            g.add_node()
+        g.add_edge(0, 1)
+        g.add_edge(0, 0)  # self-loop on node 0
+        w = canonical_string(g)
+        stg = StringToGraph(w, directed_graph=False)
+        g2, _ = stg.run()
+        assert g.is_isomorphic(g2)
+
+
+# ======================================================================
+# Directed canonical invariance with 4-node graphs
+# ======================================================================
+
+
+class TestCanonicalDirectedInvariance:
+    """Invariance of canonical string under relabeling for directed graphs."""
+
+    def test_directed_diamond_relabeling(self) -> None:
+        """Directed diamond: 0->1, 0->2, 1->3, 2->3.
+        Relabel: 0->2, 1->3, 2->0, 3->1.
+        """
+        g1 = SparseGraph(4, directed_graph=True)
+        for _ in range(4):
+            g1.add_node()
+        g1.add_edge(0, 1)
+        g1.add_edge(0, 2)
+        g1.add_edge(1, 3)
+        g1.add_edge(2, 3)
+
+        g2 = SparseGraph(4, directed_graph=True)
+        for _ in range(4):
+            g2.add_node()
+        g2.add_edge(2, 3)
+        g2.add_edge(2, 0)
+        g2.add_edge(3, 1)
+        g2.add_edge(0, 1)
+
+        assert canonical_string(g1) == canonical_string(g2)
+
+    def test_directed_cycle_4_relabeling(self) -> None:
+        """Directed 4-cycle: 0->1->2->3->0 vs 2->0->3->1->2."""
+        g1 = SparseGraph(4, directed_graph=True)
+        for _ in range(4):
+            g1.add_node()
+        g1.add_edge(0, 1)
+        g1.add_edge(1, 2)
+        g1.add_edge(2, 3)
+        g1.add_edge(3, 0)
+
+        # Relabel: 0->2, 1->0, 2->3, 3->1
+        g2 = SparseGraph(4, directed_graph=True)
+        for _ in range(4):
+            g2.add_node()
+        g2.add_edge(2, 0)
+        g2.add_edge(0, 3)
+        g2.add_edge(3, 1)
+        g2.add_edge(1, 2)
+
+        assert canonical_string(g1) == canonical_string(g2)
+
+
+# ======================================================================
 # Direct _is_reachable tests (line 124: n <= 1 early return)
 # ======================================================================
 

@@ -185,6 +185,27 @@ def test_roundtrip_cycle_5() -> None:
 
 
 # ======================================================================
+# Self-loop round-trip
+# ======================================================================
+
+
+def test_roundtrip_self_loop_undirected() -> None:
+    """Self-loop via 'C' at displacement (0,0): both pointers at same node."""
+    _roundtrip("C", directed=False)
+
+
+def test_roundtrip_self_loop_directed() -> None:
+    """Self-loop via 'C' in directed mode."""
+    _roundtrip("C", directed=True)
+
+
+def test_roundtrip_self_loop_with_neighbors() -> None:
+    """Graph with both a self-loop and regular edges: 'VC' creates
+    node 0 --self-loop--, node 0 -- node 1, node 1 --self-loop--."""
+    _roundtrip("VC", directed=False)
+
+
+# ======================================================================
 # Phase 2 (mini): small random-ish tests
 # ======================================================================
 

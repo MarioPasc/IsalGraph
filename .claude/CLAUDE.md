@@ -8,7 +8,7 @@ University of Malaga. Extends IsalChem (molecular graphs) to arbitrary graphs
 with unlabeled, indistinguishable nodes and no degree restrictions.
 
 > For full mathematical foundation, architecture, and adapter design:
-> read `docs/ISALGRAPH_AGENT_CONTEXT.md` (583 lines, comprehensive).
+> read `src/isalgraph/core/README.md`.
 
 ---
 
@@ -170,7 +170,7 @@ This is a complete graph invariant: `w*_G = w*_H` iff `G ~ H`.
 
 **Graph distance**: `Levenshtein(w*_G, w*_H)` approximates graph edit distance.
 
-Full details: `docs/ISALGRAPH_AGENT_CONTEXT.md` Sections 2.1-2.8.
+Full details: `src/isalgraph/core/README.md` 
 
 ---
 
@@ -183,6 +183,6 @@ Full details: `docs/ISALGRAPH_AGENT_CONTEXT.md` Sections 2.1-2.8.
 
 ## Detailed Specifications
 
-- @docs/ISALGRAPH_AGENT_CONTEXT.md -- Full math, architecture, adapters, verification
+- @src/isalgraph/core/README.md -- Full math, architecture
 - @docs/DEVELOPMENT.md -- Development workflow, testing, commands
 - Save every output in `media/mpascual/Sandisk2TB/research/isalgraph`

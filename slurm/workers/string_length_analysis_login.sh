@@ -17,6 +17,7 @@ if command -v conda >/dev/null 2>&1; then
     eval "$(conda shell.bash hook 2>/dev/null)" || true
     conda activate "${CONDA_ENV_NAME}" 2>/dev/null || true
 fi
+
 conda run -n isalgraph pip install -e "${REPO_DIR}[all]" --quiet
 conda run -n isalgraph python -c "from isalgraph.core.graph_to_string import GraphToString; print('OK')"
 

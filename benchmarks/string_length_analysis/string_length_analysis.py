@@ -48,8 +48,10 @@ DEFAULT_OUTPUT_DIR = "/media/mpascual/Sandisk2TB/research/isalgraph"
 DEFAULT_SEED = 42
 # Graphs up to this size try all starting nodes; above, sample.
 GREEDY_ALL_STARTS_LIMIT = 50
-# Canonical string computation limit (exhaustive search is expensive).
-CANONICAL_LIMIT = 8
+# Canonical string computation limits (exhaustive search is expensive).
+# Dense graphs (complete, gnp) explode combinatorially; sparse graphs are faster.
+CANONICAL_LIMIT_DEFAULT = 8
+CANONICAL_LIMIT_SPARSE = 12  # tree, path, star, cycle, ladder
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -222,6 +224,31 @@ def _generate_graph_suite(
     for n in [n for n in [5, 8, 10, 15, 20] if n <= max_nodes]:
         graphs.append(("wheel", nx.wheel_graph(n), False))
 
+    # ---- Directed families ----
+    directed_sizes = [n for n in [4, 6, 8, 10, 15, 20] if n <= max_nodes]
+
+    # Directed cycles
+    for n in directed_sizes:
+        g = nx.DiGraph()
+        g.add_nodes_from(range(n))
+        for i in range(n):
+            g.add_edge(i, (i + 1) % n)
+        graphs.append(("directed_cycle", g, True))
+
+    # Directed complete (tournaments are too constrained; use full digraph)
+    for n in [n for n in [3, 4, 5, 6, 7, 8] if n <= max_nodes]:
+        graphs.append(("directed_complete", nx.complete_graph(n, create_using=nx.DiGraph), True))
+
+    # Directed GNP (ensure reachability from node 0)
+    for n in [n for n in [6, 8, 10, 15, 20] if n <= max_nodes]:
+        for p in [0.3, 0.5]:
+            for _attempt in range(20):
+                seed = rng.randint(0, 2**31)
+                g = nx.gnp_random_graph(n, p, seed=seed, directed=True)
+                if g.number_of_nodes() > 0 and len(nx.descendants(g, 0)) + 1 == n:
+                    graphs.append((f"directed_gnp_p{p:.1f}", g, True))
+                    break
+
     return graphs
 
 
@@ -251,7 +278,9 @@ def _analyze_graph(
     greedy_best, greedy_0 = _greedy_min_length(sg, max_starts=max_starts)
 
     canonical_len = -1
-    if compute_canonical and n <= CANONICAL_LIMIT:
+    sparse_families = {"tree", "path", "star", "cycle", "ladder"}
+    can_limit = CANONICAL_LIMIT_SPARSE if family in sparse_families else CANONICAL_LIMIT_DEFAULT
+    if compute_canonical and n <= can_limit:
         import contextlib
 
         from isalgraph.core.canonical import canonical_string
@@ -293,7 +322,8 @@ def run_analysis(
     print(f"{'=' * 60}")
     print(f"Seed: {seed}")
     print(f"Max nodes: {max_nodes}")
-    print(f"Canonical: {'yes (N <= ' + str(CANONICAL_LIMIT) + ')' if compute_canonical else 'no'}")
+    can_info = f"yes (sparse N<={CANONICAL_LIMIT_SPARSE}, dense N<={CANONICAL_LIMIT_DEFAULT})"
+    print(f"Canonical: {can_info if compute_canonical else 'no'}")
     print(f"Output dir: {output_dir}")
     print()
 
@@ -344,7 +374,10 @@ def run_analysis(
     can_recs = [r for r in summary.records if r["canonical_length"] >= 0]
     if can_recs:
         print(f"\n{'=' * 60}")
-        print(f"CANONICAL vs GREEDY (N <= {CANONICAL_LIMIT})")
+        print(
+            f"CANONICAL vs GREEDY "
+            f"(sparse N<={CANONICAL_LIMIT_SPARSE}, dense N<={CANONICAL_LIMIT_DEFAULT})"
+        )
         print(f"{'=' * 60}")
         total_saved = 0
         for r in can_recs:
@@ -579,15 +612,15 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
         fontweight="bold",
     )
 
-    # ---- Panel (b): Scatter (compression_ratio vs density) ----
+    # ---- Panel (b): Scatter (compression factor N²/|w| vs density) ----
     for fam in families_seen:
         color = _get_family_color(fam)
         marker = _get_family_marker(fam)
-        fam_recs = [r for r in records if r["family"] == fam and r["compression_ratio"] >= 0]
+        fam_recs = [r for r in records if r["family"] == fam and r["greedy_length_best"] > 0]
         if not fam_recs:
             continue
         xs = [r["density"] for r in fam_recs]
-        ys = [r["compression_ratio"] for r in fam_recs]
+        ys = [r["num_nodes"] ** 2 / r["greedy_length_best"] for r in fam_recs]
         ax_b.scatter(
             xs,
             ys,
@@ -600,8 +633,9 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
             zorder=3,
         )
 
+    ax_b.axhline(y=1.0, color="0.5", linestyle="--", linewidth=0.8, zorder=1)
     ax_b.set_xlabel("Edge density $\\rho$")
-    ax_b.set_ylabel("Compression ratio $|w| / N^2$")
+    ax_b.set_ylabel("Compression factor $N^2 / |w|$")
     ax_b.grid(
         axis="y",
         alpha=PLOT_SETTINGS["grid_alpha"],
@@ -618,20 +652,22 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
         fontweight="bold",
     )
 
-    # ---- Panel (c): Horizontal bar chart (mean compression ratio) ----
-    family_ratios: dict[str, list[float]] = {}
+    # ---- Panel (c): Horizontal bar chart (mean compression factor N²/|w|) ----
+    family_factors: dict[str, list[float]] = {}
     for r in records:
-        if r["compression_ratio"] >= 0:
-            family_ratios.setdefault(r["family"], []).append(r["compression_ratio"])
+        if r["greedy_length_best"] > 0:
+            factor = r["num_nodes"] ** 2 / r["greedy_length_best"]
+            family_factors.setdefault(r["family"], []).append(factor)
 
-    # Include all families with data (>= 1 point)
-    bar_families = [f for f in family_ratios]
-    bar_families.sort(key=lambda f: sum(family_ratios[f]) / len(family_ratios[f]))
-    bar_means = [sum(family_ratios[f]) / len(family_ratios[f]) for f in bar_families]
+    # Include all families with data (>= 1 point), sort by mean factor
+    bar_families = list(family_factors.keys())
+    bar_families.sort(key=lambda f: sum(family_factors[f]) / len(family_factors[f]))
+    bar_means = [sum(family_factors[f]) / len(family_factors[f]) for f in bar_families]
     bar_stds = [
         (
-            (sum((v - bar_means[i]) ** 2 for v in family_ratios[f]) / len(family_ratios[f])) ** 0.5
-            if len(family_ratios[f]) > 1
+            (sum((v - bar_means[i]) ** 2 for v in family_factors[f]) / len(family_factors[f]))
+            ** 0.5
+            if len(family_factors[f]) > 1
             else 0.0
         )
         for i, f in enumerate(bar_families)
@@ -654,11 +690,11 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
             "ecolor": "0.3",
         },
     )
-    # Break-even reference line at ratio = 1.0
+    # Break-even reference line at factor = 1.0 (no compression)
     ax_c.axvline(x=1.0, color="0.5", linestyle="--", linewidth=0.8, zorder=2)
     ax_c.set_yticks(y_pos)
     ax_c.set_yticklabels(bar_display, fontsize=7)
-    ax_c.set_xlabel("Mean compression ratio $|w| / N^2$")
+    ax_c.set_xlabel("Mean compression factor $N^2 / |w|$")
     ax_c.grid(axis="y", visible=False)
     ax_c.grid(
         axis="x",
@@ -713,8 +749,9 @@ def generate_figure(records: list[dict[str, Any]], output_dir: str) -> list[str]
         )
 
         total_saved = sum(g - c for g, c in zip(all_cy, all_cx, strict=True))
+        n_equal = sum(1 for g, c in zip(all_cy, all_cx, strict=True) if g == c)
         ax_d.annotate(
-            f"Total saved: {total_saved} chars",
+            f"$|w^*| = |w|$ in {n_equal}/{len(all_cx)} cases\nTotal gap: {total_saved} chars",
             xy=(0.95, 0.05),
             xycoords="axes fraction",
             fontsize=PLOT_SETTINGS["annotation_fontsize"],
