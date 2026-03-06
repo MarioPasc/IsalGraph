@@ -11,7 +11,7 @@ conda_env: isalgraph
 
 # SLURM defaults
 constraint: cpu           # Any CPU node (Picasso recommended default)
-account: tic_163_uma/mpascual
+account: tic_163_uma
 
 # Per-benchmark configuration
 benchmarks:
