@@ -78,3 +78,14 @@ benchmarks:
     time_limit: "1-00:00:00"
     cpus: 64
     mem_gb: 64
+
+  eval_setup:
+    enabled: true
+    data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
+    iam_letter_path: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/Letter
+    n_max: 12
+    seed: 42
+    timeout_per_graph: 600
+    time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 128

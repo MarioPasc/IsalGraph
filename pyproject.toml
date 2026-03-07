@@ -36,6 +36,11 @@ dev = [
     "mypy>=1.0",
 ]
 all = ["isalgraph[networkx,igraph,viz,bench,dev]"]
+eval = [
+    "isalgraph[networkx,pyg,viz,bench]",
+    "python-Levenshtein>=0.21",
+    "tqdm>=4.60",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -56,7 +61,7 @@ strict = true
 warn_return_any = true
 
 [[tool.mypy.overrides]]
-module = ["networkx", "networkx.*", "igraph", "igraph.*", "torch", "torch.*", "torch_geometric", "torch_geometric.*"]
+module = ["networkx", "networkx.*", "igraph", "igraph.*", "torch", "torch.*", "torch_geometric", "torch_geometric.*", "Levenshtein", "Levenshtein.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
