@@ -6,6 +6,7 @@
 **Estimated local time**: ~20 min.
 **Estimated Picasso time**: ~10 min.
 
+PLAN ALREADY CREATED: `~/.claude/plans/immutable-sniffing-moonbeam.md`
 ---
 
 ## 1. Scientific Context

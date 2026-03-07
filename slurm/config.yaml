@@ -100,3 +100,16 @@ benchmarks:
     time_limit: "04:00:00"
     cpus: 16
     mem_gb: 64
+
+  eval_embedding:
+    enabled: true
+    data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
+    output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval_embedding
+    dimensions: "2,3,5,10"
+    n_procrustes_perms: 9999
+    smacof_max_iter: 300
+    smacof_n_init: 4
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 16
+    mem_gb: 64

@@ -150,7 +150,7 @@ submit_benchmark() {
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-BENCHMARKS=("random_roundtrip" "canonical_invariance" "string_length_analysis" "levenshtein_vs_ged" "greedy_optimality_gap" "starting_node_sensitivity" "roundtrip_fixed_point" "alphabet_entropy" "eval_setup" "eval_correlation")
+BENCHMARKS=("random_roundtrip" "canonical_invariance" "string_length_analysis" "levenshtein_vs_ged" "greedy_optimality_gap" "starting_node_sensitivity" "roundtrip_fixed_point" "alphabet_entropy" "eval_setup" "eval_correlation" "eval_embedding")
 
 if [[ -n "$SINGLE_BENCHMARK" ]]; then
     submit_benchmark "$SINGLE_BENCHMARK"
