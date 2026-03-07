@@ -24,27 +24,22 @@ from isalgraph.core.graph_to_string import GraphToString
 print('Core imports OK')
 "
 
-# Download PyG datasets (requires internet, only available on login node)
-echo "Downloading PyG datasets (LINUX, ALKANE)..."
+# Verify source data exists
 CONFIG="${REPO_DIR}/slurm/config.yaml"
-DATA_ROOT=$(python3 -c "
+SOURCE_DIR=$(python3 -c "
 import yaml
 with open('${CONFIG}') as f:
     cfg = yaml.safe_load(f)
-print(cfg['benchmarks']['eval_setup']['data_root'])
+print(cfg['benchmarks']['eval_setup']['source_dir'])
 ")
 
-conda run -n isalgraph python -c "
-from torch_geometric.datasets import GEDDataset
-import os
-root = os.path.join('${DATA_ROOT}', 'datasets')
-print('Downloading LINUX...')
-GEDDataset(root=root, name='LINUX', train=True)
-GEDDataset(root=root, name='LINUX', train=False)
-print('Downloading ALKANE...')
-GEDDataset(root=root, name='ALKANE', train=True)
-GEDDataset(root=root, name='ALKANE', train=False)
-print('PyG datasets downloaded OK')
-"
+echo "Checking source data at: ${SOURCE_DIR}"
+for ds in Letter/LOW Letter/MED Letter/HIGH LINUX AIDS; do
+    if [[ -d "${SOURCE_DIR}/${ds}" ]]; then
+        echo "  OK: ${ds}"
+    else
+        echo "  MISSING: ${ds}"
+    fi
+done
 
 echo "Login preparation complete. Submit via: bash slurm/launch.sh --benchmark eval_setup"

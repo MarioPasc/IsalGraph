@@ -5,9 +5,9 @@ string computation, Levenshtein matrix computation, method comparison,
 and validation into a single pipeline.
 
 Usage:
-    python -m benchmarks.eval_setup.eval_setup \\
-        --data-root data/eval \\
-        --iam-letter-path /path/to/Letter \\
+    python -m benchmarks.eval_setup.eval_setup \
+        --data-root data/eval \
+        --source-dir /path/to/source \
         --n-max 12 --n-workers 4 --seed 42
 """
 
@@ -38,6 +38,7 @@ from benchmarks.eval_setup.ged_computer import (
     compute_all_pairs_ged,
     save_ged_matrix,
 )
+from benchmarks.eval_setup.graphedx_loader import load_graphedx_dataset
 from benchmarks.eval_setup.iam_letter_loader import load_iam_letter
 from benchmarks.eval_setup.levenshtein_computer import (
     compute_levenshtein_matrix,
@@ -56,14 +57,14 @@ from benchmarks.eval_setup.validator import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATA_ROOT = "data/eval"
-DEFAULT_IAM_LETTER_PATH = "/media/mpascual/Sandisk2TB/research/isalgraph/data/source/Letter"
+DEFAULT_SOURCE_DIR = "/media/mpascual/Sandisk2TB/research/isalgraph/data/source"
 DEFAULT_N_MAX = 12
 DEFAULT_SEED = 42
 DEFAULT_TIMEOUT = 600
 
-ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "alkane"]
+ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
 IAM_DATASETS = {"iam_letter_low": "LOW", "iam_letter_med": "MED", "iam_letter_high": "HIGH"}
-PYG_DATASETS = {"linux": "LINUX", "alkane": "ALKANE"}
+GRAPHEDX_DATASETS = {"linux": "LINUX", "aids": "AIDS"}
 
 
 # ---------------------------------------------------------------------------
@@ -73,55 +74,31 @@ PYG_DATASETS = {"linux": "LINUX", "alkane": "ALKANE"}
 
 def _load_dataset(
     dataset_name: str,
-    data_root: str,
-    iam_letter_path: str,
-) -> tuple[list[nx.Graph], list[str], list[str]]:
-    """Load a dataset and return (graphs, graph_ids, labels).
+    source_dir: str,
+) -> tuple[list[nx.Graph], list[str], list[str], np.ndarray | None]:
+    """Load a dataset and return (graphs, graph_ids, labels, ged_matrix_or_None).
 
     Args:
         dataset_name: One of ALL_DATASETS.
-        data_root: Root output directory.
-        iam_letter_path: Path to IAM Letter base directory.
+        source_dir: Path to the source data directory.
 
     Returns:
-        (graphs, graph_ids, labels) tuple.
+        (graphs, graph_ids, labels, ged_matrix) tuple.
+        ged_matrix is None for IAM Letter (computed later).
     """
     if dataset_name in IAM_DATASETS:
         level = IAM_DATASETS[dataset_name]
-        ds = load_iam_letter(iam_letter_path, level)
-        return ds.graphs, ds.graph_ids, ds.labels
+        letter_dir = os.path.join(source_dir, "Letter")
+        ds = load_iam_letter(letter_dir, level)
+        return ds.graphs, ds.graph_ids, ds.labels, None
 
-    if dataset_name in PYG_DATASETS:
-        from benchmarks.eval_setup.pyg_ged_extractor import load_pyg_ged_dataset
-
-        pyg_name = PYG_DATASETS[dataset_name]
-        cache_root = os.path.join(data_root, "datasets")
-        result = load_pyg_ged_dataset(pyg_name, cache_root)
+    if dataset_name in GRAPHEDX_DATASETS:
+        gx_name = GRAPHEDX_DATASETS[dataset_name]
+        result = load_graphedx_dataset(gx_name, source_dir)
         labels = [""] * len(result.graphs)
-        return result.graphs, result.graph_ids, labels
+        return result.graphs, result.graph_ids, labels, result.ged_matrix
 
     raise ValueError(f"Unknown dataset: {dataset_name}")
-
-
-def _load_pyg_ged(
-    dataset_name: str,
-    data_root: str,
-) -> np.ndarray:
-    """Load precomputed GED matrix from PyG.
-
-    Args:
-        dataset_name: 'linux' or 'alkane'.
-        data_root: Root output directory.
-
-    Returns:
-        Raw GED matrix [N, N].
-    """
-    from benchmarks.eval_setup.pyg_ged_extractor import load_pyg_ged_dataset
-
-    pyg_name = PYG_DATASETS[dataset_name]
-    cache_root = os.path.join(data_root, "datasets")
-    result = load_pyg_ged_dataset(pyg_name, cache_root)
-    return result.ged_matrix
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +111,7 @@ def _process_dataset(
     graphs: list[nx.Graph],
     graph_ids: list[str],
     labels: list[str],
+    raw_ged_matrix: np.ndarray | None,
     data_root: str,
     n_max: int,
     n_workers: int,
@@ -198,11 +176,15 @@ def _process_dataset(
                 checkpoint_path=checkpoint,
                 timeout_per_pair=60.0,
             )
-        elif dataset_name in PYG_DATASETS:
-            raw_ged = _load_pyg_ged(dataset_name, data_root)
-            ged_matrix = extract_ged_submatrix(raw_ged, filter_result.kept_indices)
+        elif dataset_name in GRAPHEDX_DATASETS:
+            if raw_ged_matrix is None:
+                raise ValueError(f"No precomputed GED matrix for {dataset_name}")
+            ged_matrix = extract_ged_submatrix(raw_ged_matrix, filter_result.kept_indices)
         else:
             raise ValueError(f"Unknown dataset: {dataset_name}")
+
+        ged_source = "networkx" if dataset_name in IAM_DATASETS else "graphedx_jain2024"
+        ged_method = "exact_a_star" if dataset_name in IAM_DATASETS else "precomputed_bai2019"
 
         save_ged_matrix(
             ged_matrix=ged_matrix,
@@ -212,9 +194,9 @@ def _process_dataset(
             edge_counts=edge_counts,
             output_path=ged_path,
             dataset_name=dataset_name,
-            ged_method="exact_a_star" if dataset_name in IAM_DATASETS else "precomputed_bai2019",
+            ged_method=ged_method,
             ged_cost_function="uniform_topology_only",
-            source="networkx" if dataset_name in IAM_DATASETS else "pyg_bai2019",
+            source=ged_source,
             n_max_filter=n_max,
             n_dropped=filter_result.n_raw - filter_result.n_kept,
         )
@@ -291,7 +273,7 @@ def _process_dataset(
 
 def run_pipeline(
     data_root: str,
-    iam_letter_path: str,
+    source_dir: str,
     datasets: list[str],
     n_max: int,
     n_workers: int,
@@ -306,8 +288,8 @@ def run_pipeline(
     """Run the full evaluation setup pipeline.
 
     Args:
-        data_root: Root output directory.
-        iam_letter_path: Path to IAM Letter base directory.
+        data_root: Root output directory for evaluation artifacts.
+        source_dir: Path to source data (Letter/, LINUX/, AIDS/).
         datasets: List of dataset names to process.
         n_max: Maximum node count filter.
         n_workers: Number of parallel workers.
@@ -324,6 +306,7 @@ def run_pipeline(
 
     logger.info("Evaluation Setup Pipeline")
     logger.info("  data_root: %s", data_root)
+    logger.info("  source_dir: %s", source_dir)
     logger.info("  datasets: %s", datasets)
     logger.info("  n_max: %d", n_max)
     logger.info("  n_workers: %d", n_workers)
@@ -349,19 +332,23 @@ def run_pipeline(
 
     for dataset_name in datasets:
         try:
-            graphs, graph_ids, labels = _load_dataset(dataset_name, data_root, iam_letter_path)
+            graphs, graph_ids, labels, raw_ged = _load_dataset(dataset_name, source_dir)
 
             # Limit for testing
             if max_graphs_per_dataset and len(graphs) > max_graphs_per_dataset:
                 graphs = graphs[:max_graphs_per_dataset]
                 graph_ids = graph_ids[:max_graphs_per_dataset]
                 labels = labels[:max_graphs_per_dataset]
+                # Truncate GED matrix to match
+                if raw_ged is not None:
+                    raw_ged = raw_ged[:max_graphs_per_dataset, :max_graphs_per_dataset]
 
             fr = _process_dataset(
                 dataset_name=dataset_name,
                 graphs=graphs,
                 graph_ids=graph_ids,
                 labels=labels,
+                raw_ged_matrix=raw_ged,
                 data_root=data_root,
                 n_max=n_max,
                 n_workers=n_workers,
@@ -407,7 +394,7 @@ def main() -> None:
         description="Evaluation infrastructure setup (dual-mode canonical strings)."
     )
     parser.add_argument("--data-root", type=str, default=DEFAULT_DATA_ROOT)
-    parser.add_argument("--iam-letter-path", type=str, default=DEFAULT_IAM_LETTER_PATH)
+    parser.add_argument("--source-dir", type=str, default=DEFAULT_SOURCE_DIR)
     parser.add_argument("--n-max", type=int, default=DEFAULT_N_MAX)
     parser.add_argument("--n-workers", type=int, default=1)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -458,7 +445,7 @@ def main() -> None:
 
     run_pipeline(
         data_root=args.data_root,
-        iam_letter_path=args.iam_letter_path,
+        source_dir=args.source_dir,
         datasets=datasets,
         n_max=args.n_max,
         n_workers=args.n_workers,

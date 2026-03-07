@@ -10,11 +10,21 @@ comparison across 5 datasets.
 
 ## Datasets
 
-| Dataset | Source | Max |V| | GED Method |
-|---------|--------|---------|------------|
-| IAM Letter LOW/MED/HIGH | Zenodo GXL | 9 | NetworkX A* |
-| LINUX | PyG GEDDataset | ~21 | Precomputed (Bai 2019) |
-| ALKANE | PyG GEDDataset | ~12 | Precomputed (Bai 2019) |
+| Dataset | Domain | N graphs | Avg |V| | Max |V| | GED Method |
+|---------|--------|----------|---------|---------|------------|
+| IAM Letter LOW | Handwriting | ~750 | 4.7 | 9 | NetworkX A* (computed) |
+| IAM Letter MED | Handwriting | ~750 | 4.7 | 9 | NetworkX A* (computed) |
+| IAM Letter HIGH | Handwriting | ~750 | 4.7 | 9 | NetworkX A* (computed) |
+| LINUX | Software deps | ~89 | 7.6 | 12 | Precomputed (GraphEdX) |
+| AIDS | Molecular topology | ~860 | 8.9 | 12 | Precomputed (GraphEdX) |
+
+All datasets are pre-downloaded and stored under `--source-dir`:
+```
+source/
+    Letter/{LOW,MED,HIGH}/   # GXL/CXL files (Zenodo)
+    LINUX/                   # GraphEdX .pt files
+    AIDS/                    # GraphEdX .pt files
+```
 
 ## Connectivity Caveat
 
@@ -31,7 +41,8 @@ python -m benchmarks.eval_setup.eval_setup \
 
 # Full pipeline (local)
 python -m benchmarks.eval_setup.eval_setup \
-    --data-root data/eval --n-max 12 --n-workers 12 --seed 42
+    --data-root data/eval --source-dir /path/to/source \
+    --n-max 12 --n-workers 12 --seed 42
 
 # Validate only
 python -m benchmarks.eval_setup.eval_setup --data-root data/eval --validate-only
@@ -56,9 +67,9 @@ data/eval/
 |--------|---------|
 | `eval_setup.py` | CLI orchestrator |
 | `dataset_filter.py` | Node-count + connectivity filtering |
-| `iam_letter_loader.py` | GXL/CXL parser |
-| `pyg_ged_extractor.py` | PyG GED extraction |
-| `ged_computer.py` | All-pairs exact GED |
+| `iam_letter_loader.py` | GXL/CXL parser (IAM Letter) |
+| `graphedx_loader.py` | GraphEdX .pt loader (LINUX, AIDS) |
+| `ged_computer.py` | All-pairs exact GED (IAM Letter) |
 | `canonical_computer.py` | Dual canonical computation |
 | `levenshtein_computer.py` | All-pairs Levenshtein |
 | `method_comparator.py` | Exhaustive vs greedy comparison |

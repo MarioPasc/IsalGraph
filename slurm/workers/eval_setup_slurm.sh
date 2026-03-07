@@ -27,7 +27,7 @@ json.dump(cfg['benchmarks']['eval_setup'], sys.stdout)
 ")
 
 DATA_ROOT=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['data_root'])")
-IAM_LETTER_PATH=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['iam_letter_path'])")
+SOURCE_DIR=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['source_dir'])")
 N_MAX=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('n_max', 12))")
 SEED=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('seed', 42))")
 TIMEOUT=$(echo "$BENCH_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('timeout_per_graph', 600))")
@@ -35,12 +35,12 @@ N_WORKERS="${SLURM_CPUS_PER_TASK:-4}"
 
 mkdir -p "$DATA_ROOT"
 
-echo "Config: data_root=$DATA_ROOT, iam_letter_path=$IAM_LETTER_PATH"
+echo "Config: data_root=$DATA_ROOT, source_dir=$SOURCE_DIR"
 echo "  n_max=$N_MAX, seed=$SEED, timeout=$TIMEOUT, workers=$N_WORKERS"
 
 python -m benchmarks.eval_setup.eval_setup \
     --data-root "$DATA_ROOT" \
-    --iam-letter-path "$IAM_LETTER_PATH" \
+    --source-dir "$SOURCE_DIR" \
     --n-max "$N_MAX" \
     --seed "$SEED" \
     --timeout-per-graph "$TIMEOUT" \

@@ -82,7 +82,7 @@ benchmarks:
   eval_setup:
     enabled: true
     data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
-    iam_letter_path: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/Letter
+    source_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/isalgraph_source
     n_max: 12
     seed: 42
     timeout_per_graph: 600

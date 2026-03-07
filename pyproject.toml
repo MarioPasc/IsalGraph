@@ -37,9 +37,9 @@ dev = [
 ]
 all = ["isalgraph[networkx,igraph,viz,bench,dev]"]
 eval = [
-    "isalgraph[networkx,pyg,viz,bench]",
+    "isalgraph[networkx,viz,bench]",
+    "torch>=2.0",
     "python-Levenshtein>=0.21",
-    "tqdm>=4.60",
 ]
 
 [tool.setuptools.packages.find]
