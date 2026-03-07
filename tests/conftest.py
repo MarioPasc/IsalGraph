@@ -8,6 +8,21 @@ from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.sparse_graph import SparseGraph
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--eval-data-root",
+        action="store",
+        default=None,
+        help="Path to eval pipeline output (e.g., data/eval).",
+    )
+    parser.addoption(
+        "--source-dir",
+        action="store",
+        default=None,
+        help="Path to source datasets (Letter/, LINUX/, AIDS/).",
+    )
+
+
 @pytest.fixture()
 def small_cdll() -> CircularDoublyLinkedList:
     """A CDLL with capacity 10 and one node (value=0)."""

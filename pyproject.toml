@@ -53,6 +53,7 @@ markers = [
     "integration: Integration tests (external graph libs)",
     "property: Property-based tests (hypothesis)",
     "slow: Long-running tests",
+    "eval_validation: Validation tests on Picasso-generated eval data",
 ]
 
 [tool.mypy]
@@ -79,3 +80,6 @@ select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
 # E402: imports after sys.path manipulation for plotting_styles
 # ANN: benchmark scripts use dynamic typing for flexibility
 "benchmarks/**/*.py" = ["E402", "ANN"]
+# E402: imports after pytest.importorskip() for optional deps
+# ANN: test fixtures/methods don't need return type annotations
+"tests/eval_validation/*.py" = ["E402", "ANN"]

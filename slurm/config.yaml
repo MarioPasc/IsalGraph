@@ -89,3 +89,14 @@ benchmarks:
     time_limit: "2-00:00:00"
     cpus: 64
     mem_gb: 128
+
+  eval_correlation:
+    enabled: true
+    data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
+    output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval_correlation
+    n_bootstrap: 10000
+    n_permutations: 9999
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 16
+    mem_gb: 64
