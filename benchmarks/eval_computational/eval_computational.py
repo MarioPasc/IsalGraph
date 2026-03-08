@@ -460,27 +460,39 @@ def _time_ged(
     graph_ids: list[str],
     node_counts: list[int],
     n_reps: int,
-    timeout: float = 300.0,
+    ged_call_timeout: float = 60.0,
+    pair_budget_s: float = 120.0,
 ) -> pd.DataFrame:
     """Time exact GED computation for sampled pairs.
+
+    Uses adaptive repetitions: a single untimed probe determines how many
+    timed repetitions are feasible within ``pair_budget_s``.
+
+    Probe time -> reps policy:
+        < 0.1 s   : n_reps  (full)
+        0.1 - 1 s : min(10, n_reps)
+        1 - 10 s  : 3
+        10 - 60 s : 1  (probe only)
+        > 60 s    : 0  (skip, record inf)
 
     Args:
         pairs: Sampled (idx_i, idx_j) pairs.
         graphs: NetworkX graphs.
         graph_ids: Graph identifiers.
         node_counts: Node counts per graph.
-        n_reps: Timing repetitions (reduced to 5 for max_n > 12).
-        timeout: Per-pair timeout in seconds.
+        n_reps: Maximum timing repetitions.
+        ged_call_timeout: Per-call timeout for NetworkX GED (seconds).
+        pair_budget_s: Maximum total time budget per pair (seconds).
 
     Returns:
         DataFrame with per-pair GED times.
     """
     rows: list[dict] = []
+    cumulative_s = 0.0
 
     for pair_idx, (i, j) in enumerate(pairs):
         g1, g2 = graphs[i], graphs[j]
         max_n = max(node_counts[i], node_counts[j])
-        actual_reps = min(n_reps, 5) if max_n > 12 else n_reps
 
         def _compute_ged(g1_local=g1, g2_local=g2):
             return nx.graph_edit_distance(
@@ -492,23 +504,75 @@ def _time_ged(
                 edge_subst_cost=_EDGE_SUBST_COST,
                 edge_del_cost=_EDGE_DEL_COST,
                 edge_ins_cost=_EDGE_INS_COST,
-                timeout=timeout,
+                timeout=ged_call_timeout,
             )
 
+        # --- Probe: single untimed GED call to estimate cost ---
+        t_probe_start = time.process_time()
         try:
-            ged_timing = time_function(_compute_ged, n_reps=actual_reps)
-            ged_value = (
-                float(ged_timing["result"]) if ged_timing["result"] is not None else float("inf")
-            )
+            probe_result = _compute_ged()
         except Exception:
-            logger.exception("GED failed for pair (%s, %s)", graph_ids[i], graph_ids[j])
+            logger.warning("GED probe failed for pair (%s, %s)", graph_ids[i], graph_ids[j])
+            rows.append(
+                {
+                    "graph_i": graph_ids[i],
+                    "graph_j": graph_ids[j],
+                    "max_n": max_n,
+                    "ged_value": float("inf"),
+                    "ged_time_median_s": float("inf"),
+                    "ged_time_iqr_s": float("nan"),
+                    "ged_n_reps": 0,
+                    "ged_times_all_s": "[]",
+                }
+            )
+            continue
+        t_probe = time.process_time() - t_probe_start
+
+        ged_value = float(probe_result) if probe_result is not None else float("inf")
+
+        # --- Adaptive reps based on probe time ---
+        if t_probe > ged_call_timeout * 0.9:
+            # Hit timeout — record probe as the only measurement
+            actual_reps = 0
+        elif t_probe > 10.0:
+            actual_reps = 1
+        elif t_probe > 1.0:
+            actual_reps = 3
+        elif t_probe > 0.1:
+            actual_reps = min(10, n_reps)
+        else:
+            actual_reps = n_reps
+
+        # Also cap by pair budget
+        if actual_reps > 0 and t_probe > 0:
+            max_affordable = max(1, int(pair_budget_s / t_probe))
+            actual_reps = min(actual_reps, max_affordable)
+
+        if actual_reps > 0:
+            try:
+                ged_timing = time_function(_compute_ged, n_reps=actual_reps, warmup=0)
+                ged_value = (
+                    float(ged_timing["result"]) if ged_timing["result"] is not None else ged_value
+                )
+            except Exception:
+                logger.warning("GED timing failed for pair (%s, %s)", graph_ids[i], graph_ids[j])
+                ged_timing = {
+                    "median_s": t_probe,
+                    "iqr_s": float("nan"),
+                    "all_times_s": [t_probe],
+                    "n_reps": 1,
+                }
+        else:
+            # Only have the probe measurement
             ged_timing = {
-                "median_s": float("inf"),
+                "median_s": t_probe,
                 "iqr_s": float("nan"),
-                "all_times_s": [],
-                "n_reps": 0,
+                "all_times_s": [t_probe],
+                "n_reps": 1,
             }
-            ged_value = float("inf")
+
+        pair_total = t_probe + actual_reps * ged_timing["median_s"]
+        cumulative_s += pair_total
 
         row = {
             "graph_i": graph_ids[i],
@@ -523,7 +587,19 @@ def _time_ged(
         rows.append(row)
 
         if (pair_idx + 1) % max(1, len(pairs) // 10) == 0:
-            logger.info("  GED: %d/%d pairs", pair_idx + 1, len(pairs))
+            remaining = len(pairs) - pair_idx - 1
+            avg_s = cumulative_s / (pair_idx + 1)
+            eta_min = remaining * avg_s / 60
+            logger.info(
+                "  GED: %d/%d pairs (%.1fs cumulative, ~%.0f min remaining, "
+                "last probe=%.3fs, reps=%d)",
+                pair_idx + 1,
+                len(pairs),
+                cumulative_s,
+                eta_min,
+                t_probe,
+                actual_reps,
+            )
 
     return pd.DataFrame(rows)
 
@@ -788,14 +864,17 @@ def _analyze_dataset(
     os.makedirs(out_raw, exist_ok=True)
     os.makedirs(out_stats, exist_ok=True)
 
-    logger.info("=== %s: Phase A - Encoding timing ===", dataset)
-    encoding_df = _time_encoding(graphs, graph_ids, args.n_timing_reps)
-    if args.csv:
-        encoding_df.to_csv(
-            os.path.join(out_raw, f"{dataset}_encoding_times.csv"),
-            index=False,
-        )
-        logger.info("Saved encoding times CSV")
+    # --- Phase A: Encoding timing (with checkpoint) ---
+    enc_csv = os.path.join(out_raw, f"{dataset}_encoding_times.csv")
+    if os.path.isfile(enc_csv):
+        logger.info("=== %s: Phase A - LOADING checkpoint ===", dataset)
+        encoding_df = pd.read_csv(enc_csv)
+    else:
+        logger.info("=== %s: Phase A - Encoding timing ===", dataset)
+        encoding_df = _time_encoding(graphs, graph_ids, args.n_timing_reps)
+        if args.csv:
+            encoding_df.to_csv(enc_csv, index=False)
+            logger.info("Saved encoding times CSV")
 
     logger.info("=== %s: Phase B - Pair sampling ===", dataset)
     pairs = _sample_pairs(
@@ -805,34 +884,40 @@ def _analyze_dataset(
         args.seed,
     )
 
-    logger.info("=== %s: Phase C - Levenshtein timing ===", dataset)
-    lev_df = _time_levenshtein(
-        pairs,
-        graph_ids,
-        node_counts,
-        canonical_strings,
-        args.n_timing_reps,
-    )
-    if args.csv:
-        lev_df.to_csv(
-            os.path.join(out_raw, f"{dataset}_levenshtein_times.csv"),
-            index=False,
+    # --- Phase C: Levenshtein timing (with checkpoint) ---
+    lev_csv = os.path.join(out_raw, f"{dataset}_levenshtein_times.csv")
+    if os.path.isfile(lev_csv):
+        logger.info("=== %s: Phase C - LOADING checkpoint ===", dataset)
+        lev_df = pd.read_csv(lev_csv)
+    else:
+        logger.info("=== %s: Phase C - Levenshtein timing ===", dataset)
+        lev_df = _time_levenshtein(
+            pairs,
+            graph_ids,
+            node_counts,
+            canonical_strings,
+            args.n_timing_reps,
         )
-        logger.info("Saved Levenshtein times CSV")
+        if args.csv:
+            lev_df.to_csv(lev_csv, index=False)
+            logger.info("Saved Levenshtein times CSV")
 
-    logger.info("=== %s: Phase D - GED timing ===", dataset)
-    ged_df = _time_ged(
-        pairs,
-        graphs,
-        graph_ids,
-        node_counts,
-        args.n_timing_reps,
-    )
-    if args.csv:
-        ged_df.to_csv(
-            os.path.join(out_raw, f"{dataset}_ged_times.csv"),
-            index=False,
+    # --- Phase D: GED timing (with checkpoint) ---
+    ged_csv = os.path.join(out_raw, f"{dataset}_ged_times.csv")
+    if os.path.isfile(ged_csv):
+        logger.info("=== %s: Phase D - LOADING checkpoint ===", dataset)
+        ged_df = pd.read_csv(ged_csv)
+    else:
+        logger.info("=== %s: Phase D - GED timing ===", dataset)
+        ged_df = _time_ged(
+            pairs,
+            graphs,
+            graph_ids,
+            node_counts,
+            args.n_timing_reps,
         )
+    if args.csv and not os.path.isfile(ged_csv):
+        ged_df.to_csv(ged_csv, index=False)
         logger.info("Saved GED times CSV")
 
     logger.info("=== %s: Phase E - Crossover analysis ===", dataset)
