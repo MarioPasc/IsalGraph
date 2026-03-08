@@ -113,3 +113,28 @@ benchmarks:
     time_limit: "04:00:00"
     cpus: 16
     mem_gb: 64
+
+  eval_computational:
+    enabled: true
+    data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
+    source_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/isalgraph_source
+    output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval_computational
+    n_timing_reps: 25
+    n_pairs_per_bin: 50
+    seed: 42
+    time_limit: "08:00:00"
+    cpus: 1
+    mem_gb: 32
+
+  eval_encoding:
+    enabled: true
+    data_root: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval
+    output_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/eval_encoding
+    n_instances: 5
+    n_reps: 25
+    max_n_greedy: 50
+    max_n_canonical: 20
+    seed: 42
+    time_limit: "04:00:00"
+    cpus: 1
+    mem_gb: 16

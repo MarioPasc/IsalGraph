@@ -331,6 +331,9 @@ FAMILY_COLORS: dict[str, str] = {
     "petersen": "#AA4499",
     "wheel": "#117733",
     "random_string": "#332288",
+    "gnp_03": "#DDCC77",
+    "gnp_05": "#CC6600",
+    "binary_tree": "#4477AA",
 }
 
 # =============================================================================
@@ -355,6 +358,9 @@ FAMILY_DISPLAY_NAMES: dict[str, str] = {
     "petersen": "Petersen",
     "wheel": "Wheel",
     "random_string": "Random string",
+    "gnp_03": "GNP (p=0.3)",
+    "gnp_05": "GNP (p=0.5)",
+    "binary_tree": "Binary tree",
 }
 
 EXPERIMENT_DISPLAY_NAMES: dict[str, str] = {
@@ -381,6 +387,9 @@ FAMILY_MARKERS: dict[str, str] = {
     "petersen": "*",
     "wheel": "8",
     "random_string": "H",
+    "gnp_03": "d",
+    "gnp_05": "<",
+    "binary_tree": "^",
 }
 
 
