@@ -21,6 +21,7 @@ Figure 3 -- Empirical complexity:
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 import os
 import time
@@ -32,6 +33,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 
 from benchmarks.plotting_styles import (
+    INSTRUCTION_COLORS,
     PAUL_TOL_BRIGHT,
     apply_ieee_style,
     get_figure_size,
@@ -93,7 +95,7 @@ def _greedy_min(G: nx.Graph) -> str:
 def _decode(w: str) -> nx.Graph | None:
     """Decode an IsalGraph string to a NetworkX graph; None on failure."""
     try:
-        s2g = StringToGraph(w, directed=False)
+        s2g = StringToGraph(w, directed_graph=False)
         sg, _ = s2g.run()
         G = _ADAPTER.to_external(sg)
         if G.number_of_nodes() == 0:
@@ -163,53 +165,56 @@ def _ged1_neighbors(
     return results
 
 
-def _lev_close_neighbors(
+def _lev1_neighbors(
     G0: nx.Graph,
     w0: str,
     *,
-    max_atlas_n: int = 7,
     max_results: int = 8,
     exclude: list[nx.Graph] | None = None,
 ) -> list[dict[str, Any]]:
-    """Find graphs closest to G0 by Levenshtein distance (pool-based).
+    """Find non-isomorphic Lev-1 neighbours by direct string perturbation.
 
-    Scans the NetworkX graph atlas for non-isomorphic connected graphs,
-    encodes each with greedy-min, and returns those with the smallest
-    Levenshtein distance to w0.  GED is computed only for the selected
-    subset (expensive for larger graphs).
-
-    Note: Single-character edits of IsalGraph strings almost never produce
-    valid decodings, so brute-force Lev-1 enumeration fails.  This
-    pool-based approach finds Lev-close graphs regardless.
+    Every IsalGraph string over Sigma={N,n,P,p,V,v,C,c,W} decodes to a
+    valid graph (the instruction set is total), so single-character edits
+    always produce decodable strings.  This function enumerates all
+    substitutions, deletions, and insertions of w0, decodes each, and
+    returns the non-isomorphic connected neighbours sorted by GED.
     """
-    seen: list[nx.Graph] = [G0] + (exclude or [])
+    exclude_list: list[nx.Graph] = [G0] + (exclude or [])
+    seen: list[nx.Graph] = list(exclude_list)
     candidates: list[dict[str, Any]] = []
+    m = len(w0)
 
-    for g in nx.graph_atlas_g():
-        n = g.number_of_nodes()
-        if n < 3 or n > max_atlas_n:
+    perturbations: list[str] = []
+    # Substitutions
+    for i in range(m):
+        for c in _ALPHABET:
+            if c != w0[i]:
+                perturbations.append(w0[:i] + c + w0[i + 1 :])
+    # Deletions
+    for i in range(m):
+        perturbations.append(w0[:i] + w0[i + 1 :])
+    # Insertions
+    for i in range(m + 1):
+        for c in _ALPHABET:
+            perturbations.append(w0[:i] + c + w0[i:])
+
+    for wp in perturbations:
+        Gp = _decode(wp)
+        if Gp is None or not nx.is_connected(Gp):
             continue
-        if g.number_of_edges() == 0 or not nx.is_connected(g):
+        # Deduplicate by isomorphism
+        if any(nx.is_isomorphic(Gp, prev) for prev in seen):
             continue
-        # Deduplicate (atlas may have isomorphic copies across relabellings)
-        dup = any(nx.is_isomorphic(g, prev) for prev in seen)
-        if dup:
-            continue
-        seen.append(g)
+        seen.append(Gp)
+        candidates.append({"graph": Gp, "string": wp, "lev": 1})
 
-        w = _greedy_min(g)
-        lev_dist = _levenshtein(w0, w)
-        candidates.append({"graph": g.copy(), "string": w, "lev": lev_dist, "n": n})
-
-    candidates.sort(key=lambda d: (d["lev"], d["string"]))
-    selected = candidates[:max_results]
-
-    # Compute exact GED only for the selected few
-    for d in selected:
+    # Compute exact GED for candidates
+    for d in candidates:
         d["ged"] = _ged(G0, d["graph"])
 
-    selected.sort(key=lambda d: (d["ged"], d["string"]))
-    return selected
+    candidates.sort(key=lambda d: (d["ged"], d["string"]))
+    return candidates[:max_results]
 
 
 def _draw_cell(
@@ -295,8 +300,275 @@ def _draw_cell(
     ax.axis("off")
 
 
+# ---- Enhanced neighbourhood figure helpers --------------------------------
+
+
+def _render_horizontal_heatmap(
+    ax: plt.Axes,
+    string: str,
+    *,
+    fontsize: int = 6,
+) -> None:
+    """Render instruction string as a horizontal row of colored cells.
+
+    Adapts the vertical heatmap from ``algorithm_figures.py`` to horizontal
+    layout.  Each instruction character becomes a colored rectangle arranged
+    left-to-right.
+
+    Args:
+        ax: Matplotlib axes for the heatmap.
+        string: IsalGraph instruction string.
+        fontsize: Font size for instruction characters.
+    """
+    import matplotlib.patches as mpatches  # noqa: PLC0415
+
+    n = len(string)
+    if n == 0:
+        ax.axis("off")
+        return
+
+    for i, ch in enumerate(string):
+        color = INSTRUCTION_COLORS.get(ch, "#000000")
+        rect = mpatches.FancyBboxPatch(
+            (i + 0.05, 0.075),
+            0.9,
+            0.85,
+            boxstyle="round,pad=0.02",
+            facecolor=color,
+            edgecolor="0.4",
+            linewidth=0.3,
+        )
+        ax.add_patch(rect)
+        ax.text(
+            i + 0.5,
+            0.5,
+            ch,
+            ha="center",
+            va="center",
+            fontsize=fontsize,
+            fontfamily="monospace",
+            fontweight="bold",
+            color="white",
+        )
+
+    ax.set_xlim(-0.1, n + 0.1)
+    ax.set_ylim(-0.1, 1.1)
+    ax.set_aspect("auto")
+    ax.axis("off")
+
+
+def _align_to_reference(
+    G_ref: nx.Graph,
+    G_nbr: nx.Graph,
+) -> dict[int, int] | None:
+    """Find node mapping from *G_nbr* to *G_ref* maximising edge overlap.
+
+    Uses brute-force permutation search over ``|V|!`` mappings, which is
+    feasible for the small graphs used in this figure (5 nodes → 120
+    permutations).
+
+    Args:
+        G_ref: Reference graph (G₀).
+        G_nbr: Neighbour graph to align.
+
+    Returns:
+        Mapping ``{nbr_node: ref_node}`` or ``None`` if the graphs have
+        different numbers of nodes.
+    """
+    ref_nodes = sorted(G_ref.nodes())
+    nbr_nodes = sorted(G_nbr.nodes())
+
+    if len(ref_nodes) != len(nbr_nodes):
+        return None
+
+    ref_edges = {(min(u, v), max(u, v)) for u, v in G_ref.edges()}
+
+    best_mapping: dict[int, int] | None = None
+    best_overlap = -1
+
+    for perm in itertools.permutations(ref_nodes):
+        mapping = dict(zip(nbr_nodes, perm))
+        overlap = sum(
+            1
+            for u, v in G_nbr.edges()
+            if (min(mapping[u], mapping[v]), max(mapping[u], mapping[v])) in ref_edges
+        )
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_mapping = mapping
+
+    return best_mapping
+
+
+def _draw_graph_cell(
+    ax: plt.Axes,
+    G: nx.Graph,
+    pos: dict,
+    *,
+    ref_edges: set[tuple[int, int]] | None = None,
+    title: str = "",
+    node_size: int = 150,
+) -> None:
+    """Draw a graph cell with optional missing-edge overlay.
+
+    Args:
+        ax: Matplotlib axes.
+        G: Graph to draw.
+        pos: Node positions (typically G₀'s spring layout).
+        ref_edges: Edge set from G₀ (as ``(min, max)`` tuples).  Edges
+            present here but absent in *G* are drawn as dashed red lines
+            with ``alpha=0.4``.
+        title: Optional title above the graph.
+        node_size: Node marker size.
+    """
+    from benchmarks.eval_visualizations.graph_drawing import _DEFAULT_NODE_COLOR  # noqa: PLC0415
+
+    # Normal edges
+    nx.draw_networkx_edges(G, pos, edgelist=list(G.edges()), edge_color="0.5", width=0.8, ax=ax)
+
+    # Missing edges from reference (dashed red, alpha=0.4)
+    if ref_edges is not None:
+        graph_edges = {(min(u, v), max(u, v)) for u, v in G.edges()}
+        for u, v in ref_edges - graph_edges:
+            if u in pos and v in pos:
+                ax.plot(
+                    [pos[u][0], pos[v][0]],
+                    [pos[u][1], pos[v][1]],
+                    "--",
+                    color=PAUL_TOL_BRIGHT["red"],
+                    linewidth=1.0,
+                    alpha=0.4,
+                    zorder=0,
+                )
+
+    nx.draw_networkx_nodes(
+        G,
+        pos,
+        node_color=_DEFAULT_NODE_COLOR,
+        node_size=node_size,
+        edgecolors="0.3",
+        linewidths=0.5,
+        ax=ax,
+    )
+    nx.draw_networkx_labels(G, pos, font_size=6, font_color="white", ax=ax)
+
+    if title:
+        ax.set_title(title, fontsize=7, pad=3)
+
+    # Axis limits with uniform padding
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    span = max(max(xs) - min(xs), max(ys) - min(ys), 0.1)
+    pad = 0.25 * span
+    ax.set_xlim(min(xs) - pad, max(xs) + pad)
+    ax.set_ylim(min(ys) - pad, max(ys) + pad)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+
+def _add_neighborhood_panels(
+    fig: plt.Figure,
+    group_axes: dict[str, list[plt.Axes]],
+) -> None:
+    """Add semi-transparent background panels and group titles.
+
+    Draws three rounded rectangles (G₀, GED-1, Lev-1) with titles above,
+    following the same visual language as ``_add_group_boxes`` in
+    ``algorithm_figures.py``.
+
+    Args:
+        fig: The figure.
+        group_axes: Mapping ``{"g0": [...], "ged1": [...], "lev1": [...]}``
+            where each value is the list of axes belonging to that panel.
+    """
+    import matplotlib.patches as mpatches  # noqa: PLC0415
+    from matplotlib.transforms import Bbox  # noqa: PLC0415
+
+    renderer = fig.canvas.get_renderer()
+    fig.draw(renderer)
+
+    panel_conf = {
+        "g0": {
+            "color": "#444444",
+            "label": "$G_0$",
+        },
+        "ged1": {
+            "color": PAUL_TOL_BRIGHT["blue"],
+            "label": "1-GED Neighbours",
+        },
+        "lev1": {
+            "color": PAUL_TOL_BRIGHT["red"],
+            "label": "1-Lev Neighbours",
+        },
+    }
+
+    pad = 0.008
+
+    # First pass: compute bounding boxes for all groups
+    group_bboxes: dict[str, Bbox] = {}
+    for key, axes in group_axes.items():
+        bboxes = []
+        for ax in axes:
+            bb = ax.get_tightbbox(renderer)
+            if bb is not None:
+                bboxes.append(bb.transformed(fig.transFigure.inverted()))
+        if bboxes:
+            group_bboxes[key] = Bbox.union(bboxes)
+
+    # Make G₀ panel span the full vertical extent of GED + Lev panels,
+    # and clip its right edge so it doesn't overlap with the neighbor panels.
+    if "g0" in group_bboxes and ("ged1" in group_bboxes or "lev1" in group_bboxes):
+        other_bboxes = [group_bboxes[k] for k in ("ged1", "lev1") if k in group_bboxes]
+        full_y0 = min(bb.y0 for bb in other_bboxes)
+        full_y1 = max(bb.y1 for bb in other_bboxes)
+        g0_bb = group_bboxes["g0"]
+        # Clip right edge: stop before the leftmost neighbor panel starts
+        right_clip = min(bb.x0 for bb in other_bboxes) - 4 * pad
+        group_bboxes["g0"] = Bbox.from_extents(
+            g0_bb.x0, full_y0, min(g0_bb.x1, right_clip), full_y1
+        )
+
+    # Second pass: draw panels and titles
+    for key, union in group_bboxes.items():
+        conf = panel_conf[key]
+
+        rect = mpatches.FancyBboxPatch(
+            (union.x0 - pad, union.y0 - pad),
+            union.width + 2 * pad,
+            union.height + 2 * pad,
+            boxstyle="round,pad=0.005",
+            facecolor=conf["color"],
+            alpha=0.06,
+            edgecolor=conf["color"],
+            linewidth=1.0,
+            transform=fig.transFigure,
+            zorder=0,
+        )
+        fig.patches.append(rect)
+
+        # Title above panel
+        fig.text(
+            union.x0 + union.width / 2,
+            union.y1 + pad + 0.01,
+            conf["label"],
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            fontweight="bold",
+            color=conf["color"],
+            transform=fig.transFigure,
+        )
+
+
 def generate_neighborhood_figure(output_dir: str) -> str:
-    """Generate the GED-1 vs Levenshtein-close neighbourhood grid figure."""
+    """Generate the GED-1 vs Levenshtein-1 neighbourhood grid figure.
+
+    Layout: G₀ in column 0 spanning both rows, GED-1 neighbours in row (a),
+    Lev-1 neighbours in row (b).  Each graph cell has a horizontal instruction
+    heatmap below it.  Three background panels group G₀, GED-1, and Lev-1
+    sections.  Missing edges (present in G₀ but absent in the neighbour) are
+    drawn as dashed red lines with alpha=0.4.
+    """
     apply_ieee_style()
     os.makedirs(output_dir, exist_ok=True)
 
@@ -304,89 +576,114 @@ def generate_neighborhood_figure(output_dir: str) -> str:
     G0 = nx.house_graph()
     w0 = _greedy_min(G0)
     pos0 = nx.spring_layout(G0, seed=42)
+    ref_edges = {(min(u, v), max(u, v)) for u, v in G0.edges()}
     logger.info("Base graph: house, w0=%r (len=%d)", w0, len(w0))
 
     # --- GED-1 neighbours --------------------------------------------------
     ged1 = _ged1_neighbors(G0, w0)
     logger.info("GED-1 neighbours: %d unique", len(ged1))
 
-    # --- Lev-close neighbours (pool-based) ---------------------------------
-    exclude_graphs = [d["graph"] for d in ged1]
-    lev_close = _lev_close_neighbors(G0, w0, exclude=exclude_graphs, max_results=8)
-    logger.info("Lev-close neighbours: %d from pool", len(lev_close))
+    # --- Lev-1 neighbours (direct perturbation) ----------------------------
+    lev1_all = _lev1_neighbors(G0, w0, max_results=30)
+    # Filter to same node count so we can align positions to G₀'s layout
+    n0 = G0.number_of_nodes()
+    lev1_same = [d for d in lev1_all if d["graph"].number_of_nodes() == n0]
+    logger.info("Lev-1 neighbours (same size): %d / %d", len(lev1_same), len(lev1_all))
 
-    # Select 4 from each: prefer diversity in distance values
+    # Select up to n_show from each
     n_show = 4
     sel_ged1 = ged1[:n_show]
-    sel_lev = lev_close[:n_show]
 
-    # --- Figure layout: 2 rows × (1 + n_show) columns --------------------
-    n_cols = 1 + n_show
+    # Pick one Lev-1 neighbour per distinct GED value for visual diversity
+    _seen_ged: set[int] = set()
+    sel_lev: list[dict[str, Any]] = []
+    for d in lev1_same:
+        if d["ged"] not in _seen_ged:
+            _seen_ged.add(d["ged"])
+            sel_lev.append(d)
+        if len(sel_lev) >= n_show:
+            break
+    for d in lev1_same:
+        if d not in sel_lev:
+            sel_lev.append(d)
+        if len(sel_lev) >= n_show:
+            break
+
+    # Align Lev-1 neighbours to G₀'s node ordering
+    for d in sel_lev:
+        mapping = _align_to_reference(G0, d["graph"])
+        if mapping is not None:
+            d["aligned_graph"] = nx.relabel_nodes(d["graph"], mapping)
+        else:
+            d["aligned_graph"] = d["graph"]
+
+    # --- Figure layout: 5 rows × 5 columns --------------------------------
+    # Rows 0,3: graph cells | Rows 1,4: heatmap cells | Row 2: spacer
     w_fig, _ = get_figure_size("double")
-    fig = plt.figure(figsize=(w_fig, 4.0))
+    fig = plt.figure(figsize=(w_fig, 5.0))
+
     gs = GridSpec(
-        2,
-        n_cols,
+        5,
+        5,
         figure=fig,
-        wspace=0.15,
-        hspace=0.45,
-        left=0.02,
+        height_ratios=[4, 0.7, 0.6, 4, 0.7],
+        width_ratios=[0.75, 1, 1, 1, 1],
+        wspace=0.12,
+        hspace=0.12,
+        left=0.03,
         right=0.98,
-        top=0.88,
+        top=0.90,
         bottom=0.04,
     )
 
-    # Row (a): GED-1 neighbourhood
-    ax0a = fig.add_subplot(gs[0, 0])
-    _draw_cell(ax0a, G0, pos0, w0, title="$G_0$ (base)")
+    # --- G₀ (column 0, spanning all rows) ----------------------------------
+    ax_g0 = fig.add_subplot(gs[0:4, 0])
+    _draw_graph_cell(ax_g0, G0, pos0, node_size=200)
 
+    ax_g0_hm = fig.add_subplot(gs[4, 0])
+    _render_horizontal_heatmap(ax_g0_hm, w0)
+
+    # Track axes for background panels
+    g0_axes: list[plt.Axes] = [ax_g0, ax_g0_hm]
+    ged1_axes: list[plt.Axes] = []
+    lev1_axes: list[plt.Axes] = []
+
+    # --- GED-1 neighbours (rows 0-1, columns 1-4) -------------------------
     for i, d in enumerate(sel_ged1):
         ax = fig.add_subplot(gs[0, i + 1])
-        # Reuse base positions (same node set for edge edits)
-        ghost = d["edge"] if d["edit_type"] == "del" else None
-        hl = d["edge"] if d["edit_type"] == "add" else None
-        _draw_cell(
+        _draw_graph_cell(
             ax,
             d["graph"],
             pos0,
-            d["string"],
+            ref_edges=ref_edges,
             title=f"Lev = {d['lev']}",
-            ghost_edge=ghost,
-            highlight_edge=hl,
         )
+        ged1_axes.append(ax)
 
-    # Row (b): Lev-close neighbourhood
-    ax0b = fig.add_subplot(gs[1, 0])
-    _draw_cell(ax0b, G0, pos0, w0, title="$G_0$ (base)")
+        ax_hm = fig.add_subplot(gs[1, i + 1])
+        _render_horizontal_heatmap(ax_hm, d["string"])
+        ged1_axes.append(ax_hm)
 
+    # --- Lev-1 neighbours (rows 3-4, columns 1-4) -------------------------
     for i, d in enumerate(sel_lev):
-        ax = fig.add_subplot(gs[1, i + 1])
-        pos_i = nx.spring_layout(d["graph"], seed=42)
-        _draw_cell(
+        ax = fig.add_subplot(gs[3, i + 1])
+        G_draw = d["aligned_graph"]
+        _draw_graph_cell(
             ax,
-            d["graph"],
-            pos_i,
-            d["string"],
-            title=f"GED = {d['ged']}, Lev = {d['lev']}",
+            G_draw,
+            pos0,
+            ref_edges=ref_edges,
+            title=f"GED = {d['ged']}",
         )
+        lev1_axes.append(ax)
 
-    # Row headers
-    fig.text(
-        0.01,
-        0.92,
-        r"$\mathbf{(a)}$ GED-1 neighbours of $G_0$"
-        r"  $\longrightarrow$  Levenshtein distance to $w_0$",
-        fontsize=8,
-        va="bottom",
-    )
-    fig.text(
-        0.01,
-        0.46,
-        r"$\mathbf{(b)}$ Levenshtein-close neighbours of $G_0$"
-        r"  $\longrightarrow$  GED to $G_0$",
-        fontsize=8,
-        va="bottom",
-    )
+        ax_hm = fig.add_subplot(gs[4, i + 1])
+        _render_horizontal_heatmap(ax_hm, d["string"])
+        lev1_axes.append(ax_hm)
+
+    # --- Background panels -------------------------------------------------
+    fig.canvas.draw()
+    _add_neighborhood_panels(fig, {"g0": g0_axes, "ged1": ged1_axes, "lev1": lev1_axes})
 
     path = os.path.join(output_dir, "fig_neighborhood_topology")
     save_figure(fig, path)
@@ -500,16 +797,10 @@ def generate_distance_field_figure(output_dir: str) -> str:
         d["ged"] = 1
         d["source"] = "ged1"
 
-    # --- Collect Lev-close from pool --------------------------------------
-    exclude_g = [d["graph"] for d in ged1]
-    lev_pool = _lev_close_neighbors(
-        G0,
-        w0,
-        exclude=exclude_g,
-        max_results=12,
-    )
-    for d in lev_pool:
-        d["source"] = "lev_close"
+    # --- Collect Lev-1 neighbours (direct perturbation) --------------------
+    lev1 = _lev1_neighbors(G0, w0, max_results=30)
+    for d in lev1:
+        d["source"] = "lev1"
 
     # --- Merge and tag overlaps -------------------------------------------
     all_nb: list[dict[str, Any]] = []
@@ -524,8 +815,8 @@ def generate_distance_field_figure(output_dir: str) -> str:
                 "source": tag,
             }
         )
-    for d in lev_pool:
-        tag = "both" if d["ged"] == 1 else "lev_close"
+    for d in lev1:
+        tag = "both" if d["ged"] == 1 else "lev1"
         all_nb.append(
             {
                 "graph": d["graph"],
@@ -545,10 +836,8 @@ def generate_distance_field_figure(output_dir: str) -> str:
 
     selected: list[dict[str, Any]] = []
     for key in sorted(cells):
-        # Prefer "both" > "ged1" > "lev_close" for diversity
-        bucket = sorted(
-            cells[key], key=lambda d: {"both": 0, "ged1": 1, "lev_close": 2}[d["source"]]
-        )
+        # Prefer "both" > "ged1" > "lev1" for diversity
+        bucket = sorted(cells[key], key=lambda d: {"both": 0, "ged1": 1, "lev1": 2}[d["source"]])
         selected.extend(bucket[:2])  # at most 2 per cell
 
     # Cap total
@@ -558,7 +847,7 @@ def generate_distance_field_figure(output_dir: str) -> str:
         for d in selected:
             by_src.setdefault(d["source"], []).append(d)
         kept: list[dict[str, Any]] = []
-        for src in ["both", "ged1", "lev_close"]:
+        for src in ["both", "ged1", "lev1"]:
             kept.extend(by_src.get(src, [])[:4])
         selected = kept[:12]
 
@@ -606,9 +895,9 @@ def generate_distance_field_figure(output_dir: str) -> str:
     )
     main_ax.add_patch(ged_band)
     lev_band = mpatches.FancyBboxPatch(
-        (-0.5, -0.5),
+        (-0.5, 0.4),
         max_ged + 1.2,
-        2.8,
+        1.2,
         boxstyle="round,pad=0.05",
         facecolor=PAUL_TOL_BRIGHT["red"],
         alpha=0.06,
@@ -629,7 +918,7 @@ def generate_distance_field_figure(output_dir: str) -> str:
     main_ax.text(
         max_ged + 0.4,
         0.8,
-        "Lev-close\nball",
+        "Lev-1\nball",
         fontsize=7,
         ha="center",
         color=PAUL_TOL_BRIGHT["red"],
@@ -655,7 +944,7 @@ def generate_distance_field_figure(output_dir: str) -> str:
     # --- Category colours for borders -------------------------------------
     _BORDER_COLORS = {
         "ged1": PAUL_TOL_BRIGHT["blue"],
-        "lev_close": PAUL_TOL_BRIGHT["red"],
+        "lev1": PAUL_TOL_BRIGHT["red"],
         "both": PAUL_TOL_BRIGHT["green"],
     }
 
@@ -711,7 +1000,7 @@ def generate_distance_field_figure(output_dir: str) -> str:
             facecolor="none",
             edgecolor=PAUL_TOL_BRIGHT["red"],
             linewidth=1.5,
-            label="Lev-close only",
+            label="Lev-1 only",
         ),
         mpatches.Patch(
             facecolor="none", edgecolor=PAUL_TOL_BRIGHT["green"], linewidth=1.5, label="Both"

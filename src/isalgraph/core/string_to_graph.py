@@ -45,12 +45,24 @@ class StringToGraph:
         "_secondary_ptr",
     )
 
-    def __init__(self, input_string: str, directed_graph: bool) -> None:
+    def __init__(
+        self,
+        input_string: str,
+        directed_graph: bool | None = None,
+        *,
+        directed: bool | None = None,
+    ) -> None:
+        if directed_graph is not None and directed is not None:
+            raise TypeError("Cannot specify both 'directed_graph' and 'directed'. Use one.")
+        resolved = directed_graph if directed_graph is not None else directed
+        if resolved is None:
+            raise TypeError("StringToGraph requires 'directed_graph' (or 'directed') argument.")
+
         if not set(input_string).issubset(VALID_INSTRUCTIONS):
             raise ValueError(f"Invalid IsalGraph string: {input_string!r}")
 
         self._input_string: str = input_string
-        self._directed_graph: bool = directed_graph
+        self._directed_graph: bool = resolved
 
         counter = Counter(self._input_string)
         self._max_nodes: int = 1 + counter.get("V", 0) + counter.get("v", 0)

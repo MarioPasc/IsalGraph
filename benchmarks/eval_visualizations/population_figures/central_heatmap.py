@@ -513,8 +513,8 @@ def generate_aggregated_density_heatmap(
     # Integer-aligned bins: edges at -0.5, 0.5, ..., ceil(max)+0.5
     bin_max = int(np.ceil(global_max)) + 1
     bin_edges = np.arange(-0.5, bin_max + 0.5, 1.0)
-    shared_lim = (-0.5, bin_max - 0.5)
-    shared_ticks = np.arange(0, bin_max, max(1, bin_max // 8))
+    shared_lim = (0.5, bin_max - 0.5)  # Start at 1 (GED=0, Lev=0 pairs are excluded)
+    shared_ticks = np.arange(1, bin_max, max(1, bin_max // 8))
 
     # Precompute shared count normalization across both panels
     max_count = 1
@@ -570,12 +570,16 @@ def generate_aggregated_density_heatmap(
             lev_all,
             bins=[bin_edges, bin_edges],
         )[0].T  # (n_lev_bins, n_ged_bins)
-        counts_masked = np.ma.masked_where(counts_2d < 1, counts_2d)
+        # Fill zero-count cells with a sub-vmin value so LogNorm clips
+        # them to the lowest viridis color (dark purple) instead of leaving
+        # them white/transparent.
+        counts_filled = counts_2d.copy()
+        counts_filled[counts_filled < 1] = 0.5
 
         mesh = ax.pcolormesh(
             bin_edges,
             bin_edges,
-            counts_masked,
+            counts_filled,
             cmap="viridis",
             norm=count_norm,
             rasterized=True,
