@@ -781,7 +781,10 @@ def _generate_overview_grid(
             axes[row, c].axis("off")
 
     # Layout, then add decorations
-    plt.tight_layout(rect=[0, 0.04, 1, 0.92])
+    # Reserve just enough bottom space for the single-line legend
+    legend_height_inches = 0.3
+    legend_margin = legend_height_inches / fig_height
+    plt.tight_layout(rect=[0, legend_margin, 1, 0.92])
 
     # Sub-column headers — use ax titles (same pad ensures alignment)
     for col, label in [
@@ -797,14 +800,14 @@ def _generate_overview_grid(
     # Group boxes and vertical divider
     _add_group_boxes(fig, axes)
 
-    # Single legend: π/σ only (instruction letters already in heatmap)
+    # Single legend: π/σ only — anchor just below the lowest axes row
     fig.legend(
         handles=get_legend_handles(include_new_node=False),
         loc="lower center",
         ncol=2,
         fontsize=6,
         framealpha=0.8,
-        bbox_to_anchor=(0.5, 0.02),
+        bbox_to_anchor=(0.5, 0.08),
     )
 
     save_figure(fig, output_path)

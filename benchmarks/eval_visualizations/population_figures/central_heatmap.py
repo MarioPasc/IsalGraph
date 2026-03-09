@@ -478,25 +478,22 @@ def generate_aggregated_density_heatmap(
     *,
     cbar_pad: float = 0.22,
 ) -> str:
-    """Generate 1x2 aggregated heatmap stratified by graph size.
+    """Generate 1x2 aggregated heatmap of pair counts.
 
     Left panel: greedy-min. Right panel: canonical (exhaustive).
-    Each integer-aligned cell (GED=i, Lev=j) is colored by the mean graph
-    size (node count) of pairs falling into that cell.  Uses square bins
-    aligned to the integer lattice — both GED and Levenshtein are discrete,
-    so hexbins cause Moiré aliasing artifacts on integer grids.
+    Each integer-aligned cell (GED=i, Lev=j) is colored by the count of
+    graph pairs falling into that cell.  Uses square bins aligned to the
+    integer lattice — both GED and Levenshtein are discrete, so hexbins
+    cause Moiré aliasing artifacts on integer grids.
 
     Statistics annotated per panel:
         rho (Spearman rank correlation), beta (OLS slope).
     """
-    from matplotlib.colors import Normalize
     from matplotlib.gridspec import GridSpec
-    from scipy.stats import binned_statistic_2d
 
     # --- First pass: collect data, compute shared limits -----------------
     panel_data: list[tuple[str, str, np.ndarray, np.ndarray, np.ndarray, dict] | None] = []
     global_max = 0.0
-    vmin_size, vmax_size = float("inf"), 0.0
 
     for method, label in [("greedy_min", "(a) Greedy-min"), ("exhaustive", "(b) Canonical")]:
         data = _collect_aggregated_pairs(results, method)
@@ -510,8 +507,6 @@ def generate_aggregated_density_heatmap(
 
         p999 = max(np.percentile(ged_all, 99.9), np.percentile(lev_all, 99.9))
         global_max = max(global_max, p999)
-        vmin_size = min(vmin_size, np.percentile(size_all, 1))
-        vmax_size = max(vmax_size, np.percentile(size_all, 99))
 
         panel_data.append((method, label, ged_all, lev_all, size_all, stats))
 
@@ -520,7 +515,16 @@ def generate_aggregated_density_heatmap(
     bin_edges = np.arange(-0.5, bin_max + 0.5, 1.0)
     shared_lim = (-0.5, bin_max - 0.5)
     shared_ticks = np.arange(0, bin_max, max(1, bin_max // 8))
-    size_norm = Normalize(vmin=vmin_size, vmax=vmax_size)
+
+    # Precompute shared count normalization across both panels
+    max_count = 1
+    for pdata in panel_data:
+        if pdata is None:
+            continue
+        _, _, g, l, _, _ = pdata
+        counts = np.histogram2d(g, l, bins=[bin_edges, bin_edges])[0]
+        max_count = max(max_count, int(counts.max()))
+    count_norm = LogNorm(vmin=1, vmax=max_count)
 
     # --- Figure layout: data row + thin colorbar row --------------------
     # cbar_pad controls vertical gap between panels and colorbar (increase to move cbar down)
@@ -560,33 +564,20 @@ def generate_aggregated_density_heatmap(
 
         _method, label, ged_all, lev_all, size_all, stats = pdata
 
-        # 2D binned statistic: mean pair size per integer cell
-        stat_result = binned_statistic_2d(
+        # 2D histogram: count of pairs per integer cell
+        counts_2d = np.histogram2d(
             ged_all,
             lev_all,
-            size_all,
-            statistic="mean",
             bins=[bin_edges, bin_edges],
-        )
-        mean_size = stat_result.statistic.T  # (n_lev_bins, n_ged_bins)
-
-        # Count to mask empty cells
-        count_result = binned_statistic_2d(
-            ged_all,
-            lev_all,
-            size_all,
-            statistic="count",
-            bins=[bin_edges, bin_edges],
-        )
-        counts = count_result.statistic.T
-        mean_size_masked = np.ma.masked_where(counts < 1, mean_size)
+        )[0].T  # (n_lev_bins, n_ged_bins)
+        counts_masked = np.ma.masked_where(counts_2d < 1, counts_2d)
 
         mesh = ax.pcolormesh(
             bin_edges,
             bin_edges,
-            mean_size_masked,
+            counts_masked,
             cmap="viridis",
-            norm=size_norm,
+            norm=count_norm,
             rasterized=True,
         )
         last_mesh = mesh
@@ -636,10 +627,7 @@ def generate_aggregated_density_heatmap(
     # Horizontal colorbar spanning both columns
     if last_mesh is not None:
         cb = fig.colorbar(last_mesh, cax=cbar_ax, orientation="horizontal")
-        cb.set_label(
-            r"Mean pair size  $\bar{n} = (|V_i| + |V_j|)\,/\,2$",
-            fontsize=7,
-        )
+        cb.set_label("Count (number of graph pairs)", fontsize=7)
         cb.ax.tick_params(labelsize=6)
     else:
         cbar_ax.set_visible(False)
@@ -657,11 +645,11 @@ def generate_aggregated_density_heatmap(
     caption_path = os.path.join(output_dir, "fig_aggregated_density_correlation_caption.txt")
     caption = (
         "Aggregated correlation between graph edit distance (GED) and Levenshtein "
-        "distance across all five benchmark datasets, stratified by mean graph-pair "
-        "size. Each cell at integer coordinates $(i, j)$ is colored by the "
-        "mean node count $\\bar{n} = (|V_i| + |V_j|)/2$ of all pairs with "
-        "$\\text{GED} = i$ and $\\text{Lev} = j$ (light = small graphs, "
-        "dark = large graphs); white cells contain no observed pairs. "
+        "distance across all five benchmark datasets. Each cell at integer "
+        "coordinates $(i, j)$ shows the count of graph pairs with "
+        "$\\text{GED} = i$ and $\\text{Lev} = j$ (log scale; "
+        "light = few pairs, dark = many pairs); white cells contain no observed "
+        "pairs. "
         "Dashed grey line: identity ($\\text{Lev} = \\text{GED}$). "
         "Solid red line: ordinary least-squares (OLS) regression. "
         "(a) Greedy-min encoding "
@@ -674,8 +662,7 @@ def generate_aggregated_density_heatmap(
         f"$\\beta = {stats_canon.get('beta', 0):.2f}$). "
         "Reported statistics: "
         "$\\rho$ denotes Spearman's rank correlation coefficient, measuring "
-        "monotonic association between the two distance measures (a value of 1 "
-        "indicates perfect rank preservation). "
+        "monotonic association between the two distance measures. "
         "$\\beta$ denotes the OLS regression slope; $\\beta = 1$ would indicate "
         "that Levenshtein and GED operate on the same scale, while $\\beta < 1$ "
         "indicates that Levenshtein distances grow more slowly than GED."

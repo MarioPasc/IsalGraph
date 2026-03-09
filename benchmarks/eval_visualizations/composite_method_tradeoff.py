@@ -21,16 +21,12 @@ import json
 import logging
 import os
 
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import Normalize
-from matplotlib.lines import Line2D
 
 from benchmarks.eval_visualizations.result_loader import (
     ALL_DATASETS,
-    DATASET_DISPLAY,
     load_all_results,
 )
 from benchmarks.plotting_styles import (
@@ -128,7 +124,13 @@ def _draw_panel_a(
     results: dict,
     stats_dir: str,
 ) -> None:
-    """Draw the rho Canonical vs rho Greedy-Min scatter with density color."""
+    """Draw the rho Canonical vs rho Greedy-Min scatter, colored by pair count."""
+    import matplotlib.cm as cm
+    from matplotlib.colors import LogNorm
+    from matplotlib.lines import Line2D
+
+    from benchmarks.eval_visualizations.result_loader import DATASET_DISPLAY
+
     cross = _load_cross_analysis(stats_dir)
     if cross is None or "h5_method_comparison" not in cross:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
@@ -143,7 +145,7 @@ def _draw_panel_a(
     ci_exh_hi: list[float] = []
     ci_gre_lo: list[float] = []
     ci_gre_hi: list[float] = []
-    mean_densities: list[float] = []
+    pair_counts: list[int] = []
 
     for ds in ALL_DATASETS:
         if ds not in h5:
@@ -160,26 +162,26 @@ def _draw_panel_a(
         ci_gre_lo.append(entry["rho_greedy"] - ci_g[0])
         ci_gre_hi.append(ci_g[1] - entry["rho_greedy"])
 
-        # Mean pair size from loaded dataset artifacts
+        # Pair count: n_graphs * (n_graphs - 1) / 2
         if ds in results and "node_counts" in results[ds]:
-            d = _compute_mean_pair_size(results[ds]["node_counts"])
+            n_graphs = len(results[ds]["node_counts"])
+            pair_counts.append(n_graphs * (n_graphs - 1) // 2)
         else:
-            d = 0.0
-        mean_densities.append(d)
+            pair_counts.append(0)
 
     if not datasets:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
         return
 
-    # Colormap for density
+    # Colormap for pair count (log scale)
     cmap = cm.viridis  # type: ignore[attr-defined]
-    d_arr = np.array(mean_densities)
-    norm = Normalize(vmin=d_arr.min() - 0.02, vmax=d_arr.max() + 0.02)
+    pc_arr = np.array(pair_counts, dtype=float)
+    norm = LogNorm(vmin=max(pc_arr.min(), 1), vmax=pc_arr.max())
 
     legend_handles: list[Line2D] = []
     for idx, ds in enumerate(datasets):
         marker = _DATASET_MARKERS.get(ds, "o")
-        color = cmap(norm(mean_densities[idx]))
+        color = cmap(norm(pair_counts[idx]))
 
         # CI error bars
         ax.errorbar(
@@ -242,7 +244,7 @@ def _draw_panel_a(
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, pad=0.02, fraction=0.046, aspect=20)
-    cbar.set_label("Mean $|V|$", fontsize=7)
+    cbar.set_label("Pair count", fontsize=7)
     cbar.ax.tick_params(labelsize=5)
 
 
@@ -563,8 +565,8 @@ def _generate_caption(
         "Dashed line: breakeven ($1\\times$). "
         "(b) Spearman rank correlation ($\\rho$) between Levenshtein distance and GED "
         "for Canonical (x-axis) vs.\\ Greedy-Min (y-axis) encoding, with 95\\% bootstrap "
-        "confidence intervals. Points are colored by mean graph size ($\\bar{n} = "
-        "\\mathrm{mean}\\,|V|$) of each dataset. "
+        "confidence intervals. Points are colored by the number of graph pairs "
+        "in each dataset (log scale). "
     )
     if rho_info:
         caption += rho_info + " "
@@ -585,7 +587,7 @@ def generate_composite_method_tradeoff(
     """Generate the 1x2 composite figure.
 
     Panel (a): Aggregated speedup vs node count.
-    Panel (b): Canonical vs Greedy-min rho scatter (size-colored).
+    Panel (b): Canonical vs Greedy-min rho scatter (pair-count-colored).
     """
     apply_ieee_style()
     os.makedirs(output_dir, exist_ok=True)
