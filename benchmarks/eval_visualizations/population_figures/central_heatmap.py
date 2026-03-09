@@ -385,6 +385,309 @@ def generate_heatmap_grid(
 
 
 # =============================================================================
+# Aggregated size-stratified correlation (1x2)
+# =============================================================================
+
+
+def _collect_aggregated_pairs(
+    results: AllResults,
+    method: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Collect GED, Lev, and mean pair size across all datasets for one method.
+
+    For each valid pair (i,j), the size proxy is the mean node count
+    (|V_i| + |V_j|) / 2.
+
+    Returns:
+        (ged_all, lev_all, size_all) concatenated across datasets, or None.
+    """
+    ged_list: list[np.ndarray] = []
+    lev_list: list[np.ndarray] = []
+    size_list: list[np.ndarray] = []
+
+    for dataset in ALL_DATASETS:
+        vecs = _get_distance_vectors(results, dataset, method)
+        if vecs is None:
+            continue
+
+        arts = results.datasets.get(dataset)
+        if arts is None:
+            continue
+
+        node_counts = arts.node_counts.astype(float)
+        ged_mat = arts.ged_matrix
+        if method == "greedy_min":
+            lev_mat = results.levenshtein_matrices.get((dataset, "greedy"))
+        else:
+            lev_mat = results.levenshtein_matrices.get((dataset, "exhaustive"))
+        if lev_mat is None:
+            continue
+
+        n = min(ged_mat.shape[0], lev_mat.shape[0], len(node_counts))
+        triu_i, triu_j = np.triu_indices(n, k=1)
+        ged_flat = ged_mat[triu_i, triu_j].astype(float)
+        lev_flat = lev_mat[triu_i, triu_j].astype(float)
+
+        # Mean pair size (node count)
+        pair_size = (node_counts[triu_i] + node_counts[triu_j]) / 2.0
+
+        valid = np.isfinite(ged_flat) & np.isfinite(lev_flat) & (ged_flat > 0) & (lev_flat > 0)
+        ged_list.append(ged_flat[valid])
+        lev_list.append(lev_flat[valid])
+        size_list.append(pair_size[valid])
+
+    if not ged_list:
+        return None
+
+    return np.concatenate(ged_list), np.concatenate(lev_list), np.concatenate(size_list)
+
+
+def _compute_agreement_stats(
+    ged: np.ndarray,
+    lev: np.ndarray,
+) -> dict:
+    """Compute a rich set of agreement statistics between GED and Lev vectors.
+
+    Metrics:
+        rho:  Spearman rank correlation (rank preservation).
+        r:    Pearson linear correlation.
+        ccc:  Lin's Concordance Correlation Coefficient (agreement with
+              the identity line — the gold standard for method comparison;
+              Lin, 1989, Biometrics 45(1):255-268).
+        r2:   OLS R² (proportion of variance explained by linear fit).
+        beta: OLS slope (scaling factor; beta=1 means same scale).
+        mae:  Mean Absolute Error from identity (mean |Lev - GED|).
+        n:    Number of valid pairs.
+    """
+    cell = _compute_cell_stats(ged, lev)
+    mae = float(np.mean(np.abs(lev - ged)))
+    return {
+        "rho": cell["spearman_rho"],
+        "r": cell["pearson_r"],
+        "ccc": cell["lins_ccc"],
+        "r2": cell["ols_r2"],
+        "beta": cell["ols_slope"],
+        "mae": mae,
+        "n": cell["n_pairs"],
+    }
+
+
+def generate_aggregated_density_heatmap(
+    results: AllResults,
+    output_dir: str,
+    *,
+    cbar_pad: float = 0.22,
+) -> str:
+    """Generate 1x2 aggregated heatmap stratified by graph size.
+
+    Left panel: greedy-min. Right panel: canonical (exhaustive).
+    Each integer-aligned cell (GED=i, Lev=j) is colored by the mean graph
+    size (node count) of pairs falling into that cell.  Uses square bins
+    aligned to the integer lattice — both GED and Levenshtein are discrete,
+    so hexbins cause Moiré aliasing artifacts on integer grids.
+
+    Statistics annotated per panel:
+        rho (Spearman rank correlation), beta (OLS slope).
+    """
+    from matplotlib.colors import Normalize
+    from matplotlib.gridspec import GridSpec
+    from scipy.stats import binned_statistic_2d
+
+    # --- First pass: collect data, compute shared limits -----------------
+    panel_data: list[tuple[str, str, np.ndarray, np.ndarray, np.ndarray, dict] | None] = []
+    global_max = 0.0
+    vmin_size, vmax_size = float("inf"), 0.0
+
+    for method, label in [("greedy_min", "(a) Greedy-min"), ("exhaustive", "(b) Canonical")]:
+        data = _collect_aggregated_pairs(results, method)
+        if data is None:
+            panel_data.append(None)
+            continue
+        ged_all, lev_all, size_all = data
+        stats = _compute_agreement_stats(ged_all, lev_all)
+        cell = _compute_cell_stats(ged_all, lev_all)
+        stats["intercept"] = cell["ols_intercept"]
+
+        p999 = max(np.percentile(ged_all, 99.9), np.percentile(lev_all, 99.9))
+        global_max = max(global_max, p999)
+        vmin_size = min(vmin_size, np.percentile(size_all, 1))
+        vmax_size = max(vmax_size, np.percentile(size_all, 99))
+
+        panel_data.append((method, label, ged_all, lev_all, size_all, stats))
+
+    # Integer-aligned bins: edges at -0.5, 0.5, ..., ceil(max)+0.5
+    bin_max = int(np.ceil(global_max)) + 1
+    bin_edges = np.arange(-0.5, bin_max + 0.5, 1.0)
+    shared_lim = (-0.5, bin_max - 0.5)
+    shared_ticks = np.arange(0, bin_max, max(1, bin_max // 8))
+    size_norm = Normalize(vmin=vmin_size, vmax=vmax_size)
+
+    # --- Figure layout: data row + thin colorbar row --------------------
+    # cbar_pad controls vertical gap between panels and colorbar (increase to move cbar down)
+    fig = plt.figure(figsize=(7.0, 3.8))
+    gs = GridSpec(
+        2,
+        2,
+        figure=fig,
+        height_ratios=[1, 0.03],
+        hspace=cbar_pad,
+        wspace=0.06,
+        left=0.08,
+        right=0.97,
+        bottom=0.10,
+        top=0.90,
+    )
+    ax_greedy = fig.add_subplot(gs[0, 0])
+    ax_canon = fig.add_subplot(gs[0, 1])
+    cbar_ax = fig.add_subplot(gs[1, :])
+
+    stat_bbox = {
+        "boxstyle": "round,pad=0.35",
+        "facecolor": "white",
+        "edgecolor": "0.4",
+        "linewidth": 0.6,
+        "alpha": 0.92,
+    }
+
+    axes_list = [ax_greedy, ax_canon]
+    last_mesh = None
+
+    for ax, pdata in zip(axes_list, panel_data, strict=True):
+        if pdata is None:
+            ax.text(0.5, 0.5, "N/A", ha="center", va="center", transform=ax.transAxes)
+            ax.axis("off")
+            continue
+
+        _method, label, ged_all, lev_all, size_all, stats = pdata
+
+        # 2D binned statistic: mean pair size per integer cell
+        stat_result = binned_statistic_2d(
+            ged_all,
+            lev_all,
+            size_all,
+            statistic="mean",
+            bins=[bin_edges, bin_edges],
+        )
+        mean_size = stat_result.statistic.T  # (n_lev_bins, n_ged_bins)
+
+        # Count to mask empty cells
+        count_result = binned_statistic_2d(
+            ged_all,
+            lev_all,
+            size_all,
+            statistic="count",
+            bins=[bin_edges, bin_edges],
+        )
+        counts = count_result.statistic.T
+        mean_size_masked = np.ma.masked_where(counts < 1, mean_size)
+
+        mesh = ax.pcolormesh(
+            bin_edges,
+            bin_edges,
+            mean_size_masked,
+            cmap="viridis",
+            norm=size_norm,
+            rasterized=True,
+        )
+        last_mesh = mesh
+
+        # Identity line
+        ax.plot(
+            [shared_lim[0], shared_lim[1]],
+            [shared_lim[0], shared_lim[1]],
+            "--",
+            color="0.3",
+            lw=0.8,
+            zorder=7,
+        )
+
+        # OLS regression line
+        x_fit = np.array([0, shared_lim[1]])
+        y_fit = stats["beta"] * x_fit + stats["intercept"]
+        ax.plot(x_fit, y_fit, "-", color=_OLS_COLOR, lw=1.2, zorder=7)
+
+        # Annotation: rho + beta (bottom-right corner)
+        ann = f"$\\rho = {stats['rho']:.3f}$\n$\\beta = {stats['beta']:.2f}$"
+        ax.text(
+            0.96,
+            0.04,
+            ann,
+            transform=ax.transAxes,
+            fontsize=7,
+            va="bottom",
+            ha="right",
+            bbox=stat_bbox,
+            zorder=10,
+            linespacing=1.3,
+        )
+
+        ax.set_xlim(shared_lim)
+        ax.set_ylim(shared_lim)
+        ax.set_xticks(shared_ticks)
+        ax.set_yticks(shared_ticks)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_title(label, fontsize=9, fontweight="bold", loc="left")
+        ax.set_xlabel("GED", fontsize=8)
+        ax.tick_params(labelsize=6)
+
+    ax_greedy.set_ylabel("Levenshtein distance", fontsize=8)
+    ax_canon.tick_params(labelleft=False)
+
+    # Horizontal colorbar spanning both columns
+    if last_mesh is not None:
+        cb = fig.colorbar(last_mesh, cax=cbar_ax, orientation="horizontal")
+        cb.set_label(
+            r"Mean pair size  $\bar{n} = (|V_i| + |V_j|)\,/\,2$",
+            fontsize=7,
+        )
+        cb.ax.tick_params(labelsize=6)
+    else:
+        cbar_ax.set_visible(False)
+
+    path = os.path.join(output_dir, "fig_aggregated_density_correlation")
+    save_figure(fig, path)
+    plt.close(fig)
+
+    # --- Caption with actual computed values ----------------------------
+    stats_greedy = panel_data[0][5] if panel_data[0] is not None else {}
+    stats_canon = panel_data[1][5] if panel_data[1] is not None else {}
+    n_greedy = stats_greedy.get("n", 0)
+    n_canon = stats_canon.get("n", 0)
+
+    caption_path = os.path.join(output_dir, "fig_aggregated_density_correlation_caption.txt")
+    caption = (
+        "Aggregated correlation between graph edit distance (GED) and Levenshtein "
+        "distance across all five benchmark datasets, stratified by mean graph-pair "
+        "size. Each cell at integer coordinates $(i, j)$ is colored by the "
+        "mean node count $\\bar{n} = (|V_i| + |V_j|)/2$ of all pairs with "
+        "$\\text{GED} = i$ and $\\text{Lev} = j$ (light = small graphs, "
+        "dark = large graphs); white cells contain no observed pairs. "
+        "Dashed grey line: identity ($\\text{Lev} = \\text{GED}$). "
+        "Solid red line: ordinary least-squares (OLS) regression. "
+        "(a) Greedy-min encoding "
+        f"($n = {n_greedy:,}$ pairs, "
+        f"$\\rho = {stats_greedy.get('rho', 0):.3f}$, "
+        f"$\\beta = {stats_greedy.get('beta', 0):.2f}$). "
+        "(b) Canonical encoding "
+        f"($n = {n_canon:,}$ pairs, "
+        f"$\\rho = {stats_canon.get('rho', 0):.3f}$, "
+        f"$\\beta = {stats_canon.get('beta', 0):.2f}$). "
+        "Reported statistics: "
+        "$\\rho$ denotes Spearman's rank correlation coefficient, measuring "
+        "monotonic association between the two distance measures (a value of 1 "
+        "indicates perfect rank preservation). "
+        "$\\beta$ denotes the OLS regression slope; $\\beta = 1$ would indicate "
+        "that Levenshtein and GED operate on the same scale, while $\\beta < 1$ "
+        "indicates that Levenshtein distances grow more slowly than GED."
+    )
+    with open(caption_path, "w", encoding="utf-8") as f:
+        f.write(caption + "\n")
+
+    logger.info("Aggregated density heatmap saved: %s", path)
+    return path
+
+
+# =============================================================================
 # Table generation
 # =============================================================================
 
@@ -484,6 +787,7 @@ def main() -> None:
     if args.plot:
         generate_heatmap_grid(results, args.output_dir, znorm=False)
         generate_heatmap_grid(results, args.output_dir, znorm=True)
+        generate_aggregated_density_heatmap(results, args.output_dir)
 
     if args.table:
         generate_companion_table(results, args.output_dir)

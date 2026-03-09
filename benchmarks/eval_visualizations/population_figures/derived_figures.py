@@ -13,7 +13,10 @@ import json
 import logging
 import os
 
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
@@ -27,6 +30,7 @@ from benchmarks.eval_visualizations.table_generator import (
 )
 from benchmarks.plotting_styles import (
     PAUL_TOL_MUTED,
+    get_figure_size,
     save_figure,
 )
 
@@ -278,29 +282,72 @@ def generate_h1_4_table(stats_dir: str, output_dir: str) -> None:
 # =====================================================================
 
 
-def generate_h1_5_population(
-    stats_dir: str,
-    output_dir: str,
-) -> str:
-    """Generate H1.5 population figure: grouped bar + rho scatter."""
-    fig, (ax_bar, ax_scatter) = plt.subplots(1, 2, figsize=(7.0, 3.0))
+def _compute_mean_density(
+    results: AllResults,
+    dataset: str,
+) -> float:
+    """Compute mean edge density for a dataset from node/edge counts.
 
+    density_i = 2|E_i| / (|V_i| * (|V_i|-1)) for each graph i.
+    Returns the mean over all graphs.
+    """
+    if dataset not in results.datasets:
+        return 0.0
+    arts = results.datasets[dataset]
+    n = arts.node_counts.astype(np.float64)
+    e = arts.edge_counts.astype(np.float64)
+    max_edges = n * (n - 1)
+    densities = np.where(max_edges > 0, 2.0 * e / max_edges, 0.0)
+    return float(np.mean(densities))
+
+
+def _compute_mean_nodes(
+    results: AllResults,
+    dataset: str,
+) -> float:
+    """Compute mean number of nodes for a dataset."""
+    if dataset not in results.datasets:
+        return 0.0
+    return float(np.mean(results.datasets[dataset].node_counts))
+
+
+# Per-dataset marker shapes for scatter plots
+_DATASET_MARKERS: dict[str, str] = {
+    "iam_letter_low": "o",
+    "iam_letter_med": "s",
+    "iam_letter_high": "D",
+    "linux": "^",
+    "aids": "v",
+}
+
+
+def _collect_h1_5_data(
+    stats_dir: str,
+) -> tuple[
+    list[str],
+    list[float], list[float],
+    list[float], list[float],
+    list[float], list[float],
+] | None:
+    """Collect rho and CI data for H1.5 from cross-dataset analysis.
+
+    Returns:
+        (datasets, rho_exh, rho_gre,
+         ci_exh_lo, ci_exh_hi, ci_gre_lo, ci_gre_hi)
+        or None if no data.
+    """
     cross = _load_cross_analysis(stats_dir)
     if cross is None or "h5_method_comparison" not in cross:
-        logger.warning("No method comparison data available")
-        fig.text(0.5, 0.5, "No data", ha="center", va="center")
-        path = os.path.join(output_dir, "population_method_comparison")
-        save_figure(fig, path)
-        plt.close(fig)
-        return path
+        return None
 
     h5 = cross["h5_method_comparison"]
-
-    # Collect data
-    datasets = []
-    rho_exh, rho_gre = [], []
-    ci_exh_lo, ci_exh_hi = [], []
-    ci_gre_lo, ci_gre_hi = [], []
+    datasets: list[str] = []
+    rho_exh: list[float] = []
+    rho_gre: list[float] = []
+    ci_exh_lo: list[float] = []
+    ci_exh_hi: list[float] = []
+    ci_gre_lo: list[float] = []
+    ci_gre_hi: list[float] = []
 
     for ds in ALL_DATASETS:
         if ds not in h5:
@@ -317,12 +364,33 @@ def generate_h1_5_population(
         ci_gre_lo.append(entry["rho_greedy"] - ci_g[0])
         ci_gre_hi.append(ci_g[1] - entry["rho_greedy"])
 
+    if not datasets:
+        return None
+    return datasets, rho_exh, rho_gre, ci_exh_lo, ci_exh_hi, ci_gre_lo, ci_gre_hi
+
+
+def generate_h1_5_bar(
+    stats_dir: str,
+    output_dir: str,
+) -> str:
+    """Generate H1.5 grouped bar chart (Canonical vs Greedy-min)."""
+    fig, ax = plt.subplots(figsize=get_figure_size("single"))
+
+    data = _collect_h1_5_data(stats_dir)
+    if data is None:
+        logger.warning("No method comparison data available")
+        fig.text(0.5, 0.5, "No data", ha="center", va="center")
+        path = os.path.join(output_dir, "method_comparison_bar")
+        save_figure(fig, path)
+        plt.close(fig)
+        return path
+
+    datasets, rho_exh, rho_gre, ci_exh_lo, ci_exh_hi, ci_gre_lo, ci_gre_hi = data
     display_names = [DATASET_DISPLAY[ds] for ds in datasets]
     y_pos = np.arange(len(datasets))
     bar_height = 0.35
 
-    # Panel (a): Grouped bar
-    ax_bar.barh(
+    ax.barh(
         y_pos - bar_height / 2,
         rho_exh,
         height=bar_height,
@@ -334,7 +402,7 @@ def generate_h1_5_population(
         error_kw={"linewidth": 0.8},
         label="Canonical",
     )
-    ax_bar.barh(
+    ax.barh(
         y_pos + bar_height / 2,
         rho_gre,
         height=bar_height,
@@ -346,46 +414,151 @@ def generate_h1_5_population(
         error_kw={"linewidth": 0.8},
         label="Greedy-min",
     )
-    ax_bar.set_yticks(y_pos)
-    ax_bar.set_yticklabels(display_names, fontsize=6)
-    ax_bar.set_xlabel("Spearman $\\rho$", fontsize=7)
-    ax_bar.set_title("(a) Method comparison", fontsize=8)
-    ax_bar.legend(fontsize=6, loc="lower right")
-    ax_bar.tick_params(labelsize=5)
-    ax_bar.set_xlim(0, 1.05)
-    ax_bar.invert_yaxis()
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(display_names, fontsize=6)
+    ax.set_xlabel("Spearman $\\rho$", fontsize=7)
+    ax.legend(fontsize=6, loc="lower right")
+    ax.tick_params(labelsize=5)
+    ax.set_xlim(0, 1.05)
+    ax.invert_yaxis()
 
-    # Panel (b): Scatter rho_exh vs rho_gre
+    fig.tight_layout()
+    path = os.path.join(output_dir, "method_comparison_bar")
+    save_figure(fig, path)
+    plt.close(fig)
+    logger.info("H1.5 bar figure saved: %s", path)
+    return path
+
+
+def generate_h1_5_scatter(
+    results: AllResults,
+    stats_dir: str,
+    output_dir: str,
+) -> str:
+    """Generate H1.5 scatter: Canonical vs Greedy-min rho.
+
+    Each dataset is a distinct marker shape, colored by mean edge density
+    (continuous colorbar). 95% CI error bars on both axes.
+    Marker size proportional to mean graph order (number of nodes).
+    """
+    fig, ax = plt.subplots(figsize=get_figure_size("single"))
+
+    data = _collect_h1_5_data(stats_dir)
+    if data is None:
+        logger.warning("No method comparison data available")
+        fig.text(0.5, 0.5, "No data", ha="center", va="center")
+        path = os.path.join(output_dir, "method_comparison_scatter")
+        save_figure(fig, path)
+        plt.close(fig)
+        return path
+
+    datasets, rho_exh, rho_gre, ci_exh_lo, ci_exh_hi, ci_gre_lo, ci_gre_hi = data
+
+    # Compute per-dataset properties
+    mean_densities = [_compute_mean_density(results, ds) for ds in datasets]
+    mean_nodes = [_compute_mean_nodes(results, ds) for ds in datasets]
+
+    # Normalize density for colormap
+    cmap = cm.viridis  # type: ignore[attr-defined]
+    d_arr = np.array(mean_densities)
+    norm = Normalize(vmin=d_arr.min() - 0.02, vmax=d_arr.max() + 0.02)
+
+    # Normalize node counts for marker size (30-150 pt^2 range)
+    n_arr = np.array(mean_nodes)
+    if n_arr.max() > n_arr.min():
+        size_norm = (n_arr - n_arr.min()) / (n_arr.max() - n_arr.min())
+    else:
+        size_norm = np.full_like(n_arr, 0.5)
+    marker_sizes = 40 + 120 * size_norm  # range [40, 160]
+
+    # Plot each dataset with unique marker, density-colored, size by mean |V|
+    legend_handles: list[Line2D] = []
     for idx, ds in enumerate(datasets):
-        color = PAUL_TOL_MUTED[idx % len(PAUL_TOL_MUTED)]
-        ax_scatter.scatter(
+        marker = _DATASET_MARKERS.get(ds, "o")
+        color = cmap(norm(mean_densities[idx]))
+
+        # Error bars (draw first, no marker, to layer correctly)
+        ax.errorbar(
             rho_exh[idx],
             rho_gre[idx],
-            color=color,
-            s=40,
+            xerr=[[ci_exh_lo[idx]], [ci_exh_hi[idx]]],
+            yerr=[[ci_gre_lo[idx]], [ci_gre_hi[idx]]],
+            fmt="none",
+            ecolor="0.45",
+            capsize=3,
+            capthick=0.8,
+            elinewidth=0.8,
+            zorder=4,
+        )
+
+        # Scatter point
+        ax.scatter(
+            rho_exh[idx],
+            rho_gre[idx],
+            marker=marker,
+            c=[color],
+            s=marker_sizes[idx],
+            edgecolors="0.2",
+            linewidth=0.6,
             zorder=5,
-            label=DATASET_DISPLAY[ds],
-            edgecolors="0.3",
-            linewidth=0.5,
+        )
+
+        # Legend handle (uniform size, white fill for clarity)
+        legend_handles.append(
+            Line2D(
+                [0], [0],
+                marker=marker,
+                color="none",
+                markerfacecolor="0.4",
+                markeredgecolor="0.2",
+                markersize=6,
+                label=DATASET_DISPLAY[ds],
+                linewidth=0,
+            )
         )
 
     # Identity line
     lo = min(min(rho_exh), min(rho_gre)) - 0.05
     hi = max(max(rho_exh), max(rho_gre)) + 0.05
-    ax_scatter.plot([lo, hi], [lo, hi], "--", color="0.6", lw=0.8)
-    ax_scatter.set_xlabel("$\\rho$ canonical", fontsize=7)
-    ax_scatter.set_ylabel("$\\rho$ greedy-min", fontsize=7)
-    ax_scatter.set_title("(b) $\\rho$ comparison", fontsize=8)
-    ax_scatter.legend(fontsize=5, loc="upper left")
-    ax_scatter.tick_params(labelsize=5)
-    ax_scatter.set_aspect("equal")
+    ax.plot([lo, hi], [lo, hi], "--", color="0.6", lw=0.8, zorder=2)
+
+    ax.set_xlabel("$\\rho$ Canonical", fontsize=8)
+    ax.set_ylabel("$\\rho$ Greedy-Min", fontsize=8)
+    ax.legend(
+        handles=legend_handles,
+        fontsize=6,
+        loc="upper left",
+        framealpha=0.9,
+        handletextpad=0.3,
+        borderpad=0.4,
+    )
+    ax.tick_params(labelsize=6)
+    ax.set_aspect("equal")
+
+    # Colorbar for mean edge density
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])  # required for matplotlib < 3.8
+    cbar = fig.colorbar(sm, ax=ax, pad=0.02, fraction=0.046, aspect=20)
+    cbar.set_label("Mean edge density", fontsize=7)
+    cbar.ax.tick_params(labelsize=5)
 
     fig.tight_layout()
-    path = os.path.join(output_dir, "population_method_comparison")
+    path = os.path.join(output_dir, "method_comparison_scatter")
     save_figure(fig, path)
     plt.close(fig)
-    logger.info("H1.5 population figure saved: %s", path)
+    logger.info("H1.5 scatter figure saved: %s", path)
     return path
+
+
+def generate_h1_5_population(
+    results: AllResults,
+    stats_dir: str,
+    output_dir: str,
+) -> tuple[str, str]:
+    """Generate both H1.5 figures (bar + scatter). Kept for backward compat."""
+    p1 = generate_h1_5_bar(stats_dir, output_dir)
+    p2 = generate_h1_5_scatter(results, stats_dir, output_dir)
+    return p1, p2
 
 
 def generate_h1_5_table(stats_dir: str, output_dir: str) -> None:
@@ -473,5 +646,5 @@ def generate_all_derived_population(
     # H1.5
     h1_5_dir = os.path.join(output_root, "H1_5_exhaustive_vs_greedy")
     os.makedirs(h1_5_dir, exist_ok=True)
-    generate_h1_5_population(stats_dir, h1_5_dir)
+    generate_h1_5_population(results, stats_dir, h1_5_dir)
     generate_h1_5_table(stats_dir, h1_5_dir)

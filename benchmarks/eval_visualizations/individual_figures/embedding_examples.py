@@ -14,8 +14,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
 from scipy.spatial import procrustes as scipy_procrustes
+from scipy.stats import binned_statistic_2d  # noqa: E402
 from sklearn.isotonic import IsotonicRegression
 
 from benchmarks.eval_visualizations.embedding_loader import (
@@ -298,6 +298,72 @@ def _find_best_worst_shepard(
     return best_ds, worst_ds
 
 
+def _compute_pair_sizes(node_counts: np.ndarray, n: int) -> np.ndarray:
+    """Compute mean pair size (|V_i|+|V_j|)/2 for upper-triangle pairs."""
+    v = node_counts[:n].astype(np.float64)
+    idx_i, idx_j = np.triu_indices(n, k=1)
+    return (v[idx_i] + v[idx_j]) / 2.0
+
+
+def _collect_shepard_row_data(
+    results: AllResults,
+    emb: EmbeddingData,
+    embedding_dir: str,
+    ds: str,
+    method: str,
+    dim: int,
+) -> list[tuple[str, np.ndarray, np.ndarray, np.ndarray, float] | None]:
+    """Collect original/embedded distance vectors, pair sizes, and R² for one dataset row.
+
+    Returns:
+        List of (source_label, orig_valid, emb_valid, pair_sizes_valid, r2) or None per column.
+    """
+    arts = results.datasets.get(ds)
+    if arts is None:
+        return [None, None]
+
+    lev_matrix = results.levenshtein_matrices.get((ds, method))
+    ged_matrix = arts.ged_matrix
+    coords_lev = load_smacof_coords(embedding_dir, ds, f"lev_{method}", dim)
+    coords_ged = load_smacof_coords(embedding_dir, ds, "ged", dim)
+
+    row_data: list[tuple[str, np.ndarray, np.ndarray, np.ndarray, float] | None] = []
+    for source_label, orig_matrix, coords in [
+        ("Levenshtein", lev_matrix, coords_lev),
+        ("GED", ged_matrix, coords_ged),
+    ]:
+        if orig_matrix is None or coords is None:
+            row_data.append(None)
+            continue
+
+        n = min(orig_matrix.shape[0], coords.shape[0])
+        orig_sub = orig_matrix[:n, :n]
+        orig_vec = _get_original_distances_upper(orig_sub)
+        emb_vec = _compute_embedded_distances(coords[:n])
+        pair_sizes = _compute_pair_sizes(arts.node_counts, n)
+
+        valid = np.isfinite(orig_vec) & np.isfinite(emb_vec) & (orig_vec > 0)
+        orig_valid = orig_vec[valid]
+        emb_valid = emb_vec[valid]
+        sizes_valid = pair_sizes[valid]
+
+        if len(orig_valid) < 10:
+            row_data.append(None)
+            continue
+
+        # Get R²
+        r2 = 0.0
+        ds_stats = emb.stats.get(ds)
+        if ds_stats:
+            shep = ds_stats.shepard.get((method, dim))
+            if shep:
+                r2 = shep.lev_r_squared if source_label == "Levenshtein" else shep.ged_r_squared
+
+        row_data.append((source_label, orig_valid, emb_valid, sizes_valid, r2))
+
+    return row_data
+
+
 def generate_h2_3_individual(
     results: AllResults,
     emb: EmbeddingData,
@@ -306,70 +372,111 @@ def generate_h2_3_individual(
     method: str = "exhaustive",
     dim: int = 2,
 ) -> str:
-    """Generate H2.3 individual figure: best vs worst Shepard hexbin diagrams.
+    """Generate H2.3 individual figure: best vs worst Shepard diagrams.
 
-    2×2 grid: rows = best/worst dataset, columns = Lev/GED.
-    Each cell: hexbin of original vs embedded distances + isotonic regression line.
+    2x2 grid: rows = best/worst dataset, columns = Lev/GED.
+    Each cell uses integer-aligned square bins colored by mean pair size.
+    Shared colorbar row at bottom. Panels labelled (a) and (b).
     """
+    from matplotlib.gridspec import GridSpec
+
     best_ds, worst_ds = _find_best_worst_shepard(emb, method, dim)
     if best_ds is None or worst_ds is None:
         logger.warning("Cannot determine best/worst Shepard datasets")
         return ""
 
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 5.5))
+    # Pre-collect data to compute shared axis limits per row
+    rows_info: list[tuple[str, str, list]] = []  # (ds, panel_label, row_data)
+    for ds, panel_label in [(best_ds, "(a)"), (worst_ds, "(b)")]:
+        row_data = _collect_shepard_row_data(results, emb, embedding_dir, ds, method, dim)
+        rows_info.append((ds, panel_label, row_data))
 
-    for row_idx, (ds, row_label) in enumerate([(best_ds, "Best"), (worst_ds, "Worst")]):
-        arts = results.datasets.get(ds)
-        if arts is None:
-            continue
+    # Compute global min/max for colorbar (mean pair size across all cells)
+    global_size_min, global_size_max = np.inf, -np.inf
+    for _, _, row_data in rows_info:
+        for cell in row_data:
+            if cell is not None:
+                _, _, _, sizes_valid, _ = cell
+                global_size_min = min(global_size_min, sizes_valid.min())
+                global_size_max = max(global_size_max, sizes_valid.max())
 
-        lev_matrix = results.levenshtein_matrices.get((ds, method))
-        ged_matrix = arts.ged_matrix
+    # Build figure: 2 data rows + 1 colorbar row
+    fig = plt.figure(figsize=(5.0, 4.8))
+    gs = GridSpec(3, 2, figure=fig, height_ratios=[1, 1, 0.04], hspace=0.12, wspace=0.10)
 
-        coords_lev = load_smacof_coords(embedding_dir, ds, f"lev_{method}", dim)
-        coords_ged = load_smacof_coords(embedding_dir, ds, "ged", dim)
+    axes = np.empty((2, 2), dtype=object)
+    for r in range(2):
+        for c in range(2):
+            axes[r, c] = fig.add_subplot(gs[r, c])
 
-        for col_idx, (source_label, orig_matrix, coords) in enumerate(
-            [
-                ("Levenshtein", lev_matrix, coords_lev),
-                ("GED", ged_matrix, coords_ged),
-            ]
-        ):
+    # R² textbox style
+    r2_bbox = {
+        "boxstyle": "round,pad=0.35",
+        "facecolor": "white",
+        "edgecolor": "0.4",
+        "linewidth": 0.6,
+        "alpha": 0.92,
+    }
+
+    last_mappable = None  # for colorbar
+
+    for row_idx, (ds, panel_label, row_data) in enumerate(rows_info):
+        # Compute shared axis limits for this row
+        all_orig: list[np.ndarray] = []
+        all_emb: list[np.ndarray] = []
+        for cell in row_data:
+            if cell is not None:
+                _, ov, ev, _, _ = cell
+                all_orig.append(ov)
+                all_emb.append(ev)
+
+        if all_orig:
+            x_max = max(np.percentile(o, 99.5) for o in all_orig)
+            y_max = max(np.percentile(e, 99.5) for e in all_emb)
+        else:
+            x_max, y_max = 1.0, 1.0
+
+        for col_idx, cell in enumerate(row_data):
             ax = axes[row_idx, col_idx]
 
-            if orig_matrix is None or coords is None:
+            if cell is None:
                 ax.text(0.5, 0.5, "N/A", ha="center", va="center", transform=ax.transAxes)
                 ax.axis("off")
                 continue
 
-            # Get distance vectors
-            n = min(orig_matrix.shape[0], coords.shape[0])
-            orig_sub = orig_matrix[:n, :n]
-            orig_vec = _get_original_distances_upper(orig_sub)
-            emb_vec = _compute_embedded_distances(coords[:n])
+            source_label, orig_valid, emb_valid, sizes_valid, r2 = cell
 
-            # Filter valid (finite, positive original)
-            valid = np.isfinite(orig_vec) & np.isfinite(emb_vec) & (orig_vec > 0)
-            orig_valid = orig_vec[valid]
-            emb_valid = emb_vec[valid]
+            # Integer-aligned bins on x (original distances are integers).
+            # y bins use same width (1.0) for visual squares.
+            x_bin_max = int(np.ceil(x_max)) + 1
+            y_bin_max = int(np.ceil(y_max)) + 1
+            x_edges = np.arange(-0.5, x_bin_max + 0.5, 1.0)
+            y_edges = np.arange(-0.5, y_bin_max + 0.5, 1.0)
 
-            if len(orig_valid) < 10:
-                ax.text(
-                    0.5, 0.5, "Insufficient data", ha="center", va="center", transform=ax.transAxes
-                )
-                ax.axis("off")
-                continue
-
-            # Hexbin
-            ax.hexbin(
+            # Bin by mean pair size
+            stat_result = binned_statistic_2d(
                 orig_valid,
                 emb_valid,
-                gridsize=40,
+                sizes_valid,
+                statistic="mean",
+                bins=[x_edges, y_edges],
+            )
+            grid = stat_result.statistic.T  # shape: (ny, nx)
+
+            # Mask empty cells
+            masked = np.ma.masked_invalid(grid)
+
+            # Plot
+            im = ax.pcolormesh(
+                x_edges,
+                y_edges,
+                masked,
                 cmap="viridis",
-                norm=LogNorm(vmin=1),
-                mincnt=1,
+                vmin=global_size_min,
+                vmax=global_size_max,
                 rasterized=True,
             )
+            last_mappable = im
 
             # Isotonic regression line
             iso = IsotonicRegression(increasing=True)
@@ -381,47 +488,105 @@ def generate_h2_3_individual(
                 orig_sorted, iso_pred, color=PAUL_TOL_MUTED[0], linewidth=1.2, label="Isotonic fit"
             )
 
-            ax.set_xlabel("Original distance", fontsize=6)
-            ax.set_ylabel("Embedded distance", fontsize=6)
-            ax.tick_params(labelsize=5)
+            # Enforce shared limits within row
+            ax.set_xlim(-0.5, x_max * 1.03)
+            ax.set_ylim(-0.5, y_max * 1.03)
+
+            # Axis labels
+            if row_idx == 1:
+                ax.set_xlabel("Original distance", fontsize=7)
+            else:
+                ax.set_xlabel("")
+                ax.tick_params(labelbottom=False)
+            if col_idx == 0:
+                ax.set_ylabel("Embedded distance", fontsize=7)
+            else:
+                ax.set_ylabel("")
+                ax.tick_params(labelleft=False)
+            ax.tick_params(labelsize=6)
 
             # R² annotation
-            ds_stats = emb.stats.get(ds)
-            if ds_stats:
-                shep = ds_stats.shepard.get((method, dim))
-                if shep:
-                    r2 = shep.lev_r_squared if source_label == "Levenshtein" else shep.ged_r_squared
-                    ax.text(
-                        0.05,
-                        0.92,
-                        f"$R^2 = {r2:.3f}$",
-                        transform=ax.transAxes,
-                        fontsize=6,
-                        va="top",
-                        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none", "pad": 1},
-                    )
+            ax.text(
+                0.05,
+                0.93,
+                f"$R^2 = {r2:.3f}$",
+                transform=ax.transAxes,
+                fontsize=7,
+                va="top",
+                ha="left",
+                bbox=r2_bbox,
+            )
 
+            # Column titles on first row only
             if row_idx == 0:
-                ax.set_title(source_label, fontsize=8)
+                ax.set_title(source_label, fontsize=9)
 
-            # Row label
-            if col_idx == 0:
-                ax.annotate(
-                    f"{row_label}\n({DATASET_DISPLAY[ds]})",
-                    xy=(-0.35, 0.5),
-                    xycoords="axes fraction",
-                    fontsize=7,
-                    ha="right",
-                    va="center",
-                    fontweight="bold",
-                )
+        # Panel label
+        axes[row_idx, 0].text(
+            -0.22,
+            0.5,
+            f"{panel_label} {DATASET_DISPLAY[ds]}",
+            transform=axes[row_idx, 0].transAxes,
+            fontsize=8,
+            fontweight="bold",
+            va="center",
+            ha="right",
+            rotation=90,
+        )
 
-    fig.suptitle(f"Shepard diagrams ({dim}D embedding)", fontsize=9, y=0.98)
-    fig.tight_layout(rect=[0.08, 0, 1, 0.95])
+    # Shared horizontal colorbar in its own row
+    if last_mappable is not None:
+        cbar_ax = fig.add_subplot(gs[2, :])
+        cbar = fig.colorbar(last_mappable, cax=cbar_ax, orientation="horizontal")
+        cbar.set_label(
+            r"Mean pair size  $\bar{n} = (|V_i|+|V_j|)/2$",
+            fontsize=7,
+        )
+        cbar.ax.tick_params(labelsize=6)
+
+    fig.subplots_adjust(left=0.16, right=0.97, bottom=0.10, top=0.92)
 
     path = os.path.join(output_dir, "individual_shepard_diagrams")
     save_figure(fig, path)
     plt.close(fig)
+
+    # --- Auto-generate caption ---
+    best_display = DATASET_DISPLAY.get(best_ds, best_ds)
+    worst_display = DATASET_DISPLAY.get(worst_ds, worst_ds)
+
+    # Collect R² values for caption
+    r2_values: dict[str, dict[str, float]] = {}
+    for ds_name, _, row_data in rows_info:
+        r2_values[ds_name] = {}
+        for cell in row_data:
+            if cell is not None:
+                src, _, _, _, r2_val = cell
+                r2_values[ds_name][src] = r2_val
+
+    r2_best_lev = r2_values.get(best_ds, {}).get("Levenshtein", 0.0)
+    r2_best_ged = r2_values.get(best_ds, {}).get("GED", 0.0)
+    r2_worst_lev = r2_values.get(worst_ds, {}).get("Levenshtein", 0.0)
+    r2_worst_ged = r2_values.get(worst_ds, {}).get("GED", 0.0)
+
+    caption = (
+        f"Shepard diagrams for {dim}D SMACOF (MDS) embeddings of the best- and "
+        f"worst-performing datasets. Each cell is an integer-aligned square bin "
+        f"colored by the mean graph-pair size $\\bar{{n}} = (|V_i|+|V_j|)/2$ "
+        f"(viridis scale; white = no data). Solid line: isotonic regression fit. "
+        f"(a) {best_display} (highest Levenshtein $R^2$): "
+        f"Levenshtein $R^2 = {r2_best_lev:.3f}$, GED $R^2 = {r2_best_ged:.3f}$. "
+        f"(b) {worst_display} (lowest Levenshtein $R^2$): "
+        f"Levenshtein $R^2 = {r2_worst_lev:.3f}$, GED $R^2 = {r2_worst_ged:.3f}$. "
+        f"Left column: Levenshtein-based embedding; right column: GED-based embedding. "
+        f"$R^2$ is computed between the original pairwise distances and the isotonic "
+        f"regression of embedded Euclidean distances, measuring how faithfully the "
+        f"embedding preserves the distance structure."
+    )
+    caption_path = os.path.join(output_dir, "individual_shepard_diagrams_caption.txt")
+    with open(caption_path, "w", encoding="utf-8") as f:
+        f.write(caption + "\n")
+    logger.info("Caption saved: %s", caption_path)
+
     logger.info("H2.3 individual figure saved: %s", path)
     return path
 
