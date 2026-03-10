@@ -1,0 +1,100 @@
+# =============================================================================
+# IsalGraph Paper Pipeline Configuration
+# =============================================================================
+#
+# Frozen experiment config for reproducing all paper figures.
+# Copied into each run directory at launch time.
+#
+# Usage:
+#   bash experiments/paper_pipeline/launch.sh              # Submit to SLURM
+#   bash experiments/paper_pipeline/launch.sh --dry-run    # Print commands only
+#   bash experiments/paper_pipeline/launch.sh --local      # Run sequentially
+
+meta:                                     # Populated at launch time
+  git_commit: null
+  git_dirty: null
+  launched_at: null
+  launched_by: null
+
+paths:
+  repo_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalGraph
+  source_dir: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/isalgraph_source
+  runs_dir: /mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/runs
+
+slurm:
+  account: tic_163_uma
+  constraint: cpu
+  conda_env: isalgraph
+
+experiment:
+  seed: 42
+  algorithms: [canonical, greedy_min, greedy_single]
+  distance_metric: levenshtein
+  datasets: [iam_letter_low, iam_letter_med, iam_letter_high, linux, aids]
+
+steps:
+  eval_setup:
+    enabled: true
+    n_max: 12
+    timeout_per_graph: 600
+    time_limit: "2-00:00:00"
+    cpus: 64
+    mem_gb: 128
+
+  eval_correlation:
+    enabled: true
+    n_bootstrap: 10000
+    n_permutations: 9999
+    time_limit: "04:00:00"
+    cpus: 16
+    mem_gb: 64
+
+  eval_computational:
+    enabled: true
+    n_timing_reps: 25
+    n_pairs_per_bin: 50
+    time_limit: "08:00:00"
+    cpus: 1
+    mem_gb: 32
+
+  eval_encoding:
+    enabled: true
+    n_instances: 5
+    n_reps: 25
+    max_n_greedy: 50
+    max_n_canonical: 20
+    time_limit: "04:00:00"
+    cpus: 1
+    mem_gb: 16
+
+  algorithm_figures:
+    enabled: true
+    time_limit: "00:15:00"
+    cpus: 1
+    mem_gb: 4
+
+  topology_figs:
+    enabled: true
+    n_graphs: 8
+    n_min: 4
+    n_max: 13
+    edge_prob: 0.35
+    exhaustive_timeout: 60.0
+    time_limit: "04:00:00"
+    cpus: 1
+    mem_gb: 16
+
+  generate_figures:
+    enabled: true
+    time_limit: "00:30:00"
+    cpus: 1
+    mem_gb: 8
+
+paper_outputs:
+  - composite_method_tradeoff_v2
+  - fig_aggregated_density_correlation
+  - fig_algorithm_overview
+  - fig_algorithm_overview_full
+  - fig_empirical_complexity
+  - fig_neighborhood_topology
+  - table_performance_summary

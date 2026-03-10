@@ -11,7 +11,7 @@ license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Ezequiel Lopez-Rubio", email = "ezeqlr@lcc.uma.es"},
-    {name = "Mario Pascual Gonzalez"},
+    {name = "Mario Pascual Gonzalez", email="mpascual@uma.es"},
 ]
 # Core has zero dependencies
 dependencies = []
