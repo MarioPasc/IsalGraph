@@ -238,9 +238,21 @@ submit_job() {
         echo "  [DRY RUN] ${sbatch_cmd}" >&2
         echo "DRY_${job_name}"
     else
-        local job_id
-        job_id=$(eval "${sbatch_cmd}")
+        local job_id sbatch_err
+        # Capture stdout (job ID) and stderr separately
+        sbatch_err=$(mktemp)
+        job_id=$(eval "${sbatch_cmd}" 2>"$sbatch_err") || true
+        if [[ -z "$job_id" ]]; then
+            echo "  ERROR: sbatch failed for ${job_name}:" >&2
+            cat "$sbatch_err" >&2
+            rm -f "$sbatch_err"
+            return 1
+        fi
+        cat "$sbatch_err" >&2
+        rm -f "$sbatch_err"
         echo "  -> Job ID: ${job_id}" >&2
+        # Allow SLURM to register the job before dependent submissions
+        sleep 2
         echo "${job_id}"
     fi
 }
@@ -376,8 +388,8 @@ declare -A JOB_IDS
 # Step 1: eval_setup (no deps)
 JOB1=""
 if [[ "$(step_enabled eval_setup)" == "True" ]]; then
-    JOB1=$(submit_job "step1" "eval_setup" "$W_STEP1" "")
-    JOB_IDS[step1]="$JOB1"
+    JOB1=$(submit_job "step1" "eval_setup" "$W_STEP1" "") || true
+    JOB_IDS[step1]="${JOB1:-FAILED}"
 fi
 
 # Step 2a: eval_correlation (afterok:Step1)
@@ -385,8 +397,8 @@ JOB2A=""
 if [[ "$(step_enabled eval_correlation)" == "True" ]]; then
     DEP=""
     [[ -n "$JOB1" ]] && DEP="afterok:${JOB1}"
-    JOB2A=$(submit_job "step2a" "eval_correlation" "$W_STEP2A" "$DEP")
-    JOB_IDS[step2a]="$JOB2A"
+    JOB2A=$(submit_job "step2a" "eval_correlation" "$W_STEP2A" "$DEP") || true
+    JOB_IDS[step2a]="${JOB2A:-FAILED}"
 fi
 
 # Step 2b: eval_computational (afterok:Step1)
@@ -394,35 +406,36 @@ JOB2B=""
 if [[ "$(step_enabled eval_computational)" == "True" ]]; then
     DEP=""
     [[ -n "$JOB1" ]] && DEP="afterok:${JOB1}"
-    JOB2B=$(submit_job "step2b" "eval_computational" "$W_STEP2B" "$DEP")
-    JOB_IDS[step2b]="$JOB2B"
+    JOB2B=$(submit_job "step2b" "eval_computational" "$W_STEP2B" "$DEP") || true
+    JOB_IDS[step2b]="${JOB2B:-FAILED}"
 fi
 
 # Step 2c: eval_encoding (no deps -- synthetic data)
 JOB2C=""
 if [[ "$(step_enabled eval_encoding)" == "True" ]]; then
-    JOB2C=$(submit_job "step2c" "eval_encoding" "$W_STEP2C" "")
-    JOB_IDS[step2c]="$JOB2C"
+    JOB2C=$(submit_job "step2c" "eval_encoding" "$W_STEP2C" "") || true
+    JOB_IDS[step2c]="${JOB2C:-FAILED}"
 fi
 
 # Step 3a: algorithm_figures (no deps -- standalone)
 JOB3A=""
 if [[ "$(step_enabled algorithm_figures)" == "True" ]]; then
-    JOB3A=$(submit_job "step3a" "algorithm_figures" "$W_STEP3A" "")
-    JOB_IDS[step3a]="$JOB3A"
+    JOB3A=$(submit_job "step3a" "algorithm_figures" "$W_STEP3A" "") || true
+    JOB_IDS[step3a]="${JOB3A:-FAILED}"
 fi
 
 # Step 3b: topology_figs (no deps -- standalone)
 JOB3B=""
 if [[ "$(step_enabled topology_figs)" == "True" ]]; then
-    JOB3B=$(submit_job "step3b" "topology_figs" "$W_STEP3B" "")
-    JOB_IDS[step3b]="$JOB3B"
+    JOB3B=$(submit_job "step3b" "topology_figs" "$W_STEP3B" "") || true
+    JOB_IDS[step3b]="${JOB3B:-FAILED}"
 fi
 
 # Step 4: generate_figures (afterok: all previous)
 JOB4=""
 if [[ "$(step_enabled generate_figures)" == "True" ]]; then
     # Build dependency string: afterok:{id1},afterok:{id2},...
+    # Only include successfully submitted jobs (non-empty IDs)
     DEP=""
     for jid in "$JOB2A" "$JOB2B" "$JOB2C" "$JOB3A" "$JOB3B"; do
         if [[ -n "$jid" ]]; then
@@ -433,8 +446,8 @@ if [[ "$(step_enabled generate_figures)" == "True" ]]; then
             fi
         fi
     done
-    JOB4=$(submit_job "step4" "generate_figures" "$W_STEP4" "$DEP")
-    JOB_IDS[step4]="$JOB4"
+    JOB4=$(submit_job "step4" "generate_figures" "$W_STEP4" "$DEP") || true
+    JOB_IDS[step4]="${JOB4:-FAILED}"
 fi
 
 # ---------------------------------------------------------------------------
