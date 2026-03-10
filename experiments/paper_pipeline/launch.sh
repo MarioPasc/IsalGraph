@@ -201,11 +201,16 @@ print(cfg['steps']['${step_name}']['${field}'])
 # ---------------------------------------------------------------------------
 # Helper: submit SLURM job
 # ---------------------------------------------------------------------------
+# Extract numeric job ID from sbatch output.  Picasso wraps sbatch with a
+# Lua script that may print warnings to stdout, corrupting --parsable output.
+# We capture everything (stdout+stderr) and extract the last integer.
+_jobid() { echo "$1" | grep -oE '[0-9]+' | tail -1; }
+
 submit_job() {
     local job_name="$1"
     local step_name="$2"
     local worker_script="$3"
-    local dependency="$4"  # "" for no dependency, or "afterok:ID1:ID2"
+    local dependency="$4"  # "" for no dependency, or "afterok:{id}"
 
     local time_limit cpus mem_gb
     time_limit=$(step_resources "$step_name" "time_limit")
@@ -217,39 +222,33 @@ submit_job() {
         dep_flag="--dependency=${dependency}"
     fi
 
-    local sbatch_cmd="sbatch --parsable \
-        --job-name=paper_${job_name} \
-        --output=${RUN_DIR}/logs/${job_name}_%j.out \
-        --error=${RUN_DIR}/logs/${job_name}_%j.err \
-        --time=${time_limit} \
-        --cpus-per-task=${cpus} \
-        --mem=${mem_gb}G \
-        --constraint=${CFG_CONSTRAINT} \
-        --account=${CFG_ACCOUNT} \
-        --chdir=${CFG_REPO_DIR} \
-        --export=ALL,ISALGRAPH_RUN_DIR=${RUN_DIR},ISALGRAPH_REPO_DIR=${CFG_REPO_DIR} \
-        ${dep_flag} \
-        ${worker_script}"
-
     # Info to stderr so command substitution only captures the job ID
     echo "  [${job_name}] time=${time_limit} cpus=${cpus} mem=${mem_gb}G ${dep_flag}" >&2
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  [DRY RUN] ${sbatch_cmd}" >&2
+        echo "  [DRY RUN] sbatch --parsable --job-name=paper_${job_name} --time=${time_limit} --cpus-per-task=${cpus} --mem=${mem_gb}G ${dep_flag} ${worker_script}" >&2
         echo "DRY_${job_name}"
     else
-        local job_id sbatch_err
-        # Capture stdout (job ID) and stderr separately
-        sbatch_err=$(mktemp)
-        job_id=$(eval "${sbatch_cmd}" 2>"$sbatch_err") || true
+        local raw_output job_id
+        raw_output=$(sbatch --parsable \
+            --job-name="paper_${job_name}" \
+            --output="${RUN_DIR}/logs/${job_name}_%j.out" \
+            --error="${RUN_DIR}/logs/${job_name}_%j.err" \
+            --time="${time_limit}" \
+            --cpus-per-task="${cpus}" \
+            --mem="${mem_gb}G" \
+            --constraint="${CFG_CONSTRAINT}" \
+            --account="${CFG_ACCOUNT}" \
+            --chdir="${CFG_REPO_DIR}" \
+            --export=ALL,ISALGRAPH_RUN_DIR="${RUN_DIR}",ISALGRAPH_REPO_DIR="${CFG_REPO_DIR}" \
+            ${dep_flag} \
+            "${worker_script}" 2>&1) || true
+        job_id=$(_jobid "$raw_output")
         if [[ -z "$job_id" ]]; then
             echo "  ERROR: sbatch failed for ${job_name}:" >&2
-            cat "$sbatch_err" >&2
-            rm -f "$sbatch_err"
+            echo "  $raw_output" >&2
             return 1
         fi
-        cat "$sbatch_err" >&2
-        rm -f "$sbatch_err"
         echo "  -> Job ID: ${job_id}" >&2
         # Allow SLURM to register the job before dependent submissions
         sleep 2
