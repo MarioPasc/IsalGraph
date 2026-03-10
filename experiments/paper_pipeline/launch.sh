@@ -422,19 +422,17 @@ fi
 # Step 4: generate_figures (afterok: all previous)
 JOB4=""
 if [[ "$(step_enabled generate_figures)" == "True" ]]; then
-    # Build dependency string from all submitted jobs
-    DEP_JOBS=""
+    # Build dependency string: afterok:{id1},afterok:{id2},...
+    DEP=""
     for jid in "$JOB2A" "$JOB2B" "$JOB2C" "$JOB3A" "$JOB3B"; do
         if [[ -n "$jid" ]]; then
-            if [[ -n "$DEP_JOBS" ]]; then
-                DEP_JOBS="${DEP_JOBS}:${jid}"
+            if [[ -n "$DEP" ]]; then
+                DEP="${DEP},afterok:${jid}"
             else
-                DEP_JOBS="${jid}"
+                DEP="afterok:${jid}"
             fi
         fi
     done
-    DEP=""
-    [[ -n "$DEP_JOBS" ]] && DEP="afterok:${DEP_JOBS}"
     JOB4=$(submit_job "step4" "generate_figures" "$W_STEP4" "$DEP")
     JOB_IDS[step4]="$JOB4"
 fi
