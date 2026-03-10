@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-METHODS = ["exhaustive", "greedy"]
+METHODS = ["exhaustive", "greedy", "greedy_single"]
 LABELED_DATASETS = {"iam_letter_low", "iam_letter_med", "iam_letter_high"}
 DATASET_DISPLAY: dict[str, str] = {
     "iam_letter_low": "IAM Letter LOW",

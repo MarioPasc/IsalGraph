@@ -75,6 +75,8 @@ def _get_distance_vectors(
         lev_matrix = results.levenshtein_matrices.get((dataset, "greedy"))
     elif method == "exhaustive":
         lev_matrix = results.levenshtein_matrices.get((dataset, "exhaustive"))
+    elif method == "greedy_single":
+        lev_matrix = results.levenshtein_matrices.get((dataset, "greedy_single"))
     else:
         return None
     if lev_matrix is None:
@@ -418,6 +420,8 @@ def _collect_aggregated_pairs(
         ged_mat = arts.ged_matrix
         if method == "greedy_min":
             lev_mat = results.levenshtein_matrices.get((dataset, "greedy"))
+        elif method == "greedy_single":
+            lev_mat = results.levenshtein_matrices.get((dataset, "greedy_single"))
         else:
             lev_mat = results.levenshtein_matrices.get((dataset, "exhaustive"))
         if lev_mat is None:
@@ -478,9 +482,9 @@ def generate_aggregated_density_heatmap(
     *,
     cbar_pad: float = 0.22,
 ) -> str:
-    """Generate 1x2 aggregated heatmap of pair counts.
+    """Generate 1x3 aggregated heatmap of pair counts.
 
-    Left panel: greedy-min. Right panel: canonical (exhaustive).
+    Panels: (a) Canonical, (b) Greedy-min, (c) Greedy-rnd(v₀).
     Each integer-aligned cell (GED=i, Lev=j) is colored by the count of
     graph pairs falling into that cell.  Uses square bins aligned to the
     integer lattice — both GED and Levenshtein are discrete, so hexbins
@@ -491,11 +495,18 @@ def generate_aggregated_density_heatmap(
     """
     from matplotlib.gridspec import GridSpec
 
+    # --- Panel definitions: (method_key, panel_label) ---
+    panel_defs = [
+        ("exhaustive", "(a) Canonical"),
+        ("greedy_min", r"(b) Greedy-min"),
+        ("greedy_single", r"(c) Greedy-rnd($v_0$)"),
+    ]
+
     # --- First pass: collect data, compute shared limits -----------------
     panel_data: list[tuple[str, str, np.ndarray, np.ndarray, np.ndarray, dict] | None] = []
     global_max = 0.0
 
-    for method, label in [("greedy_min", "(a) Greedy-min"), ("exhaustive", "(b) Canonical")]:
+    for method, label in panel_defs:
         data = _collect_aggregated_pairs(results, method)
         if data is None:
             panel_data.append(None)
@@ -510,13 +521,15 @@ def generate_aggregated_density_heatmap(
 
         panel_data.append((method, label, ged_all, lev_all, size_all, stats))
 
+    n_panels = len(panel_defs)
+
     # Integer-aligned bins: edges at -0.5, 0.5, ..., ceil(max)+0.5
     bin_max = int(np.ceil(global_max)) + 1
     bin_edges = np.arange(-0.5, bin_max + 0.5, 1.0)
     shared_lim = (0.5, bin_max - 0.5)  # Start at 1 (GED=0, Lev=0 pairs are excluded)
     shared_ticks = np.arange(1, bin_max, max(1, bin_max // 8))
 
-    # Precompute shared count normalization across both panels
+    # Precompute shared count normalization across all panels
     max_count = 1
     for pdata in panel_data:
         if pdata is None:
@@ -527,22 +540,20 @@ def generate_aggregated_density_heatmap(
     count_norm = LogNorm(vmin=1, vmax=max_count)
 
     # --- Figure layout: data row + thin colorbar row --------------------
-    # cbar_pad controls vertical gap between panels and colorbar (increase to move cbar down)
-    fig = plt.figure(figsize=(7.0, 3.8))
+    fig = plt.figure(figsize=(10.0, 3.8))
     gs = GridSpec(
         2,
-        2,
+        n_panels,
         figure=fig,
         height_ratios=[1, 0.03],
         hspace=cbar_pad,
         wspace=0.06,
-        left=0.08,
+        left=0.06,
         right=0.97,
         bottom=0.10,
         top=0.90,
     )
-    ax_greedy = fig.add_subplot(gs[0, 0])
-    ax_canon = fig.add_subplot(gs[0, 1])
+    axes_list = [fig.add_subplot(gs[0, i]) for i in range(n_panels)]
     cbar_ax = fig.add_subplot(gs[1, :])
 
     stat_bbox = {
@@ -553,10 +564,9 @@ def generate_aggregated_density_heatmap(
         "alpha": 0.92,
     }
 
-    axes_list = [ax_greedy, ax_canon]
     last_mesh = None
 
-    for ax, pdata in zip(axes_list, panel_data, strict=True):
+    for col_idx, (ax, pdata) in enumerate(zip(axes_list, panel_data, strict=True)):
         if pdata is None:
             ax.text(0.5, 0.5, "N/A", ha="center", va="center", transform=ax.transAxes)
             ax.axis("off")
@@ -570,9 +580,6 @@ def generate_aggregated_density_heatmap(
             lev_all,
             bins=[bin_edges, bin_edges],
         )[0].T  # (n_lev_bins, n_ged_bins)
-        # Fill zero-count cells with a sub-vmin value so LogNorm clips
-        # them to the lowest viridis color (dark purple) instead of leaving
-        # them white/transparent.
         counts_filled = counts_2d.copy()
         counts_filled[counts_filled < 1] = 0.5
 
@@ -625,10 +632,13 @@ def generate_aggregated_density_heatmap(
         ax.set_xlabel("GED", fontsize=8)
         ax.tick_params(labelsize=6)
 
-    ax_greedy.set_ylabel("Levenshtein distance", fontsize=8)
-    ax_canon.tick_params(labelleft=False)
+        # Only first panel gets y-label
+        if col_idx == 0:
+            ax.set_ylabel("Levenshtein distance", fontsize=8)
+        else:
+            ax.tick_params(labelleft=False)
 
-    # Horizontal colorbar spanning both columns
+    # Horizontal colorbar spanning all columns
     if last_mesh is not None:
         cb = fig.colorbar(last_mesh, cax=cbar_ax, orientation="horizontal")
         cb.set_label("Count (number of graph pairs)", fontsize=7)
@@ -641,10 +651,14 @@ def generate_aggregated_density_heatmap(
     plt.close(fig)
 
     # --- Caption with actual computed values ----------------------------
-    stats_greedy = panel_data[0][5] if panel_data[0] is not None else {}
-    stats_canon = panel_data[1][5] if panel_data[1] is not None else {}
-    n_greedy = stats_greedy.get("n", 0)
-    n_canon = stats_canon.get("n", 0)
+    stats_by_label: dict[str, dict] = {}
+    for pdata in panel_data:
+        if pdata is not None:
+            stats_by_label[pdata[0]] = pdata[5]
+
+    s_canon = stats_by_label.get("exhaustive", {})
+    s_greedy = stats_by_label.get("greedy_min", {})
+    s_single = stats_by_label.get("greedy_single", {})
 
     caption_path = os.path.join(output_dir, "fig_aggregated_density_correlation_caption.txt")
     caption = (
@@ -656,14 +670,18 @@ def generate_aggregated_density_heatmap(
         "pairs. "
         "Dashed grey line: identity ($\\text{Lev} = \\text{GED}$). "
         "Solid red line: ordinary least-squares (OLS) regression. "
-        "(a) Greedy-min encoding "
-        f"($n = {n_greedy:,}$ pairs, "
-        f"$\\rho = {stats_greedy.get('rho', 0):.3f}$, "
-        f"$\\beta = {stats_greedy.get('beta', 0):.2f}$). "
-        "(b) Canonical encoding "
-        f"($n = {n_canon:,}$ pairs, "
-        f"$\\rho = {stats_canon.get('rho', 0):.3f}$, "
-        f"$\\beta = {stats_canon.get('beta', 0):.2f}$). "
+        "(a) Canonical encoding "
+        f"($n = {s_canon.get('n', 0):,}$ pairs, "
+        f"$\\rho = {s_canon.get('rho', 0):.3f}$, "
+        f"$\\beta = {s_canon.get('beta', 0):.2f}$). "
+        "(b) Greedy-min encoding "
+        f"($n = {s_greedy.get('n', 0):,}$ pairs, "
+        f"$\\rho = {s_greedy.get('rho', 0):.3f}$, "
+        f"$\\beta = {s_greedy.get('beta', 0):.2f}$). "
+        "(c) Greedy-rnd($v_0$) encoding "
+        f"($n = {s_single.get('n', 0):,}$ pairs, "
+        f"$\\rho = {s_single.get('rho', 0):.3f}$, "
+        f"$\\beta = {s_single.get('beta', 0):.2f}$). "
         "Reported statistics: "
         "$\\rho$ denotes Spearman's rank correlation coefficient, measuring "
         "monotonic association between the two distance measures. "

@@ -688,6 +688,38 @@ def generate_neighborhood_figure(output_dir: str) -> str:
     path = os.path.join(output_dir, "fig_neighborhood_topology")
     save_figure(fig, path)
     plt.close(fig)
+
+    # --- Auto-generate caption ---
+    n_ged1 = len(sel_ged1)
+    n_lev1 = len(sel_lev)
+    ged1_levs = [d["lev"] for d in sel_ged1]
+    lev1_geds = [d["ged"] for d in sel_lev]
+
+    caption = (
+        f"Neighbourhood topology of the house graph $G_0$ ({G0.number_of_nodes()} nodes, "
+        f"{G0.number_of_edges()} edges) under two distance metrics. "
+        f"Centre column: base graph $G_0$ with its canonical IsalGraph encoding (colour-coded "
+        f"by instruction type). "
+        f"Top rows: {n_ged1} representative 1-GED neighbours (single edge edit), "
+        f"with Levenshtein distances "
+        f"$\\mathrm{{Lev}} \\in [{min(ged1_levs)},\\, {max(ged1_levs)}]$ "
+        f"to the encoding of $G_0$. "
+        f"Bottom rows: {n_lev1} representative 1-Levenshtein neighbours "
+        f"(single character substitution, insertion, or deletion in the instruction string), "
+        f"with GED values "
+        f"$\\mathrm{{GED}} \\in [{min(lev1_geds)},\\, {max(lev1_geds)}]$. "
+        f"Dashed red edges indicate structural differences from $G_0$. "
+        f"Horizontal heatmaps below each graph render the IsalGraph instruction string "
+        f"with per-character colouring (alphabet $\\Sigma = \\{{N,n,P,p,V,v,C,c,W\\}}$). "
+        f"The asymmetry between 1-GED and 1-Levenshtein neighbourhoods illustrates that "
+        f"graph-space proximity does not imply string-space proximity, and vice versa."
+    )
+
+    caption_path = os.path.join(output_dir, "fig_neighborhood_topology_caption.txt")
+    with open(caption_path, "w", encoding="utf-8") as f:
+        f.write(caption + "\n")
+    logger.info("Caption saved: %s", caption_path)
+
     logger.info("Neighbourhood figure saved: %s", path)
     return path
 
