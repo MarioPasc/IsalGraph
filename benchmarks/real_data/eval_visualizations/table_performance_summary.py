@@ -42,9 +42,10 @@ DATASET_DISPLAY = {
     "aids": "AIDS",
 }
 
-METHODS = ["exhaustive", "greedy", "greedy_single"]
+METHODS = ["exhaustive", "pruned_exhaustive", "greedy", "greedy_single"]
 METHOD_DISPLAY = {
     "exhaustive": "Canonical",
+    "pruned_exhaustive": "Canonical (Pruned)",
     "greedy": "Greedy-Min",
     "greedy_single": r"Greedy-rnd($v_0$)",
 }

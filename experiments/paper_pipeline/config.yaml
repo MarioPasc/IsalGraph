@@ -28,7 +28,7 @@ slurm:
 
 experiment:
   seed: 42
-  algorithms: [canonical, greedy_min, greedy_single]
+  algorithms: [canonical, canonical_pruned, greedy_min, greedy_single]
   distance_metrics: [levenshtein, wl_kernel]
   wl_kernel:
     n_iter: 5

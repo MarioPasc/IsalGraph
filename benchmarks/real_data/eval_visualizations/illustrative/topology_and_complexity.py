@@ -1113,6 +1113,7 @@ def generate_complexity_figure(
     data: dict[str, dict[int, list[float]]] = {
         "greedy_single": {},
         "greedy_min": {},
+        "pruned_exhaustive": {},
         "exhaustive": {},
         "exact_ged": {},
     }
@@ -1138,6 +1139,24 @@ def generate_complexity_figure(
                 _greedy_min(G_)
 
             data["greedy_min"][n].append(_time_it(_gm, n_reps=3))
+
+            # Pruned exhaustive (with timeout probe)
+            from isalgraph.core.canonical_pruned import pruned_canonical_string  # noqa: PLC0415
+
+            t_probe_pe = time.process_time()
+            import contextlib as _ctx_pe  # noqa: PLC0415
+
+            with _ctx_pe.suppress(Exception):
+                pruned_canonical_string(sg)
+            t_probe_pe = time.process_time() - t_probe_pe
+
+            if t_probe_pe < exhaustive_timeout:
+                data["pruned_exhaustive"][n].append(
+                    _time_it(
+                        lambda sg_=sg: pruned_canonical_string(sg_),
+                        n_reps=max(1, min(3, int(5.0 / max(t_probe_pe, 1e-6)))),
+                    )
+                )
 
             # Exhaustive canonical (with timeout probe)
             t_probe = time.process_time()
@@ -1166,23 +1185,26 @@ def generate_complexity_figure(
     _COLORS = {
         "greedy_single": PAUL_TOL_BRIGHT["cyan"],
         "greedy_min": PAUL_TOL_BRIGHT["red"],
+        "pruned_exhaustive": PAUL_TOL_BRIGHT["blue"],
         "exhaustive": PAUL_TOL_BRIGHT["purple"],
         "exact_ged": PAUL_TOL_BRIGHT["grey"],
     }
     _MARKERS = {
         "greedy_single": "^",
         "greedy_min": "D",
+        "pruned_exhaustive": "d",
         "exhaustive": "s",
         "exact_ged": "o",
     }
     _LABELS = {
         "greedy_single": "Greedy (single start)",
         "greedy_min": r"Greedy-min ($n$ starts)",
+        "pruned_exhaustive": "Pruned canonical",
         "exhaustive": "Exhaustive canonical",
         "exact_ged": "Exact GED (one pair)",
     }
 
-    for key in ["exact_ged", "exhaustive", "greedy_min", "greedy_single"]:
+    for key in ["exact_ged", "exhaustive", "pruned_exhaustive", "greedy_min", "greedy_single"]:
         xs, ys_med, ys_lo, ys_hi = [], [], [], []
         for n in sizes:
             vals = data[key][n]

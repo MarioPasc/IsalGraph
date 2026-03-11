@@ -169,6 +169,7 @@ Full details: `src/isalgraph/core/README.md`
 - Define quantitative success criteria before running anything.
 - Log all hyperparameters, seeds, and environment details (reproducibility is non-negotiable).
 - Use controlled comparisons: change one variable at a time unless explicitly doing ablations.
+- When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 
 **Analysis phase:**
 - Be proactive: if results reveal an anomaly or improvement opportunity, report it with evidence.

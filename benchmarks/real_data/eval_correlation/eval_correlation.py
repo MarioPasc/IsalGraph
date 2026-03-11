@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-DEFAULT_METHODS = ["exhaustive", "greedy", "greedy_single"]
+DEFAULT_METHODS = ["exhaustive", "pruned_exhaustive", "greedy", "greedy_single"]
 IAM_DATASETS_ORDERED = ["iam_letter_low", "iam_letter_med", "iam_letter_high"]
 LABELED_DATASETS = {"iam_letter_low", "iam_letter_med", "iam_letter_high"}
 

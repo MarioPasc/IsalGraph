@@ -34,9 +34,10 @@ from benchmarks.plotting_styles import apply_ieee_style, save_figure
 logger = logging.getLogger(__name__)
 
 # Row definitions
-METHODS = ["greedy_min", "exhaustive"]
+METHODS = ["greedy_min", "pruned_exhaustive", "exhaustive"]
 METHOD_DISPLAY: dict[str, str] = {
     "greedy_min": r"$\mathbf{Greedy\text{-}min}$",
+    "pruned_exhaustive": r"$\mathbf{Canonical\text{-}Pruned}$",
     "exhaustive": "Canonical",
 }
 

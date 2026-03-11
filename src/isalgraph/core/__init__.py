@@ -6,6 +6,7 @@ from isalgraph.core.algorithms import (
     G2SAlgorithm,
     GreedyMinG2S,
     GreedySingleG2S,
+    PrunedExhaustiveG2S,
 )
 from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.graph_to_string import GraphToString
@@ -20,6 +21,7 @@ __all__ = [
     "G2SAlgorithm",
     "GreedyMinG2S",
     "ExhaustiveG2S",
+    "PrunedExhaustiveG2S",
     "GreedySingleG2S",
     "DEFAULT_ALGORITHM",
 ]

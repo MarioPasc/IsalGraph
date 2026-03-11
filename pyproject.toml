@@ -28,7 +28,7 @@ bench = [
     "pyyaml>=6.0",
     "numpy>=1.24",
     "scikit-learn>=1.3",
-    "grakel>=1.0",
+    "grakel",
 ]
 dev = [
     "pytest>=7.0",

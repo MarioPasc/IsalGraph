@@ -33,6 +33,7 @@ out['seed'] = cfg['experiment']['seed']
 # Map algorithm config names to internal method names
 algo_to_method = {
     'canonical': 'exhaustive',
+    'canonical_pruned': 'pruned_exhaustive',
     'greedy_min': 'greedy',
     'greedy_single': 'greedy_single',
 }

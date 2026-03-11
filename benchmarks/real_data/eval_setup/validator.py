@@ -16,7 +16,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-METHODS = ["exhaustive", "greedy", "greedy_single"]
+METHODS = ["exhaustive", "pruned_exhaustive", "greedy", "greedy_single"]
 
 
 @dataclass

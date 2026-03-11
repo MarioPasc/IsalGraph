@@ -41,18 +41,21 @@ RANDOM_FAMILIES = {"ba_m1", "ba_m2", "gnp_03", "gnp_05"}
 
 METHOD_COLORS = {
     "canonical": PAUL_TOL_BRIGHT["blue"],
+    "canonical_pruned": PAUL_TOL_BRIGHT["cyan"],
     "greedy_min": PAUL_TOL_BRIGHT["red"],
     "greedy_single": PAUL_TOL_BRIGHT["green"],
 }
 
 METHOD_LABELS = {
     "canonical": "Canonical",
+    "canonical_pruned": "Canonical (Pruned)",
     "greedy_min": "Greedy-Min",
     "greedy_single": r"Greedy-rnd($v_0$)",
 }
 
 METHOD_MARKERS = {
     "canonical": "o",
+    "canonical_pruned": "D",
     "greedy_min": "s",
     "greedy_single": "^",
 }
@@ -167,21 +170,34 @@ def generate_empirical_complexity(
         can_df["canonical_time_s"], can_df["n_nodes"]
     )
 
+    # Pruned exhaustive (may be absent in older CSV files)
+    pe_ns = pe_med = pe_q25 = pe_q75 = None
+    if "pruned_exhaustive_time_s" in can_df.columns:
+        pe_df = can_df[
+            can_df["pruned_exhaustive_time_s"].notna() & (can_df["pruned_exhaustive_time_s"] > 0)
+        ]
+        if len(pe_df) > 0:
+            pe_ns, pe_med, pe_q25, pe_q75 = _aggregate_per_n(
+                pe_df["pruned_exhaustive_time_s"], pe_df["n_nodes"]
+            )
+
     # --- Polynomial fits ---
     gs_alpha, gs_c, gs_r2 = _fit_polynomial(gs_ns, gs_med)
     gm_alpha, gm_c, gm_r2 = _fit_polynomial(gm_ns, gm_med)
     can_alpha, can_c, can_r2 = _fit_polynomial(can_ns, can_med)
 
-    logger.info(
-        "Fitted exponents: Greedy-rnd α=%.2f (R²=%.3f), "
-        "Greedy-Min α=%.2f (R²=%.3f), Canonical α=%.2f (R²=%.3f)",
-        gs_alpha,
-        gs_r2,
-        gm_alpha,
-        gm_r2,
-        can_alpha,
-        can_r2,
-    )
+    pe_alpha = pe_c = pe_r2 = None
+    if pe_ns is not None and len(pe_ns) >= 2:
+        pe_alpha, pe_c, pe_r2 = _fit_polynomial(pe_ns, pe_med)
+
+    log_parts = [
+        f"Greedy-rnd α={gs_alpha:.2f} (R²={gs_r2:.3f})",
+        f"Greedy-Min α={gm_alpha:.2f} (R²={gm_r2:.3f})",
+        f"Canonical α={can_alpha:.2f} (R²={can_r2:.3f})",
+    ]
+    if pe_alpha is not None:
+        log_parts.append(f"Canonical (Pruned) α={pe_alpha:.2f} (R²={pe_r2:.3f})")
+    logger.info("Fitted exponents: %s", ", ".join(log_parts))
 
     # --- Plot ---
     fig, ax = plt.subplots(figsize=get_figure_size("single", height_ratio=0.9))
@@ -191,6 +207,11 @@ def generate_empirical_complexity(
         ("greedy_min", gm_ns, gm_med, gm_q25, gm_q75, gm_alpha, gm_c, gm_r2),
         ("canonical", can_ns, can_med, can_q25, can_q75, can_alpha, can_c, can_r2),
     ]
+    if pe_alpha is not None:
+        methods_data.insert(
+            2,
+            ("canonical_pruned", pe_ns, pe_med, pe_q25, pe_q75, pe_alpha, pe_c, pe_r2),
+        )
 
     for method, ns, med, q25, q75, alpha, c, r2 in methods_data:
         color = METHOD_COLORS[method]
@@ -266,6 +287,7 @@ def generate_empirical_complexity(
     # Caption method display names (LaTeX-safe, no matplotlib math)
     _caption_names = {
         "canonical": "Canonical",
+        "canonical_pruned": "Canonical (Pruned)",
         "greedy_min": "Greedy-Min",
         "greedy_single": "Greedy-rnd($v_0$)",
     }

@@ -80,11 +80,12 @@ GRAPHEDX_DATASETS = {"linux": "LINUX", "aids": "AIDS"}
 # Config algorithm names -> internal method names used for file naming
 ALGORITHM_TO_METHOD = {
     "canonical": "exhaustive",
+    "canonical_pruned": "pruned_exhaustive",
     "greedy_min": "greedy",
     "greedy_single": "greedy_single",
 }
 
-DEFAULT_ALGORITHMS = "canonical,greedy_min,greedy_single"
+DEFAULT_ALGORITHMS = "canonical,canonical_pruned,greedy_min,greedy_single"
 DEFAULT_DISTANCE_METRICS = "levenshtein,wl_kernel"
 DEFAULT_WL_N_ITER = 5
 
@@ -297,6 +298,24 @@ def _process_dataset(
             gs_path,
         )
 
+    # 2c: Pruned exhaustive (independent computation)
+    pruned_exhaustive_strings: list[str | None] = []
+    pruned_exhaustive_times: list[float] = []
+    if not skip_canonical and "pruned_exhaustive" in requested_methods:
+        logger.info("Computing pruned_exhaustive strings for %s...", dataset_name)
+        pruned_exhaustive_strings, pruned_exhaustive_times = compute_pruned_exhaustive(
+            kept_graphs, kept_ids, timeout_s=timeout_per_graph
+        )
+        pe_path = os.path.join(canonical_dir, f"{dataset_name}_pruned_exhaustive.json")
+        save_pruned_exhaustive_strings(
+            kept_ids,
+            pruned_exhaustive_strings,
+            pruned_exhaustive_times,
+            dataset_name,
+            n_max,
+            pe_path,
+        )
+
     # ---- Step 3a: Levenshtein matrices ----
     lev_dir = os.path.join(data_root, "levenshtein_matrices")
     os.makedirs(lev_dir, exist_ok=True)
@@ -329,6 +348,14 @@ def _process_dataset(
             )
             lev_path = os.path.join(lev_dir, f"{dataset_name}_greedy_single.npz")
             save_levenshtein_matrix(lev_matrix, kept_ids, "greedy_single", lev_path)
+
+        # Pruned exhaustive
+        if pruned_exhaustive_strings and "pruned_exhaustive" in requested_methods:
+            lev_matrix = compute_levenshtein_matrix(
+                pruned_exhaustive_strings, kept_ids, "pruned_exhaustive"
+            )
+            lev_path = os.path.join(lev_dir, f"{dataset_name}_pruned_exhaustive.npz")
+            save_levenshtein_matrix(lev_matrix, kept_ids, "pruned_exhaustive", lev_path)
 
     # ---- Step 3b: WL kernel distance ----
     if not skip_levenshtein and "wl_kernel" in distance_metrics:
@@ -537,7 +564,7 @@ def main() -> None:
         "--algorithms",
         type=str,
         default=DEFAULT_ALGORITHMS,
-        help="Comma-separated algorithm names: canonical, greedy_min, greedy_single.",
+        help="Comma-separated algorithm names: canonical, canonical_pruned, greedy_min, greedy_single.",
     )
     parser.add_argument(
         "--distance-metrics",

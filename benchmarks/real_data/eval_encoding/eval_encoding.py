@@ -269,8 +269,10 @@ def _experiment_canonical_scaling(
                             "density": dens,
                             "instance": inst,
                             "canonical_time_s": float("inf"),
+                            "pruned_exhaustive_time_s": float("inf"),
                             "greedy_min_time_s": float("nan"),
                             "canonical_length": -1,
+                            "pruned_exhaustive_length": -1,
                             "greedy_min_length": -1,
                             "length_gap": 0,
                             "n_reps": 0,
@@ -310,8 +312,18 @@ def _experiment_canonical_scaling(
                 gm_timing = time_function(_greedy_min_run, n_reps=reps, warmup=0)
                 gm_str = gm_timing["result"]
 
+                # Timed pruned exhaustive measurement
+                from isalgraph.core.canonical_pruned import pruned_canonical_string
+
+                def _pruned_run(sg_l=sg):
+                    return pruned_canonical_string(sg_l)
+
+                pe_timing = time_function(_pruned_run, n_reps=reps, warmup=0)
+                pe_str = pe_timing["result"]
+
                 can_len = len(can_str)
                 gm_len = len(gm_str) if gm_str else -1
+                pe_len = len(pe_str) if pe_str else -1
 
                 rows.append(
                     {
@@ -321,8 +333,10 @@ def _experiment_canonical_scaling(
                         "density": dens,
                         "instance": inst,
                         "canonical_time_s": can_timing["median_s"],
+                        "pruned_exhaustive_time_s": pe_timing["median_s"],
                         "greedy_min_time_s": gm_timing["median_s"],
                         "canonical_length": can_len,
+                        "pruned_exhaustive_length": pe_len,
                         "greedy_min_length": gm_len,
                         "length_gap": gm_len - can_len if gm_len > 0 else 0,
                         "n_reps": reps,
@@ -399,6 +413,27 @@ def _experiment_density_dependence(
                 signal.signal(signal.SIGALRM, old_handler)
             can_time_s = float("inf")
 
+        # Pruned exhaustive (with timeout protection)
+        from isalgraph.core.canonical_pruned import pruned_canonical_string
+
+        pe_time_s = float("nan")
+        try:
+            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(int(CANONICAL_PROBE_TIMEOUT_S) + 1)
+            pe_timing = time_function(
+                lambda sg_l=sg: pruned_canonical_string(sg_l),
+                n_reps=max(3, n_reps // 5),
+                warmup=0,
+            )
+            pe_time_s = pe_timing["median_s"]
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+        except (_TimeoutError, Exception):
+            signal.alarm(0)
+            with contextlib.suppress(Exception):
+                signal.signal(signal.SIGALRM, old_handler)
+            pe_time_s = float("inf")
+
         rows.append(
             {
                 "p": entry["p"],
@@ -407,6 +442,7 @@ def _experiment_density_dependence(
                 "n_nodes": actual_n,
                 "n_edges": entry["n_edges"],
                 "greedy_min_time_s": gm_timing["median_s"],
+                "pruned_exhaustive_time_s": pe_time_s,
                 "canonical_time_s": can_time_s,
             }
         )
@@ -436,9 +472,9 @@ def _experiment_real_validation(
     datasets = ["iam_letter_low", "linux", "aids"]
 
     for dataset in datasets:
-        # Try exhaustive first, then greedy
+        # Try exhaustive first, then pruned_exhaustive, then greedy
         cs_path = None
-        for method in ["exhaustive", "greedy"]:
+        for method in ["exhaustive", "pruned_exhaustive", "greedy"]:
             candidate = os.path.join(cs_dir, f"{dataset}_{method}.json")
             if os.path.isfile(candidate):
                 cs_path = candidate
@@ -571,6 +607,7 @@ def _compute_all_scaling_exponents(
         "greedy_single": {},
         "greedy_min": {},
         "canonical": {},
+        "pruned_exhaustive": {},
     }
 
     # Greedy single-start: median time per n_nodes, per family
@@ -610,6 +647,18 @@ def _compute_all_scaling_exponents(
                     can_medians["canonical_time_s"].values,
                 )
 
+            # Pruned exhaustive
+            if "pruned_exhaustive_time_s" in fdf.columns:
+                pe_medians = (
+                    fdf.groupby("n_nodes")["pruned_exhaustive_time_s"].median().reset_index()
+                )
+                pe_medians = pe_medians[np.isfinite(pe_medians["pruned_exhaustive_time_s"])]
+                if len(pe_medians) >= 3:
+                    result["pruned_exhaustive"][family] = fit_polynomial_or_exponential(
+                        pe_medians["n_nodes"].values,
+                        pe_medians["pruned_exhaustive_time_s"].values,
+                    )
+
             # Greedy-min
             gm_medians = fdf.groupby("n_nodes")["greedy_min_time_s"].median().reset_index()
             gm_medians = gm_medians[np.isfinite(gm_medians["greedy_min_time_s"])]
@@ -627,6 +676,18 @@ def _compute_all_scaling_exponents(
                 can_all["n_nodes"].values,
                 can_all["canonical_time_s"].values,
             )
+
+        # Overall pruned exhaustive
+        if "pruned_exhaustive_time_s" in canonical_df.columns:
+            pe_all = (
+                canonical_df.groupby("n_nodes")["pruned_exhaustive_time_s"].median().reset_index()
+            )
+            pe_all = pe_all[np.isfinite(pe_all["pruned_exhaustive_time_s"])]
+            if len(pe_all) >= 3:
+                result["pruned_exhaustive"]["overall"] = fit_polynomial_or_exponential(
+                    pe_all["n_nodes"].values,
+                    pe_all["pruned_exhaustive_time_s"].values,
+                )
 
         # Overall greedy-min
         gm_all = canonical_df.groupby("n_nodes")["greedy_min_time_s"].median().reset_index()
@@ -1038,13 +1099,14 @@ def _generate_summary_table(
     rows: list[dict] = []
 
     all_families_set = set()
-    for method_key in ["greedy_single", "canonical"]:
+    for method_key in ["greedy_single", "canonical", "pruned_exhaustive"]:
         all_families_set.update(k for k in scaling_exponents.get(method_key, {}) if k != "overall")
 
     for family in sorted(all_families_set):
         cfg = FAMILY_CONFIGS.get(family, {})
         g_info = scaling_exponents.get("greedy_single", {}).get(family, {})
         c_info = scaling_exponents.get("canonical", {}).get(family, {})
+        pe_info = scaling_exponents.get("pruned_exhaustive", {}).get(family, {})
         # Density class
         if family in ("complete", "gnp_05"):
             density_class = "Dense"
@@ -1063,6 +1125,10 @@ def _generate_summary_table(
         c_alpha = c_info.get("alpha", float("nan"))
         c_r2 = c_info.get("r_squared", float("nan"))
         c_model = c_info.get("model", "polynomial")
+        # Pruned exhaustive
+        pe_alpha = pe_info.get("alpha", float("nan"))
+        pe_r2 = pe_info.get("r_squared", float("nan"))
+        pe_model = pe_info.get("model", "polynomial")
 
         c_alpha_str = (
             f"{c_alpha:.2f}"
@@ -1072,12 +1138,22 @@ def _generate_summary_table(
             else "---"
         )
 
+        pe_alpha_str = (
+            f"{pe_alpha:.2f}"
+            if pe_model == "polynomial" and np.isfinite(pe_alpha)
+            else f"exp (b={pe_info.get('base', 0):.2f})"
+            if pe_model == "exponential"
+            else "---"
+        )
+
         rows.append(
             {
                 "Family": family_display(family),
                 "n range": f"{cfg.get('n_min', '?')}-{cfg.get('n_max', '?')}",
                 "a greedy": f"{g_alpha:.2f}" if np.isfinite(g_alpha) else "---",
                 "R2 greedy": f"{g_r2:.2f}" if np.isfinite(g_r2) else "---",
+                "a pruned": pe_alpha_str,
+                "R2 pruned": f"{pe_r2:.2f}" if np.isfinite(pe_r2) else "---",
                 "a canonical": c_alpha_str,
                 "R2 canonical": f"{c_r2:.2f}" if np.isfinite(c_r2) else "---",
                 "Model": c_model if c_model != "insufficient_data" else "---",

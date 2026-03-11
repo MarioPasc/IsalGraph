@@ -254,6 +254,34 @@ def _time_encoding(
         except (ValueError, RuntimeError) as e:
             logger.warning("Exhaustive failed for %s: %s", gid, e)
 
+        # Time pruned exhaustive
+        from isalgraph.core.canonical_pruned import pruned_canonical_string
+
+        pe_timing: dict | None = None
+        pe_string: str | None = None
+        try:
+            t_probe_start = time.process_time()
+            probe_pe = pruned_canonical_string(sg)
+            t_probe_pe = time.process_time() - t_probe_start
+
+            if t_probe_pe > 60.0:
+                pe_timing = {
+                    "median_s": t_probe_pe,
+                    "iqr_s": float("nan"),
+                    "all_times_s": [t_probe_pe],
+                    "n_reps": 1,
+                }
+                pe_string = probe_pe
+            else:
+                pe_timing = time_function(
+                    pruned_canonical_string,
+                    args=(sg,),
+                    n_reps=actual_reps,
+                )
+                pe_string = pe_timing["result"]
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Pruned exhaustive failed for %s: %s", gid, e)
+
         # Time greedy-min (all starting nodes)
         def _greedy_min(sg_local=sg):
             best_s = None
@@ -285,12 +313,21 @@ def _time_encoding(
             else float("nan"),
             "exhaustive_string_length": len(exh_string) if exh_string else -1,
             "exhaustive_n_reps": exh_timing["n_reps"] if exh_timing else 0,
+            "pruned_exhaustive_time_median_s": pe_timing["median_s"] if pe_timing else float("nan"),
+            "pruned_exhaustive_time_iqr_s": pe_timing.get("iqr_s", float("nan"))
+            if pe_timing
+            else float("nan"),
+            "pruned_exhaustive_string_length": len(pe_string) if pe_string else -1,
+            "pruned_exhaustive_n_reps": pe_timing["n_reps"] if pe_timing else 0,
             "greedy_time_median_s": greedy_timing["median_s"],
             "greedy_time_iqr_s": greedy_timing["iqr_s"],
             "greedy_string_length": len(greedy_string) if greedy_string else -1,
             "greedy_n_reps": greedy_timing["n_reps"],
             "total_exhaustive_median_s": (
                 conv_timing["median_s"] + exh_timing["median_s"] if exh_timing else float("nan")
+            ),
+            "total_pruned_exhaustive_median_s": (
+                conv_timing["median_s"] + pe_timing["median_s"] if pe_timing else float("nan")
             ),
             "total_greedy_median_s": conv_timing["median_s"] + greedy_timing["median_s"],
         }
