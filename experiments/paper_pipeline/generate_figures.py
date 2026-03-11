@@ -130,7 +130,7 @@ def gen_composite_method_tradeoff(
     figures_dir: str,
 ) -> None:
     """Generate composite_method_tradeoff_v2.pdf."""
-    logger.info("[1/7] Generating composite_method_tradeoff_v2...")
+    logger.info("[1/8] Generating composite_method_tradeoff_v2...")
 
     if not check_dir_exists(data_root, "data_root"):
         return
@@ -158,7 +158,7 @@ def gen_aggregated_density_heatmap(
     figures_dir: str,
 ) -> None:
     """Generate fig_aggregated_density_correlation.pdf."""
-    logger.info("[2/7] Generating fig_aggregated_density_correlation...")
+    logger.info("[2/8] Generating fig_aggregated_density_correlation...")
 
     if not check_dir_exists(data_root, "data_root"):
         return
@@ -176,7 +176,7 @@ def gen_aggregated_density_heatmap(
 
 def gen_algorithm_overview(algo_dir: str, figures_dir: str) -> None:
     """Copy algorithm overview figures from Step 3a output."""
-    logger.info("[3/7] Copying algorithm overview figures...")
+    logger.info("[3/8] Copying algorithm overview figures...")
 
     if not check_dir_exists(algo_dir, "algorithm intermediate"):
         return
@@ -190,7 +190,7 @@ def gen_algorithm_overview(algo_dir: str, figures_dir: str) -> None:
 
 def gen_empirical_complexity(encoding_raw_dir: str, figures_dir: str) -> None:
     """Generate fig_empirical_complexity.pdf."""
-    logger.info("[5/7] Generating fig_empirical_complexity...")
+    logger.info("[5/8] Generating fig_empirical_complexity...")
 
     if not check_dir_exists(encoding_raw_dir, "encoding/raw"):
         return
@@ -205,12 +205,24 @@ def gen_empirical_complexity(encoding_raw_dir: str, figures_dir: str) -> None:
 
 def gen_neighborhood_topology(topo_dir: str, figures_dir: str) -> None:
     """Copy neighbourhood topology figure from Step 3b output."""
-    logger.info("[6/7] Copying neighbourhood topology figure...")
+    logger.info("[6/8] Copying neighbourhood topology figure...")
 
     if not check_dir_exists(topo_dir, "topology intermediate"):
         return
 
     copy_figures(topo_dir, figures_dir, ["fig_neighborhood_topology"])
+
+
+def gen_shortest_path_comparison(figures_dir: str) -> None:
+    """Generate fig_shortest_path_comparison.pdf (standalone, no precomputed data)."""
+    logger.info("[4/8] Generating fig_shortest_path_comparison...")
+
+    from benchmarks.eval_visualizations.illustrative.shortest_path_comparison import (
+        generate_shortest_path_comparison,
+    )
+
+    path = generate_shortest_path_comparison(figures_dir)
+    logger.info("  -> %s", path)
 
 
 def gen_performance_table(
@@ -219,7 +231,7 @@ def gen_performance_table(
     figures_dir: str,
 ) -> None:
     """Generate table_performance_summary.tex."""
-    logger.info("[7/7] Generating table_performance_summary...")
+    logger.info("[7/8] Generating table_performance_summary...")
 
     if not check_dir_exists(data_root, "data_root"):
         return
@@ -286,6 +298,13 @@ def generate_all(run_dir: str) -> None:
         except Exception as e:
             logger.error("  FAILED: %s", e)
             errors.append(f"algorithm_figures: {e}")
+
+    # 4b. fig_shortest_path_comparison (standalone, no deps)
+    try:
+        gen_shortest_path_comparison(figures_dir)
+    except Exception as e:
+        logger.error("  FAILED: %s", e)
+        errors.append(f"fig_shortest_path_comparison: {e}")
 
     # 5. fig_empirical_complexity
     if steps.get("eval_encoding", {}).get("enabled"):

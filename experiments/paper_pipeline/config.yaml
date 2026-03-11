@@ -45,7 +45,7 @@ steps:
     enabled: true
     n_bootstrap: 10000
     n_permutations: 9999
-    time_limit: "04:00:00"
+    time_limit: "12:00:00"
     cpus: 16
     mem_gb: 64
 
@@ -80,7 +80,7 @@ steps:
     n_max: 13
     edge_prob: 0.35
     exhaustive_timeout: 60.0
-    time_limit: "04:00:00"
+    time_limit: "12:00:00"
     cpus: 1
     mem_gb: 16
 
@@ -97,4 +97,5 @@ paper_outputs:
   - fig_algorithm_overview_full
   - fig_empirical_complexity
   - fig_neighborhood_topology
+  - fig_shortest_path_comparison
   - table_performance_summary
