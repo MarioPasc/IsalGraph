@@ -29,7 +29,9 @@ slurm:
 experiment:
   seed: 42
   algorithms: [canonical, greedy_min, greedy_single]
-  distance_metric: levenshtein
+  distance_metrics: [levenshtein, wl_kernel]
+  wl_kernel:
+    n_iter: 5
   datasets: [iam_letter_low, iam_letter_med, iam_letter_high, linux, aids]
 
 steps:

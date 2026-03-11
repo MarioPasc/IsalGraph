@@ -19,9 +19,6 @@ import argparse
 import json
 import logging
 import os
-import time
-
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -89,46 +86,11 @@ def _encode_single_random(
 ) -> tuple[list[str | None], list[float]]:
     """Run greedy G2S from a single random starting node per graph.
 
-    Returns:
-        (strings, times) lists aligned with input graphs.
+    Delegates to greedy_single_computer.compute_greedy_single.
     """
-    from isalgraph.adapters.networkx_adapter import NetworkXAdapter
-    from isalgraph.core.graph_to_string import GraphToString
+    from benchmarks.eval_setup.greedy_single_computer import compute_greedy_single
 
-    adapter = NetworkXAdapter()
-    rng = np.random.default_rng(seed)
-
-    strings: list[str | None] = []
-    times: list[float] = []
-
-    for i, (nx_graph, gid) in enumerate(zip(graphs, graph_ids, strict=True)):
-        sg = adapter.from_external(nx_graph, directed=False)
-        n = sg.node_count()
-        if n == 0:
-            strings.append(None)
-            times.append(0.0)
-            continue
-
-        # Pick a single random starting node
-        v0 = int(rng.integers(0, n))
-
-        t0 = time.perf_counter()
-        try:
-            gts = GraphToString(sg)
-            s, _ = gts.run(initial_node=v0)
-            elapsed = time.perf_counter() - t0
-            strings.append(s)
-            times.append(elapsed)
-        except (ValueError, RuntimeError) as e:
-            elapsed = time.perf_counter() - t0
-            logger.warning("Encoding failed for %s (v0=%d): %s", gid, v0, e)
-            strings.append(None)
-            times.append(elapsed)
-
-        if (i + 1) % 200 == 0:
-            logger.info("  Encoded %d/%d graphs", i + 1, len(graphs))
-
-    return strings, times
+    return compute_greedy_single(graphs, graph_ids, seed)
 
 
 def _save_strings_json(
@@ -138,49 +100,10 @@ def _save_strings_json(
     dataset_name: str,
     output_path: str,
 ) -> None:
-    """Save greedy-single strings in the same JSON format as greedy/exhaustive."""
-    strings_dict: dict[str, dict] = {}
-    lengths: list[int] = []
-    time_list: list[float] = []
+    """Save greedy-single strings. Delegates to greedy_single_computer."""
+    from benchmarks.eval_setup.greedy_single_computer import save_greedy_single_strings
 
-    for gid, s, t in zip(graph_ids, strings, times, strict=True):
-        if s is None:
-            continue
-        strings_dict[gid] = {
-            "string": s,
-            "length": len(s),
-            "time_s": round(t, 4),
-        }
-        lengths.append(len(s))
-        time_list.append(t)
-
-    lengths_arr = np.array(lengths) if lengths else np.array([0])
-    times_arr = np.array(time_list) if time_list else np.array([0.0])
-
-    output = {
-        "dataset": dataset_name,
-        "method": "greedy_single",
-        "n_max_filter": 12,
-        "n_graphs": len(strings_dict),
-        "strings": strings_dict,
-        "stats": {
-            "mean_length": round(float(np.mean(lengths_arr)), 1),
-            "median_length": int(np.median(lengths_arr)),
-            "std_length": round(float(np.std(lengths_arr)), 1),
-            "max_length": int(np.max(lengths_arr)),
-            "min_length": int(np.min(lengths_arr)),
-            "mean_time_s": round(float(np.mean(times_arr)), 4),
-            "median_time_s": round(float(np.median(times_arr)), 4),
-            "max_time_s": round(float(np.max(times_arr)), 4),
-            "total_time_s": round(float(np.sum(times_arr)), 2),
-            "n_timeout_exclusions": sum(1 for s in strings if s is None),
-        },
-    }
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
-    logger.info("Saved greedy-single strings to %s (%d graphs)", output_path, len(strings_dict))
+    save_greedy_single_strings(graph_ids, strings, times, dataset_name, 12, output_path)
 
 
 def main() -> None:

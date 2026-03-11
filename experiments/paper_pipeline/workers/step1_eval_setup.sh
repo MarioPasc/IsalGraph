@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Step 1: Eval Setup — Compute GED, canonical strings, Levenshtein matrices
+# Step 1: Eval Setup — Compute GED, canonical strings, Levenshtein matrices,
+#                       WL kernel distance matrices
 # =============================================================================
 set -euo pipefail
 
@@ -30,6 +31,23 @@ with open('${CONFIG}') as f:
 out = cfg['steps']['eval_setup']
 out['seed'] = cfg['experiment']['seed']
 out['source_dir'] = cfg['paths']['source_dir']
+
+# Algorithms: config names joined by comma
+out['algorithms'] = ','.join(cfg['experiment'].get('algorithms', ['canonical', 'greedy_min', 'greedy_single']))
+
+# Distance metrics: support both singular and plural key (backwards compat)
+metrics = cfg['experiment'].get('distance_metrics', cfg['experiment'].get('distance_metric', 'levenshtein'))
+if isinstance(metrics, list):
+    out['distance_metrics'] = ','.join(metrics)
+elif isinstance(metrics, str):
+    out['distance_metrics'] = metrics
+else:
+    out['distance_metrics'] = 'levenshtein'
+
+# WL kernel config
+wl_cfg = cfg['experiment'].get('wl_kernel', {})
+out['wl_n_iter'] = wl_cfg.get('n_iter', 5)
+
 json.dump(out, sys.stdout)
 ")
 
@@ -37,6 +55,9 @@ N_MAX=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdi
 SEED=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['seed'])")
 TIMEOUT=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['timeout_per_graph'])")
 SOURCE_DIR=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['source_dir'])")
+ALGORITHMS=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['algorithms'])")
+DISTANCE_METRICS=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['distance_metrics'])")
+WL_N_ITER=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['wl_n_iter'])")
 N_WORKERS="${SLURM_CPUS_PER_TASK:-4}"
 
 DATA_ROOT="${RUN_DIR}/data"
@@ -44,6 +65,7 @@ mkdir -p "$DATA_ROOT"
 
 echo "Config: data_root=$DATA_ROOT, source_dir=$SOURCE_DIR"
 echo "  n_max=$N_MAX, seed=$SEED, timeout=$TIMEOUT, workers=$N_WORKERS"
+echo "  algorithms=$ALGORITHMS, distance_metrics=$DISTANCE_METRICS, wl_n_iter=$WL_N_ITER"
 
 python -m benchmarks.eval_setup.eval_setup \
     --data-root "$DATA_ROOT" \
@@ -52,6 +74,9 @@ python -m benchmarks.eval_setup.eval_setup \
     --seed "$SEED" \
     --timeout-per-graph "$TIMEOUT" \
     --n-workers "$N_WORKERS" \
+    --algorithms "$ALGORITHMS" \
+    --distance-metrics "$DISTANCE_METRICS" \
+    --wl-n-iter "$WL_N_ITER" \
     --mode picasso
 
 echo "Finished: $(date)"

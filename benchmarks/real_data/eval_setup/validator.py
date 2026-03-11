@@ -16,7 +16,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-METHODS = ["exhaustive", "greedy"]
+METHODS = ["exhaustive", "greedy", "greedy_single"]
 
 
 @dataclass
@@ -293,6 +293,115 @@ def validate_cross_consistency(data_root: str, dataset: str) -> list[ValidationC
     return checks
 
 
+def validate_wl_kernel_matrix(path: str) -> list[ValidationCheck]:
+    """Validate a WL kernel .npz file.
+
+    Checks: file exists, distance symmetry, distance diagonal=0,
+    distance non-negative, kernel symmetry, kernel PSD.
+    """
+    checks: list[ValidationCheck] = []
+    prefix = os.path.basename(path)
+
+    if not os.path.exists(path):
+        checks.append(ValidationCheck(f"{prefix}/exists", False, "File not found", "error"))
+        return checks
+
+    checks.append(ValidationCheck(f"{prefix}/exists", True, "File found"))
+
+    data = np.load(path, allow_pickle=True)
+
+    # Distance matrix checks
+    dist = data["distance_matrix"]
+    n = dist.shape[0]
+
+    # Distance symmetry
+    if np.allclose(dist, dist.T, atol=1e-10):
+        checks.append(ValidationCheck(f"{prefix}/dist_symmetry", True, "Distance symmetric"))
+    else:
+        max_diff = float(np.max(np.abs(dist - dist.T)))
+        checks.append(
+            ValidationCheck(
+                f"{prefix}/dist_symmetry",
+                False,
+                f"Max asymmetry: {max_diff}",
+                "error",
+            )
+        )
+
+    # Distance diagonal = 0
+    diag_d = np.diag(dist)
+    if np.allclose(diag_d, 0.0, atol=1e-10):
+        checks.append(ValidationCheck(f"{prefix}/dist_diagonal", True, "Distance diagonal zero"))
+    else:
+        checks.append(
+            ValidationCheck(
+                f"{prefix}/dist_diagonal",
+                False,
+                f"Non-zero diagonal: max={float(np.max(np.abs(diag_d)))}",
+                "error",
+            )
+        )
+
+    # Distance non-negative
+    if np.all(dist >= -1e-10):
+        checks.append(ValidationCheck(f"{prefix}/dist_nonneg", True, "Distances non-negative"))
+    else:
+        n_neg = int(np.sum(dist < -1e-10))
+        checks.append(
+            ValidationCheck(
+                f"{prefix}/dist_nonneg",
+                False,
+                f"{n_neg} negative distances, min={float(dist.min())}",
+                "error",
+            )
+        )
+
+    # Kernel matrix checks
+    kern = data["kernel_matrix"]
+
+    # Kernel symmetry
+    if np.allclose(kern, kern.T, atol=1e-10):
+        checks.append(ValidationCheck(f"{prefix}/kernel_symmetry", True, "Kernel symmetric"))
+    else:
+        checks.append(
+            ValidationCheck(f"{prefix}/kernel_symmetry", False, "Kernel not symmetric", "error")
+        )
+
+    # Kernel PSD (check smallest eigenvalue)
+    eigenvalues = np.linalg.eigvalsh(kern)
+    min_eig = float(eigenvalues[0])
+    if min_eig >= -1e-6:
+        checks.append(
+            ValidationCheck(
+                f"{prefix}/kernel_psd",
+                True,
+                f"PSD (min eigenvalue: {min_eig:.6f})",
+            )
+        )
+    else:
+        checks.append(
+            ValidationCheck(
+                f"{prefix}/kernel_psd",
+                False,
+                f"Not PSD: min eigenvalue = {min_eig:.6f}",
+                "warning",
+            )
+        )
+
+    # Stats
+    triu_d = dist[np.triu_indices(n, k=1)]
+    checks.append(
+        ValidationCheck(
+            f"{prefix}/stats",
+            True,
+            f"{n} graphs, dist range [{float(triu_d.min()):.2f}, {float(triu_d.max()):.2f}]",
+            "info",
+        )
+    )
+
+    return checks
+
+
 def validate_all(data_root: str) -> list[ValidationCheck]:
     """Run all validation checks for a data root.
 
@@ -322,6 +431,11 @@ def validate_all(data_root: str) -> list[ValidationCheck]:
                 all_checks.extend(
                     validate_canonical_completeness(can_path, ged_path, lev_path, method)
                 )
+
+        # WL kernel matrix
+        wl_path = os.path.join(data_root, "wl_kernel_matrices", f"{dataset}.npz")
+        if os.path.exists(wl_path):
+            all_checks.extend(validate_wl_kernel_matrix(wl_path))
 
         # Cross-consistency
         all_checks.extend(validate_cross_consistency(data_root, dataset))

@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-METHODS = ["exhaustive", "greedy"]
+METHODS = ["exhaustive", "greedy", "greedy_single"]
 
 
 @dataclass
@@ -40,6 +40,8 @@ class EvalData:
     ged_matrices: dict[str, np.ndarray] = field(default_factory=dict)
     ged_graph_ids: dict[str, list[str]] = field(default_factory=dict)
     levenshtein_matrices: dict[tuple[str, str], np.ndarray] = field(default_factory=dict)
+    wl_distance_matrices: dict[str, np.ndarray] = field(default_factory=dict)
+    wl_kernel_matrices: dict[str, np.ndarray] = field(default_factory=dict)
 
 
 def _load_eval_data(data_root: str) -> EvalData:
@@ -94,6 +96,13 @@ def _load_eval_data(data_root: str) -> EvalData:
             if os.path.exists(lev_path):
                 lev_data = np.load(lev_path, allow_pickle=True)
                 ed.levenshtein_matrices[(ds, method)] = lev_data["levenshtein_matrix"]
+
+        # Load WL kernel data
+        wl_path = os.path.join(data_root, "wl_kernel_matrices", f"{ds}.npz")
+        if os.path.exists(wl_path):
+            wl_data = np.load(wl_path, allow_pickle=True)
+            ed.wl_distance_matrices[ds] = wl_data["distance_matrix"]
+            ed.wl_kernel_matrices[ds] = wl_data["kernel_matrix"]
 
     return ed
 

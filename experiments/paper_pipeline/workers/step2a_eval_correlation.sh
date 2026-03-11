@@ -29,12 +29,24 @@ with open('${CONFIG}') as f:
     cfg = yaml.safe_load(f)
 out = cfg['steps']['eval_correlation']
 out['seed'] = cfg['experiment']['seed']
+
+# Map algorithm config names to internal method names
+algo_to_method = {
+    'canonical': 'exhaustive',
+    'greedy_min': 'greedy',
+    'greedy_single': 'greedy_single',
+}
+algos = cfg['experiment'].get('algorithms', ['canonical', 'greedy_min', 'greedy_single'])
+methods = [algo_to_method[a] for a in algos if a in algo_to_method]
+out['methods'] = ','.join(methods)
+
 json.dump(out, sys.stdout)
 ")
 
 N_BOOTSTRAP=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['n_bootstrap'])")
 N_PERMUTATIONS=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['n_permutations'])")
 SEED=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['seed'])")
+METHODS=$(echo "$STEP_CFG" | python3 -c "import json,sys; print(json.load(sys.stdin)['methods'])")
 
 DATA_ROOT="${RUN_DIR}/data"
 OUTPUT_DIR="${RUN_DIR}/correlation"
@@ -42,6 +54,7 @@ mkdir -p "$OUTPUT_DIR"
 
 echo "Config: data_root=$DATA_ROOT, output_dir=$OUTPUT_DIR"
 echo "  n_bootstrap=$N_BOOTSTRAP, n_permutations=$N_PERMUTATIONS, seed=$SEED"
+echo "  methods=$METHODS"
 
 python -m benchmarks.eval_correlation.eval_correlation \
     --data-root "$DATA_ROOT" \
@@ -49,6 +62,7 @@ python -m benchmarks.eval_correlation.eval_correlation \
     --n-bootstrap "$N_BOOTSTRAP" \
     --n-permutations "$N_PERMUTATIONS" \
     --seed "$SEED" \
+    --methods "$METHODS" \
     --mode picasso \
     --csv --plot --table
 

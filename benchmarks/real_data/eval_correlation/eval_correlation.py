@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
-METHODS = ["exhaustive", "greedy"]
+DEFAULT_METHODS = ["exhaustive", "greedy", "greedy_single"]
 IAM_DATASETS_ORDERED = ["iam_letter_low", "iam_letter_med", "iam_letter_high"]
 LABELED_DATASETS = {"iam_letter_low", "iam_letter_med", "iam_letter_high"}
 
@@ -64,19 +64,45 @@ DEFAULT_OUTPUT_DIR = "/media/mpascual/Sandisk2TB/research/isalgraph/results/eval
 # =============================================================================
 
 
-def _load_dataset_artifacts(
-    data_root: str,
-    dataset: str,
-) -> dict:
-    """Load all artifacts for a dataset.
+def _discover_methods(data_root: str, dataset: str) -> list[str]:
+    """Discover available methods by scanning levenshtein_matrices directory.
 
     Args:
         data_root: Root directory of eval pipeline output.
         dataset: Dataset name.
 
     Returns:
+        List of method names found on disk.
+    """
+    lev_dir = os.path.join(data_root, "levenshtein_matrices")
+    if not os.path.isdir(lev_dir):
+        return []
+
+    prefix = f"{dataset}_"
+    suffix = ".npz"
+    methods = []
+    for fname in sorted(os.listdir(lev_dir)):
+        if fname.startswith(prefix) and fname.endswith(suffix):
+            method = fname[len(prefix) : -len(suffix)]
+            methods.append(method)
+    return methods
+
+
+def _load_dataset_artifacts(
+    data_root: str,
+    dataset: str,
+    methods: list[str] | None = None,
+) -> dict:
+    """Load all artifacts for a dataset.
+
+    Args:
+        data_root: Root directory of eval pipeline output.
+        dataset: Dataset name.
+        methods: Specific methods to load (None = discover from disk).
+
+    Returns:
         Dict with ged_matrix, labels, node_counts, edge_counts,
-        graph_ids, and per-method levenshtein matrices.
+        graph_ids, per-method levenshtein matrices, and optional WL data.
     """
     artifacts: dict = {"dataset": dataset}
 
@@ -89,13 +115,24 @@ def _load_dataset_artifacts(
     artifacts["node_counts"] = np.array(ged_data["node_counts"])
     artifacts["edge_counts"] = np.array(ged_data["edge_counts"])
 
+    # Discover or use specified methods
+    if methods is None or methods == ["auto"]:
+        methods = _discover_methods(data_root, dataset)
+
     # Levenshtein matrices
     artifacts["lev_matrices"] = {}
-    for method in METHODS:
+    for method in methods:
         lev_path = os.path.join(data_root, "levenshtein_matrices", f"{dataset}_{method}.npz")
         if os.path.exists(lev_path):
             lev_data = np.load(lev_path, allow_pickle=True)
             artifacts["lev_matrices"][method] = lev_data["levenshtein_matrix"]
+
+    # WL kernel distance matrix (algorithm-independent)
+    wl_path = os.path.join(data_root, "wl_kernel_matrices", f"{dataset}.npz")
+    if os.path.exists(wl_path):
+        wl_data = np.load(wl_path, allow_pickle=True)
+        artifacts["wl_distance_matrix"] = wl_data["distance_matrix"]
+        artifacts["wl_kernel_matrix"] = wl_data["kernel_matrix"]
 
     # Graph metadata (for densities)
     meta_path = os.path.join(data_root, "graph_metadata", f"{dataset}.json")
@@ -124,6 +161,84 @@ def _compute_densities(node_counts: np.ndarray, edge_counts: np.ndarray) -> np.n
     return densities
 
 
+def _analyze_pair(
+    proxy_matrix: np.ndarray,
+    reference_matrix: np.ndarray,
+    pair_label: str,
+    n_bootstrap: int,
+    n_permutations: int,
+    seed: int,
+) -> dict:
+    """Run correlation analysis between two distance matrices.
+
+    Generic function for any pair: Lev vs GED, Lev vs WL, WL vs GED.
+
+    Args:
+        proxy_matrix: First distance matrix.
+        reference_matrix: Second distance matrix.
+        pair_label: Label for logging (e.g. "exhaustive_lev_vs_ged").
+        n_bootstrap: Number of bootstrap resamples.
+        n_permutations: Number of Mantel permutations.
+        seed: Random seed.
+
+    Returns:
+        Dict with correlation statistics.
+    """
+    [v_proxy, v_ref], _ = extract_upper_tri(proxy_matrix, reference_matrix, mask_inf=True)
+    n_pairs = len(v_proxy)
+    n_total = proxy_matrix.shape[0] * (proxy_matrix.shape[0] - 1) // 2
+    pct_valid = 100.0 * n_pairs / n_total if n_total > 0 else 0.0
+
+    result: dict = {
+        "pair_label": pair_label,
+        "n_pairs": n_pairs,
+        "n_total_pairs": n_total,
+        "pct_valid": round(pct_valid, 1),
+    }
+
+    if n_pairs < 10:
+        result["error"] = "too_few_pairs"
+        return result
+
+    # Mantel test
+    mantel = mantel_test(
+        proxy_matrix,
+        reference_matrix,
+        method="spearman",
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+    result["mantel"] = asdict(mantel)
+
+    # Bootstrap correlations
+    spearman = bootstrap_correlation(
+        v_proxy, v_ref, method="spearman", n_bootstrap=n_bootstrap, seed=seed
+    )
+    pearson = bootstrap_correlation(
+        v_proxy, v_ref, method="pearson", n_bootstrap=n_bootstrap, seed=seed
+    )
+    kendall = bootstrap_correlation(
+        v_proxy, v_ref, method="kendall", n_bootstrap=n_bootstrap, seed=seed
+    )
+    result["spearman"] = asdict(spearman)
+    result["pearson"] = asdict(pearson)
+    result["kendall"] = asdict(kendall)
+
+    # Lin's CCC
+    ccc_raw = lins_ccc(v_proxy, v_ref)
+    v_proxy_z = (v_proxy - np.mean(v_proxy)) / (np.std(v_proxy) + 1e-12)
+    v_ref_z = (v_ref - np.mean(v_ref)) / (np.std(v_ref) + 1e-12)
+    ccc_znorm = lins_ccc(v_proxy_z, v_ref_z)
+    result["lins_ccc_raw"] = round(ccc_raw, 4)
+    result["lins_ccc_znorm"] = round(ccc_znorm, 4)
+
+    # OLS regression
+    ols = ols_regression(v_proxy, v_ref)
+    result["ols"] = ols
+
+    return result
+
+
 def _analyze_dataset(
     artifacts: dict,
     method: str,
@@ -133,9 +248,11 @@ def _analyze_dataset(
 ) -> dict:
     """Run full statistical analysis for one (dataset, method) pair.
 
+    Computes Lev vs GED correlation (and optionally Lev vs WL).
+
     Args:
         artifacts: Output of _load_dataset_artifacts().
-        method: "exhaustive" or "greedy".
+        method: Algorithm method name (e.g. "exhaustive", "greedy", "greedy_single").
         n_bootstrap: Number of bootstrap resamples.
         n_permutations: Number of Mantel permutations.
         seed: Random seed.
@@ -175,6 +292,7 @@ def _analyze_dataset(
         result["error"] = "too_few_pairs"
         return result
 
+    # ---- Lev vs GED (primary analysis) ----
     # Mantel test (H1)
     logger.info("  Running Mantel test (%d permutations)...", n_permutations)
     mantel = mantel_test(ged, lev, method="spearman", n_permutations=n_permutations, seed=seed)
@@ -213,6 +331,20 @@ def _analyze_dataset(
     # OLS regression
     ols = ols_regression(v_lev, v_ged)
     result["ols"] = ols
+
+    # ---- Lev vs WL (if WL available) ----
+    if "wl_distance_matrix" in artifacts:
+        logger.info("  Computing Lev vs WL correlation...")
+        wl_dist = artifacts["wl_distance_matrix"]
+        lev_vs_wl = _analyze_pair(
+            lev,
+            wl_dist,
+            pair_label=f"{method}_lev_vs_wl",
+            n_bootstrap=n_bootstrap,
+            n_permutations=n_permutations,
+            seed=seed,
+        )
+        result["lev_vs_wl"] = lev_vs_wl
 
     # Class-level analysis (H4) -- IAM datasets only
     if dataset in LABELED_DATASETS and any(lab != "" for lab in labels):
@@ -665,11 +797,16 @@ def _plot_rho_bars(
     """Grouped bar chart of Spearman rho per dataset and method."""
     from benchmarks.plotting_styles import PLOT_SETTINGS
 
-    datasets_to_plot = [ds for ds in ALL_DATASETS if any((ds, m) in all_stats for m in METHODS)]
+    # Discover methods present in all_stats (exclude wl_vs_ged pseudo-method)
+    methods_in_stats = sorted({m for _, m in all_stats if m != "wl_vs_ged"})
+    datasets_to_plot = [
+        ds for ds in ALL_DATASETS if any((ds, m) in all_stats for m in methods_in_stats)
+    ]
     x = np.arange(len(datasets_to_plot))
-    width = 0.35
+    n_methods = max(len(methods_in_stats), 1)
+    width = 0.8 / n_methods
 
-    for m_idx, method in enumerate(METHODS):
+    for m_idx, method in enumerate(methods_in_stats):
         rhos = []
         ci_lo = []
         ci_hi = []
@@ -685,15 +822,15 @@ def _plot_rho_bars(
             ci_hi.append(hi - rho)
             colors.append(ds_colors.get(ds, "#999999"))
 
-        offset = (m_idx - 0.5) * width
+        offset = (m_idx - n_methods / 2 + 0.5) * width
         ax.bar(
             x + offset,
             rhos,
             width,
             yerr=[ci_lo, ci_hi],
-            label=method.capitalize(),
+            label=method.replace("_", " ").capitalize(),
             color=colors,
-            hatch=method_hatches[method],
+            hatch=method_hatches.get(method, ""),
             alpha=PLOT_SETTINGS["bar_alpha"],
             capsize=PLOT_SETTINGS["errorbar_capsize"],
             edgecolor="black",
@@ -724,12 +861,14 @@ def _plot_distortion_trend(
     method_colors = {
         "exhaustive": PAUL_TOL_BRIGHT["blue"],
         "greedy": PAUL_TOL_BRIGHT["red"],
+        "greedy_single": PAUL_TOL_BRIGHT["green"],
     }
 
     x_pos = [0, 1, 2]
     x_labels = ["LOW", "MED", "HIGH"]
 
-    for method in METHODS:
+    methods_in_stats = sorted({m for _, m in all_stats if m != "wl_vs_ged"})
+    for method in methods_in_stats:
         rhos = []
         ci_lo = []
         ci_hi = []
@@ -902,7 +1041,7 @@ def _plot_heatmap_comparison(
         order = np.argsort(row_sums)
 
     matrices = [("GED", ged[:n, :n][np.ix_(order, order)])]
-    for method in METHODS:
+    for method in sorted(artifacts["lev_matrices"].keys()):
         lev = artifacts["lev_matrices"].get(method)
         if lev is not None:
             matrices.append((f"Lev ({method})", lev[:n, :n][np.ix_(order, order)]))
@@ -956,12 +1095,13 @@ def _generate_tables(
     os.makedirs(table_dir, exist_ok=True)
 
     # ---- Table 1: Correlation summary ----
+    methods_in_stats = sorted({m for _, m in all_stats if m != "wl_vs_ged"})
     rows = []
     for ds in ALL_DATASETS:
-        for method in METHODS:
+        for method in methods_in_stats:
             key = (ds, method)
             s = all_stats.get(key, {})
-            if "error" in s:
+            if not s or "error" in s:
                 continue
 
             sp = s.get("spearman", {})
@@ -1007,10 +1147,10 @@ def _generate_tables(
     # ---- Table 2: Precision@k ----
     pak_rows = []
     for ds in ALL_DATASETS:
-        for method in METHODS:
+        for method in methods_in_stats:
             key = (ds, method)
             s = all_stats.get(key, {})
-            if "error" in s:
+            if not s or "error" in s:
                 continue
             pak = s.get("precision_at_k", {})
             pak_rows.append(
@@ -1071,6 +1211,7 @@ def run_pipeline(
     save_csv: bool,
     save_plots: bool,
     save_tables: bool,
+    methods: list[str] | None = None,
 ) -> None:
     """Run the full correlation analysis pipeline.
 
@@ -1084,6 +1225,7 @@ def run_pipeline(
         save_csv: Whether to save pair-level CSVs.
         save_plots: Whether to generate figures.
         save_tables: Whether to generate LaTeX tables.
+        methods: Explicit method list, or None for auto-discovery.
     """
     t0 = time.perf_counter()
     os.makedirs(output_dir, exist_ok=True)
@@ -1098,18 +1240,17 @@ def run_pipeline(
     for ds in datasets:
         logger.info("Loading artifacts for %s...", ds)
         try:
-            artifacts = _load_dataset_artifacts(data_root, ds)
+            artifacts = _load_dataset_artifacts(data_root, ds, methods)
         except FileNotFoundError as e:
             logger.error("Missing data for %s: %s", ds, e)
             continue
 
         all_artifacts[ds] = artifacts
+        available_methods = list(artifacts["lev_matrices"].keys())
+        logger.info("  Available methods for %s: %s", ds, available_methods)
 
-        for method in METHODS:
-            if method not in artifacts["lev_matrices"]:
-                logger.warning("No %s Levenshtein matrix for %s, skipping.", method, ds)
-                continue
-
+        # Per-method analysis (Lev vs GED, Lev vs WL)
+        for method in available_methods:
             stats_dict = _analyze_dataset(
                 artifacts,
                 method,
@@ -1128,6 +1269,24 @@ def run_pipeline(
             # Save pair-level CSV
             if save_csv and "error" not in stats_dict:
                 _save_pair_csv(artifacts, method, raw_dir)
+
+        # WL vs GED (once per dataset, algorithm-independent)
+        if "wl_distance_matrix" in artifacts:
+            logger.info("  Computing WL vs GED for %s...", ds)
+            wl_vs_ged = _analyze_pair(
+                artifacts["wl_distance_matrix"],
+                artifacts["ged_matrix"],
+                pair_label=f"{ds}_wl_vs_ged",
+                n_bootstrap=n_bootstrap,
+                n_permutations=n_permutations,
+                seed=seed,
+            )
+            wl_stats_path = os.path.join(stats_dir, f"{ds}_wl_vs_ged_stats.json")
+            with open(wl_stats_path, "w") as f:
+                json.dump(wl_vs_ged, f, indent=2, default=str)
+            logger.info("Saved %s", wl_stats_path)
+            # Store for cross-dataset use
+            all_stats[(ds, "wl_vs_ged")] = wl_vs_ged
 
     # Cross-dataset analysis
     if len(all_stats) > 0:
@@ -1247,6 +1406,12 @@ def main() -> None:
     parser.add_argument("--csv", action="store_true", help="Save pair-level CSVs.")
     parser.add_argument("--plot", action="store_true", help="Generate figures.")
     parser.add_argument("--table", action="store_true", help="Generate LaTeX tables.")
+    parser.add_argument(
+        "--methods",
+        type=str,
+        default="auto",
+        help="Comma-separated method names, or 'auto' to discover from disk.",
+    )
 
     args = parser.parse_args()
 
@@ -1267,6 +1432,9 @@ def main() -> None:
                 logger.error("Unknown dataset: %s. Choose from %s", d, ALL_DATASETS)
                 sys.exit(1)
 
+    # Parse methods
+    method_list = None if args.methods == "auto" else [m.strip() for m in args.methods.split(",")]
+
     run_pipeline(
         data_root=args.data_root,
         output_dir=args.output_dir,
@@ -1277,6 +1445,7 @@ def main() -> None:
         save_csv=args.csv,
         save_plots=args.plot,
         save_tables=args.table,
+        methods=method_list,
     )
 
 

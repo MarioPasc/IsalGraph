@@ -1,14 +1,17 @@
 """Main CLI orchestrator for the evaluation infrastructure setup.
 
-Chains dataset loading, filtering, GED computation, dual canonical
-string computation, Levenshtein matrix computation, method comparison,
-and validation into a single pipeline.
+Chains dataset loading, filtering, GED computation, canonical string
+computation (exhaustive, greedy, greedy_single), Levenshtein matrix
+computation, WL kernel distance computation, method comparison, and
+validation into a single pipeline.
 
 Usage:
     python -m benchmarks.eval_setup.eval_setup \
         --data-root data/eval \
         --source-dir /path/to/source \
-        --n-max 12 --n-workers 4 --seed 42
+        --n-max 12 --n-workers 4 --seed 42 \
+        --algorithms canonical,greedy_min,greedy_single \
+        --distance-metrics levenshtein,wl_kernel
 """
 
 from __future__ import annotations
@@ -39,6 +42,10 @@ from benchmarks.eval_setup.ged_computer import (
     save_ged_matrix,
 )
 from benchmarks.eval_setup.graphedx_loader import load_graphedx_dataset
+from benchmarks.eval_setup.greedy_single_computer import (
+    compute_greedy_single,
+    save_greedy_single_strings,
+)
 from benchmarks.eval_setup.iam_letter_loader import load_iam_letter
 from benchmarks.eval_setup.levenshtein_computer import (
     compute_levenshtein_matrix,
@@ -46,12 +53,16 @@ from benchmarks.eval_setup.levenshtein_computer import (
     save_levenshtein_matrix,
 )
 from benchmarks.eval_setup.method_comparator import (
-    compare_methods,
+    compare_all_methods,
     save_method_comparison,
 )
 from benchmarks.eval_setup.validator import (
     save_validation_report,
     validate_all,
+)
+from benchmarks.eval_setup.wl_kernel_computer import (
+    compute_wl_kernel_distance,
+    save_wl_kernel_matrix,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,6 +76,17 @@ DEFAULT_TIMEOUT = 600
 ALL_DATASETS = ["iam_letter_low", "iam_letter_med", "iam_letter_high", "linux", "aids"]
 IAM_DATASETS = {"iam_letter_low": "LOW", "iam_letter_med": "MED", "iam_letter_high": "HIGH"}
 GRAPHEDX_DATASETS = {"linux": "LINUX", "aids": "AIDS"}
+
+# Config algorithm names -> internal method names used for file naming
+ALGORITHM_TO_METHOD = {
+    "canonical": "exhaustive",
+    "greedy_min": "greedy",
+    "greedy_single": "greedy_single",
+}
+
+DEFAULT_ALGORITHMS = "canonical,greedy_min,greedy_single"
+DEFAULT_DISTANCE_METRICS = "levenshtein,wl_kernel"
+DEFAULT_WL_N_ITER = 5
 
 
 # ---------------------------------------------------------------------------
@@ -120,15 +142,46 @@ def _process_dataset(
     skip_ged: bool,
     skip_canonical: bool,
     skip_levenshtein: bool,
+    algorithms: list[str],
+    distance_metrics: list[str],
+    wl_n_iter: int,
 ) -> FilterResult:
     """Run the full pipeline for one dataset.
+
+    Args:
+        dataset_name: Dataset name.
+        graphs: Raw NetworkX graphs.
+        graph_ids: Graph identifiers.
+        labels: Class labels.
+        raw_ged_matrix: Precomputed GED matrix (GraphEDX datasets) or None.
+        data_root: Root output directory.
+        n_max: Maximum node count filter.
+        n_workers: Parallel workers.
+        seed: Random seed.
+        timeout_per_graph: Per-graph canonical timeout.
+        skip_ged: Skip GED computation.
+        skip_canonical: Skip canonical string computation.
+        skip_levenshtein: Skip Levenshtein computation.
+        algorithms: List of algorithm config names to run.
+        distance_metrics: List of distance metrics to compute.
+        wl_n_iter: WL kernel iterations.
 
     Returns:
         FilterResult for the dataset.
     """
     logger.info("=" * 60)
     logger.info("Processing dataset: %s (%d raw graphs)", dataset_name, len(graphs))
+    logger.info("  algorithms: %s", algorithms)
+    logger.info("  distance_metrics: %s", distance_metrics)
     logger.info("=" * 60)
+
+    # Resolve which internal method names are requested
+    requested_methods = set()
+    for algo in algorithms:
+        if algo in ALGORITHM_TO_METHOD:
+            requested_methods.add(ALGORITHM_TO_METHOD[algo])
+        else:
+            logger.warning("Unknown algorithm '%s', skipping", algo)
 
     # ---- Step 0: Filter ----
     filter_result = filter_graphs(graphs, graph_ids, n_max)
@@ -201,12 +254,16 @@ def _process_dataset(
             n_dropped=filter_result.n_raw - filter_result.n_kept,
         )
 
-    # ---- Step 2: Dual canonical strings ----
+    # ---- Step 2: Strings (canonical exhaustive/greedy + greedy_single) ----
     canonical_dir = os.path.join(data_root, "canonical_strings")
     os.makedirs(canonical_dir, exist_ok=True)
 
+    # 2a: Canonical exhaustive + greedy (computed together by compute_all_canonical)
     canonical_results: list[CanonicalResult] = []
-    if not skip_canonical:
+    need_canonical = not skip_canonical and (
+        "exhaustive" in requested_methods or "greedy" in requested_methods
+    )
+    if need_canonical:
         checkpoint = os.path.join(canonical_dir, f"{dataset_name}_checkpoint.json")
         canonical_results = compute_all_canonical(
             kept_graphs,
@@ -216,49 +273,99 @@ def _process_dataset(
             checkpoint_path=checkpoint,
         )
 
+        # Save only the requested methods
         for method in ["exhaustive", "greedy"]:
-            out_path = os.path.join(canonical_dir, f"{dataset_name}_{method}.json")
-            save_canonical_strings(canonical_results, method, dataset_name, n_max, out_path)
+            if method in requested_methods:
+                out_path = os.path.join(canonical_dir, f"{dataset_name}_{method}.json")
+                save_canonical_strings(canonical_results, method, dataset_name, n_max, out_path)
 
-    # ---- Step 3: Levenshtein matrices ----
+    # 2b: Greedy single (independent of canonical computation)
+    greedy_single_strings: list[str | None] = []
+    greedy_single_times: list[float] = []
+    if not skip_canonical and "greedy_single" in requested_methods:
+        logger.info("Computing greedy_single strings for %s...", dataset_name)
+        greedy_single_strings, greedy_single_times = compute_greedy_single(
+            kept_graphs, kept_ids, seed
+        )
+        gs_path = os.path.join(canonical_dir, f"{dataset_name}_greedy_single.json")
+        save_greedy_single_strings(
+            kept_ids,
+            greedy_single_strings,
+            greedy_single_times,
+            dataset_name,
+            n_max,
+            gs_path,
+        )
+
+    # ---- Step 3a: Levenshtein matrices ----
     lev_dir = os.path.join(data_root, "levenshtein_matrices")
     os.makedirs(lev_dir, exist_ok=True)
 
-    if not skip_levenshtein and canonical_results:
-        # Cross-validate Levenshtein implementation
-        exhaustive_strings = [r.exhaustive_string for r in canonical_results]
-        greedy_strings = [r.greedy_string for r in canonical_results]
+    if not skip_levenshtein and "levenshtein" in distance_metrics:
+        # Exhaustive + greedy from canonical results
+        if canonical_results:
+            exhaustive_strings = [r.exhaustive_string for r in canonical_results]
+            greedy_strings = [r.greedy_string for r in canonical_results]
 
-        valid_exhaust = [s for s in exhaustive_strings if s is not None]
-        if valid_exhaust:
-            cv_result = cross_validate_levenshtein(valid_exhaust)
-            logger.info("Levenshtein cross-validation: %s", cv_result.get("status", "unknown"))
+            # Cross-validate Levenshtein implementation
+            valid_exhaust = [s for s in exhaustive_strings if s is not None]
+            if valid_exhaust:
+                cv_result = cross_validate_levenshtein(valid_exhaust)
+                logger.info("Levenshtein cross-validation: %s", cv_result.get("status", "unknown"))
 
-        for method, strings in [("exhaustive", exhaustive_strings), ("greedy", greedy_strings)]:
-            lev_matrix = compute_levenshtein_matrix(strings, kept_ids, method)
-            lev_path = os.path.join(lev_dir, f"{dataset_name}_{method}.npz")
-            save_levenshtein_matrix(lev_matrix, kept_ids, method, lev_path)
+            for method, strings in [
+                ("exhaustive", exhaustive_strings),
+                ("greedy", greedy_strings),
+            ]:
+                if method in requested_methods:
+                    lev_matrix = compute_levenshtein_matrix(strings, kept_ids, method)
+                    lev_path = os.path.join(lev_dir, f"{dataset_name}_{method}.npz")
+                    save_levenshtein_matrix(lev_matrix, kept_ids, method, lev_path)
 
-    # ---- Step 4: Method comparison ----
+        # Greedy single
+        if greedy_single_strings and "greedy_single" in requested_methods:
+            lev_matrix = compute_levenshtein_matrix(
+                greedy_single_strings, kept_ids, "greedy_single"
+            )
+            lev_path = os.path.join(lev_dir, f"{dataset_name}_greedy_single.npz")
+            save_levenshtein_matrix(lev_matrix, kept_ids, "greedy_single", lev_path)
+
+    # ---- Step 3b: WL kernel distance ----
+    if not skip_levenshtein and "wl_kernel" in distance_metrics:
+        wl_dir = os.path.join(data_root, "wl_kernel_matrices")
+        os.makedirs(wl_dir, exist_ok=True)
+        wl_path = os.path.join(wl_dir, f"{dataset_name}.npz")
+
+        logger.info("Computing WL kernel distance for %s (n_iter=%d)...", dataset_name, wl_n_iter)
+        wl_dist, wl_kernel = compute_wl_kernel_distance(kept_graphs, n_iter=wl_n_iter)
+        save_wl_kernel_matrix(wl_dist, wl_kernel, kept_ids, wl_n_iter, wl_path)
+
+    # ---- Step 4: Method comparison (generalized) ----
     comparison_dir = os.path.join(data_root, "method_comparison")
     os.makedirs(comparison_dir, exist_ok=True)
 
-    if canonical_results and not skip_levenshtein and not skip_ged:
-        # Load the matrices we just saved
-        lev_exhaust_path = os.path.join(lev_dir, f"{dataset_name}_exhaustive.npz")
-        lev_greedy_path = os.path.join(lev_dir, f"{dataset_name}_greedy.npz")
+    if not skip_levenshtein and not skip_ged and os.path.exists(ged_path):
+        # Collect available Levenshtein matrices
+        method_lev_matrices: dict[str, np.ndarray] = {}
+        for method in requested_methods:
+            lev_path = os.path.join(lev_dir, f"{dataset_name}_{method}.npz")
+            if os.path.exists(lev_path):
+                method_lev_matrices[method] = np.load(lev_path)["levenshtein_matrix"]
 
-        if (
-            os.path.exists(lev_exhaust_path)
-            and os.path.exists(lev_greedy_path)
-            and os.path.exists(ged_path)
-        ):
-            lev_exhaust = np.load(lev_exhaust_path)["levenshtein_matrix"]
-            lev_greedy = np.load(lev_greedy_path)["levenshtein_matrix"]
+        # Load WL distance if available
+        wl_distance_matrix = None
+        wl_path_check = os.path.join(data_root, "wl_kernel_matrices", f"{dataset_name}.npz")
+        if os.path.exists(wl_path_check):
+            wl_distance_matrix = np.load(wl_path_check)["distance_matrix"]
+
+        if len(method_lev_matrices) >= 1:
             ged_mat = np.load(ged_path, allow_pickle=True)["ged_matrix"]
-
-            comparison = compare_methods(
-                canonical_results, lev_exhaust, lev_greedy, ged_mat, kept_ids, dataset_name
+            comparison = compare_all_methods(
+                method_lev_matrices=method_lev_matrices,
+                ged_matrix=ged_mat,
+                wl_distance_matrix=wl_distance_matrix,
+                graph_ids=kept_ids,
+                dataset_name=dataset_name,
             )
             comp_path = os.path.join(comparison_dir, f"{dataset_name}_comparison.json")
             save_method_comparison(comparison, comp_path)
@@ -284,6 +391,9 @@ def run_pipeline(
     skip_levenshtein: bool,
     validate_only: bool,
     max_graphs_per_dataset: int | None = None,
+    algorithms: list[str] | None = None,
+    distance_metrics: list[str] | None = None,
+    wl_n_iter: int = DEFAULT_WL_N_ITER,
 ) -> None:
     """Run the full evaluation setup pipeline.
 
@@ -300,7 +410,15 @@ def run_pipeline(
         skip_levenshtein: Skip Levenshtein computation.
         validate_only: Only run validation.
         max_graphs_per_dataset: Limit graphs per dataset (for testing).
+        algorithms: Algorithm config names (default: all three).
+        distance_metrics: Distance metrics to compute (default: levenshtein, wl_kernel).
+        wl_n_iter: WL kernel iterations.
     """
+    if algorithms is None:
+        algorithms = list(ALGORITHM_TO_METHOD.keys())
+    if distance_metrics is None:
+        distance_metrics = ["levenshtein", "wl_kernel"]
+
     os.makedirs(data_root, exist_ok=True)
     np.random.seed(seed)
 
@@ -308,10 +426,13 @@ def run_pipeline(
     logger.info("  data_root: %s", data_root)
     logger.info("  source_dir: %s", source_dir)
     logger.info("  datasets: %s", datasets)
+    logger.info("  algorithms: %s", algorithms)
+    logger.info("  distance_metrics: %s", distance_metrics)
     logger.info("  n_max: %d", n_max)
     logger.info("  n_workers: %d", n_workers)
     logger.info("  seed: %d", seed)
     logger.info("  timeout_per_graph: %.0fs", timeout_per_graph)
+    logger.info("  wl_n_iter: %d", wl_n_iter)
     if max_graphs_per_dataset:
         logger.info("  max_graphs_per_dataset: %d (TESTING MODE)", max_graphs_per_dataset)
 
@@ -357,6 +478,9 @@ def run_pipeline(
                 skip_ged=skip_ged,
                 skip_canonical=skip_canonical,
                 skip_levenshtein=skip_levenshtein,
+                algorithms=algorithms,
+                distance_metrics=distance_metrics,
+                wl_n_iter=wl_n_iter,
             )
             filter_results[dataset_name] = fr
 
@@ -391,7 +515,7 @@ def run_pipeline(
 def main() -> None:
     """Entry point."""
     parser = argparse.ArgumentParser(
-        description="Evaluation infrastructure setup (dual-mode canonical strings)."
+        description="Evaluation infrastructure setup (multi-algorithm canonical strings)."
     )
     parser.add_argument("--data-root", type=str, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--source-dir", type=str, default=DEFAULT_SOURCE_DIR)
@@ -408,6 +532,24 @@ def main() -> None:
         type=str,
         default="all",
         help="Comma-separated dataset names, or 'all'.",
+    )
+    parser.add_argument(
+        "--algorithms",
+        type=str,
+        default=DEFAULT_ALGORITHMS,
+        help="Comma-separated algorithm names: canonical, greedy_min, greedy_single.",
+    )
+    parser.add_argument(
+        "--distance-metrics",
+        type=str,
+        default=DEFAULT_DISTANCE_METRICS,
+        help="Comma-separated distance metrics: levenshtein, wl_kernel.",
+    )
+    parser.add_argument(
+        "--wl-n-iter",
+        type=int,
+        default=DEFAULT_WL_N_ITER,
+        help="Number of WL kernel iterations.",
     )
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--skip-ged", action="store_true")
@@ -439,6 +581,10 @@ def main() -> None:
                 logger.error("Unknown dataset: %s. Choose from %s", d, ALL_DATASETS)
                 sys.exit(1)
 
+    # Parse algorithms and distance metrics
+    algo_list = [a.strip() for a in args.algorithms.split(",")]
+    metric_list = [m.strip() for m in args.distance_metrics.split(",")]
+
     # Picasso defaults
     if args.mode == "picasso" and args.n_workers == 1:
         args.n_workers = 64
@@ -456,6 +602,9 @@ def main() -> None:
         skip_levenshtein=args.skip_levenshtein,
         validate_only=args.validate_only,
         max_graphs_per_dataset=args.max_graphs,
+        algorithms=algo_list,
+        distance_metrics=metric_list,
+        wl_n_iter=args.wl_n_iter,
     )
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
+from isalgraph.core.algorithms import G2SAlgorithm
 from isalgraph.core.graph_to_string import GraphToString
 from isalgraph.core.sparse_graph import SparseGraph
 from isalgraph.core.string_to_graph import StringToGraph
@@ -30,9 +31,32 @@ class GraphAdapter(ABC, Generic[T]):
         """Convert a SparseGraph to an external graph object."""
         ...
 
-    def to_isalgraph_string(self, graph: T, *, directed: bool, initial_node: int = 0) -> str:
-        """Convert an external graph to its IsalGraph instruction string."""
+    def to_isalgraph_string(
+        self,
+        graph: T,
+        *,
+        directed: bool,
+        initial_node: int = 0,
+        algorithm: G2SAlgorithm | None = None,
+    ) -> str:
+        """Convert an external graph to its IsalGraph instruction string.
+
+        Args:
+            graph: External graph object.
+            directed: Whether the graph is directed.
+            initial_node: Starting node for single-run mode (used when
+                algorithm is None, for backwards compatibility).
+            algorithm: G2S algorithm to use. If None, uses a single greedy
+                run from initial_node (legacy behavior). Pass
+                DEFAULT_ALGORITHM() for greedy-min over all starting nodes.
+
+        Returns:
+            IsalGraph instruction string.
+        """
         sg = self.from_external(graph, directed=directed)
+        if algorithm is not None:
+            return algorithm.encode(sg)
+        # Legacy single-run behavior for backwards compatibility
         gts = GraphToString(sg)
         string, _ = gts.run(initial_node)
         return string

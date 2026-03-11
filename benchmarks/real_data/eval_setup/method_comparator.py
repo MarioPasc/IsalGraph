@@ -1,19 +1,18 @@
-"""Exhaustive vs greedy-min method comparison.
+"""Generalized method comparison across all algorithm pairs.
 
-Aggregates per-graph comparison data and computes matrix-level
-correlation statistics between the two Levenshtein matrices and GED.
+Computes per-method statistics (Lev vs GED, Lev vs WL) and pairwise
+comparisons between all available algorithms' Levenshtein matrices.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import os
 
 import numpy as np
 from scipy import stats
-
-from benchmarks.eval_setup.canonical_computer import CanonicalResult
 
 logger = logging.getLogger(__name__)
 
@@ -82,149 +81,86 @@ def _safe_correlation(x: np.ndarray, y: np.ndarray) -> dict:
     return result
 
 
-def compare_methods(
-    canonical_results: list[CanonicalResult],
-    lev_matrix_exhaustive: np.ndarray,
-    lev_matrix_greedy: np.ndarray,
+def compare_all_methods(
+    method_lev_matrices: dict[str, np.ndarray],
     ged_matrix: np.ndarray,
+    wl_distance_matrix: np.ndarray | None,
     graph_ids: list[str],
     dataset_name: str,
 ) -> dict:
-    """Full comparison: per-graph and matrix-level.
+    """Compare all available methods: per-method and pairwise.
+
+    For each method:
+      - Lev vs GED correlation
+      - Lev vs WL correlation (if WL available)
+    For each pair of methods:
+      - Matrix-level differences and correlations
+    Also: WL vs GED correlation (once, algorithm-independent).
 
     Args:
-        canonical_results: Per-graph dual canonical results.
-        lev_matrix_exhaustive: Levenshtein matrix from exhaustive strings.
-        lev_matrix_greedy: Levenshtein matrix from greedy strings.
+        method_lev_matrices: Mapping of method name -> Levenshtein matrix.
         ged_matrix: GED matrix.
+        wl_distance_matrix: WL kernel distance matrix (None if not computed).
         graph_ids: Graph identifiers.
         dataset_name: Dataset name.
 
     Returns:
         Comparison dict ready for JSON serialization.
     """
-    # ---- Per-graph comparison ----
-    per_graph: list[dict] = []
-    n_identical_strings = 0
-    n_identical_lengths = 0
-    length_gaps: list[int] = []
-    lev_between_methods: list[int] = []
-    speedups: list[float] = []
-    total_exhaustive_time = 0.0
-    total_greedy_time = 0.0
-
-    for r in canonical_results:
-        entry = {
-            "graph_id": r.graph_id,
-            "exhaustive_string": r.exhaustive_string,
-            "greedy_string": r.greedy_string,
-            "exhaustive_length": r.exhaustive_length,
-            "greedy_length": r.greedy_length,
-            "strings_identical": r.strings_identical,
-            "length_gap": r.length_gap,
-            "levenshtein_between_methods": r.levenshtein_between_methods,
-            "exhaustive_time_s": r.exhaustive_time_s,
-            "greedy_time_s": r.greedy_time_s,
-            "speedup": r.speedup,
-            "n_nodes": r.n_nodes,
-            "n_edges": r.n_edges,
-            "density": r.density,
-        }
-        per_graph.append(entry)
-
-        if r.strings_identical is True:
-            n_identical_strings += 1
-        if (
-            r.exhaustive_length >= 0
-            and r.greedy_length >= 0
-            and r.exhaustive_length == r.greedy_length
-        ):
-            n_identical_lengths += 1
-        if r.length_gap is not None:
-            length_gaps.append(r.length_gap)
-        if r.levenshtein_between_methods is not None:
-            lev_between_methods.append(r.levenshtein_between_methods)
-        if r.speedup is not None and r.speedup > 0:
-            speedups.append(r.speedup)
-        total_exhaustive_time += r.exhaustive_time_s
-        total_greedy_time += r.greedy_time_s
-
-    n_graphs = len(canonical_results)
-
-    # ---- Aggregate ----
-    aggregate = {
-        "n_identical_strings": n_identical_strings,
-        "pct_identical_strings": round(100.0 * n_identical_strings / n_graphs, 1)
-        if n_graphs > 0
-        else 0.0,
-        "n_identical_lengths": n_identical_lengths,
-        "pct_identical_lengths": round(100.0 * n_identical_lengths / n_graphs, 1)
-        if n_graphs > 0
-        else 0.0,
-        "mean_length_gap": round(float(np.mean(length_gaps)), 1) if length_gaps else None,
-        "max_length_gap": int(max(length_gaps)) if length_gaps else None,
-        "mean_levenshtein_between_methods": round(float(np.mean(lev_between_methods)), 1)
-        if lev_between_methods
-        else None,
-        "max_levenshtein_between_methods": int(max(lev_between_methods))
-        if lev_between_methods
-        else None,
-        "mean_speedup": round(float(np.mean(speedups)), 1) if speedups else None,
-        "median_speedup": round(float(np.median(speedups)), 1) if speedups else None,
-        "total_exhaustive_time_s": round(total_exhaustive_time, 2),
-        "total_greedy_time_s": round(total_greedy_time, 2),
-    }
-
-    # ---- Matrix-level comparison ----
-    matrix_comparison = _matrix_level_comparison(
-        lev_matrix_exhaustive, lev_matrix_greedy, ged_matrix
-    )
-
-    return {
-        "dataset": dataset_name,
-        "n_graphs": n_graphs,
-        "per_graph": per_graph,
-        "aggregate": aggregate,
-        "matrix_comparison": matrix_comparison,
-    }
-
-
-def _matrix_level_comparison(
-    lev_exhaust: np.ndarray,
-    lev_greedy: np.ndarray,
-    ged: np.ndarray,
-) -> dict:
-    """Compare upper triangles of Levenshtein matrices against GED.
-
-    Args:
-        lev_exhaust: Exhaustive Levenshtein matrix.
-        lev_greedy: Greedy Levenshtein matrix.
-        ged: GED matrix.
-
-    Returns:
-        Dict with correlation statistics.
-    """
-    [v_exhaust, v_greedy, v_ged], valid_mask = _upper_triangle_vectors(lev_exhaust, lev_greedy, ged)
-
-    n_pairs = len(v_ged)
+    method_names = sorted(method_lev_matrices.keys())
+    logger.info("Comparing methods: %s for %s", method_names, dataset_name)
 
     result: dict = {
-        "n_pairs": n_pairs,
-        "exhaustive_vs_ged": _safe_correlation(v_exhaust, v_ged),
-        "greedy_vs_ged": _safe_correlation(v_greedy, v_ged),
+        "dataset": dataset_name,
+        "n_graphs": len(graph_ids),
+        "methods": method_names,
     }
 
-    # Comparison between the two Levenshtein matrices
-    if n_pairs > 0:
-        diff = np.abs(v_exhaust - v_greedy)
-        result["exhaustive_vs_greedy"] = {
-            "max_abs_diff": int(np.max(diff)),
-            "mean_abs_diff": round(float(np.mean(diff)), 2),
-            "frac_identical_entries": round(float(np.mean(diff == 0)), 4),
-        }
-        result["exhaustive_vs_greedy"].update(_safe_correlation(v_exhaust, v_greedy))
-    else:
-        result["exhaustive_vs_greedy"] = {}
+    # ---- Per-method: Lev vs GED ----
+    per_method: dict[str, dict] = {}
+    for method in method_names:
+        lev = method_lev_matrices[method]
+        method_stats: dict = {}
+
+        # Lev vs GED
+        [v_lev, v_ged], _ = _upper_triangle_vectors(lev, ged_matrix)
+        method_stats["lev_vs_ged"] = _safe_correlation(v_lev, v_ged)
+
+        # Lev vs WL
+        if wl_distance_matrix is not None:
+            [v_lev_w, v_wl], _ = _upper_triangle_vectors(lev, wl_distance_matrix)
+            method_stats["lev_vs_wl"] = _safe_correlation(v_lev_w, v_wl)
+
+        per_method[method] = method_stats
+
+    result["per_method"] = per_method
+
+    # ---- WL vs GED (algorithm-independent, once per dataset) ----
+    if wl_distance_matrix is not None:
+        [v_wl, v_ged], _ = _upper_triangle_vectors(wl_distance_matrix, ged_matrix)
+        result["wl_vs_ged"] = _safe_correlation(v_wl, v_ged)
+
+    # ---- Pairwise method comparisons ----
+    pairwise: dict[str, dict] = {}
+    for m1, m2 in itertools.combinations(method_names, 2):
+        lev1 = method_lev_matrices[m1]
+        lev2 = method_lev_matrices[m2]
+        pair_key = f"{m1}_vs_{m2}"
+
+        [v1, v2], _ = _upper_triangle_vectors(lev1, lev2)
+        n_pairs = len(v1)
+
+        pair_stats: dict = {"n_pairs": n_pairs}
+        if n_pairs > 0:
+            diff = np.abs(v1 - v2)
+            pair_stats["max_abs_diff"] = int(np.max(diff))
+            pair_stats["mean_abs_diff"] = round(float(np.mean(diff)), 2)
+            pair_stats["frac_identical_entries"] = round(float(np.mean(diff == 0)), 4)
+            pair_stats.update(_safe_correlation(v1, v2))
+
+        pairwise[pair_key] = pair_stats
+
+    result["pairwise"] = pairwise
 
     return result
 
@@ -236,7 +172,7 @@ def save_method_comparison(
     """Save method comparison to JSON.
 
     Args:
-        comparison: Comparison dict from compare_methods().
+        comparison: Comparison dict from compare_all_methods().
         output_path: Output JSON path.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
