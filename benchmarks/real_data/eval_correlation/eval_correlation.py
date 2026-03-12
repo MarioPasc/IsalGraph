@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import multiprocessing as mp  # noqa: F401 — used in _run_parallel_analyses
 import os
 import sys
 import time
@@ -380,29 +381,21 @@ def _class_analysis(
     """
     n = ged.shape[0]
     label_arr = np.array(labels)
-    within_lev = []
-    between_lev = []
 
-    for i in range(n):
-        for j in range(i + 1, n):
-            if not np.isfinite(ged[i, j]) or ged[i, j] < 0:
-                continue
-            if not np.isfinite(lev[i, j]) or lev[i, j] < 0:
-                continue
-            val = float(lev[i, j])
-            if label_arr[i] == label_arr[j]:
-                within_lev.append(val)
-            else:
-                between_lev.append(val)
-
-    within_arr = np.array(within_lev)
-    between_arr = np.array(between_lev)
+    # Vectorised: extract upper triangle and classify in one pass
+    triu_i, triu_j = np.triu_indices(n, k=1)
+    ged_vals = ged[triu_i, triu_j].astype(np.float64)
+    lev_vals = lev[triu_i, triu_j].astype(np.float64)
+    valid = np.isfinite(ged_vals) & (ged_vals >= 0) & np.isfinite(lev_vals) & (lev_vals >= 0)
+    same_class = label_arr[triu_i] == label_arr[triu_j]
+    within_arr = lev_vals[valid & same_class]
+    between_arr = lev_vals[valid & ~same_class]
 
     d = cohens_d(between_arr, within_arr)
 
     return {
-        "n_within": len(within_lev),
-        "n_between": len(between_lev),
+        "n_within": len(within_arr),
+        "n_between": len(between_arr),
         "mean_within_lev": round(float(np.mean(within_arr)), 2) if len(within_arr) > 0 else None,
         "mean_between_lev": round(float(np.mean(between_arr)), 2) if len(between_arr) > 0 else None,
         "std_within_lev": round(float(np.std(within_arr)), 2) if len(within_arr) > 0 else None,
@@ -1197,6 +1190,43 @@ def _fmt_p(p: float | None) -> str:
 
 
 # =============================================================================
+# Parallel workers (module-level for fork-based multiprocessing)
+# =============================================================================
+
+# Populated by run_pipeline() before spawning pool; children inherit via fork.
+_PARALLEL_ARTIFACTS: dict[str, dict] = {}
+
+
+def _worker_analyze_dataset(args: tuple) -> tuple[str, str, dict]:
+    """Worker: run full analysis for one (dataset, method) pair."""
+    ds, method, n_bootstrap, n_permutations, seed = args
+    artifacts = _PARALLEL_ARTIFACTS[ds]
+    stats_dict = _analyze_dataset(
+        artifacts,
+        method,
+        n_bootstrap=n_bootstrap,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+    return (ds, method, stats_dict)
+
+
+def _worker_wl_vs_ged(args: tuple) -> tuple[str, str, dict]:
+    """Worker: WL vs GED correlation for one dataset."""
+    ds, n_bootstrap, n_permutations, seed = args
+    artifacts = _PARALLEL_ARTIFACTS[ds]
+    wl_vs_ged = _analyze_pair(
+        artifacts["wl_distance_matrix"],
+        artifacts["ged_matrix"],
+        pair_label=f"{ds}_wl_vs_ged",
+        n_bootstrap=n_bootstrap,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+    return (ds, "wl_vs_ged", wl_vs_ged)
+
+
+# =============================================================================
 # Pipeline
 # =============================================================================
 
@@ -1212,6 +1242,7 @@ def run_pipeline(
     save_plots: bool,
     save_tables: bool,
     methods: list[str] | None = None,
+    n_workers: int = 1,
 ) -> None:
     """Run the full correlation analysis pipeline.
 
@@ -1226,6 +1257,7 @@ def run_pipeline(
         save_plots: Whether to generate figures.
         save_tables: Whether to generate LaTeX tables.
         methods: Explicit method list, or None for auto-discovery.
+        n_workers: Number of parallel workers (1 = sequential).
     """
     t0 = time.perf_counter()
     os.makedirs(output_dir, exist_ok=True)
@@ -1237,6 +1269,7 @@ def run_pipeline(
     all_stats: dict[tuple[str, str], dict] = {}
     all_artifacts: dict[str, dict] = {}
 
+    # Phase 1: Load all artifacts (sequential, I/O-bound)
     for ds in datasets:
         logger.info("Loading artifacts for %s...", ds)
         try:
@@ -1244,13 +1277,56 @@ def run_pipeline(
         except FileNotFoundError as e:
             logger.error("Missing data for %s: %s", ds, e)
             continue
-
         all_artifacts[ds] = artifacts
         available_methods = list(artifacts["lev_matrices"].keys())
         logger.info("  Available methods for %s: %s", ds, available_methods)
 
-        # Per-method analysis (Lev vs GED, Lev vs WL)
-        for method in available_methods:
+    # Phase 2: Run statistical analyses
+    if n_workers > 1 and len(all_artifacts) > 0:
+        all_stats = _run_parallel_analyses(
+            all_artifacts,
+            n_bootstrap,
+            n_permutations,
+            seed,
+            n_workers,
+        )
+    else:
+        all_stats = _run_sequential_analyses(
+            all_artifacts,
+            n_bootstrap,
+            n_permutations,
+            seed,
+        )
+
+    # Phase 3: Save results, cross-dataset analysis, figures, tables
+    _save_all_results(
+        all_stats,
+        all_artifacts,
+        stats_dir,
+        raw_dir,
+        save_csv,
+        save_plots,
+        save_tables,
+        n_bootstrap,
+        seed,
+        output_dir,
+    )
+
+    elapsed = time.perf_counter() - t0
+    logger.info("Pipeline complete in %.1fs.", elapsed)
+
+
+def _run_sequential_analyses(
+    all_artifacts: dict[str, dict],
+    n_bootstrap: int,
+    n_permutations: int,
+    seed: int,
+) -> dict[tuple[str, str], dict]:
+    """Original sequential analysis path."""
+    all_stats: dict[tuple[str, str], dict] = {}
+
+    for ds, artifacts in all_artifacts.items():
+        for method in artifacts["lev_matrices"]:
             stats_dict = _analyze_dataset(
                 artifacts,
                 method,
@@ -1260,17 +1336,6 @@ def run_pipeline(
             )
             all_stats[(ds, method)] = stats_dict
 
-            # Save per-dataset stats
-            stats_path = os.path.join(stats_dir, f"{ds}_{method}_correlation_stats.json")
-            with open(stats_path, "w") as f:
-                json.dump(stats_dict, f, indent=2, default=str)
-            logger.info("Saved %s", stats_path)
-
-            # Save pair-level CSV
-            if save_csv and "error" not in stats_dict:
-                _save_pair_csv(artifacts, method, raw_dir)
-
-        # WL vs GED (once per dataset, algorithm-independent)
         if "wl_distance_matrix" in artifacts:
             logger.info("  Computing WL vs GED for %s...", ds)
             wl_vs_ged = _analyze_pair(
@@ -1281,14 +1346,88 @@ def run_pipeline(
                 n_permutations=n_permutations,
                 seed=seed,
             )
-            wl_stats_path = os.path.join(stats_dir, f"{ds}_wl_vs_ged_stats.json")
-            with open(wl_stats_path, "w") as f:
-                json.dump(wl_vs_ged, f, indent=2, default=str)
-            logger.info("Saved %s", wl_stats_path)
-            # Store for cross-dataset use
             all_stats[(ds, "wl_vs_ged")] = wl_vs_ged
 
+    return all_stats
+
+
+def _run_parallel_analyses(
+    all_artifacts: dict[str, dict],
+    n_bootstrap: int,
+    n_permutations: int,
+    seed: int,
+    n_workers: int,
+) -> dict[tuple[str, str], dict]:
+    """Fork-based parallel analysis: each (dataset, method) pair is a job.
+
+    Uses module-level ``_PARALLEL_ARTIFACTS`` so forked children
+    share the numpy arrays via copy-on-write without pickling.
+    """
+    global _PARALLEL_ARTIFACTS  # noqa: PLW0603
+    _PARALLEL_ARTIFACTS = all_artifacts
+
+    # Collect all independent jobs
+    analyze_jobs: list[tuple] = []
+    wl_jobs: list[tuple] = []
+    for ds, artifacts in all_artifacts.items():
+        for method in artifacts["lev_matrices"]:
+            analyze_jobs.append((ds, method, n_bootstrap, n_permutations, seed))
+        if "wl_distance_matrix" in artifacts:
+            wl_jobs.append((ds, n_bootstrap, n_permutations, seed))
+
+    total_jobs = len(analyze_jobs) + len(wl_jobs)
+    effective_workers = min(n_workers, total_jobs)
+    logger.info(
+        "Dispatching %d analysis jobs to %d workers...",
+        total_jobs,
+        effective_workers,
+    )
+
+    ctx = mp.get_context("fork")
+    all_stats: dict[tuple[str, str], dict] = {}
+
+    with ctx.Pool(effective_workers) as pool:
+        # Submit both job types; imap_unordered gives results as they complete
+        analyze_results = pool.map(_worker_analyze_dataset, analyze_jobs)
+        wl_results = pool.map(_worker_wl_vs_ged, wl_jobs)
+
+    for ds, method, stats_dict in analyze_results:
+        all_stats[(ds, method)] = stats_dict
+        logger.info("Completed %s / %s (%.0fs)", ds, method, stats_dict.get("analysis_time_s", 0))
+
+    for ds, key, wl_stats in wl_results:
+        all_stats[(ds, key)] = wl_stats
+        logger.info("Completed WL vs GED for %s", ds)
+
+    _PARALLEL_ARTIFACTS = {}  # free reference
+    return all_stats
+
+
+def _save_all_results(
+    all_stats: dict[tuple[str, str], dict],
+    all_artifacts: dict[str, dict],
+    stats_dir: str,
+    raw_dir: str,
+    save_csv: bool,
+    save_plots: bool,
+    save_tables: bool,
+    n_bootstrap: int,
+    seed: int,
+    output_dir: str,
+) -> None:
+    """Save JSON, CSV, figures, tables (always runs in the main process)."""
+    # Per-(dataset, method) stats + CSV
+    for (ds, method), stats_dict in sorted(all_stats.items()):
+        stats_path = os.path.join(stats_dir, f"{ds}_{method}_correlation_stats.json")
+        with open(stats_path, "w") as f:
+            json.dump(stats_dict, f, indent=2, default=str)
+        logger.info("Saved %s", stats_path)
+
+        if save_csv and method != "wl_vs_ged" and "error" not in stats_dict and ds in all_artifacts:
+            _save_pair_csv(all_artifacts[ds], method, raw_dir)
+
     # Cross-dataset analysis
+    cross_stats: dict = {}
     if len(all_stats) > 0:
         logger.info("Running cross-dataset analysis...")
         cross_stats = _cross_dataset_analysis(all_stats, n_bootstrap, seed)
@@ -1297,13 +1436,10 @@ def run_pipeline(
             json.dump(cross_stats, f, indent=2, default=str)
         logger.info("Saved %s", cross_path)
 
-        # Summary table JSON
         summary = _build_summary(all_stats)
         summary_path = os.path.join(stats_dir, "summary_table.json")
         with open(summary_path, "w") as f:
             json.dump(summary, f, indent=2, default=str)
-    else:
-        cross_stats = {}
 
     # Figures
     if save_plots and len(all_stats) > 0:
@@ -1314,9 +1450,6 @@ def run_pipeline(
     if save_tables and len(all_stats) > 0:
         logger.info("Generating tables...")
         _generate_tables(all_stats, cross_stats, output_dir)
-
-    elapsed = time.perf_counter() - t0
-    logger.info("Pipeline complete in %.1fs.", elapsed)
 
 
 def _save_pair_csv(
@@ -1412,6 +1545,13 @@ def main() -> None:
         default="auto",
         help="Comma-separated method names, or 'auto' to discover from disk.",
     )
+    parser.add_argument(
+        "--n-workers",
+        type=int,
+        default=1,
+        help="Parallel workers for analysis (1 = sequential). "
+        "Use SLURM cpus count for cluster runs.",
+    )
 
     args = parser.parse_args()
 
@@ -1446,6 +1586,7 @@ def main() -> None:
         save_plots=args.plot,
         save_tables=args.table,
         methods=method_list,
+        n_workers=args.n_workers,
     )
 
 

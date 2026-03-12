@@ -1121,36 +1121,36 @@ def generate_complexity_figure(
         for n in sizes:
             data[key][n] = []
 
+    import contextlib  # noqa: PLC0415
+
+    from isalgraph.core.canonical_pruned import pruned_canonical_string  # noqa: PLC0415
+
     for n in sizes:
         logger.info("Timing n=%d ...", n)
         graphs = [_random_connected(n, p, rng) for _ in range(n_graphs)]
+
+        # Track whether pruned exhaustive timed out at this size
+        pruned_all_timed_out = True
 
         for G in graphs:
             sg = _nx_to_sg(G)
 
             # Greedy single-start (node 0)
-            def _gs(sg_=sg):  # noqa: E731
-                GraphToString(sg_).run(initial_node=0)
-
-            data["greedy_single"][n].append(_time_it(_gs, n_reps=5))
+            data["greedy_single"][n].append(
+                _time_it(lambda sg_=sg: GraphToString(sg_).run(initial_node=0), n_reps=5)
+            )
 
             # Greedy-min (all starts)
-            def _gm(G_=G):  # noqa: E731
-                _greedy_min(G_)
-
-            data["greedy_min"][n].append(_time_it(_gm, n_reps=3))
+            data["greedy_min"][n].append(_time_it(lambda G_=G: _greedy_min(G_), n_reps=3))
 
             # Pruned exhaustive (with timeout probe)
-            from isalgraph.core.canonical_pruned import pruned_canonical_string  # noqa: PLC0415
-
             t_probe_pe = time.process_time()
-            import contextlib as _ctx_pe  # noqa: PLC0415
-
-            with _ctx_pe.suppress(Exception):
+            with contextlib.suppress(Exception):
                 pruned_canonical_string(sg)
             t_probe_pe = time.process_time() - t_probe_pe
 
             if t_probe_pe < exhaustive_timeout:
+                pruned_all_timed_out = False
                 data["pruned_exhaustive"][n].append(
                     _time_it(
                         lambda sg_=sg: pruned_canonical_string(sg_),
@@ -1158,26 +1158,41 @@ def generate_complexity_figure(
                     )
                 )
 
-            # Exhaustive canonical (with timeout probe)
-            t_probe = time.process_time()
-            import contextlib  # noqa: PLC0415
+            # Exhaustive canonical — skip if pruned already timed out
+            # (exhaustive explores a strict superset of pruned's search space)
+            if not pruned_all_timed_out or t_probe_pe < exhaustive_timeout:
+                t_probe = time.process_time()
+                with contextlib.suppress(Exception):
+                    compute_canonical(sg)
+                t_probe = time.process_time() - t_probe
 
-            with contextlib.suppress(Exception):
-                compute_canonical(sg)
-            t_probe = time.process_time() - t_probe
-
-            if t_probe < exhaustive_timeout:
-                data["exhaustive"][n].append(
-                    _time_it(
-                        lambda sg_=sg: compute_canonical(sg_),
-                        n_reps=max(1, min(3, int(5.0 / max(t_probe, 1e-6)))),
+                if t_probe < exhaustive_timeout:
+                    data["exhaustive"][n].append(
+                        _time_it(
+                            lambda sg_=sg: compute_canonical(sg_),
+                            n_reps=max(1, min(3, int(5.0 / max(t_probe, 1e-6)))),
+                        )
                     )
-                )
 
-        # Exact GED: time a random pair
-        G1, G2 = graphs[0], graphs[min(1, len(graphs) - 1)]
-        for _ in range(min(n_graphs, 5)):
-            data["exact_ged"][n].append(_time_it(lambda g1=G1, g2=G2: _ged(g1, g2), n_reps=3))
+        # Exact GED: time DIVERSE pairs (not the same pair repeated)
+        # Also apply timeout probe to avoid unbounded GED computation
+        n_ged_pairs = min(n_graphs, 5)
+        if len(graphs) >= 2:
+            t_probe_ged = time.process_time()
+            with contextlib.suppress(Exception):
+                _ged(graphs[0], graphs[1])
+            t_probe_ged = time.process_time() - t_probe_ged
+
+            if t_probe_ged < exhaustive_timeout:
+                n_reps_ged = max(1, min(3, int(5.0 / max(t_probe_ged, 1e-6))))
+                for i_pair in range(n_ged_pairs):
+                    G1 = graphs[i_pair % len(graphs)]
+                    G2 = graphs[(i_pair + 1) % len(graphs)]
+                    data["exact_ged"][n].append(
+                        _time_it(lambda g1=G1, g2=G2: _ged(g1, g2), n_reps=n_reps_ged)
+                    )
+            else:
+                logger.info("  Skipping exact GED at n=%d (probe=%.1fs)", n, t_probe_ged)
 
     # --- Plot ---------------------------------------------------------------
     fig, ax = plt.subplots(figsize=get_figure_size("double", height_ratio=0.55))

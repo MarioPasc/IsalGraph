@@ -57,6 +57,8 @@ echo "Config: data_root=$DATA_ROOT, output_dir=$OUTPUT_DIR"
 echo "  n_bootstrap=$N_BOOTSTRAP, n_permutations=$N_PERMUTATIONS, seed=$SEED"
 echo "  methods=$METHODS"
 
+N_WORKERS="${SLURM_CPUS_PER_TASK:-1}"
+
 python -m benchmarks.eval_correlation.eval_correlation \
     --data-root "$DATA_ROOT" \
     --output-dir "$OUTPUT_DIR" \
@@ -65,6 +67,7 @@ python -m benchmarks.eval_correlation.eval_correlation \
     --seed "$SEED" \
     --methods "$METHODS" \
     --mode picasso \
+    --n-workers "$N_WORKERS" \
     --csv --plot --table
 
 echo "Finished: $(date)"

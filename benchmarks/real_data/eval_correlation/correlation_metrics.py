@@ -105,8 +105,8 @@ def mantel_test(
 ) -> MantelResult:
     """Permutation-based matrix correlation test (Mantel test).
 
-    For Spearman, pre-ranks vectors so each permutation only needs
-    a Pearson correlation on ranks.
+    Uses direct fancy indexing ``d1[sigma[triu_i], sigma[triu_j]]``
+    to avoid materialising the full n×n permuted matrix each iteration.
 
     Args:
         d1: First distance matrix (square, symmetric).
@@ -120,11 +120,11 @@ def mantel_test(
     """
     n = d1.shape[0]
     rng = np.random.default_rng(seed)
-    triu_idx = np.triu_indices(n, k=1)
+    triu_i, triu_j = np.triu_indices(n, k=1)
 
     # Build validity mask across both matrices
-    v1_full = d1[triu_idx].astype(np.float64)
-    v2_full = d2[triu_idx].astype(np.float64)
+    v1_full = d1[triu_i, triu_j].astype(np.float64)
+    v2_full = d2[triu_i, triu_j].astype(np.float64)
     valid = np.isfinite(v1_full) & np.isfinite(v2_full) & (v1_full >= 0) & (v2_full >= 0)
 
     v1 = v1_full[valid]
@@ -146,17 +146,17 @@ def mantel_test(
     else:
         observed_r = float(stats.pearsonr(v1, v2).statistic)
 
+    # Pre-cast d1 for efficient repeated fancy indexing
+    d1_f64 = np.ascontiguousarray(d1, dtype=np.float64)
+
     # Permutation distribution
-    # For each permutation, permute rows+cols of d1, re-extract upper tri
+    # Direct fancy indexing avoids materialising the full n×n permuted matrix
+    corr_func = stats.spearmanr if method == "spearman" else stats.pearsonr
     perm_rs = np.empty(n_permutations)
     for i in range(n_permutations):
         sigma = rng.permutation(n)
-        d1_perm = d1[np.ix_(sigma, sigma)]
-        v1_perm = d1_perm[triu_idx].astype(np.float64)[valid]
-        if method == "spearman":
-            perm_rs[i] = stats.spearmanr(v1_perm, v2).statistic
-        else:
-            perm_rs[i] = stats.pearsonr(v1_perm, v2).statistic
+        v1_perm = d1_f64[sigma[triu_i], sigma[triu_j]][valid]
+        perm_rs[i] = corr_func(v1_perm, v2).statistic
 
     n_more_extreme = int(np.sum(perm_rs >= observed_r))
     p_value = (n_more_extreme + 1) / (n_permutations + 1)
@@ -316,13 +316,13 @@ def precision_at_k(
             if len(valid_idx) < k:
                 continue
 
-            # True k-NN
+            # True k-NN (argpartition is O(n) vs O(n log n) for argsort)
             true_dists = d_true[i, valid_idx]
-            true_knn = set(valid_idx[np.argsort(true_dists)[:k]])
+            true_knn = set(valid_idx[np.argpartition(true_dists, k)[:k]])
 
             # Proxy k-NN
             proxy_dists = d_proxy[i, valid_idx]
-            proxy_knn = set(valid_idx[np.argsort(proxy_dists)[:k]])
+            proxy_knn = set(valid_idx[np.argpartition(proxy_dists, k)[:k]])
 
             precisions.append(len(true_knn & proxy_knn) / k)
 
