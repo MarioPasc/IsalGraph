@@ -52,8 +52,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --dry-run           Print commands without executing"
             echo "  --local             Run steps sequentially as bash subprocesses"
             echo "  --step <name>       Run a single step (eval_setup, eval_correlation,"
-            echo "                      eval_computational, eval_encoding, algorithm_figures,"
-            echo "                      topology_figs, generate_figures)"
+            echo "                      eval_computational, eval_encoding, eval_message_length,"
+            echo "                      algorithm_figures, topology_figs, generate_figures)"
             echo "  --config <path>     Use custom config file (default: config.yaml)"
             echo "  -h, --help          Show this help"
             exit 0
@@ -103,7 +103,7 @@ CFG_CONDA_ENV=$(echo "$CONFIG_JSON" | python3 -c "import json,sys; print(json.lo
 # ---------------------------------------------------------------------------
 # Verify benchmark symlinks
 # ---------------------------------------------------------------------------
-REQUIRED_SYMLINKS=(eval_setup eval_correlation eval_computational eval_encoding eval_visualizations)
+REQUIRED_SYMLINKS=(eval_setup eval_correlation eval_computational eval_encoding eval_message_length eval_visualizations)
 SYMLINKS_OK=true
 for pkg in "${REQUIRED_SYMLINKS[@]}"; do
     link="${REPO_DIR}/benchmarks/${pkg}"
@@ -149,7 +149,7 @@ echo ""
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Would create: ${RUN_DIR}"
 else
-    mkdir -p "${RUN_DIR}"/{data,correlation,computational,encoding,figures/_intermediate/{algorithm,topology},logs}
+    mkdir -p "${RUN_DIR}"/{data,correlation,computational,encoding,message_length,figures/_intermediate/{algorithm,topology},logs}
 
     # Copy and fill config
     python3 -c "
@@ -295,6 +295,7 @@ W_STEP1="${W_DIR}/step1_eval_setup.sh"
 W_STEP2A="${W_DIR}/step2a_eval_correlation.sh"
 W_STEP2B="${W_DIR}/step2b_eval_computational.sh"
 W_STEP2C="${W_DIR}/step2c_eval_encoding.sh"
+W_STEP2D="${W_DIR}/step2d_eval_message_length.sh"
 W_STEP3A="${W_DIR}/step3a_algorithm_figures.sh"
 W_STEP3B="${W_DIR}/step3b_topology_figs.sh"
 W_STEP4="${W_DIR}/step4_generate_figures.sh"
@@ -311,13 +312,15 @@ if [[ -n "$SINGLE_STEP" ]]; then
         eval_correlation)   run_local "step2a" "$W_STEP2A" ;;
         eval_computational) run_local "step2b" "$W_STEP2B" ;;
         eval_encoding)      run_local "step2c" "$W_STEP2C" ;;
+        eval_message_length) run_local "step2d" "$W_STEP2D" ;;
         algorithm_figures)  run_local "step3a" "$W_STEP3A" ;;
         topology_figs)      run_local "step3b" "$W_STEP3B" ;;
         generate_figures)   run_local "step4" "$W_STEP4" ;;
         *)
             echo "ERROR: Unknown step '${SINGLE_STEP}'"
             echo "Valid steps: eval_setup, eval_correlation, eval_computational,"
-            echo "  eval_encoding, algorithm_figures, topology_figs, generate_figures"
+            echo "  eval_encoding, eval_message_length, algorithm_figures, topology_figs,"
+            echo "  generate_figures"
             exit 1
             ;;
     esac
@@ -350,6 +353,9 @@ if [[ "$LOCAL_MODE" == "true" ]]; then
     fi
     if [[ "$(step_enabled eval_encoding)" == "True" ]]; then
         run_local "step2c" "$W_STEP2C" || ERRORS=$((ERRORS + 1))
+    fi
+    if [[ "$(step_enabled eval_message_length)" == "True" ]]; then
+        run_local "step2d" "$W_STEP2D" || ERRORS=$((ERRORS + 1))
     fi
 
     # Steps 3a, 3b
@@ -416,6 +422,15 @@ if [[ "$(step_enabled eval_encoding)" == "True" ]]; then
     JOB_IDS[step2c]="${JOB2C:-FAILED}"
 fi
 
+# Step 2d: eval_message_length (afterok:Step1)
+JOB2D=""
+if [[ "$(step_enabled eval_message_length)" == "True" ]]; then
+    DEP=""
+    [[ -n "$JOB1" ]] && DEP="afterok:${JOB1}"
+    JOB2D=$(submit_job "step2d" "eval_message_length" "$W_STEP2D" "$DEP") || true
+    JOB_IDS[step2d]="${JOB2D:-FAILED}"
+fi
+
 # Step 3a: algorithm_figures (no deps -- standalone)
 JOB3A=""
 if [[ "$(step_enabled algorithm_figures)" == "True" ]]; then
@@ -436,7 +451,7 @@ if [[ "$(step_enabled generate_figures)" == "True" ]]; then
     # Build dependency string: afterok:{id1},afterok:{id2},...
     # Only include successfully submitted jobs (non-empty IDs)
     DEP=""
-    for jid in "$JOB2A" "$JOB2B" "$JOB2C" "$JOB3A" "$JOB3B"; do
+    for jid in "$JOB2A" "$JOB2B" "$JOB2C" "$JOB2D" "$JOB3A" "$JOB3B"; do
         if [[ -n "$jid" ]]; then
             if [[ -n "$DEP" ]]; then
                 DEP="${DEP},afterok:${jid}"
@@ -466,6 +481,7 @@ manifest = {
         'step2a_eval_correlation': '${JOB_IDS[step2a]:-}',
         'step2b_eval_computational': '${JOB_IDS[step2b]:-}',
         'step2c_eval_encoding': '${JOB_IDS[step2c]:-}',
+        'step2d_eval_message_length': '${JOB_IDS[step2d]:-}',
         'step3a_algorithm_figures': '${JOB_IDS[step3a]:-}',
         'step3b_topology_figs': '${JOB_IDS[step3b]:-}',
         'step4_generate_figures': '${JOB_IDS[step4]:-}',
@@ -475,14 +491,17 @@ manifest = {
         'step2a': ['step1'] if '${JOB1}' else [],
         'step2b': ['step1'] if '${JOB1}' else [],
         'step2c': [],
+        'step2d': ['step1'] if '${JOB1}' else [],
         'step3a': [],
         'step3b': [],
-        'step4': [k for k in ['step2a','step2b','step2c','step3a','step3b']
+        'step4': [k for k in ['step2a','step2b','step2c','step2d','step3a','step3b']
                    if k in {'step2a': '${JOB2A}', 'step2b': '${JOB2B}',
-                             'step2c': '${JOB2C}', 'step3a': '${JOB3A}',
+                             'step2c': '${JOB2C}', 'step2d': '${JOB2D}',
+                             'step3a': '${JOB3A}',
                              'step3b': '${JOB3B}'} and
                    {'step2a': '${JOB2A}', 'step2b': '${JOB2B}',
-                    'step2c': '${JOB2C}', 'step3a': '${JOB3A}',
+                    'step2c': '${JOB2C}', 'step2d': '${JOB2D}',
+                    'step3a': '${JOB3A}',
                     'step3b': '${JOB3B}'}[k]],
     },
 }
@@ -506,9 +525,10 @@ echo "  Step 1  (eval_setup)       : ${JOB_IDS[step1]:-skipped}"
 echo "  Step 2a (eval_correlation) : ${JOB_IDS[step2a]:-skipped}  -> depends on Step 1"
 echo "  Step 2b (eval_computational): ${JOB_IDS[step2b]:-skipped}  -> depends on Step 1"
 echo "  Step 2c (eval_encoding)    : ${JOB_IDS[step2c]:-skipped}  -> independent"
+echo "  Step 2d (eval_msg_length) : ${JOB_IDS[step2d]:-skipped}  -> depends on Step 1"
 echo "  Step 3a (algorithm_figures): ${JOB_IDS[step3a]:-skipped}  -> independent"
 echo "  Step 3b (topology_figs)    : ${JOB_IDS[step3b]:-skipped}  -> independent"
-echo "  Step 4  (generate_figures) : ${JOB_IDS[step4]:-skipped}  -> depends on 2a,2b,2c,3a,3b"
+echo "  Step 4  (generate_figures) : ${JOB_IDS[step4]:-skipped}  -> depends on 2a,2b,2c,2d,3a,3b"
 echo ""
 echo "Monitor: squeue -u $(whoami) --name=paper_step*"
 echo "Logs:    ls ${RUN_DIR}/logs/"

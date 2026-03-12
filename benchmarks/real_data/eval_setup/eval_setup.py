@@ -56,6 +56,10 @@ from benchmarks.eval_setup.method_comparator import (
     compare_all_methods,
     save_method_comparison,
 )
+from benchmarks.eval_setup.pruned_exhaustive_computer import (
+    compute_pruned_exhaustive,
+    save_pruned_exhaustive_strings,
+)
 from benchmarks.eval_setup.validator import (
     save_validation_report,
     validate_all,

@@ -225,13 +225,36 @@ def gen_shortest_path_comparison(figures_dir: str) -> None:
     logger.info("  -> %s", path)
 
 
+def gen_message_length_figure(
+    msg_raw_dir: str,
+    msg_stats_dir: str,
+    figures_dir: str,
+) -> None:
+    """Generate fig_message_length_scatter.pdf and table_message_length_summary.tex."""
+    logger.info("[8/9] Generating message length figures...")
+
+    if not check_dir_exists(msg_raw_dir, "message_length/raw"):
+        return
+
+    from benchmarks.eval_visualizations.fig_message_length import (
+        generate_message_length_table,
+        generate_ratio_figure,
+        generate_scatter_figure,
+    )
+
+    generate_scatter_figure(msg_raw_dir, figures_dir)
+    generate_ratio_figure(msg_raw_dir, figures_dir)
+    if os.path.isdir(msg_stats_dir):
+        generate_message_length_table(msg_stats_dir, figures_dir)
+
+
 def gen_performance_table(
     data_root: str,
     corr_stats_dir: str,
     figures_dir: str,
 ) -> None:
     """Generate table_performance_summary.tex."""
-    logger.info("[7/8] Generating table_performance_summary...")
+    logger.info("[9/9] Generating table_performance_summary...")
 
     if not check_dir_exists(data_root, "data_root"):
         return
@@ -267,6 +290,8 @@ def generate_all(run_dir: str) -> None:
     corr_stats_dir = os.path.join(run_dir, "correlation", "stats")
     comp_dir = os.path.join(run_dir, "computational")
     encoding_raw_dir = os.path.join(run_dir, "encoding", "raw")
+    msg_raw_dir = os.path.join(run_dir, "message_length", "raw")
+    msg_stats_dir = os.path.join(run_dir, "message_length", "stats")
     algo_dir = os.path.join(run_dir, "figures", "_intermediate", "algorithm")
     topo_dir = os.path.join(run_dir, "figures", "_intermediate", "topology")
 
@@ -314,7 +339,15 @@ def generate_all(run_dir: str) -> None:
             logger.error("  FAILED: %s", e)
             errors.append(f"fig_empirical_complexity: {e}")
 
-    # 6. Neighbourhood topology (from Step 3b)
+    # 6. Message length figures (from Step 2d)
+    if steps.get("eval_message_length", {}).get("enabled"):
+        try:
+            gen_message_length_figure(msg_raw_dir, msg_stats_dir, figures_dir)
+        except Exception as e:
+            logger.error("  FAILED: %s", e)
+            errors.append(f"fig_message_length: {e}")
+
+    # 7. Neighbourhood topology (from Step 3b)
     if steps.get("topology_figs", {}).get("enabled"):
         try:
             gen_neighborhood_topology(topo_dir, figures_dir)
