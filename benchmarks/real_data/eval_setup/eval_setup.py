@@ -368,8 +368,16 @@ def _process_dataset(
         wl_path = os.path.join(wl_dir, f"{dataset_name}.npz")
 
         logger.info("Computing WL kernel distance for %s (n_iter=%d)...", dataset_name, wl_n_iter)
-        wl_dist, wl_kernel = compute_wl_kernel_distance(kept_graphs, n_iter=wl_n_iter)
-        save_wl_kernel_matrix(wl_dist, wl_kernel, kept_ids, wl_n_iter, wl_path)
+        try:
+            wl_dist, wl_kernel = compute_wl_kernel_distance(kept_graphs, n_iter=wl_n_iter)
+            save_wl_kernel_matrix(wl_dist, wl_kernel, kept_ids, wl_n_iter, wl_path)
+        except ImportError:
+            logger.error(
+                "WL kernel SKIPPED for %s: grakel import failed (NumPy ABI mismatch). "
+                "Fix with: pip install 'numpy<2' or rebuild grakel. "
+                "All other artifacts for this dataset are unaffected.",
+                dataset_name,
+            )
 
     # ---- Step 4: Method comparison (generalized) ----
     comparison_dir = os.path.join(data_root, "method_comparison")

@@ -66,10 +66,21 @@ def compute_wl_kernel_matrix(
 
     Returns:
         Kernel matrix K of shape (N, N), not normalized.
+
+    Raises:
+        ImportError: If grakel cannot be imported (e.g. NumPy ABI mismatch).
     """
     _apply_grakel_numpy_shim()
-    from grakel import WeisfeilerLehman
-    from grakel.kernels import VertexHistogram
+    try:
+        from grakel import WeisfeilerLehman
+        from grakel.kernels import VertexHistogram
+    except ImportError as e:
+        raise ImportError(
+            f"grakel import failed: {e}. "
+            f"This is typically caused by grakel being compiled against NumPy 1.x "
+            f"while NumPy 2.x is installed. Fix with: pip install 'numpy<2' "
+            f"or pip install --force-reinstall --no-binary :all: grakel"
+        ) from e
 
     wl = WeisfeilerLehman(
         n_iter=n_iter,
