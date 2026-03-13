@@ -1,0 +1,210 @@
+/* ============================================================
+   How It Works Page
+   ============================================================ */
+
+.hiw-header {
+  text-align: center;
+  padding: var(--space-3xl) 0 var(--space-2xl);
+}
+
+.hiw-header h1 {
+  margin-bottom: var(--space-md);
+}
+
+.hiw-header p {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* Intro section */
+.hiw-intro {
+  max-width: 900px;
+  margin: 0 auto var(--space-3xl);
+}
+
+.hiw-intro p {
+  margin-bottom: var(--space-md);
+}
+
+/* Three-panel visualization */
+.viz-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+@media (min-width: 1024px) {
+  .viz-container {
+    grid-template-columns: 1fr 1.5fr 1fr;
+  }
+}
+
+.viz-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  min-height: 300px;
+  position: relative;
+}
+
+.viz-panel__label {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-sm);
+}
+
+.viz-panel__canvas {
+  width: 100%;
+  height: 250px;
+}
+
+/* String display panel */
+.string-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  padding: var(--space-md);
+}
+
+.string-display__char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.string-display__char.current {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  transform: scale(1.15);
+}
+
+.string-display__char.done {
+  opacity: 0.5;
+}
+
+/* Step log */
+.step-log {
+  background: var(--bg-code);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.8;
+}
+
+.step-log__entry {
+  color: var(--text-secondary);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.step-log__entry:last-child {
+  border-bottom: none;
+}
+
+.step-log__entry.active {
+  color: var(--accent-primary);
+}
+
+/* Instruction table */
+.instruction-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  margin: var(--space-lg) 0;
+}
+
+.instruction-table th {
+  background: var(--bg-surface);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.instruction-table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.instruction-table .instr-char {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+/* Math sections */
+.math-sections {
+  max-width: 900px;
+  margin: var(--space-3xl) auto 0;
+}
+
+.math-sections h2 {
+  margin-bottom: var(--space-xl);
+}
+
+/* Demo input */
+.demo-input {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+}
+
+.demo-input__field {
+  flex: 1;
+  min-width: 200px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-code);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.1em;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.demo-input__field:focus {
+  border-color: var(--accent-primary);
+}
+
+.demo-input__field::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+/* Graph preset selector */
+.preset-select {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

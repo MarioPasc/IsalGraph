@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How It Works — IsalGraph</title>
+  <meta name="description" content="Interactive step-by-step explanation of how IsalGraph encodes graphs as instruction strings and decodes them back.">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <meta property="og:title" content="How It Works — IsalGraph">
+  <meta property="og:description" content="Interactive visualization of the IsalGraph encoding and decoding algorithms.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/how-it-works.html">
+  <meta property="og:type" content="website">
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/typography.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/footer.css">
+  <link rel="stylesheet" href="css/how-it-works.css">
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+</head>
+<body data-page="how-it-works">
+  <div id="site-nav"></div>
+
+  <main>
+    <div class="container">
+      <header class="hiw-header">
+        <h1>How It Works</h1>
+        <p>
+          IsalGraph converts between graphs and strings using a circular doubly linked list
+          (CDLL) with two mobile pointers. Explore both directions interactively below.
+        </p>
+      </header>
+
+      <!-- Introduction -->
+      <section class="hiw-intro">
+        <h2>The Core Idea</h2>
+        <p>
+          Any finite simple graph can be encoded as a string over a 9-character alphabet
+          <span class="instruction-string">
+            &Sigma; = {<span class="char-N">N</span>, <span class="char-n">n</span>,
+            <span class="char-P">P</span>, <span class="char-p">p</span>,
+            <span class="char-V">V</span>, <span class="char-v">v</span>,
+            <span class="char-C">C</span>, <span class="char-c">c</span>,
+            <span class="char-W">W</span>}
+          </span>.
+          The encoding is reversible: given the string, the original graph can be
+          reconstructed exactly.
+        </p>
+        <p>
+          The process uses an auxiliary <strong>Circular Doubly Linked List (CDLL)</strong>
+          that keeps track of visited vertices. Two pointers &mdash; a
+          <span style="color: var(--accent-primary); font-weight: 700;">&pi; (primary)</span> and
+          <span style="color: var(--accent-secondary); font-weight: 700;">&sigma; (secondary)</span>
+          &mdash; traverse this list. Instructions either move the pointers, create new nodes
+          with edges, or add edges between existing nodes.
+        </p>
+      </section>
+
+      <!-- Instruction Table -->
+      <section class="section">
+        <h2>The Instruction Set</h2>
+        <table class="instruction-table" role="table">
+          <thead>
+            <tr>
+              <th scope="col">Instruction</th>
+              <th scope="col">Category</th>
+              <th scope="col">Effect</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="instr-char char-N">N</span></td>
+              <td>Movement</td>
+              <td>Move primary pointer &pi; forward (next) in the CDLL</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-P">P</span></td>
+              <td>Movement</td>
+              <td>Move primary pointer &pi; backward (prev) in the CDLL</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-n">n</span></td>
+              <td>Movement</td>
+              <td>Move secondary pointer &sigma; forward (next) in the CDLL</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-p">p</span></td>
+              <td>Movement</td>
+              <td>Move secondary pointer &sigma; backward (prev) in the CDLL</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-V">V</span></td>
+              <td>Node Creation</td>
+              <td>Create new vertex, add edge from &pi;'s vertex, insert into CDLL after &pi;</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-v">v</span></td>
+              <td>Node Creation</td>
+              <td>Create new vertex, add edge from &sigma;'s vertex, insert into CDLL after &sigma;</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-C">C</span></td>
+              <td>Edge Creation</td>
+              <td>Add edge from &pi;'s vertex to &sigma;'s vertex</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-c">c</span></td>
+              <td>Edge Creation</td>
+              <td>Add edge from &sigma;'s vertex to &pi;'s vertex</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-W">W</span></td>
+              <td>No-op</td>
+              <td>Do nothing (wait/padding)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- S2G Demo -->
+      <section class="section" id="s2g-demo">
+        <h2>String &rarr; Graph (Decoding)</h2>
+        <p style="margin-bottom: var(--space-lg);">
+          Enter an instruction string below to watch it being decoded into a graph step by step.
+          The initial state has a single vertex (node 0) with both pointers on it.
+        </p>
+
+        <div class="demo-input">
+          <input
+            type="text"
+            class="demo-input__field"
+            id="s2g-input"
+            value="VNVnC"
+            placeholder="Enter IsalGraph string..."
+            aria-label="IsalGraph instruction string"
+            spellcheck="false"
+            autocomplete="off"
+          >
+          <button class="btn btn-primary" id="s2g-run" aria-label="Run decoding">Run &rarr;</button>
+        </div>
+
+        <!-- Three-panel visualization -->
+        <div class="viz-container">
+          <div class="viz-panel">
+            <div class="viz-panel__label">CDLL State</div>
+            <div class="viz-panel__canvas" id="s2g-cdll-panel">
+              <svg id="s2g-cdll-svg" width="100%" height="100%"></svg>
+            </div>
+          </div>
+          <div class="viz-panel">
+            <div class="viz-panel__label">Graph</div>
+            <div class="viz-panel__canvas" id="s2g-graph-panel">
+              <svg id="s2g-graph-svg" width="100%" height="100%"></svg>
+            </div>
+          </div>
+          <div class="viz-panel">
+            <div class="viz-panel__label">Instruction String</div>
+            <div class="string-display" id="s2g-string-display"></div>
+            <div class="step-log" id="s2g-step-log" aria-live="polite">
+              <div class="step-log__entry" style="color: var(--text-tertiary);">Press "Run" to start...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transport controls -->
+        <div class="transport" id="s2g-transport" role="toolbar" aria-label="Animation controls">
+          <button class="transport__btn" id="s2g-reset" aria-label="Reset" title="Reset">&#x21BA;</button>
+          <button class="transport__btn" id="s2g-prev" aria-label="Previous step" title="Previous step">&#x25C0;</button>
+          <button class="transport__btn" id="s2g-play" aria-label="Play/Pause" title="Play/Pause">&#x25B6;</button>
+          <button class="transport__btn" id="s2g-next" aria-label="Next step" title="Next step">&#x25B6;&#x258F;</button>
+          <span class="transport__step-info" id="s2g-step-info">Step 0/0</span>
+          <label style="font-size: var(--text-xs); color: var(--text-tertiary); margin-left: auto;">
+            Speed:
+            <select id="s2g-speed" style="background: var(--bg-code); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); padding: 2px 4px; font-size: var(--text-xs);">
+              <option value="2000">0.5x</option>
+              <option value="1000" selected>1x</option>
+              <option value="500">2x</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <!-- Mathematical Foundations -->
+      <section class="math-sections section">
+        <h2>Mathematical Foundations</h2>
+
+        <div class="expandable open" id="thm-roundtrip">
+          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+            Round-Trip Correctness
+          </button>
+          <div class="expandable__content">
+            <div class="theorem">
+              <div class="theorem__label">Theorem (Round-Trip)</div>
+              <div class="theorem__content">
+                For any valid IsalGraph string <em>w</em> and any starting vertex <em>s</em>:
+                <div id="math-roundtrip" style="margin: var(--space-md) 0; text-align: center;"></div>
+                <p style="margin-top: var(--space-sm);">
+                  That is, encoding a decoded graph and decoding the result produces a graph
+                  isomorphic to the original.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="expandable" id="thm-canonical">
+          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+            Canonical String Completeness
+          </button>
+          <div class="expandable__content">
+            <div class="theorem">
+              <div class="theorem__label">Theorem (Complete Invariant)</div>
+              <div class="theorem__content">
+                <p>
+                  The <strong>canonical string</strong> is defined as the lexicographically
+                  smallest among the shortest strings produced over all starting vertices:
+                </p>
+                <div id="math-canonical-def" style="margin: var(--space-md) 0; text-align: center;"></div>
+                <p>This is a <strong>complete graph invariant</strong>:</p>
+                <div id="math-canonical-thm" style="margin: var(--space-md) 0; text-align: center;"></div>
+                <p style="margin-top: var(--space-sm);">
+                  Two graphs are isomorphic if and only if their canonical strings are identical.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="expandable" id="thm-distance">
+          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+            Graph Distance via String Edit Distance
+          </button>
+          <div class="expandable__content">
+            <div class="theorem">
+              <div class="theorem__label">Proposition (String Distance)</div>
+              <div class="theorem__content">
+                <p>
+                  The Levenshtein distance between canonical strings defines a metric
+                  on the set of isomorphism classes of finite simple graphs. This provides a
+                  polynomial-time computable distance measure that serves as a proxy for graph
+                  edit distance.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="expandable" id="key-invariants">
+          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+            Key Implementation Invariants
+          </button>
+          <div class="expandable__content">
+            <div class="theorem" style="border-left-color: var(--accent-warm);">
+              <div class="theorem__label" style="color: var(--accent-warm);">Critical Invariants</div>
+              <div class="theorem__content">
+                <ol style="padding-left: var(--space-lg); color: var(--text-secondary);">
+                  <li style="margin-bottom: var(--space-sm);">
+                    <strong>CDLL indices &ne; graph node indices.</strong>
+                    Pointers are CDLL node indices. Use <code>cdll.getValue(ptr)</code> to get the graph node.
+                  </li>
+                  <li style="margin-bottom: var(--space-sm);">
+                    <strong>Pointer immobility after V/v.</strong>
+                    The pointer does NOT advance after a node insertion.
+                  </li>
+                  <li style="margin-bottom: var(--space-sm);">
+                    <strong>Displacement pairs sorted by |a| + |b|</strong> (total cost),
+                    not by a + b (algebraic sum).
+                  </li>
+                  <li>
+                    <strong>Greedy G2S &ne; canonical string.</strong>
+                    Different starting vertices may produce different strings.
+                    The canonical string requires trying all starting vertices.
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js"></script>
+  <script src="js/components.js"></script>
+
+  <!-- KaTeX -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- D3 -->
+  <script defer src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <!-- Core algorithm -->
+  <script src="js/core/alphabet.js"></script>
+  <script src="js/core/cdll.js"></script>
+  <script src="js/core/sparse-graph.js"></script>
+  <script src="js/core/s2g.js"></script>
+
+  <!-- Visualization -->
+  <script src="js/viz/graph-renderer.js"></script>
+  <script src="js/viz/cdll-renderer.js"></script>
+  <script src="js/viz/step-player.js"></script>
+
+  <script>
+    // Render KaTeX formulas
+    document.addEventListener('DOMContentLoaded', function () {
+      var checkKatex = setInterval(function () {
+        if (typeof katex !== 'undefined') {
+          clearInterval(checkKatex);
+          var formulas = [
+            { id: 'math-roundtrip', tex: 'S2G(G2S(G, s)) \\cong G', display: true },
+            { id: 'math-canonical-def', tex: 'w^*_G = \\text{lexmin}\\{ w \\in \\arg\\min_{v \\in V} |G2S(G, v)| \\}', display: true },
+            { id: 'math-canonical-thm', tex: 'G \\cong H \\iff w^*_G = w^*_H', display: true }
+          ];
+          formulas.forEach(function (f) {
+            var el = document.getElementById(f.id);
+            if (el) {
+              katex.render(f.tex, el, { displayMode: f.display, throwOnError: false });
+            }
+          });
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>

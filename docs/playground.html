@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playground — IsalGraph</title>
+  <meta name="description" content="Experiment with IsalGraph encoding and decoding in real-time. Convert between graphs and instruction strings interactively.">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <meta property="og:title" content="Playground — IsalGraph">
+  <meta property="og:description" content="Interactive graph-to-string and string-to-graph converter.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/playground.html">
+  <meta property="og:type" content="website">
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/typography.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/footer.css">
+  <link rel="stylesheet" href="css/playground.css">
+</head>
+<body data-page="playground">
+  <div id="site-nav"></div>
+
+  <main>
+    <div class="container">
+      <header class="playground-header">
+        <h1>Playground</h1>
+        <p>Experiment with IsalGraph encoding and decoding in real-time.</p>
+      </header>
+
+      <!-- Mode Tabs -->
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" aria-controls="panel-s2g" id="tab-s2g"
+          onclick="IsalGraph.switchPlaygroundTab('s2g')">
+          String &rarr; Graph
+        </button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-g2s" id="tab-g2s"
+          onclick="IsalGraph.switchPlaygroundTab('g2s')">
+          Graph &rarr; String
+        </button>
+      </div>
+
+      <!-- S2G Panel -->
+      <div class="tab-panel active" id="panel-s2g" role="tabpanel" aria-labelledby="tab-s2g">
+        <div class="playground-layout">
+          <!-- Input -->
+          <div class="playground-input">
+            <label class="playground-input__label" for="pg-s2g-input">Instruction String</label>
+            <input
+              type="text"
+              class="playground-input__string"
+              id="pg-s2g-input"
+              value="VNVnC"
+              placeholder="e.g. VNVCnVC"
+              spellcheck="false"
+              autocomplete="off"
+              aria-describedby="pg-s2g-info"
+            >
+            <div id="pg-s2g-colored" class="output-string" style="min-height: 40px; font-size: var(--text-lg);"></div>
+            <div class="playground-input__info" id="pg-s2g-info"></div>
+            <div class="playground-input__error" id="pg-s2g-error"></div>
+
+            <div class="playground-presets">
+              <span class="playground-presets__label">Presets</span>
+              <div class="playground-presets__grid">
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('V')">Edge (V)</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVnC')">Triangle</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNV')">Path P&#x2083;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVNVNVPPPnC')">Cycle C&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VVVV')">Star S&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVNVnCNC')">House</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-lg);"
+              onclick="IsalGraph.runS2G()">
+              Decode String &rarr;
+            </button>
+          </div>
+
+          <!-- Output -->
+          <div class="playground-output">
+            <div class="viz-panel__label">Graph Output</div>
+            <div class="playground-output__viz" id="pg-s2g-output">
+              <svg id="pg-s2g-svg" width="100%" height="100%"></svg>
+            </div>
+            <div id="pg-s2g-info-output" style="margin-top: var(--space-md); font-size: var(--text-sm); color: var(--text-secondary);"></div>
+          </div>
+        </div>
+
+        <!-- Trace controls -->
+        <div class="playground-trace">
+          <div class="transport" role="toolbar" aria-label="Step through controls">
+            <button class="transport__btn" id="pg-s2g-reset" aria-label="Reset">&#x21BA;</button>
+            <button class="transport__btn" id="pg-s2g-prev" aria-label="Previous step">&#x25C0;</button>
+            <button class="transport__btn" id="pg-s2g-play" aria-label="Play/Pause">&#x25B6;</button>
+            <button class="transport__btn" id="pg-s2g-next" aria-label="Next step">&#x25B6;&#x258F;</button>
+            <span class="transport__step-info" id="pg-s2g-step-info">Step 0/0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- G2S Panel -->
+      <div class="tab-panel" id="panel-g2s" role="tabpanel" aria-labelledby="tab-g2s">
+        <div class="playground-layout">
+          <!-- Input -->
+          <div class="playground-input">
+            <label class="playground-input__label">Graph Input</label>
+            <div class="g2s-controls">
+              <select id="pg-g2s-preset" onchange="IsalGraph.loadG2SPreset(this.value)">
+                <option value="">Select a preset...</option>
+                <option value="triangle">Triangle K&#x2083;</option>
+                <option value="path3">Path P&#x2083;</option>
+                <option value="star4">Star S&#x2084;</option>
+                <option value="cycle4">Cycle C&#x2084;</option>
+                <option value="house">House graph</option>
+              </select>
+              <label style="font-size: var(--text-sm); color: var(--text-secondary);">
+                Start vertex:
+                <select id="pg-g2s-start">
+                  <option value="0">0</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="graph-editor" id="pg-g2s-editor">
+              <svg id="pg-g2s-editor-svg" width="100%" height="100%"></svg>
+            </div>
+            <p class="graph-editor__hint">Click to add nodes. Drag between nodes to add edges. Click an edge to remove it.</p>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-md);"
+              onclick="IsalGraph.runG2S()">
+              Encode Graph &rarr;
+            </button>
+          </div>
+
+          <!-- Output -->
+          <div class="playground-output">
+            <div class="viz-panel__label">Output String</div>
+            <div class="output-string" id="pg-g2s-output" aria-live="polite">
+              <span style="color: var(--text-tertiary); font-size: var(--text-sm); font-weight: 400;">
+                Select or draw a graph, then click "Encode"
+              </span>
+            </div>
+            <div id="pg-g2s-info-output" style="margin-top: var(--space-md); font-size: var(--text-sm); color: var(--text-secondary);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js"></script>
+  <script src="js/components.js"></script>
+
+  <!-- D3 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <!-- Core algorithm -->
+  <script src="js/core/alphabet.js"></script>
+  <script src="js/core/cdll.js"></script>
+  <script src="js/core/sparse-graph.js"></script>
+  <script src="js/core/s2g.js"></script>
+  <script src="js/core/g2s.js"></script>
+
+  <!-- Visualization -->
+  <script src="js/viz/graph-renderer.js"></script>
+  <script src="js/viz/cdll-renderer.js"></script>
+  <script src="js/viz/step-player.js"></script>
+
+  <!-- Playground -->
+  <script src="js/playground/playground-controller.js"></script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IsalGraph — Graph Structure as Instruction Strings</title>
+  <meta name="description" content="IsalGraph encodes graph topology as instruction strings over a 9-character alphabet. The canonical string is a complete graph invariant.">
+  <meta name="keywords" content="graph isomorphism, graph encoding, string representation, CDLL, canonical form, graph edit distance">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="IsalGraph — Graph Structure as Instruction Strings">
+  <meta property="og:description" content="Encoding graph topology as instruction strings over a 9-character alphabet. Complete graph invariant.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/">
+  <meta property="og:type" content="website">
+
+  <!-- Preconnects -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Favicon -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/typography.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/footer.css">
+  <link rel="stylesheet" href="css/index.css">
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+</head>
+<body data-page="home">
+  <div id="site-nav"></div>
+
+  <main>
+    <!-- ===================== HERO ===================== -->
+    <section class="hero">
+      <div class="hero__inner">
+        <div class="hero__content">
+          <h1 class="hero__title">
+            Graph Structure as <span class="gradient-text">Instruction Strings</span>
+          </h1>
+          <p class="hero__subtitle">
+            IsalGraph encodes graph topology as instruction strings over a 9-character alphabet
+            using a circular doubly linked list with two mobile pointers. The canonical string
+            is a complete graph invariant &mdash; two graphs are isomorphic if and only if
+            their canonical strings are identical.
+          </p>
+          <div class="hero__ctas">
+            <a href="how-it-works.html" class="btn btn-primary">Explore How It Works &rarr;</a>
+            <a href="playground.html" class="btn btn-outline">Try the Playground &rarr;</a>
+          </div>
+        </div>
+        <div class="hero__viz" id="hero-viz" aria-label="Animated visualization of a graph being encoded as an instruction string">
+          <svg id="hero-svg" viewBox="0 0 420 420"></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== KEY RESULTS STRIP ============== -->
+    <section class="results-strip bg-secondary">
+      <div class="results-strip__grid">
+        <div class="card result-card">
+          <div class="result-card__icon" aria-hidden="true">&#x2261;</div>
+          <h3 class="result-card__title">Complete Invariant</h3>
+          <div class="result-card__math" id="math-invariant"></div>
+          <p class="result-card__text">
+            The canonical string uniquely identifies a graph up to isomorphism.
+          </p>
+        </div>
+        <div class="card result-card">
+          <div class="result-card__icon" aria-hidden="true">&#x0394;</div>
+          <h3 class="result-card__title">Graph Distance</h3>
+          <p class="result-card__math" style="font-size: var(--text-sm); color: var(--text-secondary);">
+            Levenshtein distance between canonical strings
+          </p>
+          <p class="result-card__text">
+            String edit distance provides a polynomial-time proxy for graph edit distance.
+          </p>
+        </div>
+        <div class="card result-card">
+          <div class="result-card__icon" aria-hidden="true">&Sigma;</div>
+          <h3 class="result-card__title">9-Character Alphabet</h3>
+          <div class="result-card__math">
+            <span class="instruction-string">
+              <span class="char-N">N</span> <span class="char-n">n</span>
+              <span class="char-P">P</span> <span class="char-p">p</span>
+              <span class="char-V">V</span> <span class="char-v">v</span>
+              <span class="char-C">C</span> <span class="char-c">c</span>
+              <span class="char-W">W</span>
+            </span>
+          </div>
+          <p class="result-card__text">
+            Movement, node creation, edge creation, and no-op instructions encode any finite simple graph.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS TEASER ============ -->
+    <section class="teaser section">
+      <div class="container">
+        <div class="teaser__header">
+          <h2>How Does It Work?</h2>
+          <p>Three components work together to encode and decode graph topology.</p>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="step__number">1</div>
+            <h3 class="step__title">Graph</h3>
+            <p class="step__text">
+              Start with any finite simple graph &mdash; nodes connected by edges.
+              The structure we want to represent.
+            </p>
+          </div>
+          <div class="step">
+            <div class="step__number">2</div>
+            <h3 class="step__title">CDLL + Pointers</h3>
+            <p class="step__text">
+              A circular doubly linked list with two pointers (primary &amp; secondary)
+              traverses and builds the graph.
+            </p>
+          </div>
+          <div class="step">
+            <div class="step__number">3</div>
+            <h3 class="step__title">String</h3>
+            <p class="step__text">
+              Each operation emits a character from the 9-symbol alphabet.
+              The result: a compact string encoding of graph topology.
+            </p>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: var(--space-2xl);">
+          <a href="how-it-works.html" class="btn btn-outline">Learn More &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PUBLICATIONS TEASER ============ -->
+    <section class="teaser section bg-secondary">
+      <div class="container">
+        <div class="teaser__header">
+          <h2>Publications</h2>
+          <p>Research papers behind the IsalGraph framework.</p>
+        </div>
+        <div class="pub-teaser">
+          <div class="card pub-teaser__card">
+            <span class="badge badge--blue pub-teaser__year">2026</span>
+            <h3 class="pub-teaser__title">Instruction set for the representation of graphs</h3>
+            <p class="pub-teaser__authors">E. L&oacute;pez-Rubio, M. Pascual-Gonz&aacute;lez</p>
+            <a href="https://arxiv.org/abs/2603.11039" class="pub-teaser__link" target="_blank" rel="noopener noreferrer">
+              Read on arXiv &rarr;
+            </a>
+          </div>
+          <div class="card pub-teaser__card">
+            <span class="badge badge--purple pub-teaser__year">2025</span>
+            <h3 class="pub-teaser__title">Representation of the structure of graphs by sequences of instructions</h3>
+            <p class="pub-teaser__authors">E. L&oacute;pez-Rubio</p>
+            <a href="https://arxiv.org/abs/2512.10429" class="pub-teaser__link" target="_blank" rel="noopener noreferrer">
+              Read on arXiv &rarr;
+            </a>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: var(--space-2xl);">
+          <a href="publications.html" class="btn btn-outline">All Publications &rarr;</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js"></script>
+  <script src="js/components.js"></script>
+
+  <!-- KaTeX -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- D3 for hero animation -->
+  <script defer src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <script>
+    // Render KaTeX formulas once loaded
+    document.addEventListener('DOMContentLoaded', function () {
+      var checkKatex = setInterval(function () {
+        if (typeof katex !== 'undefined') {
+          clearInterval(checkKatex);
+          var el = document.getElementById('math-invariant');
+          if (el) {
+            katex.render('G \\cong H \\iff w^*_G = w^*_H', el, {
+              displayMode: true,
+              throwOnError: false
+            });
+          }
+        }
+      }, 100);
+    });
+  </script>
+
+  <!-- Hero animation -->
+  <script src="js/viz/hero-animation.js" defer></script>
+</body>
+</html>
