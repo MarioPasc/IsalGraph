@@ -97,19 +97,26 @@
 @media (min-width: 768px) {
   .lab-section__inner {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: center;
   }
 }
 
 .lab-section__logo {
   flex: 0 0 auto;
-  width: 280px;
+  width: 240px;
+}
+
+@media (min-width: 768px) {
+  .lab-section__logo {
+    width: 300px;
+  }
 }
 
 .lab-section__logo img {
   width: 100%;
   height: auto;
   border-radius: var(--radius-md);
+  object-fit: contain;
 }
 
 .lab-section__info {

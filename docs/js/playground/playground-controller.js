@@ -61,6 +61,9 @@
     }
   }
 
+  /**
+   * Run S2G: decode string, build trace, wire up step player.
+   */
   IsalGraph.runS2G = function () {
     var input = document.getElementById('pg-s2g-input');
     if (!input) return;
@@ -68,167 +71,82 @@
     if (!str) return;
 
     var errorEl = document.getElementById('pg-s2g-error');
-
     try {
-      var converter = new IsalGraph.StringToGraph(str, false);
-      var result = converter.run({ trace: true });
-      var graph = result.graph;
-      var traceSteps = result.traceSteps;
-
-      // Render final graph
-      var d3Data = IsalGraph.sparseGraphToD3(graph);
-      IsalGraph.renderGraph('pg-s2g-svg', d3Data);
-
-      // Info
-      var infoOut = document.getElementById('pg-s2g-info-output');
-      if (infoOut) {
-        infoOut.textContent = 'Decoded: ' + graph.nodeCount() + ' nodes, ' +
-          graph.logicalEdgeCount() + ' edges';
-      }
-
-      // Build action descriptions for each step
-      var actionDescs = buildS2GActionLog(str, traceSteps);
-
-      // Render action log
-      renderActionLog('pg-s2g-action-log', actionDescs, 0);
-
-      // Set up step player
-      s2gPlayer = new SimplePlayer(traceSteps.length, function (stepIdx) {
-        // Render graph at this step
-        var step = traceSteps[stepIdx];
-        var gd = IsalGraph.sparseGraphToD3(step.graph);
-        var priNode = step.cdll.size() > 0 ? step.cdll.getValue(step.primaryPtr) : undefined;
-        var secNode = step.cdll.size() > 0 ? step.cdll.getValue(step.secondaryPtr) : undefined;
-        IsalGraph.renderGraph('pg-s2g-svg', gd, {
-          primaryNode: priNode,
-          secondaryNode: secNode
-        });
-        // Update step info
-        var stepInfo = document.getElementById('pg-s2g-step-info');
-        if (stepInfo) stepInfo.textContent = 'Step ' + stepIdx + '/' + (traceSteps.length - 1);
-        // Update action log highlight
-        renderActionLog('pg-s2g-action-log', actionDescs, stepIdx);
-        // Update info
-        if (infoOut) {
-          infoOut.textContent = 'Step ' + stepIdx + ': ' + step.graph.nodeCount() + ' nodes, ' +
-            step.graph.logicalEdgeCount() + ' edges';
-        }
+      var result = runS2GWithTrace(str);
+      setupStepAnimation({
+        traceSteps: result.traceSteps,
+        inputString: str,
+        graphSvgId: 'pg-s2g-svg',
+        infoId: 'pg-s2g-info-output',
+        actionLogId: 'pg-s2g-action-log',
+        stepInfoId: 'pg-s2g-step-info',
+        outputStringId: null,
+        playerRef: function (p) { s2gPlayer = p; },
+        buildDescs: function () { return buildS2GActionLog(str, result.traceSteps); }
       });
-
-      var stepInfo = document.getElementById('pg-s2g-step-info');
-      if (stepInfo) stepInfo.textContent = 'Step 0/' + (traceSteps.length - 1);
-
-      // Show initial state
-      s2gPlayer.goToStep(0);
-
       if (errorEl) errorEl.textContent = '';
     } catch (e) {
       if (errorEl) errorEl.textContent = 'Error: ' + e.message;
     }
   };
 
+  function runS2GWithTrace(str) {
+    var converter = new IsalGraph.StringToGraph(str, false);
+    return converter.run({ trace: true });
+  }
+
   function buildS2GActionLog(str, traceSteps) {
     var descs = [];
     descs.push({
-      step: 0,
-      instr: '',
-      text: 'Initial state: vertex 0 created, both pointers \u03C0 and \u03C3 at node 0'
+      step: 0, instr: '',
+      text: 'Initial state: vertex 0 created, \u03C0=0, \u03C3=0'
     });
-
     for (var i = 1; i < traceSteps.length; i++) {
       var ch = str[i - 1];
       var prev = traceSteps[i - 1];
       var curr = traceSteps[i];
-      var info = IsalGraph.INSTRUCTION_INFO[ch];
-
-      var prevPriGraph = prev.cdll.getValue(prev.primaryPtr);
-      var prevSecGraph = prev.cdll.getValue(prev.secondaryPtr);
-      var currPriGraph = curr.cdll.getValue(curr.primaryPtr);
-      var currSecGraph = curr.cdll.getValue(curr.secondaryPtr);
-
-      var text = '';
-      switch (ch) {
-        case 'N':
-          text = '\u03C0 moves forward: ' + prevPriGraph + ' \u2192 ' + currPriGraph;
-          break;
-        case 'P':
-          text = '\u03C0 moves backward: ' + prevPriGraph + ' \u2192 ' + currPriGraph;
-          break;
-        case 'n':
-          text = '\u03C3 moves forward: ' + prevSecGraph + ' \u2192 ' + currSecGraph;
-          break;
-        case 'p':
-          text = '\u03C3 moves backward: ' + prevSecGraph + ' \u2192 ' + currSecGraph;
-          break;
-        case 'V':
-          var newNode = curr.graph.nodeCount() - 1;
-          text = 'New vertex ' + newNode + ', edge {' + currPriGraph + ',' + newNode + '} via \u03C0';
-          break;
-        case 'v':
-          var newNode2 = curr.graph.nodeCount() - 1;
-          text = 'New vertex ' + newNode2 + ', edge {' + currSecGraph + ',' + newNode2 + '} via \u03C3';
-          break;
-        case 'C':
-          text = 'Edge {' + currPriGraph + ',' + currSecGraph + '} (\u03C0 \u2192 \u03C3)';
-          break;
-        case 'c':
-          text = 'Edge {' + currSecGraph + ',' + currPriGraph + '} (\u03C3 \u2192 \u03C0)';
-          break;
-        case 'W':
-          text = 'No-op';
-          break;
-      }
-
+      var prevPri = prev.cdll.getValue(prev.primaryPtr);
+      var prevSec = prev.cdll.getValue(prev.secondaryPtr);
+      var currPri = curr.cdll.getValue(curr.primaryPtr);
+      var currSec = curr.cdll.getValue(curr.secondaryPtr);
+      var text = describeInstruction(ch, prevPri, prevSec, currPri, currSec, curr.graph);
       descs.push({ step: i, instr: ch, text: text });
     }
     return descs;
   }
 
-  // ---- S2G Transport ----
-  document.addEventListener('DOMContentLoaded', function () {
-    bindTransport('pg-s2g', function () { return s2gPlayer; });
-    bindTransport('pg-g2s', function () { return g2sPlayer; });
-
-    // Initial colored display
-    var input = document.getElementById('pg-s2g-input');
-    if (input) {
-      updateS2GColored(input.value);
-      input.addEventListener('input', function () {
-        updateS2GColored(this.value);
-      });
+  /**
+   * Human-readable description of what an instruction did.
+   */
+  function describeInstruction(ch, prevPri, prevSec, currPri, currSec, graph) {
+    switch (ch) {
+      case 'N': return '\u03C0 forward: node ' + prevPri + ' \u2192 node ' + currPri;
+      case 'P': return '\u03C0 backward: node ' + prevPri + ' \u2192 node ' + currPri;
+      case 'n': return '\u03C3 forward: node ' + prevSec + ' \u2192 node ' + currSec;
+      case 'p': return '\u03C3 backward: node ' + prevSec + ' \u2192 node ' + currSec;
+      case 'V':
+        var nv = graph.nodeCount() - 1;
+        return 'Create vertex ' + nv + ', edge {' + currPri + ',' + nv + '} via \u03C0';
+      case 'v':
+        var nv2 = graph.nodeCount() - 1;
+        return 'Create vertex ' + nv2 + ', edge {' + currSec + ',' + nv2 + '} via \u03C3';
+      case 'C': return 'Edge {\u03C0=' + currPri + ', \u03C3=' + currSec + '}';
+      case 'c': return 'Edge {\u03C3=' + currSec + ', \u03C0=' + currPri + '}';
+      case 'W': return 'No-op';
+      default: return ch;
     }
-  });
+  }
 
   // ================================================================
   // G2S (Graph → String)
   // ================================================================
 
   var G2S_PRESETS = {
-    triangle: {
-      nodeCount: 3,
-      edges: [[0, 1], [1, 2], [2, 0]],
-      name: 'Triangle K\u2083'
-    },
-    path3: {
-      nodeCount: 3,
-      edges: [[0, 1], [1, 2]],
-      name: 'Path P\u2083'
-    },
-    star4: {
-      nodeCount: 5,
-      edges: [[0, 1], [0, 2], [0, 3], [0, 4]],
-      name: 'Star S\u2084'
-    },
-    cycle4: {
-      nodeCount: 4,
-      edges: [[0, 1], [1, 2], [2, 3], [3, 0]],
-      name: 'Cycle C\u2084'
-    },
-    house: {
-      nodeCount: 5,
-      edges: [[0, 1], [1, 2], [2, 3], [3, 0], [2, 4], [3, 4]],
-      name: 'House graph'
-    }
+    triangle: { nodeCount: 3, edges: [[0,1],[1,2],[2,0]], name: 'Triangle K\u2083' },
+    path3:    { nodeCount: 3, edges: [[0,1],[1,2]],       name: 'Path P\u2083' },
+    star4:    { nodeCount: 5, edges: [[0,1],[0,2],[0,3],[0,4]], name: 'Star S\u2084' },
+    cycle4:   { nodeCount: 4, edges: [[0,1],[1,2],[2,3],[3,0]], name: 'Cycle C\u2084' },
+    house:    { nodeCount: 5, edges: [[0,1],[1,2],[2,3],[3,0],[2,4],[3,4]], name: 'House graph' }
   };
 
   var g2sCurrentGraph = null;
@@ -268,8 +186,20 @@
     if (logEl) logEl.innerHTML = '';
     var infoOut = document.getElementById('pg-g2s-info-output');
     if (infoOut) infoOut.textContent = preset.name + ': ' + preset.nodeCount + ' nodes, ' + preset.edges.length + ' edges';
+
+    // Reset player
+    if (g2sPlayer) { g2sPlayer.pause(); g2sPlayer = null; }
+    var si = document.getElementById('pg-g2s-step-info');
+    if (si) si.textContent = 'Step 0/0';
+    // Reset play button icon
+    var pb = document.getElementById('pg-g2s-play');
+    if (pb) pb.innerHTML = '&#x25B6;';
   };
 
+  /**
+   * Run G2S: encode the graph, then replay the output string through S2G
+   * to get a per-character animation.
+   */
   IsalGraph.runG2S = function () {
     if (!g2sCurrentGraph) {
       var outputEl = document.getElementById('pg-g2s-output');
@@ -281,63 +211,30 @@
     var startNode = startSel ? parseInt(startSel.value, 10) : 0;
 
     try {
+      // Step 1: Encode graph to string
       var converter = new IsalGraph.GraphToString(g2sCurrentGraph);
-      var result = converter.run(startNode, { trace: true });
-      var str = result.string;
-      var traceSteps = result.traceSteps;
+      var g2sResult = converter.run(startNode, { trace: false });
+      var encodedStr = g2sResult.string;
 
-      // Show final string
-      var outputEl = document.getElementById('pg-g2s-output');
-      if (outputEl) {
-        outputEl.innerHTML = IsalGraph.renderColoredString(str);
-      }
+      // Step 2: Replay the encoded string through S2G to get per-character trace
+      var s2gReplay = runS2GWithTrace(encodedStr);
+      var traceSteps = s2gReplay.traceSteps;
 
-      var infoOut = document.getElementById('pg-g2s-info-output');
-      if (infoOut) {
-        infoOut.textContent = 'Encoded: ' + str.length + ' instructions (from vertex ' + startNode + ')';
-      }
+      // Build action log from the S2G replay
+      var actionDescs = buildG2SReplayLog(encodedStr, traceSteps);
 
-      // Build action descriptions
-      var actionDescs = buildG2SActionLog(str, traceSteps);
-
-      // Render action log
-      renderActionLog('pg-g2s-action-log', actionDescs, 0);
-
-      // Set up step player
-      g2sPlayer = new SimplePlayer(traceSteps.length, function (stepIdx) {
-        var step = traceSteps[stepIdx];
-        // Render the output graph state
-        var gd = IsalGraph.sparseGraphToD3(step.graph);
-        var priNode = step.cdll.size() > 0 ? step.cdll.getValue(step.primaryPtr) : undefined;
-        var secNode = step.cdll.size() > 0 ? step.cdll.getValue(step.secondaryPtr) : undefined;
-        IsalGraph.renderGraph('pg-g2s-editor-svg', gd, {
-          primaryNode: priNode,
-          secondaryNode: secNode
-        });
-        // Show partial string built so far
-        if (outputEl) {
-          var partialStr = step.outputString || '';
-          if (partialStr) {
-            outputEl.innerHTML = IsalGraph.renderColoredString(partialStr);
-          } else {
-            outputEl.innerHTML = '<span style="color: var(--text-tertiary); font-size: var(--text-sm); font-weight: 400;">(building...)</span>';
-          }
-        }
-        // Update step info
-        var stepInfo = document.getElementById('pg-g2s-step-info');
-        if (stepInfo) stepInfo.textContent = 'Step ' + stepIdx + '/' + (traceSteps.length - 1);
-        // Update action log
-        renderActionLog('pg-g2s-action-log', actionDescs, stepIdx);
-        if (infoOut) {
-          infoOut.textContent = 'Step ' + stepIdx + ': ' + step.graph.nodeCount() + ' nodes mapped, ' +
-            step.graph.logicalEdgeCount() + ' edges placed, string: "' + (step.outputString || '') + '"';
-        }
+      // Wire up the step animation
+      setupStepAnimation({
+        traceSteps: traceSteps,
+        inputString: encodedStr,
+        graphSvgId: 'pg-g2s-editor-svg',
+        infoId: 'pg-g2s-info-output',
+        actionLogId: 'pg-g2s-action-log',
+        stepInfoId: 'pg-g2s-step-info',
+        outputStringId: 'pg-g2s-output',
+        playerRef: function (p) { g2sPlayer = p; },
+        buildDescs: function () { return actionDescs; }
       });
-
-      var stepInfo = document.getElementById('pg-g2s-step-info');
-      if (stepInfo) stepInfo.textContent = 'Step 0/' + (traceSteps.length - 1);
-
-      g2sPlayer.goToStep(0);
 
     } catch (e) {
       var errEl = document.getElementById('pg-g2s-output');
@@ -345,40 +242,117 @@
     }
   };
 
-  function buildG2SActionLog(str, traceSteps) {
+  /**
+   * Build action log for G2S by replaying the encoded string through S2G.
+   * Each step shows what instruction was emitted and what it does.
+   */
+  function buildG2SReplayLog(str, traceSteps) {
     var descs = [];
+    descs.push({
+      step: 0, instr: '',
+      text: 'Encoding starts: map start vertex \u2192 output vertex 0'
+    });
+    for (var i = 1; i < traceSteps.length; i++) {
+      var ch = str[i - 1];
+      var prev = traceSteps[i - 1];
+      var curr = traceSteps[i];
+      var prevPri = prev.cdll.getValue(prev.primaryPtr);
+      var prevSec = prev.cdll.getValue(prev.secondaryPtr);
+      var currPri = curr.cdll.getValue(curr.primaryPtr);
+      var currSec = curr.cdll.getValue(curr.secondaryPtr);
+      var text = describeInstruction(ch, prevPri, prevSec, currPri, currSec, curr.graph);
+      descs.push({ step: i, instr: ch, text: 'Emit ' + ch + ': ' + text });
+    }
+    // Final summary
+    descs.push({
+      step: traceSteps.length, instr: '',
+      text: 'Encoding complete! String: "' + str + '" (' + str.length + ' chars)'
+    });
+    return descs;
+  }
 
-    // The trace has one entry per loop iteration, plus initial and final.
-    // Each trace entry records the state BEFORE the operation.
-    // The string grows between consecutive entries.
-    for (var i = 0; i < traceSteps.length; i++) {
-      var step = traceSteps[i];
-      var prevStr = i > 0 ? traceSteps[i - 1].outputString || '' : '';
-      var currStr = step.outputString || '';
-      var newChars = currStr.substring(prevStr.length);
+  // ================================================================
+  // Shared: Step Animation Setup
+  // ================================================================
 
-      var text = '';
-      if (i === 0) {
-        text = 'Initial state: map input vertex to output vertex 0';
-      } else if (i === traceSteps.length - 1) {
-        text = 'Encoding complete: "' + currStr + '"';
-      } else {
-        // Describe the new instructions emitted
-        if (newChars.length === 0) {
-          text = 'Searching for next operation...';
-        } else {
-          var parts = [];
-          for (var c = 0; c < newChars.length; c++) {
-            var ch = newChars[c];
-            var info = IsalGraph.INSTRUCTION_INFO[ch];
-            parts.push(ch + ' (' + (info ? info.description : '?') + ')');
+  /**
+   * Wire up a step animation for either S2G or G2S.
+   * @param {Object} opts
+   *   traceSteps, inputString, graphSvgId, infoId, actionLogId,
+   *   stepInfoId, outputStringId, playerRef(player), buildDescs()
+   */
+  function setupStepAnimation(opts) {
+    var traceSteps = opts.traceSteps;
+    var inputString = opts.inputString;
+    var actionDescs = opts.buildDescs();
+
+    // Total animation steps = trace steps + 1 final summary (for G2S) or just trace steps
+    var totalSteps = actionDescs.length;
+
+    var player = new SimplePlayer(totalSteps, function (stepIdx) {
+      // Determine which trace step to render
+      var traceIdx = Math.min(stepIdx, traceSteps.length - 1);
+      var step = traceSteps[traceIdx];
+
+      // Render graph
+      var gd = IsalGraph.sparseGraphToD3(step.graph);
+      var priNode = step.cdll.size() > 0 ? step.cdll.getValue(step.primaryPtr) : undefined;
+      var secNode = step.cdll.size() > 0 ? step.cdll.getValue(step.secondaryPtr) : undefined;
+      IsalGraph.renderGraph(opts.graphSvgId, gd, {
+        primaryNode: priNode,
+        secondaryNode: secNode
+      });
+
+      // Update step info
+      var stepInfoEl = document.getElementById(opts.stepInfoId);
+      if (stepInfoEl) stepInfoEl.textContent = 'Step ' + stepIdx + '/' + (totalSteps - 1);
+
+      // Update info line
+      var infoEl = document.getElementById(opts.infoId);
+      if (infoEl) {
+        var processedStr = traceIdx > 0 ? inputString.substring(0, traceIdx) : '';
+        infoEl.textContent = step.graph.nodeCount() + ' nodes, ' +
+          step.graph.logicalEdgeCount() + ' edges' +
+          (processedStr ? ' | String so far: "' + processedStr + '"' : '');
+      }
+
+      // Update output string display (G2S mode — show string building up)
+      if (opts.outputStringId) {
+        var outputEl = document.getElementById(opts.outputStringId);
+        if (outputEl) {
+          var builtStr = traceIdx > 0 ? inputString.substring(0, traceIdx) : '';
+          var remaining = inputString.substring(traceIdx);
+          var html = '';
+          // Built portion: fully colored
+          for (var c = 0; c < builtStr.length; c++) {
+            html += '<span class="char-' + builtStr[c] + '">' + builtStr[c] + '</span>';
           }
-          text = 'Emit: ' + parts.join(', ');
+          // Remaining portion: dimmed
+          if (remaining && stepIdx < totalSteps - 1) {
+            for (var r = 0; r < remaining.length; r++) {
+              html += '<span style="opacity: 0.2; color: var(--text-tertiary);">' + remaining[r] + '</span>';
+            }
+          }
+          if (!html) {
+            html = '<span style="color: var(--text-tertiary); font-size: var(--text-sm); font-weight: 400;">(encoding...)</span>';
+          }
+          outputEl.innerHTML = html;
         }
       }
-      descs.push({ step: i, instr: newChars, text: text });
-    }
-    return descs;
+
+      // Update action log
+      renderActionLog(opts.actionLogId, actionDescs, stepIdx);
+    });
+
+    opts.playerRef(player);
+
+    // Start at step 0
+    player.goToStep(0);
+
+    // Reset play button icon
+    var playBtnId = opts.stepInfoId.replace('-step-info', '-play');
+    var pb = document.getElementById(playBtnId);
+    if (pb) pb.innerHTML = '&#x25B6;';
   }
 
   // ================================================================
@@ -392,7 +366,10 @@
     var html = '';
     for (var i = 0; i < descs.length; i++) {
       var d = descs[i];
-      var activeClass = i === activeStep ? ' active' : '';
+      var cls = 'step-log__entry';
+      if (i === activeStep) cls += ' active';
+      else if (i > activeStep) cls += ' future';
+
       var instrSpan = '';
       if (d.instr) {
         instrSpan = '<span class="instruction-string" style="margin-right: 6px;">';
@@ -401,8 +378,8 @@
         }
         instrSpan += '</span>';
       }
-      html += '<div class="step-log__entry' + activeClass + '">' +
-        '<strong style="color: var(--text-tertiary); margin-right: 6px;">' + i + '.</strong>' +
+      html += '<div class="' + cls + '">' +
+        '<strong style="color: var(--text-tertiary); min-width: 28px; display: inline-block;">' + i + '.</strong>' +
         instrSpan + d.text + '</div>';
     }
     el.innerHTML = html;
@@ -415,7 +392,7 @@
   }
 
   // ================================================================
-  // Shared: Simple Step Player (no dependency on StepPlayer class)
+  // Simple Step Player
   // ================================================================
 
   function SimplePlayer(totalSteps, onStepChange) {
@@ -423,7 +400,7 @@
     this.current = 0;
     this.playing = false;
     this.timer = null;
-    this.speed = 1000;
+    this.speed = 800;
     this.onStepChange = onStepChange;
   }
 
@@ -471,26 +448,24 @@
   };
 
   // ================================================================
-  // Shared: Bind transport buttons
+  // Bind transport buttons (called once on DOMContentLoaded)
   // ================================================================
 
   function bindTransport(prefix, getPlayer) {
     var resetBtn = document.getElementById(prefix + '-reset');
-    var prevBtn = document.getElementById(prefix + '-prev');
-    var playBtn = document.getElementById(prefix + '-play');
-    var nextBtn = document.getElementById(prefix + '-next');
+    var prevBtn  = document.getElementById(prefix + '-prev');
+    var playBtn  = document.getElementById(prefix + '-play');
+    var nextBtn  = document.getElementById(prefix + '-next');
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
-      var p = getPlayer();
-      if (p) p.reset();
+      var p = getPlayer(); if (p) p.reset();
+      if (playBtn) playBtn.innerHTML = '&#x25B6;';
     });
     if (prevBtn) prevBtn.addEventListener('click', function () {
-      var p = getPlayer();
-      if (p) p.prev();
+      var p = getPlayer(); if (p) p.prev();
     });
     if (nextBtn) nextBtn.addEventListener('click', function () {
-      var p = getPlayer();
-      if (p) p.next();
+      var p = getPlayer(); if (p) p.next();
     });
     if (playBtn) playBtn.addEventListener('click', function () {
       var p = getPlayer();
@@ -505,4 +480,22 @@
       }
     });
   }
+
+  // ================================================================
+  // Init
+  // ================================================================
+
+  document.addEventListener('DOMContentLoaded', function () {
+    bindTransport('pg-s2g', function () { return s2gPlayer; });
+    bindTransport('pg-g2s', function () { return g2sPlayer; });
+
+    // Initial colored display for S2G input
+    var input = document.getElementById('pg-s2g-input');
+    if (input) {
+      updateS2GColored(input.value);
+      input.addEventListener('input', function () {
+        updateS2GColored(this.value);
+      });
+    }
+  });
 })();
