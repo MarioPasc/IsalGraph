@@ -175,32 +175,62 @@ def gen_aggregated_density_heatmap(
 
 
 def gen_algorithm_overview(algo_dir: str, figures_dir: str) -> None:
-    """Copy algorithm overview figures from Step 3a output."""
-    logger.info("[3/8] Copying algorithm overview figures...")
+    """Generate algorithm overview (horizontal, 5-step) and copy full version.
 
-    if not check_dir_exists(algo_dir, "algorithm intermediate"):
-        return
+    The compact overview is regenerated directly (horizontal layout);
+    the full-step version is still copied from Step 3a intermediate output.
+    """
+    logger.info("[3/8] Generating algorithm overview figures...")
 
-    copy_figures(
-        algo_dir,
-        figures_dir,
-        ["fig_algorithm_overview", "fig_algorithm_overview_full"],
+    import networkx as nx
+
+    from benchmarks.eval_visualizations.illustrative.algorithm_figures import (
+        generate_algorithm_overview,
     )
+    from isalgraph.adapters.networkx_adapter import NetworkXAdapter
+    from isalgraph.core.graph_to_string import GraphToString
+
+    G = nx.house_graph()
+    adapter = NetworkXAdapter()
+    sg = adapter.from_external(G, directed=False)
+    g2s = GraphToString(sg)
+    w, _ = g2s.run(initial_node=0)
+    generate_algorithm_overview(w, G, initial_node=0, output_dir=figures_dir)
+
+    # Full version is still copied from Step 3a intermediate
+    if check_dir_exists(algo_dir, "algorithm intermediate"):
+        copy_figures(algo_dir, figures_dir, ["fig_algorithm_overview_full"])
 
 
-def gen_empirical_complexity(encoding_raw_dir: str, figures_dir: str) -> None:
-    """Generate fig_empirical_complexity.pdf."""
+def gen_empirical_complexity(
+    encoding_raw_dir: str,
+    comp_dir: str,
+    msg_raw_dir: str,
+    figures_dir: str,
+) -> None:
+    """Generate fig_empirical_complexity.pdf and combined figure."""
     logger.info("[5/8] Generating fig_empirical_complexity...")
 
     if not check_dir_exists(encoding_raw_dir, "encoding/raw"):
         return
 
     from benchmarks.eval_visualizations.fig_empirical_complexity import (
+        generate_combined_complexity_ratio,
         generate_empirical_complexity,
     )
 
-    path = generate_empirical_complexity(encoding_raw_dir, figures_dir)
+    path = generate_empirical_complexity(encoding_raw_dir, figures_dir, comp_dir)
     logger.info("  -> %s", path)
+
+    # Combined figure (complexity + ratio, shared x-axis)
+    if os.path.isdir(msg_raw_dir):
+        path2 = generate_combined_complexity_ratio(
+            encoding_raw_dir,
+            comp_dir,
+            msg_raw_dir,
+            figures_dir,
+        )
+        logger.info("  -> %s", path2)
 
 
 def gen_neighborhood_topology(topo_dir: str, figures_dir: str) -> None:
@@ -237,13 +267,18 @@ def gen_message_length_figure(
         return
 
     from benchmarks.eval_visualizations.fig_message_length import (
+        generate_information_content_table,
         generate_message_length_table,
         generate_ratio_figure,
+        generate_scatter_caption,
         generate_scatter_figure,
     )
 
     generate_scatter_figure(msg_raw_dir, figures_dir)
+    generate_scatter_figure(msg_raw_dir, figures_dir, log_counts=True)
+    generate_scatter_caption(msg_raw_dir, figures_dir)
     generate_ratio_figure(msg_raw_dir, figures_dir)
+    generate_information_content_table(msg_raw_dir, figures_dir)
     if os.path.isdir(msg_stats_dir):
         generate_message_length_table(msg_stats_dir, figures_dir)
 
@@ -334,7 +369,7 @@ def generate_all(run_dir: str) -> None:
     # 5. fig_empirical_complexity
     if steps.get("eval_encoding", {}).get("enabled"):
         try:
-            gen_empirical_complexity(encoding_raw_dir, figures_dir)
+            gen_empirical_complexity(encoding_raw_dir, comp_dir, msg_raw_dir, figures_dir)
         except Exception as e:
             logger.error("  FAILED: %s", e)
             errors.append(f"fig_empirical_complexity: {e}")

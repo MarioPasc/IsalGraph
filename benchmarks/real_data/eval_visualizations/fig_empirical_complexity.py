@@ -44,6 +44,7 @@ METHOD_COLORS = {
     "canonical_pruned": PAUL_TOL_BRIGHT["cyan"],
     "greedy_min": PAUL_TOL_BRIGHT["red"],
     "greedy_single": PAUL_TOL_BRIGHT["green"],
+    "ged": PAUL_TOL_BRIGHT["purple"],
 }
 
 METHOD_LABELS = {
@@ -51,6 +52,7 @@ METHOD_LABELS = {
     "canonical_pruned": "Canonical (Pruned)",
     "greedy_min": "Greedy-Min",
     "greedy_single": r"Greedy-rnd($v_0$)",
+    "ged": "GED (per pair)",
 }
 
 METHOD_MARKERS = {
@@ -58,6 +60,7 @@ METHOD_MARKERS = {
     "canonical_pruned": "D",
     "greedy_min": "s",
     "greedy_single": "^",
+    "ged": "X",
 }
 
 FAMILY_DISPLAY = {
@@ -123,6 +126,26 @@ def _aggregate_per_n(
     return ns, medians[mask].values, q25[mask].values, q75[mask].values
 
 
+def _load_ged_times(comp_dir: str) -> pd.DataFrame:
+    """Load GED per-pair computation times from all datasets.
+
+    Reads ``{dataset}_ged_times.csv`` files and returns a DataFrame
+    with columns ``max_n`` and ``ged_time_median_s``.
+    """
+    frames = []
+    if not os.path.isdir(comp_dir):
+        return pd.DataFrame()
+    for fname in sorted(os.listdir(comp_dir)):
+        if fname.endswith("_ged_times.csv"):
+            path = os.path.join(comp_dir, fname)
+            df = pd.read_csv(path)
+            if "max_n" in df.columns and "ged_time_median_s" in df.columns:
+                frames.append(df[["max_n", "ged_time_median_s"]])
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
 def _fit_polynomial(
     ns: np.ndarray,
     ts: np.ndarray,
@@ -147,12 +170,16 @@ def _fit_polynomial(
 def generate_empirical_complexity(
     data_dir: str,
     output_dir: str,
+    comp_dir: str = "",
 ) -> str:
     """Generate the empirical complexity figure.
 
     Args:
         data_dir: Directory containing raw CSV timing data.
         output_dir: Directory to save output figures.
+        comp_dir: Directory with computational evaluation outputs
+            (``raw/{dataset}_ged_times.csv``). If provided, GED per-pair
+            computation time is overlaid.
 
     Returns:
         Base path of saved figure.
@@ -205,21 +232,20 @@ def generate_empirical_complexity(
     methods_data = [
         ("greedy_single", gs_ns, gs_med, gs_q25, gs_q75, gs_alpha, gs_c, gs_r2),
         ("greedy_min", gm_ns, gm_med, gm_q25, gm_q75, gm_alpha, gm_c, gm_r2),
-        ("canonical", can_ns, can_med, can_q25, can_q75, can_alpha, can_c, can_r2),
     ]
     if pe_alpha is not None:
-        methods_data.insert(
-            2,
+        methods_data.append(
             ("canonical_pruned", pe_ns, pe_med, pe_q25, pe_q75, pe_alpha, pe_c, pe_r2),
         )
+    # Keep canonical data for caption but don't plot it
+    all_methods_data = methods_data + [
+        ("canonical", can_ns, can_med, can_q25, can_q75, can_alpha, can_c, can_r2),
+    ]
 
     for method, ns, med, q25, q75, alpha, c, r2 in methods_data:
         color = METHOD_COLORS[method]
         label = METHOD_LABELS[method]
         marker = METHOD_MARKERS[method]
-
-        # Legend label includes scaling law
-        legend_label = f"{label}: $T \\sim n^{{{alpha:.1f}}}$ ($R^2$={r2:.3f})"
 
         # Data points with IQR error bars
         ax.errorbar(
@@ -228,7 +254,7 @@ def generate_empirical_complexity(
             yerr=[med - q25, q75 - med],
             fmt=marker,
             color=color,
-            label=legend_label,
+            label=label,
             markersize=4,
             capsize=1.5,
             capthick=0.5,
@@ -242,9 +268,51 @@ def generate_empirical_complexity(
         t_fit = c * n_fit**alpha
         ax.plot(n_fit, t_fit, "--", color=color, linewidth=0.8, alpha=0.6, zorder=2)
 
+    # --- GED per-pair computation time (from real datasets) ---
+    ged_alpha = ged_c = ged_r2 = None
+    ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
+    ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
+    if not ged_df.empty:
+        ged_ns, ged_med, ged_q25, ged_q75 = _aggregate_per_n(
+            ged_df["ged_time_median_s"],
+            ged_df["max_n"],
+        )
+        if len(ged_ns) >= 2:
+            ged_alpha, ged_c, ged_r2 = _fit_polynomial(ged_ns, ged_med)
+            ax.errorbar(
+                ged_ns,
+                ged_med,
+                yerr=[ged_med - ged_q25, ged_q75 - ged_med],
+                fmt=METHOD_MARKERS["ged"],
+                color=METHOD_COLORS["ged"],
+                label=METHOD_LABELS["ged"],
+                markersize=4,
+                capsize=1.5,
+                capthick=0.5,
+                elinewidth=0.5,
+                markeredgewidth=0.4,
+                zorder=3,
+            )
+            n_fit = np.linspace(max(ged_ns.min(), 3), ged_ns.max(), 200)
+            t_fit = ged_c * n_fit**ged_alpha
+            ax.plot(
+                n_fit,
+                t_fit,
+                "--",
+                color=METHOD_COLORS["ged"],
+                linewidth=0.8,
+                alpha=0.6,
+                zorder=2,
+            )
+            logger.info(
+                "GED (per pair) α=%.2f (R²=%.3f)",
+                ged_alpha,
+                ged_r2,
+            )
+
     ax.set_yscale("log")
     ax.set_xlabel(r"Number of nodes $n$")
-    ax.set_ylabel("Encoding time (s)")
+    ax.set_ylabel("Time (s)")
 
     # Remove top and right spines
     ax.spines["top"].set_visible(False)
@@ -254,15 +322,13 @@ def generate_empirical_complexity(
     ax.set_xlim(None, 52)
     ax.set_xticks(np.arange(0, 51, 10))
 
-    # Legend below the plot, outside the axes
+    # Legend inside the plot, lower right
     ax.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.25),
-        ncol=1,
+        loc="lower right",
         fontsize=PLOT_SETTINGS["annotation_fontsize"],
         handletextpad=0.4,
         borderpad=0.4,
-        frameon=False,
+        framealpha=0.85,
     )
 
     fig.tight_layout()
@@ -291,15 +357,31 @@ def generate_empirical_complexity(
         "greedy_min": "Greedy-Min",
         "greedy_single": "Greedy-rnd($v_0$)",
     }
-    for method, _ns, _med, _q25, _q75, alpha, _c, r2 in methods_data:
+    for method, _ns, _med, _q25, _q75, alpha, _c, r2 in all_methods_data:
         caption_lines.append(
-            f"{_caption_names[method]}: $\\alpha = {alpha:.1f}$, $R^2 = {r2:.3f}$. "
+            f"{_caption_names[method]}: $T \\sim n^{{{alpha:.1f}}}$, $R^2 = {r2:.3f}$. "
+        )
+    if ged_alpha is not None:
+        _caption_names["ged"] = "GED (per pair)"
+        caption_lines.append(
+            f"GED (per pair): $T \\sim n^{{{ged_alpha:.1f}}}$, $R^2 = {ged_r2:.3f}$. "
         )
     caption_lines.append(
         "Greedy methods exhibit polynomial scaling ($\\alpha \\approx 3$--$5$), "
         "while the canonical method scales super-polynomially ($\\alpha \\approx 9$) "
-        "on random graphs and becomes infeasible beyond $n \\approx 12$."
+        "on random graphs and becomes infeasible beyond $n \\approx 12$. "
     )
+    if ged_alpha is not None:
+        caption_lines.append(
+            "GED computation time (per graph pair, from real datasets) is overlaid "
+            "for reference: it grows as $T \\sim n^{"
+            f"{ged_alpha:.1f}"
+            "}$, vastly exceeding all IsalGraph encoding methods. "
+            "Note that encoding times are per-graph (synthetic random graphs), "
+            "while GED is per-pair (real benchmark datasets); the full IsalGraph "
+            "pipeline for one pair ($2 \\times$ encode $+$ Levenshtein) remains "
+            "well below GED."
+        )
     caption_text = "".join(caption_lines)
 
     caption_path = base_path + "_caption.txt"
@@ -307,6 +389,292 @@ def generate_empirical_complexity(
         f.write(caption_text)
     logger.info("Caption saved: %s", caption_path)
 
+    return base_path
+
+
+# ---------------------------------------------------------------------------
+# Combined figure: complexity + compression ratio (shared x-axis)
+# ---------------------------------------------------------------------------
+
+
+def generate_combined_complexity_ratio(
+    encoding_dir: str,
+    comp_dir: str,
+    msg_raw_dir: str,
+    output_dir: str,
+) -> str:
+    """Generate fig_complexity_ratio_combined.pdf — 1x2 horizontal layout.
+
+    Left panel (a): empirical complexity (encoding time + GED).
+    Right panel (b): compression ratio heatmap with colorbar below.
+    Independent x-axes (different data ranges).
+
+    Returns:
+        Base path of saved figure.
+    """
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
+    apply_ieee_style()
+    os.makedirs(output_dir, exist_ok=True)
+
+    # ---- Load encoding data ------------------------------------------------
+    gs_df = _load_greedy_single_times(encoding_dir)
+    can_df = _load_canonical_greedy_min_times(encoding_dir)
+
+    gs_ns, gs_med, gs_q25, gs_q75 = _aggregate_per_n(gs_df["greedy_time_s"], gs_df["n_nodes"])
+    gm_ns, gm_med, gm_q25, gm_q75 = _aggregate_per_n(
+        can_df["greedy_min_time_s"],
+        can_df["n_nodes"],
+    )
+
+    pe_ns = pe_med = pe_q25 = pe_q75 = None
+    pe_alpha = pe_c = pe_r2 = None
+    if "pruned_exhaustive_time_s" in can_df.columns:
+        pe_df = can_df[
+            can_df["pruned_exhaustive_time_s"].notna() & (can_df["pruned_exhaustive_time_s"] > 0)
+        ]
+        if len(pe_df) > 0:
+            pe_ns, pe_med, pe_q25, pe_q75 = _aggregate_per_n(
+                pe_df["pruned_exhaustive_time_s"],
+                pe_df["n_nodes"],
+            )
+            pe_alpha, pe_c, pe_r2 = _fit_polynomial(pe_ns, pe_med)
+
+    gs_alpha, gs_c, gs_r2 = _fit_polynomial(gs_ns, gs_med)
+    gm_alpha, gm_c, gm_r2 = _fit_polynomial(gm_ns, gm_med)
+    can_alpha, can_c, can_r2 = _fit_polynomial(
+        *_aggregate_per_n(can_df["canonical_time_s"], can_df["n_nodes"])[:2],
+    )
+
+    methods_data = [
+        ("greedy_single", gs_ns, gs_med, gs_q25, gs_q75, gs_alpha, gs_c, gs_r2),
+        ("greedy_min", gm_ns, gm_med, gm_q25, gm_q75, gm_alpha, gm_c, gm_r2),
+    ]
+    if pe_alpha is not None:
+        methods_data.append(
+            ("canonical_pruned", pe_ns, pe_med, pe_q25, pe_q75, pe_alpha, pe_c, pe_r2),
+        )
+
+    # GED times
+    ged_alpha = ged_c = ged_r2 = None
+    ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
+    ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
+    ged_data = None
+    if not ged_df.empty:
+        ged_ns, ged_med, ged_q25, ged_q75 = _aggregate_per_n(
+            ged_df["ged_time_median_s"],
+            ged_df["max_n"],
+        )
+        if len(ged_ns) >= 2:
+            ged_alpha, ged_c, ged_r2 = _fit_polynomial(ged_ns, ged_med)
+            ged_data = (ged_ns, ged_med, ged_q25, ged_q75)
+
+    # ---- Load ratio data ---------------------------------------------------
+    from benchmarks.eval_visualizations.fig_message_length import _load_message_length_csvs
+
+    ratio_df = _load_message_length_csvs(msg_raw_dir)
+    ratio_col = "ratio_uniform_standard"
+    ratio_methods = ["pruned_exhaustive", "greedy", "greedy_single"]
+    ratio_df = ratio_df[ratio_df["method"].isin(ratio_methods)]
+    ratio_df = ratio_df[np.isfinite(ratio_df[ratio_col]) & (ratio_df[ratio_col] > 0)]
+
+    # ---- Create figure: 1x2 horizontal layout -----------------------------
+    fig = plt.figure(figsize=(7.16, 3.2))
+    outer_gs = GridSpec(
+        1,
+        2,
+        figure=fig,
+        width_ratios=[1, 1],
+        wspace=0.40,
+        left=0.07,
+        right=0.97,
+        top=0.91,
+        bottom=0.16,
+    )
+
+    # Left panel (a): complexity — single axes
+    ax_left = fig.add_subplot(outer_gs[0, 0])
+
+    # Right panel (b): heatmap + colorbar — nested 2-row GridSpec
+    inner_gs = GridSpecFromSubplotSpec(
+        2,
+        1,
+        subplot_spec=outer_gs[0, 1],
+        height_ratios=[1, 0.05],
+        hspace=0.30,
+    )
+    ax_right = fig.add_subplot(inner_gs[0, 0])
+    cbar_ax = fig.add_subplot(inner_gs[1, 0])
+
+    # ---- Left panel: encoding times ----------------------------------------
+    for method, ns, med, q25, q75, alpha, c, _r2 in methods_data:
+        color = METHOD_COLORS[method]
+        marker = METHOD_MARKERS[method]
+        ax_left.errorbar(
+            ns,
+            med,
+            yerr=[med - q25, q75 - med],
+            fmt=marker,
+            color=color,
+            label=METHOD_LABELS[method],
+            markersize=4,
+            capsize=1.5,
+            capthick=0.5,
+            elinewidth=0.5,
+            markeredgewidth=0.4,
+            zorder=3,
+        )
+        n_fit = np.linspace(max(ns.min(), 3), ns.max(), 200)
+        ax_left.plot(n_fit, c * n_fit**alpha, "--", color=color, lw=0.8, alpha=0.6, zorder=2)
+
+    if ged_data is not None:
+        gns, gmed, gq25, gq75 = ged_data
+        ax_left.errorbar(
+            gns,
+            gmed,
+            yerr=[gmed - gq25, gq75 - gmed],
+            fmt=METHOD_MARKERS["ged"],
+            color=METHOD_COLORS["ged"],
+            label=METHOD_LABELS["ged"],
+            markersize=4,
+            capsize=1.5,
+            capthick=0.5,
+            elinewidth=0.5,
+            markeredgewidth=0.4,
+            zorder=3,
+        )
+        n_fit = np.linspace(max(gns.min(), 3), gns.max(), 200)
+        ax_left.plot(
+            n_fit,
+            ged_c * n_fit**ged_alpha,
+            "--",
+            color=METHOD_COLORS["ged"],
+            lw=0.8,
+            alpha=0.6,
+            zorder=2,
+        )
+
+    ax_left.set_yscale("log")
+    ax_left.set_xlabel(r"Number of nodes $n$", fontsize=7)
+    ax_left.set_ylabel("Time (s)", fontsize=7)
+    ax_left.set_title("(a) Empirical time complexity", fontsize=8, loc="left")
+    ax_left.spines["top"].set_visible(False)
+    ax_left.spines["right"].set_visible(False)
+    ax_left.tick_params(labelsize=6)
+    ax_left.set_xlim(None, 52)
+    ax_left.set_xticks(np.arange(0, 51, 10))
+    ax_left.legend(
+        loc="lower right",
+        fontsize=PLOT_SETTINGS["annotation_fontsize"],
+        handletextpad=0.4,
+        borderpad=0.4,
+        framealpha=0.85,
+    )
+
+    # ---- Right panel: compression ratio heatmap ----------------------------
+    if not ratio_df.empty:
+        x_ratio = ratio_df["n_nodes"].values.astype(float)
+        y_ratio = ratio_df[ratio_col].values.astype(float)
+
+        y_lo = min(float(y_ratio.min()), 0.5)
+        y_hi = max(float(y_ratio.max()), 3.5)
+        x_lo, x_hi = float(x_ratio.min()), float(x_ratio.max())
+
+        n_xbins = min(50, int(x_hi - x_lo + 1))
+        n_ybins = 50
+        xbins = np.linspace(x_lo - 0.5, x_hi + 0.5, n_xbins + 1)
+        ybins = np.linspace(y_lo, y_hi, n_ybins + 1)
+
+        H, xedges, yedges = np.histogram2d(x_ratio, y_ratio, bins=[xbins, ybins])
+        H_log = np.log1p(H)
+
+        im = ax_right.pcolormesh(
+            xedges,
+            yedges,
+            H_log.T,
+            cmap="viridis",
+            vmin=0,
+            vmax=H_log.max(),
+            rasterized=True,
+        )
+        ax_right.axhline(y=1.0, color="white", lw=1.0, ls="--", alpha=0.8, zorder=2)
+
+        # OLS trend
+        mask = np.isfinite(x_ratio) & np.isfinite(y_ratio)
+        if mask.sum() > 2:
+            slope, intercept = np.polyfit(x_ratio[mask], y_ratio[mask], 1)
+            x_line = np.linspace(x_lo, x_hi, 200)
+            ax_right.plot(
+                x_line,
+                slope * x_line + intercept,
+                "-",
+                color="red",
+                lw=1.2,
+                alpha=0.9,
+                zorder=3,
+            )
+            crossover_n = (1.0 - intercept) / slope if abs(slope) > 1e-12 else None
+            text_parts = [rf"slope $= {slope:.4f}$"]
+            if crossover_n is not None and crossover_n < x_lo:
+                text_parts.append(r"ratio $> 1\ \forall\ N$")
+            elif crossover_n is not None and x_lo <= crossover_n <= x_hi:
+                text_parts.append(rf"$N^* = {crossover_n:.1f}$")
+            ax_right.text(
+                0.95,
+                0.95,
+                "\n".join(text_parts),
+                transform=ax_right.transAxes,
+                fontsize=6,
+                va="top",
+                ha="right",
+                bbox={"boxstyle": "round,pad=0.3", "fc": "wheat", "alpha": 0.85},
+                zorder=5,
+            )
+
+        cbar = fig.colorbar(im, cax=cbar_ax, orientation="horizontal")
+        cbar.set_label("Count (log scale)", fontsize=6)
+        cbar.ax.tick_params(labelsize=5)
+
+    ax_right.set_xlabel("Number of nodes $N$", fontsize=7)
+    ax_right.set_ylabel("Ratio (GED / IsalGraph)", fontsize=7)
+    ax_right.set_title("(b) Information content ratio", fontsize=8, loc="left")
+    ax_right.tick_params(labelsize=6)
+
+    # ---- Save --------------------------------------------------------------
+    base_path = os.path.join(output_dir, "fig_complexity_ratio_combined")
+    save_figure(fig, base_path)
+    plt.close(fig)
+
+    # ---- Caption -----------------------------------------------------------
+    caption = (
+        "Combined view of encoding time complexity and information content. "
+        "(a) Empirical time complexity of IsalGraph encoding methods on random graphs "
+        "(Barab\\'asi--Albert and Erd\\H{o}s--R\\'enyi), with GED per-pair "
+        "computation time from real benchmark datasets overlaid for reference. "
+        "Vertical axis: time in seconds (log scale). "
+        "Dashed lines: polynomial fits $T = c \\cdot n^{\\alpha}$. "
+    )
+    for method, _ns, _med, _q25, _q75, alpha, _c, r2 in methods_data:
+        lbl = METHOD_LABELS.get(method, method)
+        caption += f"{lbl}: $T \\sim n^{{{alpha:.1f}}}$. "
+    if ged_alpha is not None:
+        caption += f"GED (per pair): $T \\sim n^{{{ged_alpha:.1f}}}$. "
+    caption += (
+        "(b) Compression ratio (GED standard encoding / IsalGraph uniform encoding) "
+        "vs.\\ number of nodes, aggregated across all datasets and methods "
+        "(2D histogram, log-scaled counts). "
+        "White dashed line: break-even (ratio $= 1$). "
+        "Red line: OLS trend. "
+        "Together, these panels show that IsalGraph's polynomial encoding time "
+        "yields consistently shorter representations than the GED construction "
+        "model, while being orders of magnitude faster to compute."
+    )
+    caption_path = base_path + "_caption.txt"
+    with open(caption_path, "w", encoding="utf-8") as f:
+        f.write(caption + "\n")
+    logger.info("Caption saved: %s", caption_path)
+
+    logger.info("Combined figure saved: %s", base_path)
     return base_path
 
 
@@ -325,6 +693,11 @@ def main() -> None:
         help="Directory containing raw CSV timing data.",
     )
     parser.add_argument(
+        "--comp-dir",
+        default="",
+        help="Directory with computational evaluation outputs (for GED times).",
+    )
+    parser.add_argument(
         "--output-dir",
         default="/media/mpascual/Sandisk2TB/research/isalgraph/results/figures/complexity",
         help="Output directory for figures.",
@@ -332,7 +705,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    generate_empirical_complexity(args.data_dir, args.output_dir)
+    generate_empirical_complexity(args.data_dir, args.output_dir, args.comp_dir)
 
 
 if __name__ == "__main__":
