@@ -1,59 +1,51 @@
 # IsalGraph Website — Development Progress
 
-## Status: Complete
+## Status: Complete (All phases done)
 
-### Phase 1: CSS Foundation + Shared Components
-- [x] 12 CSS files: variables, reset, typography, layout, components, nav, footer, + 5 page-specific
-- [x] theme.js (dark/light toggle with localStorage)
-- [x] components.js (nav/footer injection, expandable toggles, mobile menu)
-- [x] SVG favicon (two connected graph nodes)
+### Phase 1-4: Initial Implementation (complete)
+See git history for details.
 
-### Phase 2: HTML Pages (5 pages)
-- [x] **index.html** — Hero with animated graph, key results strip (KaTeX), how-it-works teaser, publications teaser
-- [x] **how-it-works.html** — Instruction table, S2G demo with 3-panel viz, KaTeX theorems (round-trip, canonical, distance), expandable math sections
-- [x] **publications.html** — 2 papers (arXiv:2603.11039, arXiv:2512.10429), BibTeX copy, Schema.org JSON-LD
-- [x] **team.html** — Profile cards (López-Rubio, Pascual González), ICAI lab section, acknowledgements
-- [x] **playground.html** — S2G/G2S tabs, presets (Triangle, Path, Star, Cycle, House), graph editor, transport controls
+### Phase 5: Polish (complete)
+- [x] Image optimization (icai: 2.9MB→89KB, team photos compressed)
+- [x] OG social card + Twitter Card meta on all pages
+- [x] Skip-to-content, focus rings, ARIA, WCAG AA contrast
+- [x] `prefers-reduced-motion` support
 
-### Phase 3: Core JS Algorithm Ports (verified identical to Python)
-- [x] alphabet.js — Instruction set definitions, colored string rendering
-- [x] cdll.js — CircularDoublyLinkedList with clone()
-- [x] sparse-graph.js — SparseGraph with clone(), getEdgeList(), isIsomorphic()
-- [x] s2g.js — StringToGraph with trace mode (B6 fix)
-- [x] g2s.js — GraphToString with trace mode (B2, B3, B4, B5, B7, B8 fixes)
-- [x] Round-trip verified: JS produces identical output to Python ("VNVnC" → triangle, G2S → "VpvNC")
+### Fixes Applied (feedback round)
 
-### Phase 4: Visualization Modules
-- [x] graph-renderer.js — D3 force-directed graph with node/edge highlighting and pointer indicators
-- [x] cdll-renderer.js — CDLL circular ring visualization with π/σ pointer labels
-- [x] step-player.js — Transport controls (play/pause/step/reset/speed) with step log
-- [x] hero-animation.js — D3 triangle graph with typewriter string animation
-- [x] playground-controller.js — S2G/G2S mode orchestration, presets, validation
+#### Correctness
+- [x] **Fixed all preset strings**: `VNVnC` was NOT a triangle (it produced a path + self-loop). Correct encodings verified via round-trip against Python:
+  - Triangle K3: `VVPnC` (was `VNVnC`)
+  - Path P3: `Vpv` (was `VNV`)
+  - Cycle C4: `VVpvPpC` (was `VNVNVNVPPPnC`)
+  - Star S4: `VVVV` (correct)
+  - House: `VVpvpvPCnC` (was `VNVNVnCNC`)
+- [x] Hero animation updated to use correct triangle string `VVPnC`
+- [x] All 6 S2G presets and 5 G2S presets pass round-trip isomorphism test
 
-### Phase 5: Polish
-- [x] Image optimization: icai.png 2.9MB → 89KB, team photos compressed
-- [x] OG social card image (1200x630) for all pages
-- [x] Twitter Card meta tags on all pages
-- [x] Skip-to-content link on all pages
-- [x] Visible focus rings for keyboard navigation (`focus-visible`)
-- [x] Screen-reader utility class (`.sr-only`)
-- [x] WCAG AA color contrast fixes (text-tertiary adjusted)
-- [x] `aria-expanded`/`aria-controls` on expandable sections
-- [x] SVG `aria-hidden` on decorative elements
-- [x] Form label associations and `aria-label` attributes
-- [x] Mobile menu changed to `<nav>` with proper ARIA
-- [x] `prefers-reduced-motion` media query
-- [x] `loading="lazy"` on non-critical images
-- [x] CDN preconnect hints
+#### How It Works page
+- [x] Removed broken interactive S2G demo (JS was never wired to buttons)
+- [x] Replaced with accurate step-by-step walkthrough table for `VVPnC` → K3
+- [x] Added "Try it yourself" callout linking to Playground
+- [x] Removed unnecessary D3/core JS script tags (page no longer needs them)
+
+#### Playground
+- [x] **G2S step-by-step**: Added trace visualization with action log, transport controls (play/pause/step/reset)
+- [x] **S2G action log**: Added step-by-step action descriptions below graph output
+- [x] G2S shows partial string being built at each step
+- [x] Both modes show pointer positions (π/σ) on the graph
+
+#### ICAI Logo
+- [x] Fixed horizontal stretching: changed container width from 200px to 280px, added `height: auto`
+
+#### Publications
+- [x] Added IsalChem paper: Thurnhofer-Hemsi et al. (2025) "Representation of Molecules by Sequences of Instructions", J. Chem. Inf. Model.
+- [x] Added Schema.org structured data for the new paper
+- [x] BibTeX copy works for all 3 papers
 
 ### Validation
 - [x] All 5 HTML files parse without errors
 - [x] All 13 JS files pass Node.js syntax check
-- [x] All internal links resolve
-- [x] JS round-trip test matches Python output
-- [x] Responsive breakpoints at 768px and 1024px
-
-### Stats
-- 40 files total
-- 252KB code (excluding images)
-- 1,974 lines CSS / 2,175 lines JS / 1,089 lines HTML
+- [x] All internal links resolve correctly
+- [x] 11/11 preset tests pass (6 S2G + 5 G2S round-trips)
+- [x] JS output matches Python output exactly for all test cases
