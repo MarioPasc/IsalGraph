@@ -136,66 +136,80 @@
         </table>
       </section>
 
-      <!-- S2G Demo -->
-      <section class="section" id="s2g-demo">
-        <h2>String &rarr; Graph (Decoding)</h2>
+      <!-- S2G Walkthrough -->
+      <section class="section" id="s2g-walkthrough">
+        <h2>String &rarr; Graph (Decoding): Walkthrough</h2>
         <p style="margin-bottom: var(--space-lg);">
-          Enter an instruction string below to watch it being decoded into a graph step by step.
-          The initial state has a single vertex (node 0) with both pointers on it.
+          Let's decode the string
+          <span class="instruction-string">
+            <span class="char-V">V</span><span class="char-V">V</span><span class="char-P">P</span><span class="char-n">n</span><span class="char-C">C</span>
+          </span>
+          step by step to produce a triangle (K&sub3;). The initial state has a single vertex (node 0) with both pointers &pi; and &sigma; on it.
         </p>
 
-        <div class="demo-input">
-          <input
-            type="text"
-            class="demo-input__field"
-            id="s2g-input"
-            value="VNVnC"
-            placeholder="Enter IsalGraph string..."
-            aria-label="IsalGraph instruction string"
-            spellcheck="false"
-            autocomplete="off"
-          >
-          <button class="btn btn-primary" id="s2g-run" aria-label="Run decoding">Run &rarr;</button>
+        <div class="card--flat" style="padding: var(--space-xl); margin-bottom: var(--space-lg);">
+          <table class="instruction-table" role="table" style="margin: 0;">
+            <thead>
+              <tr>
+                <th scope="col">Step</th>
+                <th scope="col">Instruction</th>
+                <th scope="col">Action</th>
+                <th scope="col">State After</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0</td>
+                <td>&mdash;</td>
+                <td>Initial state</td>
+                <td>Nodes: {0}. Edges: none. CDLL: [0]. &pi;&rarr;0, &sigma;&rarr;0</td>
+              </tr>
+              <tr>
+                <td>1</td>
+                <td><span class="instr-char char-V">V</span></td>
+                <td>Create node 1, add edge {0,1}, insert 1 into CDLL after &pi;</td>
+                <td>Nodes: {0,1}. Edges: {0,1}. CDLL: [0,1]. &pi;&rarr;0, &sigma;&rarr;0</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td><span class="instr-char char-V">V</span></td>
+                <td>Create node 2, add edge {0,2}, insert 2 into CDLL after &pi;</td>
+                <td>Nodes: {0,1,2}. Edges: {0,1}, {0,2}. CDLL: [0,2,1]. &pi;&rarr;0, &sigma;&rarr;0</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td><span class="instr-char char-P">P</span></td>
+                <td>Move &pi; backward (prev) in CDLL</td>
+                <td>&pi; moves from CDLL node 0 to prev = node 1 (graph vertex 1). &sigma; stays at 0</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td><span class="instr-char char-n">n</span></td>
+                <td>Move &sigma; forward (next) in CDLL</td>
+                <td>&sigma; moves from CDLL node 0 to next = node 2 (graph vertex 2). &pi;&rarr;1, &sigma;&rarr;2</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td><span class="instr-char char-C">C</span></td>
+                <td>Add edge from &pi;'s vertex (1) to &sigma;'s vertex (2)</td>
+                <td>Edges: {0,1}, {0,2}, {1,2}. Triangle complete!</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- Three-panel visualization -->
-        <div class="viz-container">
-          <div class="viz-panel">
-            <div class="viz-panel__label">CDLL State</div>
-            <div class="viz-panel__canvas" id="s2g-cdll-panel">
-              <svg id="s2g-cdll-svg" width="100%" height="100%" aria-hidden="true"></svg>
-            </div>
+        <div class="theorem" style="border-left-color: var(--accent-tertiary);">
+          <div class="theorem__label" style="color: var(--accent-tertiary);">Try it yourself</div>
+          <div class="theorem__content">
+            <p>
+              The best way to understand IsalGraph is to experiment with it interactively.
+              Use the <strong>Playground</strong> to enter any instruction string and watch the
+              graph being built step by step, with full CDLL state and action log at each step.
+            </p>
+            <p style="margin-top: var(--space-md);">
+              <a href="playground.html" class="btn btn-primary">Open Playground &rarr;</a>
+            </p>
           </div>
-          <div class="viz-panel">
-            <div class="viz-panel__label">Graph</div>
-            <div class="viz-panel__canvas" id="s2g-graph-panel">
-              <svg id="s2g-graph-svg" width="100%" height="100%" aria-hidden="true"></svg>
-            </div>
-          </div>
-          <div class="viz-panel">
-            <div class="viz-panel__label">Instruction String</div>
-            <div class="string-display" id="s2g-string-display"></div>
-            <div class="step-log" id="s2g-step-log" aria-live="polite">
-              <div class="step-log__entry" style="color: var(--text-tertiary);">Press "Run" to start...</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Transport controls -->
-        <div class="transport" id="s2g-transport" role="toolbar" aria-label="Animation controls">
-          <button class="transport__btn" id="s2g-reset" aria-label="Reset" title="Reset">&#x21BA;</button>
-          <button class="transport__btn" id="s2g-prev" aria-label="Previous step" title="Previous step">&#x25C0;</button>
-          <button class="transport__btn" id="s2g-play" aria-label="Play/Pause" title="Play/Pause">&#x25B6;</button>
-          <button class="transport__btn" id="s2g-next" aria-label="Next step" title="Next step">&#x25B6;&#x258F;</button>
-          <span class="transport__step-info" id="s2g-step-info">Step 0/0</span>
-          <label style="font-size: var(--text-xs); color: var(--text-tertiary); margin-left: auto;">
-            Speed:
-            <select id="s2g-speed" aria-label="Animation speed" style="background: var(--bg-code); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); padding: 2px 4px; font-size: var(--text-xs);">
-              <option value="2000">0.5x</option>
-              <option value="1000" selected>1x</option>
-              <option value="500">2x</option>
-            </select>
-          </label>
         </div>
       </section>
 
@@ -308,20 +322,6 @@
   <!-- KaTeX -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-
-  <!-- D3 -->
-  <script defer src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-
-  <!-- Core algorithm -->
-  <script src="js/core/alphabet.js"></script>
-  <script src="js/core/cdll.js"></script>
-  <script src="js/core/sparse-graph.js"></script>
-  <script src="js/core/s2g.js"></script>
-
-  <!-- Visualization -->
-  <script src="js/viz/graph-renderer.js"></script>
-  <script src="js/viz/cdll-renderer.js"></script>
-  <script src="js/viz/step-player.js"></script>
 
   <script>
     // Render KaTeX formulas

@@ -103,11 +103,12 @@
 
 .lab-section__logo {
   flex: 0 0 auto;
-  width: 200px;
+  width: 280px;
 }
 
 .lab-section__logo img {
   width: 100%;
+  height: auto;
   border-radius: var(--radius-md);
 }
 

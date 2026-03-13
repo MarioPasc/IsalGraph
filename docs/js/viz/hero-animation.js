@@ -22,8 +22,8 @@
     // Respect reduced motion
     var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // Example: "VNVnC" produces a triangle (nodes 0-1-2 with edges 0-1, 1-2, 2-0)
-    var instructionString = 'VNVnC';
+    // "VVPnC" produces a triangle K3 (nodes 0-1-2 with edges 0-1, 0-2, 1-2)
+    var instructionString = 'VVPnC';
     var nodes = [
       { id: 0, label: '0' },
       { id: 1, label: '1' },

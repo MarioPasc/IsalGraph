@@ -66,7 +66,7 @@
               type="text"
               class="playground-input__string"
               id="pg-s2g-input"
-              value="VNVnC"
+              value="VVPnC"
               placeholder="e.g. VNVCnVC"
               spellcheck="false"
               autocomplete="off"
@@ -80,11 +80,11 @@
               <span class="playground-presets__label">Presets</span>
               <div class="playground-presets__grid">
                 <button class="preset-btn" onclick="IsalGraph.setS2GPreset('V')">Edge (V)</button>
-                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVnC')">Triangle</button>
-                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNV')">Path P&#x2083;</button>
-                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVNVNVPPPnC')">Cycle C&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VVPnC')">Triangle K&#x2083;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('Vpv')">Path P&#x2083;</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VVpvPpC')">Cycle C&#x2084;</button>
                 <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VVVV')">Star S&#x2084;</button>
-                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VNVNVnCNC')">House</button>
+                <button class="preset-btn" onclick="IsalGraph.setS2GPreset('VVpvpvPCnC')">House</button>
               </div>
             </div>
 
@@ -101,6 +101,10 @@
               <svg id="pg-s2g-svg" width="100%" height="100%" aria-hidden="true"></svg>
             </div>
             <div id="pg-s2g-info-output" style="margin-top: var(--space-md); font-size: var(--text-sm); color: var(--text-secondary);"></div>
+            <div class="viz-panel__label" style="margin-top: var(--space-lg);">Step-by-Step Actions</div>
+            <div class="step-log" id="pg-s2g-action-log" aria-live="polite" style="max-height: 250px;">
+              <div class="step-log__entry" style="color: var(--text-tertiary);">Click "Decode" to start...</div>
+            </div>
           </div>
         </div>
 
@@ -160,6 +164,21 @@
               </span>
             </div>
             <div id="pg-g2s-info-output" style="margin-top: var(--space-md); font-size: var(--text-sm); color: var(--text-secondary);"></div>
+            <div class="viz-panel__label" style="margin-top: var(--space-lg);">Step-by-Step Actions</div>
+            <div class="step-log" id="pg-g2s-action-log" aria-live="polite" style="max-height: 250px;">
+              <div class="step-log__entry" style="color: var(--text-tertiary);">Select a preset and click "Encode" to start...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- G2S Trace controls -->
+        <div class="playground-trace">
+          <div class="transport" role="toolbar" aria-label="G2S step through controls">
+            <button class="transport__btn" id="pg-g2s-reset" aria-label="Reset">&#x21BA;</button>
+            <button class="transport__btn" id="pg-g2s-prev" aria-label="Previous step">&#x25C0;</button>
+            <button class="transport__btn" id="pg-g2s-play" aria-label="Play/Pause">&#x25B6;</button>
+            <button class="transport__btn" id="pg-g2s-next" aria-label="Next step">&#x25B6;&#x258F;</button>
+            <span class="transport__step-info" id="pg-g2s-step-info">Step 0/0</span>
           </div>
         </div>
       </div>
