@@ -13,6 +13,13 @@
   <meta property="og:description" content="Encoding graph topology as instruction strings over a 9-character alphabet. Complete graph invariant.">
   <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IsalGraph — Graph Structure as Instruction Strings">
+  <meta name="twitter:description" content="Encoding graph topology as instruction strings over a 9-character alphabet. Complete graph invariant.">
+  <meta name="twitter:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
 
   <!-- Preconnects -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -36,9 +43,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 </head>
 <body data-page="home">
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
   <div id="site-nav"></div>
 
-  <main>
+  <main id="main-content">
     <!-- ===================== HERO ===================== -->
     <section class="hero">
       <div class="hero__inner">
@@ -57,8 +65,8 @@
             <a href="playground.html" class="btn btn-outline">Try the Playground &rarr;</a>
           </div>
         </div>
-        <div class="hero__viz" id="hero-viz" aria-label="Animated visualization of a graph being encoded as an instruction string">
-          <svg id="hero-svg" viewBox="0 0 420 420"></svg>
+        <div class="hero__viz" id="hero-viz" role="img" aria-label="Animated visualization of a graph being encoded as an instruction string">
+          <svg id="hero-svg" viewBox="0 0 420 420" aria-hidden="true"></svg>
         </div>
       </div>
     </section>

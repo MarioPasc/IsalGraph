@@ -11,6 +11,13 @@
   <meta property="og:description" content="Interactive visualization of the IsalGraph encoding and decoding algorithms.">
   <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/how-it-works.html">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How It Works — IsalGraph">
+  <meta name="twitter:description" content="Interactive visualization of the IsalGraph encoding and decoding algorithms.">
+  <meta name="twitter:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
@@ -30,9 +37,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 </head>
 <body data-page="how-it-works">
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
   <div id="site-nav"></div>
 
-  <main>
+  <main id="main-content">
     <div class="container">
       <header class="hiw-header">
         <h1>How It Works</h1>
@@ -155,13 +163,13 @@
           <div class="viz-panel">
             <div class="viz-panel__label">CDLL State</div>
             <div class="viz-panel__canvas" id="s2g-cdll-panel">
-              <svg id="s2g-cdll-svg" width="100%" height="100%"></svg>
+              <svg id="s2g-cdll-svg" width="100%" height="100%" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="viz-panel">
             <div class="viz-panel__label">Graph</div>
             <div class="viz-panel__canvas" id="s2g-graph-panel">
-              <svg id="s2g-graph-svg" width="100%" height="100%"></svg>
+              <svg id="s2g-graph-svg" width="100%" height="100%" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="viz-panel">
@@ -182,7 +190,7 @@
           <span class="transport__step-info" id="s2g-step-info">Step 0/0</span>
           <label style="font-size: var(--text-xs); color: var(--text-tertiary); margin-left: auto;">
             Speed:
-            <select id="s2g-speed" style="background: var(--bg-code); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); padding: 2px 4px; font-size: var(--text-xs);">
+            <select id="s2g-speed" aria-label="Animation speed" style="background: var(--bg-code); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); padding: 2px 4px; font-size: var(--text-xs);">
               <option value="2000">0.5x</option>
               <option value="1000" selected>1x</option>
               <option value="500">2x</option>
@@ -196,10 +204,10 @@
         <h2>Mathematical Foundations</h2>
 
         <div class="expandable open" id="thm-roundtrip">
-          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+          <button class="expandable__toggle" aria-expanded="true" aria-controls="thm-roundtrip-content" onclick="IsalGraph.toggleExpandable(this)">
             Round-Trip Correctness
           </button>
-          <div class="expandable__content">
+          <div class="expandable__content" id="thm-roundtrip-content">
             <div class="theorem">
               <div class="theorem__label">Theorem (Round-Trip)</div>
               <div class="theorem__content">
@@ -215,10 +223,10 @@
         </div>
 
         <div class="expandable" id="thm-canonical">
-          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+          <button class="expandable__toggle" aria-expanded="false" aria-controls="thm-canonical-content" onclick="IsalGraph.toggleExpandable(this)">
             Canonical String Completeness
           </button>
-          <div class="expandable__content">
+          <div class="expandable__content" id="thm-canonical-content">
             <div class="theorem">
               <div class="theorem__label">Theorem (Complete Invariant)</div>
               <div class="theorem__content">
@@ -238,10 +246,10 @@
         </div>
 
         <div class="expandable" id="thm-distance">
-          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+          <button class="expandable__toggle" aria-expanded="false" aria-controls="thm-distance-content" onclick="IsalGraph.toggleExpandable(this)">
             Graph Distance via String Edit Distance
           </button>
-          <div class="expandable__content">
+          <div class="expandable__content" id="thm-distance-content">
             <div class="theorem">
               <div class="theorem__label">Proposition (String Distance)</div>
               <div class="theorem__content">
@@ -257,10 +265,10 @@
         </div>
 
         <div class="expandable" id="key-invariants">
-          <button class="expandable__toggle" onclick="this.parentElement.classList.toggle('open')">
+          <button class="expandable__toggle" aria-expanded="false" aria-controls="key-invariants-content" onclick="IsalGraph.toggleExpandable(this)">
             Key Implementation Invariants
           </button>
-          <div class="expandable__content">
+          <div class="expandable__content" id="key-invariants-content">
             <div class="theorem" style="border-left-color: var(--accent-warm);">
               <div class="theorem__label" style="color: var(--accent-warm);">Critical Invariants</div>
               <div class="theorem__content">

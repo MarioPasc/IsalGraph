@@ -63,13 +63,13 @@
         '</div>' +
       '</div>' +
     '</nav>' +
-    '<div class="mobile-menu" id="mobile-menu">' +
+    '<nav class="mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">' +
       '<a href="index.html" class="mobile-menu__link' + mobileActiveClass('home') + '">Home</a>' +
       '<a href="how-it-works.html" class="mobile-menu__link' + mobileActiveClass('how-it-works') + '">How It Works</a>' +
       '<a href="publications.html" class="mobile-menu__link' + mobileActiveClass('publications') + '">Publications</a>' +
       '<a href="playground.html" class="mobile-menu__link' + mobileActiveClass('playground') + '">Playground</a>' +
       '<a href="team.html" class="mobile-menu__link' + mobileActiveClass('team') + '">Team</a>' +
-    '</div>';
+    '</nav>';
 
   // ---- Footer ----
   var FOOTER_HTML =
@@ -116,8 +116,15 @@
     if (footerEl) footerEl.innerHTML = FOOTER_HTML;
   });
 
-  // ---- Mobile menu toggle ----
+  // ---- Expandable section toggle (accessible) ----
   window.IsalGraph = window.IsalGraph || {};
+  window.IsalGraph.toggleExpandable = function (btn) {
+    var parent = btn.parentElement;
+    var isOpen = parent.classList.toggle('open');
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  };
+
+  // ---- Mobile menu toggle ----
   window.IsalGraph.toggleMobile = function () {
     var menu = document.getElementById('mobile-menu');
     var btn = document.querySelector('.hamburger');

@@ -13,7 +13,7 @@
   /* Text */
   --text-primary: #e8ecf4;
   --text-secondary: #8b97b0;
-  --text-tertiary: #5a6680;
+  --text-tertiary: #7a8599;
   --text-inverse: #0a0e17;
 
   /* Accent — IsalGraph signature colors */
@@ -96,7 +96,7 @@
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
+  --text-tertiary: #6b7a8d;
   --text-inverse: #f8fafc;
 
   --border-subtle: rgba(15, 23, 42, 0.08);

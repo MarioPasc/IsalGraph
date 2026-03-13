@@ -60,7 +60,6 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.15em;
-  outline: none;
   transition: border-color var(--transition-fast);
   margin-bottom: var(--space-md);
 }
@@ -164,7 +163,6 @@
   height: 4px;
   background: var(--border-default);
   border-radius: 2px;
-  outline: none;
 }
 
 .trace-timeline__slider::-webkit-slider-thumb {
