@@ -853,6 +853,7 @@ def _plot_distortion_trend(
 
     method_colors = {
         "exhaustive": PAUL_TOL_BRIGHT["blue"],
+        "pruned_exhaustive": PAUL_TOL_BRIGHT["yellow"],
         "greedy": PAUL_TOL_BRIGHT["red"],
         "greedy_single": PAUL_TOL_BRIGHT["green"],
     }

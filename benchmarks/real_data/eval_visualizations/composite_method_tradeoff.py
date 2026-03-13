@@ -727,7 +727,7 @@ def _compute_binned_speedups_v2(
             if enc_bin.empty:
                 continue
 
-            exh_enc_med = enc_bin["exhaustive_time_median_s"].median()
+            exh_enc_med = enc_bin["pruned_exhaustive_time_median_s"].median()
             gre_enc_med = enc_bin["greedy_time_median_s"].median()
 
             ged_bin = ged_df[(ged_df["max_n"] >= lo) & (ged_df["max_n"] <= hi)]
@@ -738,7 +738,7 @@ def _compute_binned_speedups_v2(
             lev_bin = lev_df[(lev_df["max_n"] >= lo) & (lev_df["max_n"] <= hi)]
             lev_med = lev_bin["c_ext_time_median_s"].median() if not lev_bin.empty else 0.0
 
-            # Canonical and Greedy-min pipelines
+            # Canonical (Pruned) and Greedy-min pipelines
             t_exh = 2 * exh_enc_med + lev_med
             t_gre = 2 * gre_enc_med + lev_med
 
@@ -867,7 +867,7 @@ def _draw_panel_a_v2(
             zorder=4,
         )
 
-    # --- Canonical line (lowest speedup) ---
+    # --- Canonical (Pruned) line (lowest speedup) ---
     if valid_exh.any():
         ax.plot(
             centers[valid_exh],
@@ -876,7 +876,7 @@ def _draw_panel_a_v2(
             marker="o",
             linewidth=1.5,
             markersize=5,
-            label="Canonical",
+            label="Canonical (Pruned)",
             zorder=4,
         )
 
@@ -971,7 +971,7 @@ def _compute_per_dataset_rho(
 
     rho_data: dict[str, dict[str, float]] = {}
     method_keys = {
-        "exhaustive": "exhaustive",
+        "pruned_exhaustive": "pruned_exhaustive",
         "greedy": "greedy",
         "greedy_single": "greedy_single",
     }
@@ -1037,11 +1037,15 @@ def _draw_panel_b_v2(
         if ds not in rho_data:
             continue
         entry = rho_data[ds]
-        if "exhaustive" not in entry or "greedy" not in entry or "greedy_single" not in entry:
+        if (
+            "pruned_exhaustive" not in entry
+            or "greedy" not in entry
+            or "greedy_single" not in entry
+        ):
             continue
 
         datasets.append(ds)
-        rho_exh.append(entry["exhaustive"])
+        rho_exh.append(entry["pruned_exhaustive"])
         rho_gre.append(entry["greedy"])
         rho_sng.append(entry["greedy_single"])
 
@@ -1099,7 +1103,7 @@ def _draw_panel_b_v2(
     line_pts = np.array([lo, hi])
     ax3d.plot(line_pts, line_pts, line_pts, "--", color="0.6", lw=0.8, zorder=2)
 
-    ax3d.set_xlabel(r"$\rho$ Canonical", fontsize=7, labelpad=2)
+    ax3d.set_xlabel(r"$\rho$ Canon. (Pr.)", fontsize=7, labelpad=2)
     ax3d.set_ylabel(r"$\rho$ Greedy-Min", fontsize=7, labelpad=2)
     ax3d.set_zlabel(r"$\rho$ Greedy-rnd($v_0$)", fontsize=7, labelpad=2)
     ax3d.tick_params(labelsize=5, pad=0)
@@ -1159,11 +1163,15 @@ def _draw_panel_b_v2_direct(
         if ds not in rho_data:
             continue
         entry = rho_data[ds]
-        if "exhaustive" not in entry or "greedy" not in entry or "greedy_single" not in entry:
+        if (
+            "pruned_exhaustive" not in entry
+            or "greedy" not in entry
+            or "greedy_single" not in entry
+        ):
             continue
 
         datasets.append(ds)
-        rho_exh.append(entry["exhaustive"])
+        rho_exh.append(entry["pruned_exhaustive"])
         rho_gre.append(entry["greedy"])
         rho_sng.append(entry["greedy_single"])
 
@@ -1294,7 +1302,7 @@ def _draw_panel_b_v2_direct(
     ax3d.set_ylim(rho_hi, rho_lo)  # INVERTED: high-to-low
     ax3d.set_zlim(rho_lo, rho_hi)
 
-    ax3d.set_xlabel(r"$\rho$ Canon.", fontsize=7, labelpad=4)
+    ax3d.set_xlabel(r"$\rho$ Canon. (Pr.)", fontsize=7, labelpad=4)
     ax3d.set_ylabel(r"$\rho$ Gr-Min", fontsize=7, labelpad=4)
     ax3d.set_zlabel(r"$\rho$ Gr-rnd($v_0$)", fontsize=7, labelpad=4)
     ax3d.tick_params(labelsize=5, pad=1)
@@ -1357,14 +1365,14 @@ def _generate_caption_v2(
             return ""
         return f"${min(vals):.3f}$--${max(vals):.3f}$"
 
-    rho_exh = _rho_range("exhaustive")
+    rho_exh = _rho_range("pruned_exhaustive")
     rho_gre = _rho_range("greedy")
     rho_sng = _rho_range("greedy_single")
 
     # --- Compose caption ---
     caption = (
         f"Computational--quality trade-off across {n_datasets} benchmark datasets "
-        f"for three encoding methods: Canonical, Greedy-Min, and Greedy-rnd($v_0$). "
+        f"for three encoding methods: Canonical (Pruned), Greedy-Min, and Greedy-rnd($v_0$). "
         f"(a) Geometric-mean speedup of the IsalGraph pipeline (encoding + Levenshtein) "
         f"over exact GED computation, aggregated across datasets and binned by graph size "
         f"($n = {n_lo}$--${n_hi}$ nodes). "
@@ -1374,10 +1382,10 @@ def _generate_caption_v2(
     if gre_range:
         caption += f"Greedy-Min achieves {gre_range} speedup; "
     if exh_range:
-        caption += f"Canonical achieves {exh_range} speedup. "
+        caption += f"Canonical (Pruned) achieves {exh_range} speedup. "
     caption += (
         "Per-point annotations indicate the speedup ratio of the fastest method "
-        "(Greedy-rnd) over Canonical. "
+        "(Greedy-rnd) over Canonical (Pruned). "
         "Shaded regions highlight the gap between consecutive methods. "
         "Dashed line: breakeven ($1\\times$). "
     )
@@ -1390,13 +1398,13 @@ def _generate_caption_v2(
     )
     if rho_exh and rho_gre and rho_sng:
         caption += (
-            f"Canonical $\\rho$ ranges from {rho_exh}; "
+            f"Canonical (Pruned) $\\rho$ ranges from {rho_exh}; "
             f"Greedy-Min from {rho_gre}; "
             f"Greedy-rnd($v_0$) from {rho_sng}. "
         )
     caption += (
         "Dashed line: 3D identity ($\\rho$ equal across all methods). "
-        "Canonical consistently achieves the highest $\\rho$ on 4 of 5 datasets, "
+        "Canonical (Pruned) consistently achieves the highest $\\rho$ on 4 of 5 datasets, "
         "while Greedy-rnd($v_0$) offers the largest speedup at the cost of lower correlation."
     )
     return caption

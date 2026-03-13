@@ -76,6 +76,8 @@ def _get_distance_vectors(
         lev_matrix = results.levenshtein_matrices.get((dataset, "greedy"))
     elif method == "exhaustive":
         lev_matrix = results.levenshtein_matrices.get((dataset, "exhaustive"))
+    elif method == "pruned_exhaustive":
+        lev_matrix = results.levenshtein_matrices.get((dataset, "pruned_exhaustive"))
     elif method == "greedy_single":
         lev_matrix = results.levenshtein_matrices.get((dataset, "greedy_single"))
     else:
@@ -423,6 +425,8 @@ def _collect_aggregated_pairs(
             lev_mat = results.levenshtein_matrices.get((dataset, "greedy"))
         elif method == "greedy_single":
             lev_mat = results.levenshtein_matrices.get((dataset, "greedy_single"))
+        elif method == "pruned_exhaustive":
+            lev_mat = results.levenshtein_matrices.get((dataset, "pruned_exhaustive"))
         else:
             lev_mat = results.levenshtein_matrices.get((dataset, "exhaustive"))
         if lev_mat is None:
@@ -498,7 +502,7 @@ def generate_aggregated_density_heatmap(
 
     # --- Panel definitions: (method_key, panel_label) ---
     panel_defs = [
-        ("exhaustive", "(a) Canonical"),
+        ("pruned_exhaustive", "(a) Canonical (Pruned)"),
         ("greedy_min", r"(b) Greedy-min"),
         ("greedy_single", r"(c) Greedy-rnd($v_0$)"),
     ]
@@ -657,7 +661,7 @@ def generate_aggregated_density_heatmap(
         if pdata is not None:
             stats_by_label[pdata[0]] = pdata[5]
 
-    s_canon = stats_by_label.get("exhaustive", {})
+    s_canon = stats_by_label.get("pruned_exhaustive", {})
     s_greedy = stats_by_label.get("greedy_min", {})
     s_single = stats_by_label.get("greedy_single", {})
 
@@ -671,7 +675,7 @@ def generate_aggregated_density_heatmap(
         "pairs. "
         "Dashed grey line: identity ($\\text{Lev} = \\text{GED}$). "
         "Solid red line: ordinary least-squares (OLS) regression. "
-        "(a) Canonical encoding "
+        "(a) Canonical (Pruned) encoding "
         f"($n = {s_canon.get('n', 0):,}$ pairs, "
         f"$\\rho = {s_canon.get('rho', 0):.3f}$, "
         f"$\\beta = {s_canon.get('beta', 0):.2f}$). "

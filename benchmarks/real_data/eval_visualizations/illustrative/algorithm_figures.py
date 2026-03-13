@@ -88,6 +88,44 @@ def _annotate_step(prev_graph: object, curr_graph: object, instruction: str) -> 
     return ", ".join(parts)
 
 
+def _pick_n(trace_list: list, n: int) -> list[tuple[int, object]]:
+    """Select *n* evenly-spaced snapshots (always includes first and last)."""
+    total = len(trace_list)
+    if total <= n:
+        return [(i, t) for i, t in enumerate(trace_list)]
+    indices = [round(i * (total - 1) / (n - 1)) for i in range(n)]
+    return [(idx, trace_list[idx]) for idx in indices]
+
+
+def _annotate_colored_prefix(
+    ax: plt.Axes,
+    prefix: str,
+    *,
+    fontsize: float = 5.5,
+    y_offset: float = -0.10,
+) -> None:
+    """Show colored instruction prefix below an axes."""
+    if not prefix:
+        return
+    n = len(prefix)
+    char_spacing = min(0.055, 0.8 / max(n, 1))
+    x_start = 0.5 - (n - 1) * char_spacing / 2
+    for i, ch in enumerate(prefix):
+        color = INSTRUCTION_COLORS.get(ch, "#000000")
+        ax.text(
+            x_start + i * char_spacing,
+            y_offset,
+            ch,
+            transform=ax.transAxes,
+            fontsize=fontsize,
+            ha="center",
+            fontfamily="monospace",
+            fontweight="bold",
+            color=color,
+            clip_on=False,
+        )
+
+
 # =============================================================================
 # Instruction heatmap rendering
 # =============================================================================
@@ -151,6 +189,68 @@ def _render_instruction_heatmap(
 
     ax.set_xlim(-cell_width, cell_width)
     ax.set_ylim(-cell_height * 0.2, n * cell_height + cell_height * 0.1)
+    ax.set_aspect("auto")
+    ax.axis("off")
+
+
+def _render_instruction_heatmap_horizontal(
+    ax: plt.Axes,
+    full_string: str,
+    current_idx: int,
+    *,
+    cell_width: float = 0.6,
+    cell_height: float = 0.5,
+) -> None:
+    """Render instruction string as a horizontal row of colored cells.
+
+    Same visual style as the vertical heatmap but arranged left-to-right.
+    Completed instructions have full color; remaining are dimmed (whitish).
+
+    Args:
+        ax: Matplotlib axes.
+        full_string: Complete instruction string.
+        current_idx: Index of last completed instruction (-1 for none).
+        cell_width: Width of each cell.
+        cell_height: Height of each cell.
+    """
+    import matplotlib.patches as mpatches
+
+    n = len(full_string)
+    if n == 0:
+        ax.axis("off")
+        return
+
+    for i, ch in enumerate(full_string):
+        color = INSTRUCTION_COLORS.get(ch, "#000000")
+        completed = i <= current_idx
+        alpha = 1.0 if completed else 0.15
+        x = i * cell_width
+
+        rect = mpatches.FancyBboxPatch(
+            (x, -cell_height / 2),
+            cell_width * 0.85,
+            cell_height,
+            boxstyle="round,pad=0.02",
+            facecolor=color,
+            alpha=alpha,
+            edgecolor="0.4" if completed else "0.8",
+            linewidth=0.4,
+        )
+        ax.add_patch(rect)
+        ax.text(
+            x + cell_width * 0.425,
+            0,
+            ch,
+            ha="center",
+            va="center",
+            fontsize=6,
+            fontfamily="monospace",
+            fontweight="bold" if i == current_idx else "normal",
+            color="white" if completed else "0.6",
+        )
+
+    ax.set_xlim(-cell_width * 0.2, n * cell_width + cell_width * 0.1)
+    ax.set_ylim(-cell_height, cell_height)
     ax.set_aspect("auto")
     ax.axis("off")
 
@@ -815,13 +915,286 @@ def _generate_overview_grid(
     return output_path
 
 
+# =============================================================================
+# Figure 3b: Algorithm Overview — Horizontal layout (5 snapshots)
+# =============================================================================
+
+
+def _add_group_boxes_horizontal(
+    fig: plt.Figure,
+    s2g_axes: list[list[plt.Axes]],
+    g2s_axes: list[list[plt.Axes]],
+) -> None:
+    """Add grouped boxes and labels for the horizontal overview layout.
+
+    Args:
+        fig: The figure.
+        s2g_axes: 2-element list of [cdll_axes_row, graph_axes_row].
+        g2s_axes: 2-element list of [cdll_axes_row, graph_axes_row].
+    """
+    import matplotlib.patches as mpatches
+    from matplotlib.transforms import Bbox
+
+    renderer = fig.canvas.get_renderer()
+    fig.draw(renderer)
+
+    pad = 0.008
+
+    def _group_bbox(axes_rows: list[list[plt.Axes]]) -> Bbox:
+        bboxes = []
+        for row in axes_rows:
+            for ax in row:
+                bb = ax.get_tightbbox(renderer)
+                if bb is not None:
+                    bboxes.append(bb.transformed(fig.transFigure.inverted()))
+        return Bbox.union(bboxes)
+
+    s2g_bb = _group_bbox(s2g_axes)
+    fig.patches.append(
+        mpatches.FancyBboxPatch(
+            (s2g_bb.x0 - pad, s2g_bb.y0 - pad),
+            s2g_bb.width + 2 * pad,
+            s2g_bb.height + 2 * pad,
+            boxstyle="round,pad=0.005",
+            facecolor="#EE6677",
+            alpha=0.06,
+            edgecolor="#EE6677",
+            linewidth=1.0,
+            transform=fig.transFigure,
+            zorder=0,
+        )
+    )
+
+    g2s_bb = _group_bbox(g2s_axes)
+    fig.patches.append(
+        mpatches.FancyBboxPatch(
+            (g2s_bb.x0 - pad, g2s_bb.y0 - pad),
+            g2s_bb.width + 2 * pad,
+            g2s_bb.height + 2 * pad,
+            boxstyle="round,pad=0.005",
+            facecolor="#4477AA",
+            alpha=0.06,
+            edgecolor="#4477AA",
+            linewidth=1.0,
+            transform=fig.transFigure,
+            zorder=0,
+        )
+    )
+
+    # Group titles (rotated, to the left of boxes)
+    fig.text(
+        s2g_bb.x0 - pad - 0.025,
+        s2g_bb.y0 + s2g_bb.height / 2,
+        "String-to-Graph (S2G)",
+        ha="center",
+        va="center",
+        fontsize=8,
+        fontweight="bold",
+        color="#CC3355",
+        transform=fig.transFigure,
+        rotation=90,
+    )
+    fig.text(
+        g2s_bb.x0 - pad - 0.025,
+        g2s_bb.y0 + g2s_bb.height / 2,
+        "Graph-to-String (G2S)",
+        ha="center",
+        va="center",
+        fontsize=8,
+        fontweight="bold",
+        color="#335588",
+        transform=fig.transFigure,
+        rotation=90,
+    )
+
+    # Horizontal divider between the two groups
+    mid_y = (s2g_bb.y0 + g2s_bb.y1) / 2
+    fig.add_artist(
+        plt.Line2D(
+            [max(s2g_bb.x0, g2s_bb.x0) - pad, min(s2g_bb.x1, g2s_bb.x1) + pad],
+            [mid_y, mid_y],
+            transform=fig.transFigure,
+            color="0.5",
+            linewidth=0.8,
+            linestyle="--",
+            zorder=1,
+        )
+    )
+
+
+def _generate_overview_grid_horizontal(
+    s2g_trace: list,
+    g2s_trace: list,
+    w: str,
+    w_g2s: str,
+    G_target: nx.Graph,
+    snaps_s2g: list[tuple[int, object]],
+    snaps_g2s: list[tuple[int, object]],
+    output_path: str,
+) -> str:
+    """Horizontal overview: steps progress left-to-right, S2G above G2S.
+
+    Layout per group (3 rows x n_cols):
+        Row 0: CDLL rings
+        Row 1: Instruction heatmap (horizontal colored blocks)
+        Row 2: Graphs
+
+    Args:
+        s2g_trace: Full S2G trace (for layout computation).
+        g2s_trace: Full G2S trace (unused directly, kept for symmetry).
+        w: S2G instruction string.
+        w_g2s: G2S instruction string.
+        G_target: Target NetworkX graph.
+        snaps_s2g: Selected S2G snapshots as (step_idx, trace_entry).
+        snaps_g2s: Selected G2S snapshots as (step_idx, trace_entry).
+        output_path: Full output path (without extension).
+
+    Returns:
+        Path to saved figure (without extension).
+    """
+    from matplotlib.gridspec import GridSpec
+
+    n_cols = max(len(snaps_s2g), len(snaps_g2s))
+    _GRAPH_NODE_SIZE = 150
+
+    fig = plt.figure(figsize=(2.0 * n_cols + 0.5, 7.5))
+
+    outer_gs = GridSpec(
+        2,
+        1,
+        figure=fig,
+        hspace=0.35,
+        top=0.92,
+        bottom=0.06,
+        left=0.08,
+        right=0.97,
+    )
+
+    # 3 rows per group: CDLL, Instruction strip, Graph
+    gs_s2g = outer_gs[0].subgridspec(
+        3, n_cols, height_ratios=[1.0, 0.30, 1.6], hspace=0.15, wspace=0.20
+    )
+    gs_g2s = outer_gs[1].subgridspec(
+        3, n_cols, height_ratios=[1.0, 0.30, 1.6], hspace=0.15, wspace=0.20
+    )
+
+    s2g_cdll_axes = [fig.add_subplot(gs_s2g[0, c]) for c in range(n_cols)]
+    s2g_instr_axes = [fig.add_subplot(gs_s2g[1, c]) for c in range(n_cols)]
+    s2g_graph_axes = [fig.add_subplot(gs_s2g[2, c]) for c in range(n_cols)]
+    g2s_cdll_axes = [fig.add_subplot(gs_g2s[0, c]) for c in range(n_cols)]
+    g2s_instr_axes = [fig.add_subplot(gs_g2s[1, c]) for c in range(n_cols)]
+    g2s_graph_axes = [fig.add_subplot(gs_g2s[2, c]) for c in range(n_cols)]
+
+    # Compute fixed layouts from final states
+    pos_target = nx.spring_layout(G_target, seed=42)
+    final_s2g_nx = _sparse_to_nx(s2g_trace[-1][0])
+    pos_s2g = nx.spring_layout(final_s2g_nx, seed=42)
+
+    # ---- S2G snapshots ----
+    for col, (step_idx, (graph, cdll, pri, sec, prefix)) in enumerate(snaps_s2g):
+        # Row 0: CDLL ring
+        cdll_order = _extract_cdll_order(cdll, pri)
+        sec_payload = cdll.get_value(sec)
+        sec_idx = cdll_order.index(sec_payload) if sec_payload in cdll_order else 0
+        draw_cdll_ring(
+            s2g_cdll_axes[col],
+            cdll_order,
+            0,
+            sec_idx,
+            radius=0.7,
+            node_radius=0.15,
+        )
+        label = "Init" if step_idx == 0 else f"Step {step_idx}"
+        s2g_cdll_axes[col].set_title(label, fontsize=7, fontweight="bold", pad=3)
+
+        # Row 1: Horizontal instruction heatmap
+        current_char_idx = len(prefix) - 1
+        _render_instruction_heatmap_horizontal(s2g_instr_axes[col], w, current_char_idx)
+
+        # Row 2: Graph
+        G_nx = _sparse_to_nx(graph)
+        if G_nx.number_of_nodes() > 0:
+            draw_graph(G_nx, s2g_graph_axes[col], node_size=_GRAPH_NODE_SIZE, pos=pos_s2g)
+        else:
+            s2g_graph_axes[col].axis("off")
+
+    # ---- G2S snapshots ----
+    for col, (step_idx, (out_graph, cdll, pri, sec, prefix)) in enumerate(snaps_g2s):
+        # Row 0: CDLL ring
+        cdll_order = _extract_cdll_order(cdll, pri)
+        sec_payload = cdll.get_value(sec)
+        sec_idx = cdll_order.index(sec_payload) if sec_payload in cdll_order else 0
+        draw_cdll_ring(
+            g2s_cdll_axes[col],
+            cdll_order,
+            0,
+            sec_idx,
+            radius=0.7,
+            node_radius=0.15,
+        )
+        label = "Init" if step_idx == 0 else f"Step {step_idx}"
+        g2s_cdll_axes[col].set_title(label, fontsize=7, fontweight="bold", pad=3)
+
+        # Row 1: Horizontal instruction heatmap
+        current_char_idx = len(prefix) - 1 if prefix else -1
+        _render_instruction_heatmap_horizontal(g2s_instr_axes[col], w_g2s, current_char_idx)
+
+        # Row 2: Graph with ghosts
+        inserted_nodes: set[int] = set(range(out_graph.node_count()))
+        inserted_edges: set[tuple[int, int]] = set()
+        for u in range(out_graph.node_count()):
+            for v in out_graph.neighbors(u):
+                if u < v:
+                    inserted_edges.add((u, v))
+
+        _draw_graph_with_ghosts(
+            G_target,
+            inserted_nodes,
+            inserted_edges,
+            g2s_graph_axes[col],
+            pos_target,
+            node_size=_GRAPH_NODE_SIZE,
+        )
+
+    # Hide unused columns
+    for col in range(len(snaps_s2g), n_cols):
+        s2g_cdll_axes[col].axis("off")
+        s2g_instr_axes[col].axis("off")
+        s2g_graph_axes[col].axis("off")
+    for col in range(len(snaps_g2s), n_cols):
+        g2s_cdll_axes[col].axis("off")
+        g2s_instr_axes[col].axis("off")
+        g2s_graph_axes[col].axis("off")
+
+    # Group boxes and divider
+    _add_group_boxes_horizontal(
+        fig,
+        [s2g_cdll_axes, s2g_instr_axes, s2g_graph_axes],
+        [g2s_cdll_axes, g2s_instr_axes, g2s_graph_axes],
+    )
+
+    # Single legend at bottom
+    fig.legend(
+        handles=get_legend_handles(include_new_node=False),
+        loc="lower center",
+        ncol=2,
+        fontsize=6,
+        framealpha=0.8,
+        bbox_to_anchor=(0.5, 0.0),
+    )
+
+    save_figure(fig, output_path)
+    plt.close(fig)
+    return output_path
+
+
 def generate_algorithm_overview(
     w: str,
     G_target: nx.Graph,
     initial_node: int,
     output_dir: str,
 ) -> str:
-    """Generate compact 2-column algorithm overview (3 snapshots each).
+    """Generate horizontal algorithm overview (5 snapshots each, left-to-right).
 
     Args:
         w: IsalGraph instruction string.
@@ -840,26 +1213,15 @@ def generate_algorithm_overview(
     g2s = GraphToString(sg)
     w_g2s, g2s_trace = g2s.run(initial_node=initial_node, trace=True)
 
-    def pick_3(trace_list: list) -> list[tuple[int, object]]:
-        n = len(trace_list)
-        if n <= 3:
-            return [(i, t) for i, t in enumerate(trace_list)]
-        mid = n // 2
-        return [
-            (0, trace_list[0]),
-            (mid, trace_list[mid]),
-            (n - 1, trace_list[-1]),
-        ]
-
     path = os.path.join(output_dir, "fig_algorithm_overview")
-    result = _generate_overview_grid(
+    result = _generate_overview_grid_horizontal(
         s2g_trace,
         g2s_trace,
         w,
         w_g2s,
         G_target,
-        pick_3(s2g_trace),
-        pick_3(g2s_trace),
+        _pick_n(s2g_trace, 5),
+        _pick_n(g2s_trace, 5),
         path,
     )
     logger.info("Algorithm overview saved: %s", result)
