@@ -258,7 +258,6 @@
 }
 
 .site-nav__dropdown-menu {
-  display: none;
   position: absolute;
   top: 100%;
   left: 50%;
@@ -270,12 +269,33 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-prominent);
   z-index: calc(var(--z-nav) + 1);
-  margin-top: var(--space-xs);
+  padding-top: calc(var(--space-xs) + 8px);
+  /* Use opacity + visibility + pointer-events instead of display:none
+     so we can add a transition-delay for comfortable mouse travel */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  /* Keep the menu alive briefly after mouse leaves */
+  transition-delay: 0.12s;
+}
+
+/* Transparent bridge to cover the gap between toggle and menu */
+.site-nav__dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  height: 12px;
 }
 
 .site-nav__dropdown:hover .site-nav__dropdown-menu,
 .site-nav__dropdown:focus-within .site-nav__dropdown-menu {
-  display: block;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0.05s;
 }
 
 .site-nav__dropdown-item {

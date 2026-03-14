@@ -241,6 +241,52 @@
             nodes \(\{0,1,2,3\}\) and edges \(\{(0,1),\, (0,2),\, (2,3)\}\).
           </p>
         </div>
+
+        <!-- Interactive S2G Trace Widget -->
+        <div class="math-widget" id="math-s2g-trace">
+          <div class="math-widget__header">
+            <h3>Interactive: Step Through S2G</h3>
+            <p style="color: var(--text-secondary); font-size: var(--text-sm);">
+              Enter any instruction string and step through the interpreter state at each instruction.
+              The graph builds up in real time with pointer positions shown.
+            </p>
+          </div>
+          <div class="math-widget__body">
+            <div class="math-widget__controls">
+              <input type="text" class="explorer-input__string" id="math-s2g-input" value="VVPnC"
+                     placeholder="e.g. VVPnC" spellcheck="false" autocomplete="off"
+                     style="font-size: var(--text-base); padding: var(--space-sm);">
+              <div style="display: flex; gap: var(--space-xs); flex-wrap: wrap; margin-top: var(--space-sm);">
+                <button class="preset-btn" onclick="IsalGraph.mathSetS2GInput('VVPnC'); IsalGraph.mathRunS2GTrace();">Triangle</button>
+                <button class="preset-btn" onclick="IsalGraph.mathSetS2GInput('VvNV'); IsalGraph.mathRunS2GTrace();">VvNV</button>
+                <button class="preset-btn" onclick="IsalGraph.mathSetS2GInput('VNVNVPPpC'); IsalGraph.mathRunS2GTrace();">Cycle</button>
+                <button class="preset-btn" onclick="IsalGraph.mathSetS2GInput('VVVV'); IsalGraph.mathRunS2GTrace();">Star</button>
+              </div>
+              <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-md);"
+                      onclick="IsalGraph.mathRunS2GTrace();">Run Trace</button>
+              <div class="explorer-input__error" id="math-s2g-error"></div>
+            </div>
+
+            <div id="math-s2g-widget" style="display: none;">
+              <div class="math-widget__display">
+                <div class="math-widget__graph-area">
+                  <svg id="math-s2g-graph" width="100%" height="100%"></svg>
+                </div>
+                <div class="math-widget__info-area">
+                  <div class="math-widget__string" id="math-s2g-string" style="font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 700; letter-spacing: 0.1em; text-align: center; margin-bottom: var(--space-sm);"></div>
+                  <div class="math-widget__cdll" id="math-s2g-cdll" style="font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); text-align: center; margin-bottom: var(--space-sm);"></div>
+                  <div class="math-widget__state" id="math-s2g-state" style="font-size: var(--text-sm); color: var(--text-secondary); text-align: center;"></div>
+                </div>
+              </div>
+              <div class="math-widget__transport">
+                <button class="transport__btn" onclick="IsalGraph.mathS2GReset()" aria-label="Reset">&#x21BA;</button>
+                <button class="transport__btn" onclick="IsalGraph.mathS2GStep(-1)" aria-label="Previous">&#x25C0;</button>
+                <span id="math-s2g-counter" style="font-size: var(--text-sm); color: var(--text-secondary); min-width: 100px; text-align: center;">Step 0 / 0</span>
+                <button class="transport__btn" onclick="IsalGraph.mathS2GStep(1)" aria-label="Next">&#x25B6;</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ============ 4. G2S ALGORITHM ============ -->
@@ -474,6 +520,50 @@
 
           <div class="proof-box__qed">&#x25A0;</div>
         </div>
+
+        <!-- Interactive Proof Companion -->
+        <div class="math-widget" id="math-proof-companion">
+          <div class="math-widget__header">
+            <h3>Interactive: See the Proof in Action</h3>
+            <p style="color: var(--text-secondary); font-size: var(--text-sm);">
+              Choose a pair of isomorphic graphs and step through the proof:
+              see the isomorphism \(\phi\), encode both graphs, and verify
+              that their canonical strings are identical.
+            </p>
+          </div>
+          <div class="math-widget__body">
+            <div style="display: flex; gap: var(--space-sm); flex-wrap: wrap; justify-content: center; margin-bottom: var(--space-lg);">
+              <button class="preset-btn proof-example-btn active" onclick="IsalGraph.mathProofSelectExample(0)">Triangle K&#x2083;</button>
+              <button class="preset-btn proof-example-btn" onclick="IsalGraph.mathProofSelectExample(1)">Path P&#x2083;</button>
+              <button class="preset-btn proof-example-btn" onclick="IsalGraph.mathProofSelectExample(2)">Star S&#x2084;</button>
+            </div>
+
+            <div class="proof-viz">
+              <div class="proof-viz__graphs">
+                <div class="proof-viz__graph-panel">
+                  <div class="proof-viz__label" id="math-proof-label-g">Graph G</div>
+                  <svg id="math-proof-graph-g" class="proof-viz__svg"></svg>
+                </div>
+                <div class="proof-viz__arrow">&harr;</div>
+                <div class="proof-viz__graph-panel">
+                  <div class="proof-viz__label" id="math-proof-label-h">Graph H</div>
+                  <svg id="math-proof-graph-h" class="proof-viz__svg"></svg>
+                </div>
+              </div>
+
+              <div class="proof-viz__info" id="math-proof-mapping" style="display: none;"></div>
+              <div class="proof-viz__info proof-viz__string" id="math-proof-string-g" style="display: none;"></div>
+              <div class="proof-viz__info proof-viz__string" id="math-proof-string-h" style="display: none;"></div>
+              <div class="proof-viz__info proof-viz__conclusion" id="math-proof-conclusion" style="display: none;"></div>
+            </div>
+
+            <div class="math-widget__transport">
+              <button class="transport__btn" onclick="IsalGraph.mathProofStep(-1)" aria-label="Previous">&#x25C0;</button>
+              <span id="math-proof-counter" style="font-size: var(--text-sm); color: var(--text-secondary); min-width: 200px; text-align: center;">Step 1/5: Show graphs</span>
+              <button class="transport__btn" onclick="IsalGraph.mathProofStep(1)" aria-label="Next">&#x25B6;</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ============ 7. GRAPH DISTANCE ============ -->
@@ -591,6 +681,21 @@
   <!-- Scripts -->
   <script src="js/theme.js?v=4"></script>
   <script src="js/components.js?v=4"></script>
+
+  <!-- D3 for interactive widgets -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <!-- Core algorithm (needed for S2G trace) -->
+  <script src="js/core/alphabet.js?v=4"></script>
+  <script src="js/core/cdll.js?v=4"></script>
+  <script src="js/core/sparse-graph.js?v=4"></script>
+  <script src="js/core/s2g.js?v=4"></script>
+
+  <!-- Visualization -->
+  <script src="js/viz/graph-renderer.js?v=4"></script>
+
+  <!-- Math page animations -->
+  <script src="js/math/math-animations.js?v=4"></script>
 
   <!-- KaTeX -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
