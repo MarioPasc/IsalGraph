@@ -26,6 +26,7 @@ import os
 import matplotlib
 import numpy as np
 import pandas as pd
+from scipy import stats as sp_stats
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -622,7 +623,7 @@ def generate_scatter_caption(
     n_total = len(df)
 
     parts = [
-        f"Information content comparison between IsalGraph (uniform encoding, "
+        f"Message length comparison between IsalGraph (uniform encoding, "
         f"$L \\times \\log_2 9$ bits) and GED construction "
         f"(standard encoding) across {n_datasets} benchmark datasets "
         f"($n = {n_total:,}$ graph instances). "
@@ -733,16 +734,48 @@ def generate_information_content_table(
         if valid:
             best_beta[ds] = min(valid)
 
+    # --- Median compression ratio + Wilcoxon test per (dataset, method) ---
+    ratio_col = "ratio_uniform_standard"
+    med_ratios: dict[str, dict[str, float]] = {}
+    wilcox_pvals: dict[str, dict[str, float]] = {}
+    for method in _TABLE_METHODS:
+        med_ratios[method] = {}
+        wilcox_pvals[method] = {}
+        for ds in _TABLE_DATASETS:
+            mdf = df[(df["method"] == method) & (df["dataset"] == ds)]
+            if mdf.empty:
+                continue
+            ratios = mdf[ratio_col].dropna().values
+            if len(ratios) < 2:
+                continue
+            med_ratios[method][ds] = float(np.median(ratios))
+            # One-sided Wilcoxon signed-rank: H0: median(ratio) <= 1
+            try:
+                _, p_val = sp_stats.wilcoxon(ratios - 1, alternative="greater")
+            except ValueError:
+                p_val = float("nan")
+            wilcox_pvals[method][ds] = p_val
+
+    # Best (highest) median ratio per dataset
+    best_med: dict[str, float] = {}
+    for ds in _TABLE_DATASETS:
+        ds_meds = [med_ratios[m].get(ds, 0.0) for m in _TABLE_METHODS]
+        valid = [v for v in ds_meds if v > 0]
+        if valid:
+            best_med[ds] = max(valid)
+
     # --- Build LaTeX ---
     lines: list[str] = []
     lines.append(r"\begin{table*}[t]")
     lines.append(r"\centering")
     lines.append(
-        r"\caption{Dataset properties and OLS slope $\beta$ of IsalGraph uniform "
-        r"encoding vs.\ GED standard encoding ($y = \beta x + \alpha$). "
-        r"$\beta < 1$ indicates IsalGraph is more compact. "
+        r"\caption{Dataset properties, OLS slope $\beta$ ($R^2$) of IsalGraph "
+        r"uniform encoding vs.\ GED standard encoding ($y = \beta x + \alpha$), "
+        r"and median per-graph compression ratio $\tilde{r}$ "
+        r"(GED standard / IsalGraph uniform). "
+        r"$\beta < 1$ and $\tilde{r} > 1$ both indicate IsalGraph is more compact. "
         r"$\Delta$: difference from best method per dataset. "
-        r"Best $\beta$ per dataset in \textbf{bold}.}"
+        r"Best value per dataset in \textbf{bold}.}"
     )
     lines.append(r"\label{tab:information-content}")
     lines.append(r"\small")
@@ -792,14 +825,14 @@ def generate_information_content_table(
 
     lines.append(r"\midrule")
 
-    # --- Beta rows ---
+    # --- Beta (R²) rows — merged ---
     n_meth = len(_TABLE_METHODS)
     for j, method in enumerate(_TABLE_METHODS):
         method_label = METHOD_DISPLAY.get(method, method)
         if j == 0:
             row = (
                 rf"\multirow{{{n_meth}}}{{*}}"
-                rf"{{\rotatebox[origin=c]{{90}}{{\small OLS $\beta$}}}}"
+                rf"{{\rotatebox[origin=c]{{90}}{{\small $\beta$ ($R^2$)}}}}"
                 rf" & {method_label}"
             )
         else:
@@ -807,45 +840,70 @@ def generate_information_content_table(
 
         for ds in _TABLE_DATASETS:
             beta = betas[method].get(ds)
+            r2 = r2s[method].get(ds)
             if beta is None:
                 row += " & --"
                 continue
             best = best_beta.get(ds)
             is_best = best is not None and abs(beta - best) < 1e-6
+            r2_str = f" ({r2:.2f})" if r2 is not None else ""
             if is_best:
-                row += rf" & \textbf{{{beta:.3f}}}"
+                row += rf" & \textbf{{{beta:.3f}}}{r2_str}"
             else:
-                delta = beta - best if best is not None else 0
-                row += rf" & {beta:.3f} (+{delta:.3f})"
+                row += rf" & {beta:.3f}{r2_str}"
 
         row += r" \\"
         lines.append(row)
 
-    # --- R² rows ---
+    # --- Median ratio rows ---
     lines.append(r"\midrule")
+
+    def _sig_stars(p: float) -> str:
+        """Return significance stars for a p-value."""
+        if p < 0.001:
+            return "^{***}"
+        if p < 0.01:
+            return "^{**}"
+        if p < 0.05:
+            return "^{*}"
+        return ""
+
     for j, method in enumerate(_TABLE_METHODS):
         method_label = METHOD_DISPLAY.get(method, method)
         if j == 0:
             row = (
                 rf"\multirow{{{n_meth}}}{{*}}"
-                rf"{{\rotatebox[origin=c]{{90}}{{\small $R^2$}}}}"
+                rf"{{\rotatebox[origin=c]{{90}}{{\small $\tilde{{r}}$}}}}"
                 rf" & {method_label}"
             )
         else:
             row = f" & {method_label}"
 
         for ds in _TABLE_DATASETS:
-            r2 = r2s[method].get(ds)
-            if r2 is None:
+            med = med_ratios[method].get(ds)
+            if med is None:
                 row += " & --"
+                continue
+            best = best_med.get(ds)
+            is_best = best is not None and abs(med - best) < 1e-6
+            p = wilcox_pvals[method].get(ds, float("nan"))
+            stars = _sig_stars(p)
+            if is_best:
+                row += rf" & $\textbf{{{med:.3f}}}{stars}$"
             else:
-                row += f" & {r2:.3f}"
+                delta = med - best if best is not None else 0
+                row += rf" & ${med:.3f}{stars}$ ({delta:+.3f})"
 
         row += r" \\"
         lines.append(row)
 
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabular}")
+    lines.append(
+        r"\vspace{1pt}\par\footnotesize"
+        r"{$^{***}\!p < 0.001$ (one-sided Wilcoxon signed-rank, "
+        r"$H_0\colon \tilde{r} \leq 1$).}"
+    )
     lines.append(r"\end{table*}")
 
     out_path = os.path.join(output_dir, "table_information_content.tex")

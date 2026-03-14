@@ -265,13 +265,17 @@
           </button>
           <div class="expandable__content" id="thm-distance-content">
             <div class="theorem">
-              <div class="theorem__label">Proposition (String Distance)</div>
+              <div class="theorem__label">Corollary (IsalGraph Distance is a Metric)</div>
               <div class="theorem__content">
                 <p>
-                  The Levenshtein distance between canonical strings defines a metric
-                  on the set of isomorphism classes of finite simple graphs. This provides a
-                  polynomial-time computable distance measure that serves as a proxy for graph
-                  edit distance.
+                  The <strong>IsalGraph graph distance</strong> is defined as the Levenshtein
+                  distance between canonical strings:
+                </p>
+                <div id="math-distance-def" style="margin: var(--space-md) 0; text-align: center;"></div>
+                <p>
+                  This defines a metric on the space of isomorphism classes of finite,
+                  simple, connected graphs, providing a polynomial-time computable
+                  distance that correlates with graph edit distance.
                 </p>
               </div>
             </div>
@@ -309,6 +313,20 @@
             </div>
           </div>
         </div>
+
+        <div class="theorem" style="border-left-color: var(--accent-secondary);">
+          <div class="theorem__label" style="color: var(--accent-secondary);">Full Mathematical Treatment</div>
+          <div class="theorem__content">
+            <p>
+              For complete formal definitions, algorithm pseudocode, proofs of
+              completeness and metric properties, and the full theoretical foundation
+              of IsalGraph, see the dedicated Math Foundations page.
+            </p>
+            <p style="margin-top: var(--space-md);">
+              <a href="math.html" class="btn btn-primary">Math Foundations &rarr;</a>
+            </p>
+          </div>
+        </div>
       </section>
     </div>
   </main>
@@ -316,8 +334,8 @@
   <div id="site-footer"></div>
 
   <!-- Scripts -->
-  <script src="js/theme.js?v=3"></script>
-  <script src="js/components.js?v=3"></script>
+  <script src="js/theme.js?v=4"></script>
+  <script src="js/components.js?v=4"></script>
 
   <!-- KaTeX -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -330,9 +348,10 @@
         if (typeof katex !== 'undefined') {
           clearInterval(checkKatex);
           var formulas = [
-            { id: 'math-roundtrip', tex: 'S2G(G2S(G, s)) \\cong G', display: true },
-            { id: 'math-canonical-def', tex: 'w^*_G = \\text{lexmin}\\{ w \\in \\arg\\min_{v \\in V} |G2S(G, v)| \\}', display: true },
-            { id: 'math-canonical-thm', tex: 'G \\cong H \\iff w^*_G = w^*_H', display: true }
+            { id: 'math-roundtrip', tex: '\\mathrm{S2G}(\\mathrm{G2S}(G, s)) \\cong G', display: true },
+            { id: 'math-canonical-def', tex: 'w^*_G = \\operatorname*{lex\\text{-}min}_{w \\,\\in\\, \\mathcal{W}^*(G)} w', display: true },
+            { id: 'math-canonical-thm', tex: 'G \\cong H \\iff w^*_G = w^*_H', display: true },
+            { id: 'math-distance-def', tex: 'd_{\\mathrm{IsalGraph}}(G, H) = d_{\\mathrm{Lev}}(w^*_G,\\, w^*_H)', display: true }
           ];
           formulas.forEach(function (f) {
             var el = document.getElementById(f.id);

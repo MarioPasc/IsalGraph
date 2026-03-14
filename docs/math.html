@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Math Foundations — IsalGraph</title>
+  <meta name="description" content="Formal mathematical foundations of the IsalGraph framework: definitions, algorithms, theorems, and proofs.">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <meta property="og:title" content="Math Foundations — IsalGraph">
+  <meta property="og:description" content="Complete mathematical theory behind IsalGraph: interpreter state, instruction semantics, canonical strings, and graph distance.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/math.html">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Math Foundations — IsalGraph">
+  <meta name="twitter:description" content="Complete mathematical theory behind IsalGraph.">
+  <meta name="twitter:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="css/variables.css?v=4">
+  <link rel="stylesheet" href="css/reset.css?v=4">
+  <link rel="stylesheet" href="css/typography.css?v=4">
+  <link rel="stylesheet" href="css/layout.css?v=4">
+  <link rel="stylesheet" href="css/components.css?v=4">
+  <link rel="stylesheet" href="css/nav.css?v=4">
+  <link rel="stylesheet" href="css/footer.css?v=4">
+  <link rel="stylesheet" href="css/math.css?v=4">
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+</head>
+<body data-page="math">
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
+  <div id="site-nav"></div>
+
+  <main id="main-content">
+    <div class="container">
+      <header class="math-header">
+        <h1>Mathematical Foundations</h1>
+        <p>
+          Complete formal treatment of the IsalGraph framework: interpreter state,
+          instruction semantics, encoding and decoding algorithms, canonical strings,
+          and the graph distance metric. Based on
+          <a href="https://arxiv.org/abs/2603.11039" target="_blank" rel="noopener noreferrer">L&oacute;pez-Rubio &amp; Pascual-Gonz&aacute;lez (2026)</a>.
+        </p>
+      </header>
+
+      <!-- Table of Contents -->
+      <nav class="math-toc" aria-label="Table of contents">
+        <div class="math-toc__title">Contents</div>
+        <ol class="math-toc__list">
+          <li><a href="#interpreter-state">1. Interpreter State</a></li>
+          <li><a href="#instruction-set">2. Instruction Set and Semantics</a></li>
+          <li><a href="#s2g-algorithm">3. String-to-Graph Algorithm (S2G)</a></li>
+          <li><a href="#g2s-algorithm">4. Graph-to-String Algorithm (G2S)</a></li>
+          <li><a href="#canonical-strings">5. Canonical Strings</a>
+            <ol class="math-toc__list toc-sub">
+              <li><a href="#exhaustive-canonical">5.1 Exhaustive Canonical String</a></li>
+              <li><a href="#structural-triplet">5.2 Structural Triplet</a></li>
+              <li><a href="#pruned-canonical">5.3 Pruned Canonical String</a></li>
+            </ol>
+          </li>
+          <li><a href="#completeness">6. Completeness Theorem</a></li>
+          <li><a href="#graph-distance">7. Graph Distance Metric</a></li>
+          <li><a href="#locality">8. Locality Property</a></li>
+        </ol>
+      </nav>
+
+      <!-- ============ 1. INTERPRETER STATE ============ -->
+      <section class="math-section" id="interpreter-state">
+        <h2>1. Interpreter State</h2>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 1 (Interpreter State)</div>
+          <p>
+            An IsalGraph <em>interpreter state</em> is a triple
+            \(\mathcal{S} = (G,\, \mathcal{L},\, \pi)\) where:
+          </p>
+          <ul style="margin: var(--space-md) 0; padding-left: var(--space-xl); color: var(--text-secondary);">
+            <li style="margin-bottom: var(--space-sm);">
+              \(G = (V_G, E_G)\) is a finite, simple graph with nodes identified
+              by contiguous integers \(\{0, 1, \ldots, |V_G|-1\}\).
+            </li>
+            <li style="margin-bottom: var(--space-sm);">
+              \(\mathcal{L}\) is an array-backed <strong>circular doubly-linked list</strong> (CDLL)
+              with nodes carrying graph-node indices as integer payloads.
+              \(\mathrm{val}_\mathcal{L}(\ell)\) denotes the payload of CDLL node \(\ell\), and
+              \(\mathrm{next}(\ell)\), \(\mathrm{prev}(\ell)\) denote successor and predecessor
+              in circular order.
+            </li>
+            <li>
+              \(\pi = (\pi_1, \pi_2)\) is a pair of pointers (CDLL node indices), where
+              \(\pi_1\) is the <strong>primary pointer</strong> and \(\pi_2\) is the
+              <strong>secondary pointer</strong>.
+            </li>
+          </ul>
+          <p>
+            <strong>Critical invariant:</strong> The CDLL index space and the graph node index
+            space are <em>distinct</em>. Use \(\mathrm{val}_\mathcal{L}(\pi_i)\) to obtain
+            the graph node at pointer \(\pi_i\).
+          </p>
+        </div>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Initial State</div>
+          <p>
+            The initial interpreter state \(\mathcal{S}_0\) has:
+            \(G\) containing exactly one node (node 0) with no edges;
+            \(\mathcal{L}\) containing exactly one node with payload 0;
+            and both \(\pi_1\) and \(\pi_2\) pointing to this single CDLL node.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 2. INSTRUCTION SET ============ -->
+      <section class="math-section" id="instruction-set">
+        <h2>2. Instruction Set and Semantics</h2>
+
+        <p>The instruction alphabet is:</p>
+        <div class="math-display">
+          $$\Sigma = \{\texttt{N},\, \texttt{n},\, \texttt{P},\, \texttt{p},\, \texttt{V},\, \texttt{v},\, \texttt{C},\, \texttt{c},\, \texttt{W}\}$$
+        </div>
+
+        <table class="math-instr-table" role="table">
+          <thead>
+            <tr>
+              <th>Instruction</th>
+              <th>Category</th>
+              <th>Formal Effect</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="instr-char char-N">N</span></td>
+              <td>Primary move (fwd)</td>
+              <td>\(\pi_1 \leftarrow \mathrm{next}_\mathcal{L}(\pi_1)\)</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-P">P</span></td>
+              <td>Primary move (bwd)</td>
+              <td>\(\pi_1 \leftarrow \mathrm{prev}_\mathcal{L}(\pi_1)\)</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-n">n</span></td>
+              <td>Secondary move (fwd)</td>
+              <td>\(\pi_2 \leftarrow \mathrm{next}_\mathcal{L}(\pi_2)\)</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-p">p</span></td>
+              <td>Secondary move (bwd)</td>
+              <td>\(\pi_2 \leftarrow \mathrm{prev}_\mathcal{L}(\pi_2)\)</td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-V">V</span></td>
+              <td>Node via primary</td>
+              <td>
+                Add node \(u\); add edge
+                \((\mathrm{val}_\mathcal{L}(\pi_1),\, u)\);
+                insert \(u\) into \(\mathcal{L}\) after \(\pi_1\)
+              </td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-v">v</span></td>
+              <td>Node via secondary</td>
+              <td>
+                Add node \(u\); add edge
+                \((\mathrm{val}_\mathcal{L}(\pi_2),\, u)\);
+                insert \(u\) into \(\mathcal{L}\) after \(\pi_2\)
+              </td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-C">C</span></td>
+              <td>Edge (pri &rarr; sec)</td>
+              <td>
+                Add edge \((\mathrm{val}_\mathcal{L}(\pi_1),\, \mathrm{val}_\mathcal{L}(\pi_2))\)
+              </td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-c">c</span></td>
+              <td>Edge (sec &rarr; pri)</td>
+              <td>
+                Add edge \((\mathrm{val}_\mathcal{L}(\pi_2),\, \mathrm{val}_\mathcal{L}(\pi_1))\)
+              </td>
+            </tr>
+            <tr>
+              <td><span class="instr-char char-W">W</span></td>
+              <td>No-op</td>
+              <td>State unchanged</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Remark</div>
+          <p>
+            Every string \(w \in \Sigma^*\) decodes to a valid finite simple graph.
+            No instruction produces undefined or inconsistent state. The pointer does
+            <strong>not</strong> advance after a \(\texttt{V}\) or \(\texttt{v}\) instruction.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 3. S2G ALGORITHM ============ -->
+      <section class="math-section" id="s2g-algorithm">
+        <h2>3. String-to-Graph Algorithm (S2G)</h2>
+
+        <div class="algorithm-box">
+          <div class="algorithm-box__title">Algorithm 1: S2G(w, directed)</div>
+          <div class="algorithm-box__line">
+            <span class="algorithm-box__keyword">Input:</span> String \(w \in \Sigma^*\); Boolean \(\mathit{directed}\)
+          </div>
+          <div class="algorithm-box__line">
+            <span class="algorithm-box__keyword">Output:</span> Graph \(G\) such that \(\mathrm{S2G}(w) = G\)
+          </div>
+          <div class="algorithm-box__line">&nbsp;</div>
+          <div class="algorithm-box__line">
+            1. Initialize \(\mathcal{S}_0 = (G_0, \mathcal{L}_0, (\pi_1, \pi_2))\)
+            <span class="algorithm-box__comment">// node 0, both ptrs on it</span>
+          </div>
+          <div class="algorithm-box__line">
+            2. <span class="algorithm-box__keyword">for</span> each instruction \(\sigma_i\) in \(w\):
+          </div>
+          <div class="algorithm-box__line--indent">
+            Execute \(\sigma_i\) according to Table 1, updating \(\mathcal{S}\)
+          </div>
+          <div class="algorithm-box__line">
+            3. <span class="algorithm-box__keyword">return</span> \(G\)
+          </div>
+        </div>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Example</div>
+          <p>
+            \(\mathrm{S2G}(\texttt{VvNV},\, \mathit{false})\) produces a graph with
+            nodes \(\{0,1,2,3\}\) and edges \(\{(0,1),\, (0,2),\, (2,3)\}\).
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 4. G2S ALGORITHM ============ -->
+      <section class="math-section" id="g2s-algorithm">
+        <h2>4. Graph-to-String Algorithm (G2S)</h2>
+
+        <h3>Pair Generation and Cost</h3>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 2 (Displacement Pairs)</div>
+          <p>For integer \(M > 0\), let:</p>
+          <div class="math-display">
+            $$\mathcal{P}(M) = \bigl\{(a,b) \;\big|\; a, b \in \{-M, \ldots, M\}\bigr\}$$
+          </div>
+          <p>
+            sorted in increasing order of the tuple
+            \((|a|+|b|,\; |a|,\; a,\; b)\) lexicographically.
+          </p>
+          <p style="margin-top: var(--space-md);">
+            The <strong>cost</strong> of pair \((a,b)\) is \(|a| + |b|\), which equals
+            the number of pointer-move instructions (\(\texttt{N}/\texttt{P}/\texttt{n}/\texttt{p}\))
+            emitted.
+          </p>
+        </div>
+
+        <div class="algorithm-box">
+          <div class="algorithm-box__title">Algorithm 2: G2S(G, v₀)</div>
+          <div class="algorithm-box__line">
+            <span class="algorithm-box__keyword">Input:</span> Connected graph \(G=(V,E)\); starting node \(v_0 \in V\)
+          </div>
+          <div class="algorithm-box__line">
+            <span class="algorithm-box__keyword">Output:</span> String \(w \in \Sigma^*\) with \(\mathrm{S2G}(w) \cong G\)
+          </div>
+          <div class="algorithm-box__line">&nbsp;</div>
+          <div class="algorithm-box__line">
+            1. Initialize output state with \(v_0\); set \(n_\mathrm{left} = |V|-1\), \(e_\mathrm{left} = |E|\)
+          </div>
+          <div class="algorithm-box__line">
+            2. <span class="algorithm-box__keyword">while</span> \(n_\mathrm{left} > 0\) <strong>or</strong> \(e_\mathrm{left} > 0\):
+          </div>
+          <div class="algorithm-box__line--indent">
+            <span class="algorithm-box__keyword">for</span> each \((a,b) \in \mathcal{P}(M)\) in sorted order:
+          </div>
+          <div class="algorithm-box__line--indent2">
+            Compute tentative pointer positions after \(|a|\) + \(|b|\) moves
+          </div>
+          <div class="algorithm-box__line--indent2">
+            Try (in priority): \(\texttt{V}\), \(\texttt{v}\), \(\texttt{C}\), \(\texttt{c}\)
+          </div>
+          <div class="algorithm-box__line--indent2">
+            <span class="algorithm-box__keyword">if</span> any operation succeeds: emit moves + instruction, <span class="algorithm-box__keyword">break</span>
+          </div>
+          <div class="algorithm-box__line">
+            3. <span class="algorithm-box__keyword">return</span> concatenation of emitted instructions
+          </div>
+        </div>
+
+        <div class="remark-box">
+          <div class="remark-box__label">String Length Decomposition</div>
+          <p>
+            For a graph \(G\) with \(N\) nodes and \(M\) edges, any IsalGraph string has length:
+          </p>
+          <div class="math-display">
+            $$|w| \;=\; \underbrace{(N-1)}_{\text{one }\texttt{V}/\texttt{v}\text{ per non-root}} \;+\;
+            \underbrace{M - (N-1)}_{\text{one }\texttt{C}/\texttt{c}\text{ per extra edge}} \;+\;
+            \underbrace{\sum_k (|a_k| + |b_k|)}_{\text{pointer moves}}$$
+          </div>
+          <p>
+            The first two terms are fixed by \(G\); minimizing \(|w|\) reduces to
+            minimizing total pointer travel.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 5. CANONICAL STRINGS ============ -->
+      <section class="math-section" id="canonical-strings">
+        <h2>5. Canonical Strings</h2>
+
+        <h3 id="exhaustive-canonical">5.1 Exhaustive Canonical String</h3>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 3 (Exhaustive Canonical String)</div>
+          <p>
+            For a finite, simple, connected graph \(G = (V, E)\) with \(N = |V|\) nodes,
+            let \(\mathcal{W}^+(G, v) \subseteq \Sigma^*\) denote the set of all IsalGraph
+            strings producible by \(\mathrm{G2S}(G, v)\) when neighbor choice is made
+            <em>exhaustively over all valid options</em>.
+          </p>
+          <p style="margin-top: var(--space-md);">
+            The <strong>exhaustive canonical string</strong> of \(G\) is:
+          </p>
+          <div class="math-display">
+            $$w^{+}_G \;=\; \operatorname*{lex\text{-}min}_{w \,\in\, \mathcal{W}^+(G)} w$$
+          </div>
+          <p>where:</p>
+          <div class="math-display">
+            $$\mathcal{W}^+(G) \;=\; \operatorname*{arg\,min}_{w \,\in\, \bigcup_{v \in V} \mathcal{W}^+(G,v)} |w|$$
+          </div>
+        </div>
+
+        <h3 id="structural-triplet">5.2 Structural Triplet</h3>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 4 (Structural Triplet)</div>
+          <p>
+            For graph \(G = (V, E)\) and node \(v \in V\), let \(N_k(v)\) denote
+            the set of nodes at graph-theoretic distance exactly \(k\) from \(v\).
+            The <strong>structural triplet</strong> of \(v\) is:
+          </p>
+          <div class="math-display">
+            $$\tau(v) \;=\; \bigl(|N_1(v)|,\; |N_2(v)|,\; |N_3(v)|\bigr) \;\in\; \mathbb{N}^3$$
+          </div>
+          <p>
+            <strong>Complexity:</strong> Per-node triplet is \(O(N + E)\) via BFS truncated
+            at distance 3. Full collection is \(O(N(N+E))\) per graph.
+          </p>
+        </div>
+
+        <h3 id="pruned-canonical">5.3 Pruned Canonical String</h3>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 5 (Pruned Canonical String)</div>
+          <p>
+            For graph \(G = (V, E)\), let \(\mathcal{W}^*(G, v)\) denote all IsalGraph
+            strings producible by \(\mathrm{G2S}(G, v)\) when uninserted neighbor choice
+            is made over the <strong>pruned candidate set</strong>:
+          </p>
+          <div class="math-display">
+            $$\mathcal{C}_{\mathrm{pruned}} \;=\; \bigl\{\, c \in \mathcal{C} \;\big|\;
+            \tau(c) = \max_{c' \in \mathcal{C}}\,\tau(c') \,\bigr\}$$
+          </div>
+          <p>The <strong>pruned canonical string</strong> is:</p>
+          <div class="math-display">
+            $$w^*_G \;=\; \operatorname*{lex\text{-}min}_{w \,\in\, \mathcal{W}^*(G)} w$$
+          </div>
+          <p>where:</p>
+          <div class="math-display">
+            $$\mathcal{W}^*(G) \;=\; \operatorname*{arg\,min}_{w \,\in\,
+            \bigcup_{v \in V} \mathcal{W}^*(G,v)} |w|$$
+          </div>
+        </div>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Remark</div>
+          <p>
+            Pruned and exhaustive canonical strings may differ in length but both are
+            complete invariants. On vertex-transitive graphs (where all nodes share the
+            same triplet), pruning is vacuous and the algorithms agree exactly.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============ 6. COMPLETENESS THEOREM ============ -->
+      <section class="math-section" id="completeness">
+        <h2>6. Completeness Theorem</h2>
+
+        <div class="thm-box">
+          <div class="thm-box__label">Theorem 1 (Complete Graph Invariant)</div>
+          <p>
+            Let \(G = (V_G, E_G)\) and \(H = (V_H, E_H)\) be finite, simple, connected
+            graphs. Then:
+          </p>
+          <div class="math-display">
+            $$w^*_G = w^*_H \quad \iff \quad G \cong H$$
+          </div>
+        </div>
+
+        <div class="proof-box">
+          <div class="proof-box__label">Proof</div>
+
+          <div class="proof-step">
+            <div class="proof-step__label">
+              (\(\Rightarrow\)) Equal strings imply isomorphic graphs:
+            </div>
+            <p>
+              \(\mathrm{S2G}\) is a deterministic function of \(w\).
+              If \(w^*_G = w^*_H =: w\), then \(G' := \mathrm{S2G}(w)\) is uniquely defined.
+              By round-trip correctness, every execution of \(\mathrm{G2S}(G, v_0)\) yields
+              a string that \(\mathrm{S2G}\) decodes back to a graph isomorphic to \(G\).
+              Therefore: \(G \cong G' \cong H\).
+            </p>
+          </div>
+
+          <div class="proof-step">
+            <div class="proof-step__label">
+              (\(\Leftarrow\)) Isomorphic graphs yield equal strings:
+            </div>
+            <p>
+              Suppose \(\phi\colon V_G \xrightarrow{\;\sim\;} V_H\) is a graph isomorphism.
+            </p>
+
+            <p style="margin-top: var(--space-md);">
+              <strong>Step 1 (Triplet invariance):</strong>
+              Graph-theoretic distances are preserved under isomorphism:
+              \(\mathrm{dist}_G(u, v) = \mathrm{dist}_H(\phi(u), \phi(v))\).
+              Therefore \(|N_k^G(v)| = |N_k^H(\phi(v))|\) for all \(v\) and \(k\), giving:
+            </p>
+            <div class="math-display">
+              $$\tau_G(v) = \tau_H(\phi(v)) \quad \forall v \in V_G$$
+            </div>
+            <p>
+              This preserves the pruned candidate set:
+              \(\phi(\mathcal{C}_{\mathrm{pruned}}^{G}) = \mathcal{C}_{\mathrm{pruned}}^{H}\).
+            </p>
+
+            <p style="margin-top: var(--space-md);">
+              <strong>Step 2 (Execution-path bijection):</strong>
+              Any pruned execution path \(\Pi\) on \(G\) starting at \(v_0\) maps
+              bijectively to a pruned execution path \(\phi(\Pi)\) on \(H\) starting
+              at \(\phi(v_0)\). By Step 1, both emit identical strings:
+            </p>
+            <div class="math-display">
+              $$w(\Pi, G) = w(\phi(\Pi), H)$$
+            </div>
+
+            <p style="margin-top: var(--space-md);">
+              <strong>Step 3 (String-set equality):</strong>
+              Applying the bijection over all starting nodes:
+            </p>
+            <div class="math-display">
+              $$\bigcup_{v \in V_G} \mathcal{W}^*(G, v) = \bigcup_{v \in V_H} \mathcal{W}^*(H, v)$$
+            </div>
+            <p>
+              Therefore \(\mathcal{W}^*(G) = \mathcal{W}^*(H)\) and:
+            </p>
+            <div class="math-display">
+              $$w^*_G = \operatorname*{lex\text{-}min}_{w \in \mathcal{W}^*(G)} w =
+              \operatorname*{lex\text{-}min}_{w \in \mathcal{W}^*(H)} w = w^*_H$$
+            </div>
+          </div>
+
+          <div class="proof-box__qed">&#x25A0;</div>
+        </div>
+      </section>
+
+      <!-- ============ 7. GRAPH DISTANCE ============ -->
+      <section class="math-section" id="graph-distance">
+        <h2>7. Graph Distance Metric</h2>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 6 (Levenshtein Distance)</div>
+          <p>
+            For two strings \(w_1, w_2 \in \Sigma^*\), their <strong>Levenshtein distance</strong> is:
+          </p>
+          <div class="math-display">
+            $$d_{\mathrm{Lev}}(w_1, w_2) \;=\; \min\bigl\{ k \;\big|\; w_1
+            \xrightarrow{\text{$k$ edits}} w_2 \bigr\}$$
+          </div>
+          <p>
+            where a single <em>edit</em> is a character insertion, deletion, or substitution.
+            Computable in \(O(|w_1| \cdot |w_2|)\) via standard dynamic programming.
+          </p>
+        </div>
+
+        <div class="def-box">
+          <div class="def-box__label">Definition 7 (Graph Edit Distance)</div>
+          <p>
+            The <strong>graph edit distance</strong> \(\mathrm{GED}(G, H)\) is the minimum
+            number of elementary edit operations (node insertion, node deletion, edge insertion,
+            edge deletion) needed to transform \(G\) into a graph isomorphic to \(H\).
+            Computing GED is \(\mathsf{NP}\)-hard.
+          </p>
+        </div>
+
+        <div class="cor-box">
+          <div class="cor-box__label">Corollary 1 (IsalGraph Distance is a Metric)</div>
+          <p>The <strong>IsalGraph graph distance</strong>:</p>
+          <div class="math-display">
+            $$d_{\mathrm{IsalGraph}}(G, H) = d_{\mathrm{Lev}}(w^*_G, w^*_H)$$
+          </div>
+          <p>
+            is a metric on the space of isomorphism classes of finite, simple, connected graphs.
+          </p>
+        </div>
+
+        <div class="proof-box">
+          <div class="proof-box__label">Proof</div>
+          <ul style="padding-left: var(--space-xl); color: var(--text-secondary);">
+            <li style="margin-bottom: var(--space-sm);">
+              <strong>Non-negativity and symmetry:</strong> Inherited from Levenshtein distance.
+            </li>
+            <li style="margin-bottom: var(--space-sm);">
+              <strong>Identity of indiscernibles:</strong>
+              \(d_{\mathrm{IsalGraph}}(G, H) = 0 \iff w^*_G = w^*_H \iff G \cong H\)
+              (by Theorem 1 and \(d_{\mathrm{Lev}}(w_1, w_2) = 0 \iff w_1 = w_2\)).
+            </li>
+            <li>
+              <strong>Triangle inequality:</strong> For any graphs \(G, H, K\):
+              <div class="math-display">
+                $$d_{\mathrm{IsalGraph}}(G, K) = d_{\mathrm{Lev}}(w^*_G, w^*_K) \leq
+                d_{\mathrm{Lev}}(w^*_G, w^*_H) + d_{\mathrm{Lev}}(w^*_H, w^*_K) =
+                d_{\mathrm{IsalGraph}}(G, H) + d_{\mathrm{IsalGraph}}(H, K)$$
+              </div>
+            </li>
+          </ul>
+          <div class="proof-box__qed">&#x25A0;</div>
+        </div>
+      </section>
+
+      <!-- ============ 8. LOCALITY ============ -->
+      <section class="math-section" id="locality">
+        <h2>8. Locality Property</h2>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Empirical Observation</div>
+          <p>
+            Let \(G, H\) be finite, simple, connected graphs with
+            \(k = \mathrm{GED}(G,H)\). Empirically:
+          </p>
+          <ol style="padding-left: var(--space-xl); color: var(--text-secondary); margin-top: var(--space-md);">
+            <li style="margin-bottom: var(--space-sm);">
+              <strong>Monotonicity:</strong> \(d_{\mathrm{IsalGraph}}(G, H)\) is a
+              non-decreasing function of \(k\) (adding more edit operations produces
+              strings further apart).
+            </li>
+            <li>
+              <strong>Strong correlation:</strong> Over broad graph families, Pearson and
+              Spearman correlations between \(d_{\mathrm{IsalGraph}}\) and GED are high.
+            </li>
+          </ol>
+        </div>
+
+        <div class="remark-box">
+          <div class="remark-box__label">Distinguishing Feature</div>
+          <p>
+            Unlike Hamming distance on adjacency matrices (where a single node insertion
+            changes \(O(N)\) entries), the IsalGraph distance reflects the
+            <strong>instruction-level cost</strong> of re-encoding: naturally bounded by
+            changed edges plus pointer-movement costs.
+          </p>
+        </div>
+
+        <div style="text-align: center; margin-top: var(--space-3xl);">
+          <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">
+            Explore these concepts interactively:
+          </p>
+          <div style="display: flex; gap: var(--space-md); justify-content: center; flex-wrap: wrap;">
+            <a href="playground.html" class="btn btn-outline">Playground &rarr;</a>
+            <a href="explorer.html" class="btn btn-primary">Graph Space Explorer &rarr;</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js?v=4"></script>
+  <script src="js/components.js?v=4"></script>
+
+  <!-- KaTeX -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var check = setInterval(function () {
+        if (typeof renderMathInElement !== 'undefined') {
+          clearInterval(check);
+          renderMathInElement(document.body, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false
+          });
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>

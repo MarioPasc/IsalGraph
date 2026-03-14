@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explorer — IsalGraph</title>
+  <meta name="description" content="Explore the neighborhood structure of IsalGraph strings. Visualize graphs at Levenshtein distance 1 and shortest edit paths between any two strings.">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <meta property="og:title" content="Explorer — IsalGraph">
+  <meta property="og:description" content="Interactive graph space exploration via Levenshtein neighborhoods and shortest edit paths.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/explorer.html">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Explorer — IsalGraph">
+  <meta name="twitter:description" content="Interactive graph space exploration via Levenshtein neighborhoods and shortest edit paths.">
+  <meta name="twitter:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="css/variables.css?v=4">
+  <link rel="stylesheet" href="css/reset.css?v=4">
+  <link rel="stylesheet" href="css/typography.css?v=4">
+  <link rel="stylesheet" href="css/layout.css?v=4">
+  <link rel="stylesheet" href="css/components.css?v=4">
+  <link rel="stylesheet" href="css/nav.css?v=4">
+  <link rel="stylesheet" href="css/footer.css?v=4">
+  <link rel="stylesheet" href="css/explorer.css?v=4">
+</head>
+<body data-page="explorer">
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
+  <div id="site-nav"></div>
+
+  <main id="main-content">
+    <div class="container">
+      <header class="explorer-header">
+        <h1>Graph Space Explorer</h1>
+        <p>
+          Explore how graphs change under single-character edits to their IsalGraph strings.
+          Visualize the immediate neighborhood of any string (all graphs at Levenshtein distance 1)
+          or trace the shortest edit path between two strings.
+        </p>
+      </header>
+
+      <!-- Mode Tabs -->
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" aria-controls="panel-neighborhood" id="tab-neighborhood"
+          onclick="IsalGraph.switchExplorerTab('neighborhood')">
+          Neighborhood
+        </button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-path" id="tab-path"
+          onclick="IsalGraph.switchExplorerTab('path')">
+          Shortest Path
+        </button>
+      </div>
+
+      <!-- =============== NEIGHBORHOOD PANEL =============== -->
+      <div class="tab-panel active" id="panel-neighborhood" role="tabpanel" aria-labelledby="tab-neighborhood">
+        <div class="explorer-layout">
+          <!-- Input -->
+          <div class="explorer-input">
+            <label class="explorer-input__label" for="exp-nb-input">Instruction String</label>
+            <input
+              type="text"
+              class="explorer-input__string"
+              id="exp-nb-input"
+              value="VVPnC"
+              placeholder="e.g. VVPnC"
+              spellcheck="false"
+              autocomplete="off"
+            >
+            <div id="exp-nb-colored" class="output-string" style="min-height: 40px; font-size: var(--text-lg);"></div>
+            <div class="explorer-input__error" id="exp-nb-error"></div>
+
+            <div class="explorer-presets">
+              <span class="explorer-presets__label">Presets</span>
+              <div class="explorer-presets__grid">
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('V')">Edge</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVPnC')">Triangle</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('Vpv')">Path P&#x2083;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVpvPpC')">Cycle C&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVVV')">Star S&#x2084;</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-lg);"
+              onclick="IsalGraph.runNeighborhood()">
+              Explore Neighborhood &rarr;
+            </button>
+          </div>
+
+          <!-- Source graph -->
+          <div class="source-graph">
+            <div class="viz-panel__label">Source Graph</div>
+            <div class="source-graph__viz">
+              <svg id="exp-nb-source-svg" width="100%" height="100%" aria-hidden="true"></svg>
+            </div>
+            <div class="source-graph__info" id="exp-nb-source-info"></div>
+          </div>
+        </div>
+
+        <!-- Output: summary + filter + carousel (hidden until explore) -->
+        <div id="exp-nb-output" class="explorer-output" style="display: none;">
+          <div class="neighbor-summary">
+            <div class="neighbor-summary__count" id="exp-nb-summary-count">0 neighbors</div>
+            <div class="neighbor-summary__detail" id="exp-nb-summary-detail"></div>
+          </div>
+
+          <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all" onclick="IsalGraph.filterNeighbors('all')">All</button>
+            <button class="filter-btn" data-filter="del" onclick="IsalGraph.filterNeighbors('del')">Deletions</button>
+            <button class="filter-btn" data-filter="sub" onclick="IsalGraph.filterNeighbors('sub')">Substitutions</button>
+            <button class="filter-btn" data-filter="ins" onclick="IsalGraph.filterNeighbors('ins')">Insertions</button>
+          </div>
+
+          <div class="carousel">
+            <div class="carousel__inner" id="exp-nb-carousel"></div>
+            <div class="carousel__nav">
+              <button class="carousel__nav-btn" onclick="IsalGraph.carouselScroll(-1)" aria-label="Scroll left">&larr;</button>
+              <button class="carousel__nav-btn" onclick="IsalGraph.carouselScroll(1)" aria-label="Scroll right">&rarr;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =============== SHORTEST PATH PANEL =============== -->
+      <div class="tab-panel" id="panel-path" role="tabpanel" aria-labelledby="tab-path">
+        <div class="path-inputs">
+          <div class="explorer-input">
+            <label class="explorer-input__label" for="exp-path-input-a">String A (source)</label>
+            <input
+              type="text"
+              class="explorer-input__string"
+              id="exp-path-input-a"
+              value="V"
+              placeholder="e.g. V"
+              spellcheck="false"
+              autocomplete="off"
+            >
+            <div id="exp-path-colored-a" class="output-string" style="min-height: 36px; font-size: var(--text-base);"></div>
+          </div>
+
+          <div class="explorer-input">
+            <label class="explorer-input__label" for="exp-path-input-b">String B (target)</label>
+            <input
+              type="text"
+              class="explorer-input__string"
+              id="exp-path-input-b"
+              value="VVPnC"
+              placeholder="e.g. VVPnC"
+              spellcheck="false"
+              autocomplete="off"
+            >
+            <div id="exp-path-colored-b" class="output-string" style="min-height: 36px; font-size: var(--text-base);"></div>
+          </div>
+        </div>
+
+        <div class="path-presets">
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('V', 'VV')">Edge &rarr; Star</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('V', 'VVPnC')">Edge &rarr; Triangle</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VVPnC', 'VVpvPpC')">Triangle &rarr; C&#x2084;</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VVVV', 'Vpv')">Star &rarr; Path</button>
+        </div>
+
+        <div class="explorer-input__error" id="exp-path-error"></div>
+
+        <div style="text-align: center; margin-bottom: var(--space-xl);">
+          <button class="btn btn-primary" onclick="IsalGraph.runShortestPath()">
+            Find Shortest Path &rarr;
+          </button>
+        </div>
+
+        <!-- Output (hidden until computed) -->
+        <div id="exp-path-output" style="display: none;">
+          <div class="distance-display">
+            <div class="distance-display__value" id="exp-path-dist-value">0</div>
+            <div class="distance-display__label" id="exp-path-dist-label">Levenshtein distance</div>
+          </div>
+
+          <div class="path-steps" id="exp-path-steps"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js?v=4"></script>
+  <script src="js/components.js?v=4"></script>
+
+  <!-- D3 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <!-- Core algorithm -->
+  <script src="js/core/alphabet.js?v=4"></script>
+  <script src="js/core/cdll.js?v=4"></script>
+  <script src="js/core/sparse-graph.js?v=4"></script>
+  <script src="js/core/s2g.js?v=4"></script>
+
+  <!-- Visualization -->
+  <script src="js/viz/graph-renderer.js?v=4"></script>
+
+  <!-- Explorer -->
+  <script src="js/explorer/levenshtein.js?v=4"></script>
+  <script src="js/explorer/explorer-controller.js?v=4"></script>
+</body>
+</html>

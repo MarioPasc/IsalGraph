@@ -127,7 +127,7 @@ def _aggregate_per_n(
 
 
 def _load_ged_times(comp_dir: str) -> pd.DataFrame:
-    """Load GED per-pair computation times from all datasets.
+    """Load GED per-pair computation times from real-dataset CSVs.
 
     Reads ``{dataset}_ged_times.csv`` files and returns a DataFrame
     with columns ``max_n`` and ``ged_time_median_s``.
@@ -144,6 +144,42 @@ def _load_ged_times(comp_dir: str) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
+
+
+def _load_synthetic_ged_times(
+    encoding_dir: str,
+    timeout_ceil_s: float = 55.0,
+) -> pd.DataFrame:
+    """Load GED per-pair computation times from synthetic random graphs.
+
+    Reads ``synthetic_ged_times.csv`` (produced by
+    ``compute_synthetic_ged.py``) and returns a DataFrame with columns
+    ``n_nodes`` and ``ged_time_median_s``, filtered to the random
+    families used in the encoding benchmark.
+
+    Rows where ``ged_time_median_s >= timeout_ceil_s`` are discarded
+    because ``nx.graph_edit_distance(timeout=60)`` returns an
+    approximate upper bound (not the exact time) when the timeout is
+    hit, making those timing values unreliable (censored data).
+    """
+    path = os.path.join(encoding_dir, "synthetic_ged_times.csv")
+    if not os.path.isfile(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    df = df[df["family"].isin(RANDOM_FAMILIES)]
+    # Filter out infinite / missing times
+    df = df[np.isfinite(df["ged_time_median_s"]) & (df["ged_time_median_s"] > 0)]
+    # Filter out timeout-saturated rows (censored data, not real timing)
+    n_before = len(df)
+    df = df[df["ged_time_median_s"] < timeout_ceil_s]
+    n_dropped = n_before - len(df)
+    if n_dropped > 0:
+        logger.info(
+            "Dropped %d timeout-saturated GED rows (>= %.0fs)",
+            n_dropped,
+            timeout_ceil_s,
+        )
+    return df
 
 
 def _fit_polynomial(
@@ -268,14 +304,24 @@ def generate_empirical_complexity(
         t_fit = c * n_fit**alpha
         ax.plot(n_fit, t_fit, "--", color=color, linewidth=0.8, alpha=0.6, zorder=2)
 
-    # --- GED per-pair computation time (from real datasets) ---
+    # --- GED per-pair computation time ---
+    # Prefer synthetic GED (same graph families) over real-dataset GED.
     ged_alpha = ged_c = ged_r2 = None
-    ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
-    ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
+    syn_ged_df = _load_synthetic_ged_times(data_dir)
+    if not syn_ged_df.empty:
+        ged_df = syn_ged_df
+        ged_n_col = "n_nodes"
+        logger.info("Using synthetic GED data (%d rows)", len(ged_df))
+    else:
+        ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
+        ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
+        ged_n_col = "max_n"
+        if not ged_df.empty:
+            logger.info("Using real-dataset GED data (%d rows)", len(ged_df))
     if not ged_df.empty:
         ged_ns, ged_med, ged_q25, ged_q75 = _aggregate_per_n(
             ged_df["ged_time_median_s"],
-            ged_df["max_n"],
+            ged_df[ged_n_col],
         )
         if len(ged_ns) >= 2:
             ged_alpha, ged_c, ged_r2 = _fit_polynomial(ged_ns, ged_med)
@@ -311,7 +357,7 @@ def generate_empirical_complexity(
             )
 
     ax.set_yscale("log")
-    ax.set_xlabel(r"Number of nodes $n$")
+    ax.set_xlabel(r"Number of nodes $N$")
     ax.set_ylabel("Time (s)")
 
     # Remove top and right spines
@@ -372,15 +418,30 @@ def generate_empirical_complexity(
         "on random graphs and becomes infeasible beyond $n \\approx 12$. "
     )
     if ged_alpha is not None:
+        if not syn_ged_df.empty:
+            ged_source = (
+                "GED computation time (per graph pair, same synthetic random "
+                "graph families) is overlaid for reference"
+            )
+            ged_note = (
+                "Note that encoding times are per-graph while GED is per-pair; "
+                "the full IsalGraph pipeline for one pair "
+                "($2 \\times$ encode $+$ Levenshtein) remains well below GED."
+            )
+        else:
+            ged_source = (
+                "GED computation time (per graph pair, from real benchmark "
+                "datasets) is overlaid for reference"
+            )
+            ged_note = (
+                "Note that encoding times are per-graph (synthetic random graphs), "
+                "while GED is per-pair (real benchmark datasets); the full IsalGraph "
+                "pipeline for one pair ($2 \\times$ encode $+$ Levenshtein) remains "
+                "well below GED."
+            )
         caption_lines.append(
-            "GED computation time (per graph pair, from real datasets) is overlaid "
-            "for reference: it grows as $T \\sim n^{"
-            f"{ged_alpha:.1f}"
-            "}$, vastly exceeding all IsalGraph encoding methods. "
-            "Note that encoding times are per-graph (synthetic random graphs), "
-            "while GED is per-pair (real benchmark datasets); the full IsalGraph "
-            "pipeline for one pair ($2 \\times$ encode $+$ Levenshtein) remains "
-            "well below GED."
+            f"{ged_source}: it grows as $T \\sim n^{{{ged_alpha:.1f}}}$, "
+            f"vastly exceeding all IsalGraph encoding methods. {ged_note}"
         )
     caption_text = "".join(caption_lines)
 
@@ -455,19 +516,31 @@ def generate_combined_complexity_ratio(
             ("canonical_pruned", pe_ns, pe_med, pe_q25, pe_q75, pe_alpha, pe_c, pe_r2),
         )
 
-    # GED times
+    # GED times — prefer synthetic (same conditions) over real-dataset
     ged_alpha = ged_c = ged_r2 = None
-    ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
-    ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
     ged_data = None
-    if not ged_df.empty:
+    syn_ged_df = _load_synthetic_ged_times(encoding_dir)
+    if not syn_ged_df.empty:
         ged_ns, ged_med, ged_q25, ged_q75 = _aggregate_per_n(
-            ged_df["ged_time_median_s"],
-            ged_df["max_n"],
+            syn_ged_df["ged_time_median_s"],
+            syn_ged_df["n_nodes"],
         )
         if len(ged_ns) >= 2:
             ged_alpha, ged_c, ged_r2 = _fit_polynomial(ged_ns, ged_med)
             ged_data = (ged_ns, ged_med, ged_q25, ged_q75)
+        logger.info("Combined: using synthetic GED data (%d rows)", len(syn_ged_df))
+    else:
+        ged_comp_raw = os.path.join(comp_dir, "raw") if comp_dir else ""
+        ged_df = _load_ged_times(ged_comp_raw) if ged_comp_raw else pd.DataFrame()
+        if not ged_df.empty:
+            ged_ns, ged_med, ged_q25, ged_q75 = _aggregate_per_n(
+                ged_df["ged_time_median_s"],
+                ged_df["max_n"],
+            )
+            if len(ged_ns) >= 2:
+                ged_alpha, ged_c, ged_r2 = _fit_polynomial(ged_ns, ged_med)
+                ged_data = (ged_ns, ged_med, ged_q25, ged_q75)
+            logger.info("Combined: using real-dataset GED data (%d rows)", len(ged_df))
 
     # ---- Load ratio data ---------------------------------------------------
     from benchmarks.eval_visualizations.fig_message_length import _load_message_length_csvs
@@ -485,7 +558,7 @@ def generate_combined_complexity_ratio(
         2,
         figure=fig,
         width_ratios=[1, 1],
-        wspace=0.40,
+        wspace=0.32,
         left=0.07,
         right=0.97,
         top=0.91,
@@ -555,9 +628,9 @@ def generate_combined_complexity_ratio(
         )
 
     ax_left.set_yscale("log")
-    ax_left.set_xlabel(r"Number of nodes $n$", fontsize=7)
+    ax_left.set_xlabel(r"Number of nodes $N$", fontsize=7)
     ax_left.set_ylabel("Time (s)", fontsize=7)
-    ax_left.set_title("(a) Empirical time complexity", fontsize=8, loc="left")
+    ax_left.set_title("(a) Empirical time complexity", fontsize=8, fontweight="bold", loc="left")
     ax_left.spines["top"].set_visible(False)
     ax_left.spines["right"].set_visible(False)
     ax_left.tick_params(labelsize=6)
@@ -637,7 +710,7 @@ def generate_combined_complexity_ratio(
 
     ax_right.set_xlabel("Number of nodes $N$", fontsize=7)
     ax_right.set_ylabel("Ratio (GED / IsalGraph)", fontsize=7)
-    ax_right.set_title("(b) Information content ratio", fontsize=8, loc="left")
+    ax_right.set_title("(b) Message length ratio", fontsize=8, fontweight="bold", loc="left")
     ax_right.tick_params(labelsize=6)
 
     # ---- Save --------------------------------------------------------------
@@ -646,13 +719,18 @@ def generate_combined_complexity_ratio(
     plt.close(fig)
 
     # ---- Caption -----------------------------------------------------------
+    ged_source_txt = (
+        "same synthetic random graph families"
+        if not syn_ged_df.empty
+        else "real benchmark datasets"
+    )
     caption = (
-        "Combined view of encoding time complexity and information content. "
+        "Combined view of encoding time complexity and message length. "
         "(a) Empirical time complexity of IsalGraph encoding methods on random graphs "
         "(Barab\\'asi--Albert and Erd\\H{o}s--R\\'enyi), with GED per-pair "
-        "computation time from real benchmark datasets overlaid for reference. "
+        f"computation time ({ged_source_txt}) overlaid for reference. "
         "Vertical axis: time in seconds (log scale). "
-        "Dashed lines: polynomial fits $T = c \\cdot n^{\\alpha}$. "
+        "Dashed lines: polynomial fits $T = c \\cdot n^{{\\alpha}}$. "
     )
     for method, _ns, _med, _q25, _q75, alpha, _c, r2 in methods_data:
         lbl = METHOD_LABELS.get(method, method)
