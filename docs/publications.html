@@ -23,56 +23,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
-  <link rel="stylesheet" href="css/variables.css?v=3">
-  <link rel="stylesheet" href="css/reset.css?v=3">
-  <link rel="stylesheet" href="css/typography.css?v=3">
-  <link rel="stylesheet" href="css/layout.css?v=3">
-  <link rel="stylesheet" href="css/components.css?v=3">
-  <link rel="stylesheet" href="css/nav.css?v=3">
-  <link rel="stylesheet" href="css/footer.css?v=3">
-  <link rel="stylesheet" href="css/publications.css?v=3">
-
-  <!-- Schema.org structured data -->
-  <script type="application/ld+json">
-  [{
-    "@context": "https://schema.org",
-    "@type": "ScholarlyArticle",
-    "name": "Instruction set for the representation of graphs",
-    "author": [
-      {"@type": "Person", "name": "Ezequiel Lopez-Rubio"},
-      {"@type": "Person", "name": "Mario Pascual-Gonzalez"}
-    ],
-    "datePublished": "2026",
-    "url": "https://arxiv.org/abs/2603.11039"
-  },
-  {
-    "@context": "https://schema.org",
-    "@type": "ScholarlyArticle",
-    "name": "Representation of the structure of graphs by sequences of instructions",
-    "author": [
-      {"@type": "Person", "name": "Ezequiel Lopez-Rubio"}
-    ],
-    "datePublished": "2025",
-    "url": "https://arxiv.org/abs/2512.10429"
-  },
-  {
-    "@context": "https://schema.org",
-    "@type": "ScholarlyArticle",
-    "name": "Representation of Molecules by Sequences of Instructions",
-    "author": [
-      {"@type": "Person", "name": "Karl Thurnhofer-Hemsi"},
-      {"@type": "Person", "name": "Iván García-Aguilar"},
-      {"@type": "Person", "name": "José David Fernández-Rodriguez"},
-      {"@type": "Person", "name": "Ezequiel Lopez-Rubio"}
-    ],
-    "datePublished": "2025",
-    "url": "https://doi.org/10.1021/acs.jcim.5c00572",
-    "isPartOf": {
-      "@type": "Periodical",
-      "name": "Journal of Chemical Information and Modeling"
-    }
-  }]
-  </script>
+  <link rel="stylesheet" href="css/variables.css?v=5">
+  <link rel="stylesheet" href="css/reset.css?v=5">
+  <link rel="stylesheet" href="css/typography.css?v=5">
+  <link rel="stylesheet" href="css/layout.css?v=5">
+  <link rel="stylesheet" href="css/components.css?v=5">
+  <link rel="stylesheet" href="css/nav.css?v=5">
+  <link rel="stylesheet" href="css/footer.css?v=5">
+  <link rel="stylesheet" href="css/publications.css?v=5">
 </head>
 <body data-page="publications">
   <a href="#main-content" class="skip-to-content">Skip to main content</a>
@@ -85,151 +43,23 @@
         <p>Research papers and preprints on the IsalGraph framework for graph encoding via instruction strings.</p>
       </header>
 
-      <div class="paper-list">
-
-        <!-- Paper 1: 2026 -->
-        <article class="card paper-card">
-          <div class="paper-card__meta">
-            <span class="badge badge--blue">2026</span>
-            <span class="badge badge--green">arXiv preprint</span>
-          </div>
-          <h2 class="paper-card__title">Instruction set for the representation of graphs</h2>
-          <p class="paper-card__authors">Ezequiel Lopez-Rubio, Mario Pascual-Gonzalez</p>
-          <div class="paper-card__abstract">
-            <p>
-              This work introduces IsalGraph, a framework for representing the structure of finite
-              simple graphs as strings over a 9-character instruction alphabet. Using a circular
-              doubly linked list (CDLL) with two mobile pointers, any graph can be encoded into
-              a compact instruction sequence and faithfully decoded back. We prove that the
-              canonical string &mdash; the lexicographically smallest shortest encoding over all
-              starting vertices &mdash; is a complete graph invariant: two graphs are isomorphic
-              if and only if their canonical strings coincide. The Levenshtein distance between
-              canonical strings defines a metric on isomorphism classes that serves as a
-              polynomial-time proxy for graph edit distance.
-            </p>
-          </div>
-          <div class="paper-card__actions">
-            <a href="https://arxiv.org/abs/2603.11039" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">arXiv</a>
-            <a href="https://arxiv.org/pdf/2603.11039" class="btn btn-sm btn-outline" target="_blank" rel="noopener noreferrer">PDF</a>
-            <button class="btn btn-sm btn-ghost" onclick="IsalGraph.toggleBibtex('bib-2026')">
-              BibTeX <span id="bib-2026-feedback" class="copy-feedback"></span>
-            </button>
-          </div>
-          <div id="bib-2026" class="bibtex-content expandable">
-            <div class="expandable__content" style="display: block;">
-              <pre>@misc{lopezrubio2026instructionsetrepresentationgraphs,
-      title={Instruction set for the representation of graphs},
-      author={Ezequiel Lopez-Rubio and Mario Pascual-Gonzalez},
-      year={2026},
-      eprint={2603.11039},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2603.11039},
-}</pre>
-              <button class="btn btn-sm btn-outline" onclick="IsalGraph.copyBibtex('bib-2026')" style="margin-top: var(--space-sm);">
-                Copy to clipboard
-              </button>
-            </div>
-          </div>
-        </article>
-
-        <!-- Paper 2: 2025 -->
-        <article class="card paper-card">
-          <div class="paper-card__meta">
-            <span class="badge badge--purple">2025</span>
-            <span class="badge badge--green">arXiv preprint</span>
-          </div>
-          <h2 class="paper-card__title">Representation of the structure of graphs by sequences of instructions</h2>
-          <p class="paper-card__authors">Ezequiel Lopez-Rubio</p>
-          <div class="paper-card__abstract">
-            <p>
-              This paper presents the foundational theory for representing graph structures
-              using instruction sequences. A graph is encoded as a string over a finite alphabet
-              by traversing it with a circular doubly linked list equipped with two pointers.
-              The encoding procedure is reversible: the original graph can be reconstructed
-              from its string representation. This framework opens new avenues for graph
-              comparison, classification, and generation using techniques from string processing.
-            </p>
-          </div>
-          <div class="paper-card__actions">
-            <a href="https://arxiv.org/abs/2512.10429" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">arXiv</a>
-            <a href="https://arxiv.org/pdf/2512.10429" class="btn btn-sm btn-outline" target="_blank" rel="noopener noreferrer">PDF</a>
-            <button class="btn btn-sm btn-ghost" onclick="IsalGraph.toggleBibtex('bib-2025')">
-              BibTeX <span id="bib-2025-feedback" class="copy-feedback"></span>
-            </button>
-          </div>
-          <div id="bib-2025" class="bibtex-content expandable">
-            <div class="expandable__content" style="display: block;">
-              <pre>@misc{lopezrubio2025representationstructuregraphssequences,
-      title={Representation of the structure of graphs by
-             sequences of instructions},
-      author={Ezequiel Lopez-Rubio},
-      year={2025},
-      eprint={2512.10429},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2512.10429},
-}</pre>
-              <button class="btn btn-sm btn-outline" onclick="IsalGraph.copyBibtex('bib-2025')" style="margin-top: var(--space-sm);">
-                Copy to clipboard
-              </button>
-            </div>
-          </div>
-        </article>
-
-        <!-- Paper 3: IsalChem 2025 -->
-        <article class="card paper-card">
-          <div class="paper-card__meta">
-            <span class="badge badge--purple">2025</span>
-            <span class="badge badge--amber">Journal</span>
-          </div>
-          <h2 class="paper-card__title">Representation of Molecules by Sequences of Instructions</h2>
-          <p class="paper-card__authors">Karl Thurnhofer-Hemsi, Iv&aacute;n Garc&iacute;a-Aguilar, Jos&eacute; David Fern&aacute;ndez-Rodriguez, Ezequiel L&oacute;pez-Rubio</p>
-          <div class="paper-card__abstract">
-            <p>
-              This paper introduces IsalChem, the predecessor to IsalGraph, which applies instruction
-              string encoding to molecular graphs. Molecules are represented as labeled graphs where
-              atoms are nodes and bonds are edges. The encoding framework produces compact string
-              representations that capture molecular topology, enabling string-based techniques for
-              molecular comparison, generation, and classification. Published in the Journal of Chemical
-              Information and Modeling (ACS Publications).
-            </p>
-          </div>
-          <div class="paper-card__actions">
-            <a href="https://doi.org/10.1021/acs.jcim.5c00572" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">DOI</a>
-            <button class="btn btn-sm btn-ghost" onclick="IsalGraph.toggleBibtex('bib-isalchem')">
-              BibTeX <span id="bib-isalchem-feedback" class="copy-feedback"></span>
-            </button>
-          </div>
-          <div id="bib-isalchem" class="bibtex-content expandable">
-            <div class="expandable__content" style="display: block;">
-              <pre>@article{thurnhofer2025representation,
-  title={Representation of Molecules by Sequences of Instructions},
-  author={Thurnhofer-Hemsi, Karl and Garc{\'\i}a-Aguilar,
-          Iv{\'a}n and Fern{\'a}ndez-Rodriguez,
-          Jos{\'e} David and L{\'o}pez-Rubio, Ezequiel},
-  journal={Journal of Chemical Information and Modeling},
-  volume={65},
-  number={15},
-  pages={7936--7955},
-  year={2025},
-  publisher={ACS Publications}
-}</pre>
-              <button class="btn btn-sm btn-outline" onclick="IsalGraph.copyBibtex('bib-isalchem')" style="margin-top: var(--space-sm);">
-                Copy to clipboard
-              </button>
-            </div>
-          </div>
-        </article>
-
+      <!-- Paper list (dynamically loaded from data/publications.csv) -->
+      <div class="paper-list" id="paper-list-container">
+        <div style="text-align: center; padding: var(--space-xl); color: var(--text-tertiary);">Loading publications...</div>
       </div>
     </div>
   </main>
 
   <div id="site-footer"></div>
 
-  <script src="js/theme.js?v=3"></script>
-  <script src="js/components.js?v=3"></script>
-  <script src="js/publications.js?v=3"></script>
+  <script src="js/theme.js?v=5"></script>
+  <script src="js/components.js?v=5"></script>
+  <script src="js/publications.js?v=5"></script>
+  <script src="js/data-loader.js?v=5"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      IsalGraph.loadPublicationsData();
+    });
+  </script>
 </body>
 </html>

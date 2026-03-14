@@ -23,14 +23,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
-  <link rel="stylesheet" href="css/variables.css?v=3">
-  <link rel="stylesheet" href="css/reset.css?v=3">
-  <link rel="stylesheet" href="css/typography.css?v=3">
-  <link rel="stylesheet" href="css/layout.css?v=3">
-  <link rel="stylesheet" href="css/components.css?v=3">
-  <link rel="stylesheet" href="css/nav.css?v=3">
-  <link rel="stylesheet" href="css/footer.css?v=3">
-  <link rel="stylesheet" href="css/team.css?v=3">
+  <link rel="stylesheet" href="css/variables.css?v=5">
+  <link rel="stylesheet" href="css/reset.css?v=5">
+  <link rel="stylesheet" href="css/typography.css?v=5">
+  <link rel="stylesheet" href="css/layout.css?v=5">
+  <link rel="stylesheet" href="css/components.css?v=5">
+  <link rel="stylesheet" href="css/nav.css?v=5">
+  <link rel="stylesheet" href="css/footer.css?v=5">
+  <link rel="stylesheet" href="css/team.css?v=5">
 </head>
 <body data-page="team">
   <a href="#main-content" class="skip-to-content">Skip to main content</a>
@@ -43,68 +43,9 @@
         <p>The researchers behind the IsalGraph framework at the University of M&aacute;laga.</p>
       </header>
 
-      <!-- Team Members -->
-      <div class="team-grid">
-        <article class="card profile-card">
-          <img
-            src="images/EzequielLopez-sm.png"
-            alt="Photo of Ezequiel López-Rubio"
-            class="profile-card__photo"
-            width="140"
-            height="140"
-          >
-          <h2 class="profile-card__name">Ezequiel L&oacute;pez-Rubio</h2>
-          <p class="profile-card__role">Principal Investigator</p>
-          <p class="profile-card__affiliation">
-            Full Professor<br>
-            Dept. of Computer Languages and Computer Science<br>
-            University of M&aacute;laga
-          </p>
-          <p class="profile-card__bio">
-            Ezequiel L&oacute;pez-Rubio is a Full Professor at the University of M&aacute;laga.
-            His research interests include graph theory, machine learning, computer vision,
-            and neural network architectures. He is the creator of the IsalGraph framework
-            and the principal investigator of the ICAI research group.
-          </p>
-          <div class="profile-card__links">
-            <a href="mailto:ezeqlr@lcc.uma.es" class="btn btn-sm btn-ghost">Email</a>
-            <a href="https://scholar.google.es/citations?user=PLACEHOLDER" class="btn btn-sm btn-ghost" target="_blank" rel="noopener noreferrer">Scholar</a>
-            <a href="https://orcid.org/0000-0001-8231-5687" class="btn btn-sm btn-ghost orcid-link" target="_blank" rel="noopener noreferrer">
-              <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" alt="" width="16" height="16" class="orcid-icon">
-              ORCID
-            </a>
-          </div>
-        </article>
-
-        <article class="card profile-card">
-          <img
-            src="images/MarioPascual-sm.jpg"
-            alt="Photo of Mario Pascual González"
-            class="profile-card__photo"
-            width="140"
-            height="140"
-          >
-          <h2 class="profile-card__name">Mario Pascual Gonz&aacute;lez</h2>
-          <p class="profile-card__role">PhD Student</p>
-          <p class="profile-card__affiliation">
-            Dept. of Computer Languages and Computer Science<br>
-            University of M&aacute;laga
-          </p>
-          <p class="profile-card__bio">
-            Mario Pascual Gonz&aacute;lez is a PhD student at the University of M&aacute;laga
-            working on graph representation learning and the IsalGraph framework. His research
-            focuses on leveraging instruction string encodings for deep learning applications
-            in graph generation, classification, and comparison.
-          </p>
-          <div class="profile-card__links">
-            <a href="mailto:mpascual@uma.es" class="btn btn-sm btn-ghost">Email</a>
-            <a href="https://github.com/MarioPasc" class="btn btn-sm btn-ghost" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a href="https://orcid.org/0009-0001-2178-4647" class="btn btn-sm btn-ghost orcid-link" target="_blank" rel="noopener noreferrer">
-              <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" alt="" width="16" height="16" class="orcid-icon">
-              ORCID
-            </a>
-          </div>
-        </article>
+      <!-- Team Members (dynamically loaded from data/team.csv) -->
+      <div class="team-grid" id="team-grid-container">
+        <div style="text-align: center; padding: var(--space-xl); color: var(--text-tertiary);">Loading team data...</div>
       </div>
 
       <!-- Lab Section -->
@@ -156,7 +97,13 @@
 
   <div id="site-footer"></div>
 
-  <script src="js/theme.js?v=3"></script>
-  <script src="js/components.js?v=3"></script>
+  <script src="js/theme.js?v=5"></script>
+  <script src="js/components.js?v=5"></script>
+  <script src="js/data-loader.js?v=5"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      IsalGraph.loadTeamData();
+    });
+  </script>
 </body>
 </html>
