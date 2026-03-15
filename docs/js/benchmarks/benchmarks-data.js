@@ -29,25 +29,25 @@
           nGraphs: 1180, meanNodes: 4.066, meanEdges: 3.066,
           meanStringLen: 3.970, isalBits: 12.59, isalEntropyBits: 4.717,
           gedGenerousBits: 15.39, gedStandardBits: 21.53, gedFullBits: 31.24,
-          ratio: 1.168, pctWins: 71.53, nWins: 844
+          ratio: 1.710, pctWins: 100.0, nWins: 1180
         },
         iam_letter_low_pruned_exhaustive: {
           nGraphs: 1180, meanNodes: 4.066, meanEdges: 3.066,
           meanStringLen: 3.970, isalBits: 12.59, isalEntropyBits: 5.313,
           gedGenerousBits: 15.39, gedStandardBits: 21.53, gedFullBits: 31.24,
-          ratio: 1.168, pctWins: 71.53, nWins: 844
+          ratio: 1.710, pctWins: 100.0, nWins: 1180
         },
         iam_letter_low_greedy: {
           nGraphs: 1180, meanNodes: 4.066, meanEdges: 3.066,
           meanStringLen: 3.970, isalBits: 12.59, isalEntropyBits: 5.072,
           gedGenerousBits: 15.39, gedStandardBits: 21.53, gedFullBits: 31.24,
-          ratio: 1.168, pctWins: 71.53, nWins: 844
+          ratio: 1.710, pctWins: 100.0, nWins: 1180
         },
         iam_letter_low_greedy_single: {
           nGraphs: 1180, meanNodes: 4.066, meanEdges: 3.066,
           meanStringLen: 4.481, isalBits: 14.20, isalEntropyBits: 7.159,
           gedGenerousBits: 15.39, gedStandardBits: 21.53, gedFullBits: 31.24,
-          ratio: 1.026, pctWins: 49.24, nWins: 581
+          ratio: 1.516, pctWins: 100.0, nWins: 1180
         },
 
         // --- iam_letter_med ---
@@ -55,25 +55,25 @@
           nGraphs: 1253, meanNodes: 4.115, meanEdges: 3.168,
           meanStringLen: 4.172, isalBits: 13.22, isalEntropyBits: 5.364,
           gedGenerousBits: 15.97, gedStandardBits: 22.25, gedFullBits: 32.21,
-          ratio: 1.161, pctWins: 69.83, nWins: 875
+          ratio: 1.683, pctWins: 100.0, nWins: 1253
         },
         iam_letter_med_pruned_exhaustive: {
           nGraphs: 1253, meanNodes: 4.115, meanEdges: 3.168,
           meanStringLen: 4.181, isalBits: 13.25, isalEntropyBits: 5.950,
           gedGenerousBits: 15.97, gedStandardBits: 22.25, gedFullBits: 32.21,
-          ratio: 1.160, pctWins: 69.83, nWins: 875
+          ratio: 1.679, pctWins: 100.0, nWins: 1253
         },
         iam_letter_med_greedy: {
           nGraphs: 1253, meanNodes: 4.115, meanEdges: 3.168,
           meanStringLen: 4.178, isalBits: 13.24, isalEntropyBits: 5.720,
           gedGenerousBits: 15.97, gedStandardBits: 22.25, gedFullBits: 32.21,
-          ratio: 1.160, pctWins: 69.83, nWins: 875
+          ratio: 1.680, pctWins: 100.0, nWins: 1253
         },
         iam_letter_med_greedy_single: {
           nGraphs: 1253, meanNodes: 4.115, meanEdges: 3.168,
           meanStringLen: 4.684, isalBits: 14.85, isalEntropyBits: 7.826,
           gedGenerousBits: 15.97, gedStandardBits: 22.25, gedFullBits: 32.21,
-          ratio: 1.023, pctWins: 49.24, nWins: 617
+          ratio: 1.499, pctWins: 100.0, nWins: 1253
         },
 
         // --- iam_letter_high ---
@@ -81,25 +81,25 @@
           nGraphs: 2059, meanNodes: 4.581, meanEdges: 4.556,
           meanStringLen: 6.949, isalBits: 22.03, isalEntropyBits: 13.80,
           gedGenerousBits: 24.29, gedStandardBits: 32.42, gedFullBits: 45.32,
-          ratio: 1.064, pctWins: 60.08, nWins: 1237
+          ratio: 1.472, pctWins: 99.0, nWins: 2039
         },
         iam_letter_high_pruned_exhaustive: {
           nGraphs: 2059, meanNodes: 4.581, meanEdges: 4.556,
           meanStringLen: 7.070, isalBits: 22.41, isalEntropyBits: 14.70,
           gedGenerousBits: 24.29, gedStandardBits: 32.42, gedFullBits: 45.32,
-          ratio: 1.048, pctWins: 60.03, nWins: 1236
+          ratio: 1.447, pctWins: 99.0, nWins: 2039
         },
         iam_letter_high_greedy: {
           nGraphs: 2059, meanNodes: 4.581, meanEdges: 4.556,
           meanStringLen: 7.068, isalBits: 22.41, isalEntropyBits: 14.82,
           gedGenerousBits: 24.29, gedStandardBits: 32.42, gedFullBits: 45.32,
-          ratio: 1.050, pctWins: 60.08, nWins: 1237
+          ratio: 1.447, pctWins: 99.0, nWins: 2039
         },
         iam_letter_high_greedy_single: {
           nGraphs: 2059, meanNodes: 4.581, meanEdges: 4.556,
           meanStringLen: 7.593, isalBits: 24.07, isalEntropyBits: 16.56,
           gedGenerousBits: 24.29, gedStandardBits: 32.42, gedFullBits: 45.32,
-          ratio: 0.9756, pctWins: 53.04, nWins: 1092
+          ratio: 1.347, pctWins: 96.9, nWins: 1995
         },
 
         // --- linux ---
@@ -107,25 +107,25 @@
           nGraphs: 89, meanNodes: 8.708, meanEdges: 8.348,
           meanStringLen: 13.01, isalBits: 41.24, isalEntropyBits: 26.34,
           gedGenerousBits: 62.54, gedStandardBits: 78.60, gedFullBits: 104.04,
-          ratio: 1.502, pctWins: 98.88, nWins: 88
+          ratio: 1.906, pctWins: 100.0, nWins: 89
         },
         linux_pruned_exhaustive: {
           nGraphs: 89, meanNodes: 8.708, meanEdges: 8.348,
           meanStringLen: 13.16, isalBits: 41.71, isalEntropyBits: 28.27,
           gedGenerousBits: 62.54, gedStandardBits: 78.60, gedFullBits: 104.04,
-          ratio: 1.489, pctWins: 98.88, nWins: 88
+          ratio: 1.884, pctWins: 100.0, nWins: 89
         },
         linux_greedy: {
           nGraphs: 89, meanNodes: 8.708, meanEdges: 8.348,
           meanStringLen: 13.31, isalBits: 42.21, isalEntropyBits: 28.52,
           gedGenerousBits: 62.54, gedStandardBits: 78.60, gedFullBits: 104.04,
-          ratio: 1.474, pctWins: 98.88, nWins: 88
+          ratio: 1.862, pctWins: 100.0, nWins: 89
         },
         linux_greedy_single: {
           nGraphs: 89, meanNodes: 8.708, meanEdges: 8.348,
           meanStringLen: 14.27, isalBits: 45.23, isalEntropyBits: 31.08,
           gedGenerousBits: 62.54, gedStandardBits: 78.60, gedFullBits: 104.04,
-          ratio: 1.382, pctWins: 96.63, nWins: 86
+          ratio: 1.738, pctWins: 100.0, nWins: 89
         },
 
         // --- aids ---
@@ -133,25 +133,25 @@
           nGraphs: 769, meanNodes: 10.56, meanEdges: 10.70,
           meanStringLen: 17.49, isalBits: 55.44, isalEntropyBits: 39.74,
           gedGenerousBits: 84.39, gedStandardBits: 104.64, gedFullBits: 136.75,
-          ratio: 1.534, pctWins: 99.61, nWins: 766
+          ratio: 1.888, pctWins: 100.0, nWins: 769
         },
         aids_pruned_exhaustive: {
           nGraphs: 769, meanNodes: 10.56, meanEdges: 10.70,
           meanStringLen: 18.09, isalBits: 57.35, isalEntropyBits: 42.27,
           gedGenerousBits: 84.39, gedStandardBits: 104.64, gedFullBits: 136.75,
-          ratio: 1.491, pctWins: 99.61, nWins: 766
+          ratio: 1.825, pctWins: 100.0, nWins: 769
         },
         aids_greedy: {
           nGraphs: 769, meanNodes: 10.56, meanEdges: 10.70,
           meanStringLen: 18.10, isalBits: 57.38, isalEntropyBits: 41.43,
           gedGenerousBits: 84.39, gedStandardBits: 104.64, gedFullBits: 136.75,
-          ratio: 1.490, pctWins: 99.48, nWins: 765
+          ratio: 1.824, pctWins: 100.0, nWins: 769
         },
         aids_greedy_single: {
           nGraphs: 769, meanNodes: 10.56, meanEdges: 10.70,
           meanStringLen: 19.96, isalBits: 63.28, isalEntropyBits: 46.04,
           gedGenerousBits: 84.39, gedStandardBits: 104.64, gedFullBits: 136.75,
-          ratio: 1.360, pctWins: 98.44, nWins: 757
+          ratio: 1.654, pctWins: 100.0, nWins: 769
         }
       }
     },
@@ -388,13 +388,13 @@
     // ---------------------------------------------------------------
     headlines: {
       // Best compression: AIDS exhaustive, ratio = 1.534 (generous baseline)
-      maxCompressionRatio: 1.534,
-      maxCompressionDataset: 'aids',
+      maxCompressionRatio: 1.906,
+      maxCompressionDataset: 'linux',
       maxCompressionMethod: 'exhaustive',
 
       // Best compression win percentage
-      maxCompressionWinPct: 99.61,
-      maxCompressionWinDataset: 'aids',
+      maxCompressionWinPct: 100.0,
+      maxCompressionWinDataset: 'linux',
 
       // Peak Spearman rho: IAM Letter Low exhaustive = 0.9345
       peakSpearmanRho: 0.9345,

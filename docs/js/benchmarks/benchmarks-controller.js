@@ -105,7 +105,7 @@
     if (tableEl) {
       var html2 = '<table class="bench-table"><thead><tr>' +
         '<th>Dataset</th><th>N</th><th>Nodes</th><th>Edges</th>' +
-        '<th>IsalGraph bits</th><th>GED bits</th><th>Ratio</th><th>% Wins</th>' +
+        '<th>IsalGraph (bits)</th><th>GED standard (bits)</th><th>Ratio</th><th>% Wins</th>' +
         '</tr></thead><tbody>';
 
       D.messageLengths.datasets.forEach(function (ds) {
@@ -117,7 +117,7 @@
           '<td class="mono">' + d.meanNodes.toFixed(1) + '</td>' +
           '<td class="mono">' + d.meanEdges.toFixed(1) + '</td>' +
           '<td class="mono">' + d.isalBits.toFixed(1) + '</td>' +
-          '<td class="mono">' + d.gedGenerousBits.toFixed(1) + '</td>' +
+          '<td class="mono">' + d.gedStandardBits.toFixed(1) + '</td>' +
           '<td class="mono highlight">' + d.ratio.toFixed(3) + '</td>' +
           '<td class="mono">' + d.pctWins.toFixed(1) + '%</td>' +
           '</tr>';

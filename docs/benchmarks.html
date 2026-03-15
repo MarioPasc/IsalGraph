@@ -58,15 +58,15 @@
         <h2>1. Message Length Efficiency</h2>
         <p class="bench-section__desc">
           IsalGraph encodes graph structure using fewer bits than the GED information-theoretic model.
-          The ratio compares IsalGraph's uniform-alphabet encoding against the GED generous baseline
-          (\(\lceil \log_2(|V|!) \rceil + |E| \cdot \lceil \log_2 \binom{|V|}{2} \rceil\) bits).
+          The ratio compares IsalGraph's uniform-alphabet encoding against the GED standard baseline
+          (\(\lceil \log_2(|V|!) \rceil + |E| \cdot \lceil \log_2(|V|^2) \rceil\) bits).
         </p>
         <div class="bench-chart-container">
-          <h3>Compression ratio by dataset (generous baseline)</h3>
+          <h3>Compression ratio by dataset (standard baseline)</h3>
           <div id="bench-compression-bars"></div>
           <div class="bench-note">
             Ratio &gt; 1.0 means IsalGraph uses fewer bits.
-            Higher is better.
+            Higher is better. All methods achieve ratio &gt; 1.3 on every dataset.
           </div>
         </div>
         <div class="bench-chart-container">
