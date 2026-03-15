@@ -8,6 +8,10 @@ __pycache__/
 # C extensions
 *.so
 
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
 # Distribution / packaging
 .Python
 build/
@@ -51,6 +55,7 @@ coverage.xml
 *.py.cover
 .hypothesis/
 .pytest_cache/
+.ruff_cache/
 cover/
 
 # Translations
