@@ -54,6 +54,10 @@
           onclick="IsalGraph.switchPlaygroundTab('g2s')">
           Graph &rarr; String
         </button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-roundtrip" id="tab-roundtrip"
+          onclick="IsalGraph.switchPlaygroundTab('roundtrip')">
+          Round-Trip
+        </button>
       </div>
 
       <!-- S2G Panel -->
@@ -179,6 +183,84 @@
             <button class="transport__btn" id="pg-g2s-play" aria-label="Play/Pause">&#x25B6;</button>
             <button class="transport__btn" id="pg-g2s-next" aria-label="Next step">&#x25B6;&#x258F;</button>
             <span class="transport__step-info" id="pg-g2s-step-info">Step 0/0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Round-Trip Panel -->
+      <div class="tab-panel" id="panel-roundtrip" role="tabpanel" aria-labelledby="tab-roundtrip">
+        <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">
+          Verify the <strong>round-trip property</strong>: decode a string to a graph, encode it back,
+          decode again, and confirm the result is isomorphic to the original.
+        </p>
+        <div class="playground-layout">
+          <!-- Input -->
+          <div class="playground-input">
+            <label class="playground-input__label" for="pg-rt-input">Instruction String</label>
+            <input
+              type="text"
+              class="playground-input__string"
+              id="pg-rt-input"
+              value="VVpvPpC"
+              placeholder="e.g. VVpvPpC"
+              spellcheck="false"
+              autocomplete="off"
+            >
+            <div id="pg-rt-colored" class="output-string" style="min-height: 40px; font-size: var(--text-lg);"></div>
+
+            <div class="playground-presets">
+              <span class="playground-presets__label">Presets</span>
+              <div class="playground-presets__grid">
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VVPnC')">Triangle K&#x2083;</button>
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VVpvPpC')">Cycle C&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VVpvpvPCnC')">House</button>
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VVVVNnNCnNCnnnC')">Wheel W&#x2085;</button>
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VNVNVNVNC')">Cycle C&#x2085;</button>
+                <button class="preset-btn" onclick="IsalGraph.setRTPreset('VVVNNnCNnCnnnC')">Complete K&#x2084;</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-lg);"
+              onclick="IsalGraph.runRoundTrip()">
+              Run Round-Trip &rarr;
+            </button>
+          </div>
+
+          <!-- Output -->
+          <div class="playground-output" id="pg-rt-output" style="display: none;">
+            <!-- Step 1: Original -->
+            <div class="rt-step">
+              <div class="viz-panel__label">1. Decode: S2G(w)</div>
+              <div class="rt-step__graph">
+                <svg id="pg-rt-svg-original" width="100%" height="100%" aria-hidden="true"></svg>
+              </div>
+              <div id="pg-rt-info-original" class="rt-step__info"></div>
+            </div>
+
+            <!-- Step 2: Re-encode -->
+            <div class="rt-step">
+              <div class="viz-panel__label">2. Encode: G2S(G, v<sub>best</sub>)</div>
+              <div id="pg-rt-reencoded-string" class="output-string" style="min-height: 40px; font-size: var(--text-lg); margin: var(--space-md) 0;"></div>
+              <div id="pg-rt-info-encode" class="rt-step__info"></div>
+            </div>
+
+            <!-- Step 3: Re-decode -->
+            <div class="rt-step">
+              <div class="viz-panel__label">3. Decode again: S2G(w')</div>
+              <div class="rt-step__graph">
+                <svg id="pg-rt-svg-roundtrip" width="100%" height="100%" aria-hidden="true"></svg>
+              </div>
+              <div id="pg-rt-info-roundtrip" class="rt-step__info"></div>
+            </div>
+
+            <!-- Verdict -->
+            <div id="pg-rt-verdict" class="rt-verdict"></div>
+
+            <!-- All-start-vertex table -->
+            <div style="margin-top: var(--space-xl);">
+              <div class="viz-panel__label">G2S from each starting vertex</div>
+              <div id="pg-rt-all-starts" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
           </div>
         </div>
       </div>

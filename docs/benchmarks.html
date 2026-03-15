@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benchmarks — IsalGraph</title>
+  <meta name="description" content="Empirical benchmarks of the IsalGraph framework: compression ratios, time complexity, and correlation with graph edit distance across 5 datasets.">
+  <meta name="author" content="Ezequiel López-Rubio, Mario Pascual González">
+
+  <meta property="og:title" content="Benchmarks — IsalGraph">
+  <meta property="og:description" content="Compression ratios, time complexity, and GED correlation benchmarks for IsalGraph.">
+  <meta property="og:url" content="https://mariopasc.github.io/IsalGraph/benchmarks.html">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Benchmarks — IsalGraph">
+  <meta name="twitter:description" content="Compression ratios, time complexity, and GED correlation benchmarks for IsalGraph.">
+  <meta name="twitter:image" content="https://mariopasc.github.io/IsalGraph/images/og-card.png">
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="stylesheet" href="css/variables.css?v=5">
+  <link rel="stylesheet" href="css/reset.css?v=5">
+  <link rel="stylesheet" href="css/typography.css?v=5">
+  <link rel="stylesheet" href="css/layout.css?v=5">
+  <link rel="stylesheet" href="css/components.css?v=5">
+  <link rel="stylesheet" href="css/nav.css?v=5">
+  <link rel="stylesheet" href="css/footer.css?v=5">
+  <link rel="stylesheet" href="css/benchmarks.css?v=5">
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+</head>
+<body data-page="benchmarks">
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
+  <div id="site-nav"></div>
+
+  <main id="main-content">
+    <div class="container">
+      <header class="benchmarks-header">
+        <h1>Benchmarks</h1>
+        <p>
+          Empirical evaluation of the IsalGraph framework across five real-world graph datasets.
+          Results from
+          <a href="https://arxiv.org/abs/2603.11039" target="_blank" rel="noopener noreferrer">L&oacute;pez-Rubio &amp; Pascual-Gonz&aacute;lez (2026)</a>.
+        </p>
+      </header>
+
+      <!-- Headline stats -->
+      <div class="bench-stats" id="bench-stats"></div>
+
+      <!-- ============ 1. COMPRESSION ============ -->
+      <section class="bench-section" id="compression">
+        <h2>1. Message Length Efficiency</h2>
+        <p class="bench-section__desc">
+          IsalGraph encodes graph structure using fewer bits than the GED information-theoretic model.
+          The ratio compares IsalGraph's uniform-alphabet encoding against the GED generous baseline
+          (\(\lceil \log_2(|V|!) \rceil + |E| \cdot \lceil \log_2 \binom{|V|}{2} \rceil\) bits).
+        </p>
+        <div class="bench-chart-container">
+          <h3>Compression ratio by dataset (generous baseline)</h3>
+          <div id="bench-compression-bars"></div>
+          <div class="bench-note">
+            Ratio &gt; 1.0 means IsalGraph uses fewer bits.
+            Higher is better.
+          </div>
+        </div>
+        <div class="bench-chart-container">
+          <h3>Detailed comparison</h3>
+          <div id="bench-compression-table"></div>
+        </div>
+      </section>
+
+      <!-- ============ 2. TIME COMPLEXITY ============ -->
+      <section class="bench-section" id="complexity">
+        <h2>2. Empirical Time Complexity</h2>
+        <p class="bench-section__desc">
+          Power-law scaling \(T(n) \propto n^{\alpha}\) on synthetic graphs
+          (Barab&aacute;si&ndash;Albert, Erd&odblac;s&ndash;R&eacute;nyi, paths, stars, cycles,
+          complete, binary trees, grids). The greedy single-start encoder scales as
+          \(O(n^{2.7})\), significantly faster than exact GED.
+        </p>
+        <div class="bench-chart-container">
+          <h3>Scaling exponents by method (overall fit)</h3>
+          <div id="bench-scaling-bars"></div>
+        </div>
+        <div class="bench-chart-container">
+          <h3>Scaling exponents by graph family</h3>
+          <div id="bench-scaling-table"></div>
+        </div>
+      </section>
+
+      <!-- ============ 3. GED CORRELATION ============ -->
+      <section class="bench-section" id="correlation">
+        <h2>3. Correlation with Graph Edit Distance</h2>
+        <p class="bench-section__desc">
+          Spearman rank correlation (\(\rho\)) between the IsalGraph Levenshtein distance
+          and exact graph edit distance. Strong correlation on structured graphs
+          (IAM Letter LOW: \(\rho = 0.93\)), moderate on sparse molecular graphs (AIDS: \(\rho = 0.35\)).
+        </p>
+        <div class="bench-chart-container">
+          <h3>Spearman &rho; by dataset (exhaustive method)</h3>
+          <div id="bench-correlation-bars"></div>
+        </div>
+        <div class="bench-chart-container">
+          <h3>Method comparison</h3>
+          <div id="bench-correlation-table"></div>
+        </div>
+        <div class="bench-chart-container">
+          <h3>Comparison with Weisfeiler-Leman kernel</h3>
+          <div id="bench-wl-comparison"></div>
+          <div class="bench-note">
+            IsalGraph (exhaustive) outperforms the 3-iteration WL subtree kernel on 4 of 5 datasets.
+            The WL kernel is slightly better on AIDS (sparse molecular graphs with high structural
+            heterogeneity).
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 4. SPEEDUP ============ -->
+      <section class="bench-section" id="speedup">
+        <h2>4. Computational Speedup</h2>
+        <p class="bench-section__desc">
+          End-to-end wall-clock comparison: IsalGraph encoding + Levenshtein distance
+          vs. exact GED computation. Speedup increases with graph size.
+        </p>
+        <div class="bench-chart-container">
+          <h3>Speedup over GED by graph size</h3>
+          <div id="bench-speedup-table"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <!-- Scripts -->
+  <script src="js/theme.js?v=5"></script>
+  <script src="js/components.js?v=5"></script>
+
+  <!-- KaTeX -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Benchmark data + controller -->
+  <script src="js/benchmarks/benchmarks-data.js?v=5"></script>
+  <script src="js/benchmarks/benchmarks-controller.js?v=5"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var check = setInterval(function () {
+        if (typeof renderMathInElement !== 'undefined') {
+          clearInterval(check);
+          renderMathInElement(document.body, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false
+          });
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>

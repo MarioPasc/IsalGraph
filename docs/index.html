@@ -111,6 +111,47 @@
       </div>
     </section>
 
+    <!-- ============ BY THE NUMBERS ============ -->
+    <section class="results-strip">
+      <div class="results-strip__header" style="text-align: center; margin-bottom: var(--space-xl);">
+        <h2 style="font-size: var(--text-2xl); margin-bottom: var(--space-sm);">By the Numbers</h2>
+        <p style="color: var(--text-secondary); font-size: var(--text-base);">
+          Empirical results across 5 benchmark datasets.
+          <a href="benchmarks.html" style="color: var(--accent-primary);">See full benchmarks &rarr;</a>
+        </p>
+      </div>
+      <div class="results-strip__grid">
+        <a href="benchmarks.html#compression" class="card result-card" style="text-decoration: none;">
+          <div class="result-card__icon" aria-hidden="true" style="font-size: var(--text-3xl);">99.6%</div>
+          <h3 class="result-card__title">Compression Wins</h3>
+          <p class="result-card__text">
+            Graphs where IsalGraph encoding is shorter than the GED information-theoretic model.
+          </p>
+        </a>
+        <a href="benchmarks.html#correlation" class="card result-card" style="text-decoration: none;">
+          <div class="result-card__icon" aria-hidden="true" style="font-family: var(--font-mono); font-size: var(--text-2xl);">&rho; = 0.93</div>
+          <h3 class="result-card__title">GED Correlation</h3>
+          <p class="result-card__text">
+            Peak Spearman rank correlation between IsalGraph distance and graph edit distance.
+          </p>
+        </a>
+        <a href="benchmarks.html#complexity" class="card result-card" style="text-decoration: none;">
+          <div class="result-card__icon" aria-hidden="true" style="font-family: var(--font-mono); font-size: var(--text-2xl);">O(n<sup>2.7</sup>)</div>
+          <h3 class="result-card__title">Greedy Encoding</h3>
+          <p class="result-card__text">
+            Empirical time complexity of the greedy single-start encoder on synthetic graphs.
+          </p>
+        </a>
+        <a href="benchmarks.html" class="card result-card" style="text-decoration: none;">
+          <div class="result-card__icon" aria-hidden="true" style="font-size: var(--text-3xl);">5</div>
+          <h3 class="result-card__title">Benchmark Datasets</h3>
+          <p class="result-card__text">
+            IAM Letter (LOW, MED, HIGH), LINUX kernel, and AIDS molecular graphs.
+          </p>
+        </a>
+      </div>
+    </section>
+
     <!-- ============ HOW IT WORKS TEASER ============ -->
     <section class="teaser section">
       <div class="container">

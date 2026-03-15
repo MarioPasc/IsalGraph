@@ -305,6 +305,22 @@
       phi: { 0: 0, 1: 3, 2: 4, 3: 1, 4: 2 },
       stringG: 'VVVV',
       stringH: 'VVVV'
+    },
+    {
+      name: 'Complete (K\u2084)',
+      graphG: { nodeCount: 4, edges: [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]] },
+      graphH: { nodeCount: 4, edges: [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]] },
+      phi: { 0: 2, 1: 3, 2: 0, 3: 1 },
+      stringG: 'VVVPnCnCPpC',
+      stringH: 'VVVPnCnCPpC'
+    },
+    {
+      name: 'Cycles (C\u2085)',
+      graphG: { nodeCount: 5, edges: [[0,1],[1,2],[2,3],[3,4],[4,0]] },
+      graphH: { nodeCount: 5, edges: [[0,1],[1,2],[2,3],[3,4],[4,0]] },
+      phi: { 0: 1, 1: 2, 2: 3, 3: 4, 4: 0 },
+      stringG: 'VVpvpvPnC',
+      stringH: 'VVpvpvPnC'
     }
   ];
 

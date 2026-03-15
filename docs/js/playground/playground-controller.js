@@ -482,6 +482,162 @@
   }
 
   // ================================================================
+  // Round-Trip
+  // ================================================================
+
+  IsalGraph.setRTPreset = function (str) {
+    var input = document.getElementById('pg-rt-input');
+    if (input) {
+      input.value = str;
+      updateRTColored(str);
+    }
+  };
+
+  function updateRTColored(str) {
+    var el = document.getElementById('pg-rt-colored');
+    if (el && typeof IsalGraph.renderColoredString === 'function') {
+      el.innerHTML = IsalGraph.renderColoredString(str);
+    }
+  }
+
+  /**
+   * Check if two SparseGraphs are isomorphic.
+   * Uses the built-in isIsomorphic method if available,
+   * otherwise falls back to degree-sequence comparison.
+   */
+  function graphsAreIsomorphic(g1, g2) {
+    // Use built-in isomorphism check
+    if (typeof g1.isIsomorphic === 'function') {
+      return g1.isIsomorphic(g2);
+    }
+
+    // Fallback: basic degree-sequence check
+    if (g1.nodeCount() !== g2.nodeCount()) return false;
+    if (g1.logicalEdgeCount() !== g2.logicalEdgeCount()) return false;
+
+    var n = g1.nodeCount();
+    var deg1 = [], deg2 = [];
+    for (var i = 0; i < n; i++) {
+      deg1.push(g1.neighbors(i).size);
+      deg2.push(g2.neighbors(i).size);
+    }
+    deg1.sort(function (a, b) { return a - b; });
+    deg2.sort(function (a, b) { return a - b; });
+    for (var j = 0; j < n; j++) {
+      if (deg1[j] !== deg2[j]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Run the full round-trip: decode string -> encode graph -> decode again -> compare.
+   */
+  IsalGraph.runRoundTrip = function () {
+    var input = document.getElementById('pg-rt-input');
+    if (!input) return;
+    var str = input.value.trim();
+    if (!str) return;
+
+    var outputDiv = document.getElementById('pg-rt-output');
+
+    try {
+      // Step 1: Decode the original string
+      var s2g1 = new IsalGraph.StringToGraph(str, false);
+      var result1 = s2g1.run({ trace: false });
+      var graphOriginal = result1.graph;
+
+      // Render original graph
+      var d3Original = IsalGraph.sparseGraphToD3(graphOriginal);
+      IsalGraph.renderGraph('pg-rt-svg-original', d3Original);
+      var infoOrig = document.getElementById('pg-rt-info-original');
+      if (infoOrig) {
+        infoOrig.textContent = graphOriginal.nodeCount() + ' nodes, ' +
+          graphOriginal.logicalEdgeCount() + ' edges';
+      }
+
+      // Step 2: Encode from every starting vertex, pick shortest (greedy-min)
+      var allStrings = [];
+      var bestString = null;
+      var bestStart = 0;
+      for (var v = 0; v < graphOriginal.nodeCount(); v++) {
+        var g2s = new IsalGraph.GraphToString(graphOriginal);
+        var g2sResult = g2s.run(v, { trace: false });
+        allStrings.push({ vertex: v, string: g2sResult.string, length: g2sResult.string.length });
+        if (bestString === null || g2sResult.string.length < bestString.length ||
+            (g2sResult.string.length === bestString.length && g2sResult.string < bestString)) {
+          bestString = g2sResult.string;
+          bestStart = v;
+        }
+      }
+
+      // Render re-encoded string
+      var reEncodedEl = document.getElementById('pg-rt-reencoded-string');
+      if (reEncodedEl) {
+        reEncodedEl.innerHTML = IsalGraph.renderColoredString(bestString);
+      }
+      var infoEncode = document.getElementById('pg-rt-info-encode');
+      if (infoEncode) {
+        infoEncode.textContent = 'Best start vertex: ' + bestStart +
+          ' | Length: ' + bestString.length +
+          (bestString === str ? ' (identical to input!)' : ' (different from input: ' + str.length + ' chars)');
+      }
+
+      // Step 3: Decode the re-encoded string
+      var s2g2 = new IsalGraph.StringToGraph(bestString, false);
+      var result2 = s2g2.run({ trace: false });
+      var graphRoundTrip = result2.graph;
+
+      // Render round-trip graph
+      var d3RT = IsalGraph.sparseGraphToD3(graphRoundTrip);
+      IsalGraph.renderGraph('pg-rt-svg-roundtrip', d3RT);
+      var infoRT = document.getElementById('pg-rt-info-roundtrip');
+      if (infoRT) {
+        infoRT.textContent = graphRoundTrip.nodeCount() + ' nodes, ' +
+          graphRoundTrip.logicalEdgeCount() + ' edges';
+      }
+
+      // Step 4: Compare
+      var isIso = graphsAreIsomorphic(graphOriginal, graphRoundTrip);
+      var verdictEl = document.getElementById('pg-rt-verdict');
+      if (verdictEl) {
+        if (isIso) {
+          verdictEl.className = 'rt-verdict rt-verdict--success';
+          verdictEl.innerHTML = 'Isomorphic! Round-trip property verified.';
+        } else {
+          verdictEl.className = 'rt-verdict rt-verdict--fail';
+          verdictEl.innerHTML = 'Not isomorphic — this should not happen!';
+        }
+      }
+
+      // Step 5: Show all-start-vertex table
+      var tableEl = document.getElementById('pg-rt-all-starts');
+      if (tableEl) {
+        var html = '<table class="instruction-table" style="width: 100%; font-size: var(--text-sm);">' +
+          '<thead><tr><th>Start v</th><th>String</th><th>Length</th></tr></thead><tbody>';
+        allStrings.forEach(function (entry) {
+          var isBest = entry.vertex === bestStart;
+          var style = isBest ? ' style="background: rgba(52, 211, 153, 0.08);"' : '';
+          html += '<tr' + style + '><td>' + entry.vertex + (isBest ? ' *' : '') + '</td>' +
+            '<td style="font-family: var(--font-mono); letter-spacing: 0.05em;">' +
+            IsalGraph.renderColoredString(entry.string) + '</td>' +
+            '<td>' + entry.length + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        tableEl.innerHTML = html;
+      }
+
+      // Show output
+      if (outputDiv) outputDiv.style.display = 'block';
+
+    } catch (e) {
+      if (outputDiv) {
+        outputDiv.style.display = 'block';
+        outputDiv.innerHTML = '<div style="color: #ef4444; padding: var(--space-lg);">Error: ' + e.message + '</div>';
+      }
+    }
+  };
+
+  // ================================================================
   // Init
   // ================================================================
 
@@ -495,6 +651,15 @@
       updateS2GColored(input.value);
       input.addEventListener('input', function () {
         updateS2GColored(this.value);
+      });
+    }
+
+    // Initial colored display for RT input
+    var rtInput = document.getElementById('pg-rt-input');
+    if (rtInput) {
+      updateRTColored(rtInput.value);
+      rtInput.addEventListener('input', function () {
+        updateRTColored(this.value);
       });
     }
   });

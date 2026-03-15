@@ -38,12 +38,13 @@
         '<div class="site-nav__links">' +
           // Learn dropdown
           '<div class="site-nav__dropdown">' +
-            '<button class="site-nav__dropdown-toggle' + dropdownActive(['how-it-works', 'math']) + '" aria-haspopup="true" aria-expanded="false">' +
+            '<button class="site-nav__dropdown-toggle' + dropdownActive(['how-it-works', 'math', 'benchmarks']) + '" aria-haspopup="true" aria-expanded="false">' +
               'Learn <svg class="site-nav__chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
             '</button>' +
             '<div class="site-nav__dropdown-menu">' +
               '<a href="how-it-works.html" class="site-nav__dropdown-item' + activeClass('how-it-works') + '">How It Works</a>' +
               '<a href="math.html" class="site-nav__dropdown-item' + activeClass('math') + '">Math Foundations</a>' +
+              '<a href="benchmarks.html" class="site-nav__dropdown-item' + activeClass('benchmarks') + '">Benchmarks</a>' +
             '</div>' +
           '</div>' +
           '<a href="publications.html" class="site-nav__link' + activeClass('publications') + '">Publications</a>' +
@@ -93,6 +94,7 @@
       '<a href="index.html" class="mobile-menu__link' + mobileActiveClass('home') + '">Home</a>' +
       '<a href="how-it-works.html" class="mobile-menu__link' + mobileActiveClass('how-it-works') + '">How It Works</a>' +
       '<a href="math.html" class="mobile-menu__link' + mobileActiveClass('math') + '">Math Foundations</a>' +
+      '<a href="benchmarks.html" class="mobile-menu__link' + mobileActiveClass('benchmarks') + '">Benchmarks</a>' +
       '<a href="publications.html" class="mobile-menu__link' + mobileActiveClass('publications') + '">Publications</a>' +
       '<a href="playground.html" class="mobile-menu__link' + mobileActiveClass('playground') + '">Playground</a>' +
       '<a href="explorer.html" class="mobile-menu__link' + mobileActiveClass('explorer') + '">Explorer</a>' +
@@ -115,6 +117,7 @@
           '<div class="site-footer__links">' +
             '<a href="how-it-works.html" class="site-footer__link">How It Works</a>' +
             '<a href="math.html" class="site-footer__link">Math Foundations</a>' +
+            '<a href="benchmarks.html" class="site-footer__link">Benchmarks</a>' +
             '<a href="publications.html" class="site-footer__link">Publications</a>' +
             '<a href="playground.html" class="site-footer__link">Playground</a>' +
             '<a href="explorer.html" class="site-footer__link">Explorer</a>' +

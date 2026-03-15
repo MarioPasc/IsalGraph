@@ -213,6 +213,124 @@
         </div>
       </section>
 
+      <!-- G2S Walkthrough -->
+      <section class="section" id="g2s-walkthrough">
+        <h2>Graph &rarr; String (Encoding): Walkthrough</h2>
+        <p style="margin-bottom: var(--space-lg);">
+          Now let's go in the other direction: encode the triangle (K&sub3;) back into an instruction
+          string using the greedy G2S algorithm. The algorithm starts from a chosen vertex and
+          greedily searches for the cheapest pointer displacement that enables inserting a new
+          node (via <span class="instr-char char-V">V</span>/<span class="instr-char char-v">v</span>)
+          or a new edge (via <span class="instr-char char-C">C</span>/<span class="instr-char char-c">c</span>).
+        </p>
+
+        <p style="margin-bottom: var(--space-lg);">
+          <strong>Input graph:</strong> K&sub3; with nodes {0, 1, 2} and edges {0&ndash;1, 0&ndash;2, 1&ndash;2}.
+          <strong>Starting vertex:</strong> node 0.
+        </p>
+
+        <div class="card--flat" style="padding: var(--space-xl); margin-bottom: var(--space-lg);">
+          <table class="instruction-table" role="table" style="margin: 0;">
+            <thead>
+              <tr>
+                <th scope="col">Step</th>
+                <th scope="col">Pair (a, b)</th>
+                <th scope="col">Operation</th>
+                <th scope="col">String</th>
+                <th scope="col">State After</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0</td>
+                <td>&mdash;</td>
+                <td>Initial state</td>
+                <td><code>""</code></td>
+                <td>
+                  G<sub>out</sub>: {0}. Edges: none. CDLL: [0]. &pi;&rarr;0, &sigma;&rarr;0.
+                  <br><em>2 nodes + 1 edge still to insert.</em>
+                </td>
+              </tr>
+              <tr>
+                <td>1</td>
+                <td>(0, 0)</td>
+                <td>
+                  Cost 0. Uninserted neighbor of &pi;'s node found (node 1).
+                  <br>Emit <span class="instr-char char-V">V</span>.
+                </td>
+                <td>
+                  <span class="char-V">V</span>
+                </td>
+                <td>
+                  G<sub>out</sub>: {0, 1}. Edges: {0&ndash;1}. CDLL: [0, 1].
+                  <br>&pi;&rarr;0, &sigma;&rarr;0. <em>1 node + 1 edge remain.</em>
+                </td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>(0, 0)</td>
+                <td>
+                  Cost 0. Uninserted neighbor of &pi;'s node found (node 2).
+                  <br>Emit <span class="instr-char char-V">V</span>.
+                </td>
+                <td>
+                  <span class="char-V">V</span><span class="char-V">V</span>
+                </td>
+                <td>
+                  G<sub>out</sub>: {0, 1, 2}. Edges: {0&ndash;1, 0&ndash;2}. CDLL: [0, 2, 1].
+                  <br>&pi;&rarr;0, &sigma;&rarr;0. <em>0 nodes + 1 edge remain.</em>
+                </td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>(&minus;1, +1)</td>
+                <td>
+                  Cost 2. All nodes inserted; search for edge operation.
+                  Pairs (0,0) through (&minus;1,0) fail (edges exist or self-loop).
+                  <br>At (&minus;1,+1): &pi; prev&rarr;node 1, &sigma; next&rarr;node 2. Edge 1&ndash;2 not in G<sub>out</sub> but in input.
+                  <br>Emit <span class="instr-char char-P">P</span><span class="instr-char char-n">n</span><span class="instr-char char-C">C</span>.
+                </td>
+                <td>
+                  <span class="char-V">V</span><span class="char-V">V</span><span class="char-P">P</span><span class="char-n">n</span><span class="char-C">C</span>
+                </td>
+                <td>
+                  G<sub>out</sub>: {0, 1, 2}. Edges: {0&ndash;1, 0&ndash;2, 1&ndash;2}. Triangle complete!
+                  <br>&pi;&rarr;1, &sigma;&rarr;2. <em>All done.</em>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="remark-box" style="margin-bottom: var(--space-xl);">
+          <div class="remark-box__label">Observation</div>
+          <p>
+            The greedy G2S algorithm produced the string
+            <span class="instruction-string">
+              <span class="char-V">V</span><span class="char-V">V</span><span class="char-P">P</span><span class="char-n">n</span><span class="char-C">C</span>
+            </span>
+            &mdash; exactly the same string we decoded in the S2G walkthrough above!
+            This is the <strong>round-trip property</strong> in action: encoding a graph and decoding the
+            result produces a graph isomorphic to the original. For this triangle, the G2S output from
+            every starting vertex is identical (<code>VVPnC</code>), confirming its <strong>canonical string</strong>.
+          </p>
+        </div>
+
+        <div class="theorem" style="border-left-color: var(--accent-tertiary);">
+          <div class="theorem__label" style="color: var(--accent-tertiary);">Try it yourself</div>
+          <div class="theorem__content">
+            <p>
+              Use the <strong>Playground</strong> in G2S mode to encode any graph and watch the greedy
+              algorithm choose displacement pairs step by step. Try different starting vertices
+              and observe how the resulting strings differ.
+            </p>
+            <p style="margin-top: var(--space-md);">
+              <a href="playground.html" class="btn btn-primary">Open Playground &rarr;</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- Mathematical Foundations -->
       <section class="math-sections section">
         <h2>Mathematical Foundations</h2>
