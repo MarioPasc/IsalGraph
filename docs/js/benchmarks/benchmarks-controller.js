@@ -1,6 +1,10 @@
 /**
  * IsalGraph — Benchmarks Controller
  * Renders charts and tables from the embedded benchmark data.
+ *
+ * NOTE: Only Canonical (Pruned), Greedy-Min, and Greedy-Single methods
+ * are displayed. The unpruned exhaustive is omitted (it differs only
+ * marginally and is not the algorithm presented in the paper).
  */
 (function () {
   'use strict';
@@ -18,13 +22,10 @@
   };
 
   var METHOD_LABELS = {
-    exhaustive: 'Exhaustive',
-    pruned_exhaustive: 'Pruned',
+    pruned_exhaustive: 'Canonical (Pruned)',
     greedy: 'Greedy-Min',
     greedy_single: 'Greedy-Single'
   };
-
-  var BAR_COLORS = ['--primary', '--secondary', '--tertiary', '--warm'];
 
   // ================================================================
   // Helper: create a horizontal bar
@@ -51,14 +52,14 @@
     var h = D.headlines;
     el.innerHTML =
       '<div class="bench-stat">' +
-        '<div class="bench-stat__value">' + h.maxCompressionWinPct.toFixed(1) + '%</div>' +
-        '<div class="bench-stat__label">Compression Wins</div>' +
-        '<div class="bench-stat__detail">Best dataset: ' + DATASET_LABELS[h.maxCompressionWinDataset] + '</div>' +
+        '<div class="bench-stat__value">' + h.maxCompressionRatio.toFixed(1) + 'x</div>' +
+        '<div class="bench-stat__label">Peak Compression</div>' +
+        '<div class="bench-stat__detail">' + DATASET_LABELS[h.maxCompressionDataset] + ' (vs. GED standard)</div>' +
       '</div>' +
       '<div class="bench-stat">' +
         '<div class="bench-stat__value">&rho; = ' + h.peakSpearmanRho.toFixed(2) + '</div>' +
         '<div class="bench-stat__label">Peak GED Correlation</div>' +
-        '<div class="bench-stat__detail">' + DATASET_LABELS[h.peakSpearmanDataset] + ' (' + METHOD_LABELS[h.peakSpearmanMethod] + ')</div>' +
+        '<div class="bench-stat__detail">' + DATASET_LABELS[h.peakSpearmanDataset] + ' (Canonical Pruned)</div>' +
       '</div>' +
       '<div class="bench-stat">' +
         '<div class="bench-stat__value">O(n<sup>' + h.greedySingleOverallAlpha.toFixed(1) + '</sup>)</div>' +
@@ -79,18 +80,18 @@
     var barsEl = document.getElementById('bench-compression-bars');
     var tableEl = document.getElementById('bench-compression-table');
 
+    // Use pruned_exhaustive (Canonical) for the bar chart
     if (barsEl) {
       var html = '';
       var maxRatio = 0;
-      // Use exhaustive method for the bar chart
       D.messageLengths.datasets.forEach(function (ds) {
-        var d = D.messageLengths.data[ds + '_exhaustive'];
+        var d = D.messageLengths.data[ds + '_pruned_exhaustive'];
         if (d && d.ratio > maxRatio) maxRatio = d.ratio;
       });
       maxRatio = Math.max(maxRatio * 1.1, 1.6);
 
       D.messageLengths.datasets.forEach(function (ds) {
-        var d = D.messageLengths.data[ds + '_exhaustive'];
+        var d = D.messageLengths.data[ds + '_pruned_exhaustive'];
         if (!d) return;
         html += bar(
           DATASET_LABELS[ds],
@@ -104,12 +105,12 @@
 
     if (tableEl) {
       var html2 = '<table class="bench-table"><thead><tr>' +
-        '<th>Dataset</th><th>N</th><th>Nodes</th><th>Edges</th>' +
+        '<th>Dataset</th><th>N</th><th>Avg. Nodes</th><th>Avg. Edges</th>' +
         '<th>IsalGraph (bits)</th><th>GED standard (bits)</th><th>Ratio</th><th>% Wins</th>' +
         '</tr></thead><tbody>';
 
       D.messageLengths.datasets.forEach(function (ds) {
-        var d = D.messageLengths.data[ds + '_exhaustive'];
+        var d = D.messageLengths.data[ds + '_pruned_exhaustive'];
         if (!d) return;
         html2 += '<tr>' +
           '<td>' + DATASET_LABELS[ds] + '</td>' +
@@ -138,7 +139,7 @@
       var methods = [
         { key: 'greedy_single', label: 'Greedy-Single', color: '--primary' },
         { key: 'greedy_min', label: 'Greedy-Min', color: '--secondary' },
-        { key: 'pruned_exhaustive', label: 'Pruned Exhaustive', color: '--tertiary' }
+        { key: 'pruned_exhaustive', label: 'Canonical (Pruned)', color: '--tertiary' }
       ];
       var html = '';
       var maxAlpha = 12;
@@ -164,7 +165,7 @@
       };
 
       var html2 = '<table class="bench-table"><thead><tr>' +
-        '<th>Graph Family</th><th>Greedy-Single</th><th>Greedy-Min</th><th>Pruned</th>' +
+        '<th>Graph Family</th><th>Greedy-Single</th><th>Greedy-Min</th><th>Canonical (Pruned)</th>' +
         '</tr></thead><tbody>';
 
       families.forEach(function (fam) {
@@ -203,10 +204,11 @@
     var tableEl = document.getElementById('bench-correlation-table');
     var wlEl = document.getElementById('bench-wl-comparison');
 
+    // Use pruned_exhaustive for bar chart
     if (barsEl) {
       var html = '';
       D.correlation.datasets.forEach(function (ds) {
-        var d = D.correlation.data[ds + '_exhaustive'];
+        var d = D.correlation.data[ds + '_pruned_exhaustive'];
         if (!d) return;
         html += bar(
           DATASET_LABELS[ds],
@@ -219,28 +221,26 @@
 
     if (tableEl) {
       var html2 = '<table class="bench-table"><thead><tr>' +
-        '<th>Dataset</th><th>Exhaustive</th><th>Pruned</th><th>Greedy-Min</th><th>Greedy-Single</th><th>N pairs</th>' +
+        '<th>Dataset</th><th>Canonical (Pruned)</th><th>Greedy-Min</th><th>Greedy-Single</th><th>N pairs</th>' +
         '</tr></thead><tbody>';
 
       D.correlation.datasets.forEach(function (ds) {
-        var ex = D.correlation.data[ds + '_exhaustive'];
         var pe = D.correlation.data[ds + '_pruned_exhaustive'];
         var gm = D.correlation.data[ds + '_greedy'];
         var gs = D.correlation.data[ds + '_greedy_single'];
 
         html2 += '<tr><td>' + DATASET_LABELS[ds] + '</td>';
-        html2 += '<td class="mono highlight">' + (ex ? ex.rho.toFixed(3) : '&mdash;') + '</td>';
-        html2 += '<td class="mono">' + (pe ? pe.rho.toFixed(3) : '&mdash;') + '</td>';
+        html2 += '<td class="mono highlight">' + (pe ? pe.rho.toFixed(3) : '&mdash;') + '</td>';
         html2 += '<td class="mono">' + (gm ? gm.rho.toFixed(3) : '&mdash;') + '</td>';
         html2 += '<td class="mono">' + (gs ? gs.rho.toFixed(3) : '&mdash;') + '</td>';
-        html2 += '<td class="mono muted">' + (ex ? ex.nPairs.toLocaleString() : '&mdash;') + '</td>';
+        html2 += '<td class="mono muted">' + (pe ? pe.nPairs.toLocaleString() : '&mdash;') + '</td>';
         html2 += '</tr>';
       });
       html2 += '</tbody></table>';
       tableEl.innerHTML = html2;
     }
 
-    // WL comparison
+    // WL comparison (using pruned_exhaustive rho values)
     if (wlEl) {
       var wl = D.headlines.isalgraphBeatsWl;
       var html3 = '<table class="bench-table"><thead><tr>' +

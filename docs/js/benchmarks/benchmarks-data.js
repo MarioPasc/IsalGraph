@@ -396,10 +396,10 @@
       maxCompressionWinPct: 100.0,
       maxCompressionWinDataset: 'linux',
 
-      // Peak Spearman rho: IAM Letter Low exhaustive = 0.9345
-      peakSpearmanRho: 0.9345,
+      // Peak Spearman rho: IAM Letter Low pruned_exhaustive = 0.9278
+      peakSpearmanRho: 0.9278,
       peakSpearmanDataset: 'iam_letter_low',
-      peakSpearmanMethod: 'exhaustive',
+      peakSpearmanMethod: 'pruned_exhaustive',
 
       // Greedy single overall scaling exponent
       greedySingleOverallAlpha: 2.710,
@@ -414,13 +414,13 @@
       maxSpeedupDataset: 'aids',
       maxSpeedupBin: '11-12',
 
-      // WL kernel comparison: IsalGraph (exhaustive) beats WL on all IAM datasets
+      // WL kernel comparison: IsalGraph (pruned) vs WL
       isalgraphBeatsWl: {
-        iam_letter_low:  { isalRho: 0.9345, wlRho: 0.6816, delta: 0.2529 },
-        iam_letter_med:  { isalRho: 0.8762, wlRho: 0.6273, delta: 0.2489 },
-        iam_letter_high: { isalRho: 0.6824, wlRho: 0.3729, delta: 0.3095 },
-        linux:           { isalRho: 0.4329, wlRho: 0.3666, delta: 0.0663 },
-        aids:            { isalRho: 0.3486, wlRho: 0.4051, delta: -0.0565 }
+        iam_letter_low:  { isalRho: 0.9278, wlRho: 0.6816, delta: 0.2462 },
+        iam_letter_med:  { isalRho: 0.8833, wlRho: 0.6273, delta: 0.2560 },
+        iam_letter_high: { isalRho: 0.6660, wlRho: 0.3729, delta: 0.2931 },
+        linux:           { isalRho: 0.4850, wlRho: 0.3666, delta: 0.1184 },
+        aids:            { isalRho: 0.3266, wlRho: 0.4051, delta: -0.0785 }
       },
 
       // Encoding summary row counts

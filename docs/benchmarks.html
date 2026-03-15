@@ -100,10 +100,10 @@
         <p class="bench-section__desc">
           Spearman rank correlation (\(\rho\)) between the IsalGraph Levenshtein distance
           and exact graph edit distance. Strong correlation on structured graphs
-          (IAM Letter LOW: \(\rho = 0.93\)), moderate on sparse molecular graphs (AIDS: \(\rho = 0.35\)).
+          (IAM Letter LOW: \(\rho = 0.93\)), moderate on sparse molecular graphs (AIDS: \(\rho = 0.33\)).
         </p>
         <div class="bench-chart-container">
-          <h3>Spearman &rho; by dataset (exhaustive method)</h3>
+          <h3>Spearman &rho; by dataset (Canonical Pruned)</h3>
           <div id="bench-correlation-bars"></div>
         </div>
         <div class="bench-chart-container">
@@ -114,7 +114,7 @@
           <h3>Comparison with Weisfeiler-Leman kernel</h3>
           <div id="bench-wl-comparison"></div>
           <div class="bench-note">
-            IsalGraph (exhaustive) outperforms the 3-iteration WL subtree kernel on 4 of 5 datasets.
+            IsalGraph (Canonical Pruned) outperforms the 3-iteration WL subtree kernel on 4 of 5 datasets.
             The WL kernel is slightly better on AIDS (sparse molecular graphs with high structural
             heterogeneity).
           </div>
