@@ -105,7 +105,8 @@
   var s2gTraceState = {
     traceSteps: null,
     inputString: '',
-    currentStep: 0
+    currentStep: 0,
+    playTimer: null
   };
 
   IsalGraph.mathSetS2GInput = function (str) {
@@ -143,13 +144,42 @@
       if (widget) widget.style.display = 'block';
 
       updateS2GTraceDisplay();
+
+      // Auto-play the trace
+      mathS2GAutoPlay();
     } catch (e) {
       if (errorEl) errorEl.textContent = 'Error: ' + e.message;
     }
   };
 
+  function mathS2GAutoPlay() {
+    // Stop any existing playback
+    if (s2gTraceState.playTimer) {
+      clearInterval(s2gTraceState.playTimer);
+      s2gTraceState.playTimer = null;
+    }
+    if (!s2gTraceState.traceSteps) return;
+    var maxStep = s2gTraceState.traceSteps.length - 1;
+    if (s2gTraceState.currentStep >= maxStep) return;
+
+    s2gTraceState.playTimer = setInterval(function () {
+      if (s2gTraceState.currentStep >= maxStep) {
+        clearInterval(s2gTraceState.playTimer);
+        s2gTraceState.playTimer = null;
+        return;
+      }
+      s2gTraceState.currentStep++;
+      updateS2GTraceDisplay();
+    }, 800);
+  }
+
   IsalGraph.mathS2GStep = function (delta) {
     if (!s2gTraceState.traceSteps) return;
+    // Stop auto-play on manual step
+    if (s2gTraceState.playTimer) {
+      clearInterval(s2gTraceState.playTimer);
+      s2gTraceState.playTimer = null;
+    }
     var newStep = s2gTraceState.currentStep + delta;
     if (newStep < 0) newStep = 0;
     if (newStep >= s2gTraceState.traceSteps.length) newStep = s2gTraceState.traceSteps.length - 1;
@@ -158,6 +188,11 @@
   };
 
   IsalGraph.mathS2GReset = function () {
+    // Stop auto-play on reset
+    if (s2gTraceState.playTimer) {
+      clearInterval(s2gTraceState.playTimer);
+      s2gTraceState.playTimer = null;
+    }
     s2gTraceState.currentStep = 0;
     updateS2GTraceDisplay();
   };
@@ -326,10 +361,17 @@
 
   var proofState = {
     exampleIdx: 0,
-    step: 0 // 0=show graphs, 1=show phi, 2=show G2S on G, 3=show G2S on H, 4=strings equal
+    step: 0, // 0=show graphs, 1=show phi, 2=show G2S on G, 3=show G2S on H, 4=strings equal
+    playTimer: null
   };
 
-  IsalGraph.mathProofSelectExample = function (idx) {
+  IsalGraph.mathProofSelectExample = function (idx, autoPlay) {
+    // Stop any existing playback
+    if (proofState.playTimer) {
+      clearInterval(proofState.playTimer);
+      proofState.playTimer = null;
+    }
+
     proofState.exampleIdx = idx;
     proofState.step = 0;
 
@@ -340,9 +382,27 @@
     });
 
     updateProofDisplay();
+
+    // Auto-play through proof steps (default: true)
+    if (autoPlay !== false) {
+      proofState.playTimer = setInterval(function () {
+        if (proofState.step >= 4) {
+          clearInterval(proofState.playTimer);
+          proofState.playTimer = null;
+          return;
+        }
+        proofState.step++;
+        updateProofDisplay();
+      }, 1200);
+    }
   };
 
   IsalGraph.mathProofStep = function (delta) {
+    // Stop auto-play on manual step
+    if (proofState.playTimer) {
+      clearInterval(proofState.playTimer);
+      proofState.playTimer = null;
+    }
     proofState.step += delta;
     if (proofState.step < 0) proofState.step = 0;
     if (proofState.step > 4) proofState.step = 4;
@@ -480,10 +540,10 @@
       }, 200);
     }
 
-    // Init proof companion
+    // Init proof companion (no auto-play on page load — only on user click)
     setTimeout(function () {
       if (document.getElementById('math-proof-graph-g')) {
-        IsalGraph.mathProofSelectExample(0);
+        IsalGraph.mathProofSelectExample(0, false);
       }
     }, 300);
   });

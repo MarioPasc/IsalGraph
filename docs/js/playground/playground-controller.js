@@ -344,15 +344,21 @@
       renderActionLog(opts.actionLogId, actionDescs, stepIdx);
     });
 
-    opts.playerRef(player);
-
-    // Start at step 0
-    player.goToStep(0);
-
-    // Reset play button icon
+    // Hook: reset play button icon when playback ends
     var playBtnId = opts.stepInfoId.replace('-step-info', '-play');
     var pb = document.getElementById(playBtnId);
-    if (pb) pb.innerHTML = '&#x25B6;';
+    var origPause = player.pause.bind(player);
+    player.pause = function () {
+      origPause();
+      if (pb) pb.innerHTML = '&#x25B6;';
+    };
+
+    opts.playerRef(player);
+
+    // Start at step 0, then auto-play immediately
+    player.goToStep(0);
+    player.play();
+    if (pb) pb.innerHTML = '&#x23F8;';
   }
 
   // ================================================================
