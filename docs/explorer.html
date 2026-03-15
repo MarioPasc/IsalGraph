@@ -69,8 +69,8 @@
               type="text"
               class="explorer-input__string"
               id="exp-nb-input"
-              value="VVPnC"
-              placeholder="e.g. VVPnC"
+              value="VNVNVNVNC"
+              placeholder="e.g. VNVNVNVNC"
               spellcheck="false"
               autocomplete="off"
             >
@@ -80,11 +80,11 @@
             <div class="explorer-presets">
               <span class="explorer-presets__label">Presets</span>
               <div class="explorer-presets__grid">
-                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('V')">Edge</button>
-                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVPnC')">Triangle</button>
-                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('Vpv')">Path P&#x2083;</button>
-                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVpvPpC')">Cycle C&#x2084;</button>
-                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVVV')">Star S&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VNVNVNVNC')">Cycle C&#x2085;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVVNNnCNnCnnnC')">Complete K&#x2084;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VNVNVNVNVNC')">Cycle C&#x2086;</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VNVVNVNVV')">Branch Tree</button>
+                <button class="preset-btn" onclick="IsalGraph.setExplorerPreset('VVVVNnNCnNC')">Star + Ring</button>
               </div>
             </div>
 
@@ -137,8 +137,8 @@
               type="text"
               class="explorer-input__string"
               id="exp-path-input-a"
-              value="V"
-              placeholder="e.g. V"
+              value="VNVNVNVNC"
+              placeholder="e.g. VNVNVNVNC"
               spellcheck="false"
               autocomplete="off"
             >
@@ -151,8 +151,8 @@
               type="text"
               class="explorer-input__string"
               id="exp-path-input-b"
-              value="VVPnC"
-              placeholder="e.g. VVPnC"
+              value="VVVNNnCNnCnnnC"
+              placeholder="e.g. VVVNNnCNnCnnnC"
               spellcheck="false"
               autocomplete="off"
             >
@@ -161,10 +161,10 @@
         </div>
 
         <div class="path-presets">
-          <button class="preset-btn" onclick="IsalGraph.setPathPreset('V', 'VV')">Edge &rarr; Star</button>
-          <button class="preset-btn" onclick="IsalGraph.setPathPreset('V', 'VVPnC')">Edge &rarr; Triangle</button>
-          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VVPnC', 'VVpvPpC')">Triangle &rarr; C&#x2084;</button>
-          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VVVV', 'Vpv')">Star &rarr; Path</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VNVNVNVNC', 'VVVNNnCNnCnnnC')">C&#x2085; &rarr; K&#x2084;</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VNVVNVNVV', 'VNVNVNVNVNC')">Tree &rarr; C&#x2086;</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VVVNNnCNnCnnnC', 'VVVVNnNCnNC')">K&#x2084; &rarr; Star+Ring</button>
+          <button class="preset-btn" onclick="IsalGraph.setPathPreset('VNVNVNVNC', 'VNVVNVNVV')">C&#x2085; &rarr; Tree</button>
         </div>
 
         <div class="explorer-input__error" id="exp-path-error"></div>
