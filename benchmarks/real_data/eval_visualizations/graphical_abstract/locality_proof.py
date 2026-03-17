@@ -1,11 +1,13 @@
 """Locality proof figure for the graphical abstract.
 
 Shows that a single edge edit (GED=1) corresponds to a small
-Levenshtein distance in the canonical string, using the house graph
-as the running example:
-  - G₀ = house graph (5 nodes, 6 edges)
-  - G₋ = house − edge(2,3) = cycle₅, GED=1, Lev=1
-  - G₊ = house + edge(0,3),         GED=1, Lev=4
+Levenshtein distance in the canonical (greedy-min) string.
+
+Uses a 5-node, 7-edge graph where both edge deletion and edge addition
+yield Lev=1 in the greedy-min canonical strings:
+  - G₀: edges {0-1, 0-2, 0-4, 1-2, 1-3, 1-4, 3-4}, w₀ = 'VVVpvNCnCNpC'
+  - G₋ = G₀ − edge(1,4): removes one C instruction,  GED=1, Lev=1
+  - G₊ = G₀ + edge(2,3): inserts one C instruction,  GED=1, Lev=1
 """
 
 from __future__ import annotations
@@ -204,31 +206,37 @@ def generate_locality_figure(output_dir: str) -> str:
     from matplotlib.gridspec import GridSpec
 
     # ---- Build graphs ----
-    G0 = nx.house_graph()
+    # Base graph: 5 nodes, 7 edges — found by exhaustive search to have
+    # Lev=1 in BOTH directions (edge deletion AND edge addition).
+    G0 = nx.Graph()
+    G0.add_edges_from([(0, 1), (0, 2), (0, 4), (1, 2), (1, 3), (1, 4), (3, 4)])
     w0 = _greedy_min(G0)
 
-    # G₋ = house − edge(2,3) = cycle₅
+    # G₋ = G₀ − edge(1,4): removes one C instruction → Lev=1
     G_minus = G0.copy()
-    G_minus.remove_edge(2, 3)
+    G_minus.remove_edge(1, 4)
     w_minus = _greedy_min(G_minus)
+    del_edge = (1, 4)
 
-    # G₊ = house + edge(0,3)
+    # G₊ = G₀ + edge(2,3): inserts one C instruction → Lev=1
     G_plus = G0.copy()
-    G_plus.add_edge(0, 3)
+    G_plus.add_edge(2, 3)
     w_plus = _greedy_min(G_plus)
+    add_edge = (2, 3)
 
     import Levenshtein
 
     lev_minus = Levenshtein.distance(w0, w_minus)
     lev_plus = Levenshtein.distance(w0, w_plus)
-    logger.info("G0: w=%r", w0)
-    logger.info("G-: w=%r, GED=1, Lev=%d", w_minus, lev_minus)
-    logger.info("G+: w=%r, GED=1, Lev=%d", w_plus, lev_plus)
+    logger.info("G0: n=%d, m=%d, w=%r", G0.number_of_nodes(), G0.number_of_edges(), w0)
+    logger.info("G-: -%s, w=%r, GED=1, Lev=%d", del_edge, w_minus, lev_minus)
+    logger.info("G+: +%s, w=%r, GED=1, Lev=%d", add_edge, w_plus, lev_plus)
+    assert lev_minus == 1, f"Expected Lev=1 for deletion, got {lev_minus}"
+    assert lev_plus == 1, f"Expected Lev=1 for addition, got {lev_plus}"
 
     # ---- Fixed layout (consistent across all three graphs) ----
-    # Use the union of all edges for layout stability
     G_union = nx.Graph()
-    G_union.add_nodes_from(range(max(G_plus.number_of_nodes(), G0.number_of_nodes())))
+    G_union.add_nodes_from(range(G0.number_of_nodes()))
     for G in [G0, G_minus, G_plus]:
         G_union.add_edges_from(G.edges())
     pos = nx.spring_layout(G_union, seed=42)
@@ -260,15 +268,15 @@ def generate_locality_figure(output_dir: str) -> str:
     ax_w_plus = fig.add_subplot(gs[1, 2])
 
     # ---- Draw graphs ----
-    # G₋: show removed edge as dashed
+    # G₋: show removed edge as dashed ghost
     _draw_graph_cell(
         ax_g_minus,
         G_minus,
         pos,
-        ghost_edges=[(2, 3)],
+        ghost_edges=[del_edge],
     )
     ax_g_minus.set_title(
-        r"$G_{-}$ (edge removed)",
+        r"$G_{-}$ ($-$ edge)",
         fontsize=7,
         pad=4,
         color="0.3",
@@ -277,22 +285,22 @@ def generate_locality_figure(output_dir: str) -> str:
     # G₀: center, no highlights
     _draw_graph_cell(ax_g0, G0, pos)
     ax_g0.set_title(
-        r"$G_0$ (house graph)",
+        r"$G_0$",
         fontsize=7,
         pad=4,
         fontweight="bold",
         color="0.2",
     )
 
-    # G₊: show added edge highlighted
+    # G₊: show added edge highlighted in red
     _draw_graph_cell(
         ax_g_plus,
         G_plus,
         pos,
-        highlight_edges=[(0, 3)],
+        highlight_edges=[add_edge],
     )
     ax_g_plus.set_title(
-        r"$G_{+}$ (edge added)",
+        r"$G_{+}$ ($+$ edge)",
         fontsize=7,
         pad=4,
         color="0.3",
