@@ -70,6 +70,16 @@ class TestNetworkXAdapterConversion:
         g2 = adapter.from_isalgraph_string(s, directed=False)
         assert nx.is_isomorphic(g, g2)
 
+    def test_string_roundtrip_with_algorithm(self, adapter: NetworkXAdapter) -> None:
+        """to_isalgraph_string with explicit algorithm parameter."""
+        from isalgraph.core.algorithms import GreedyMinG2S
+
+        g = nx.cycle_graph(5)
+        algo = GreedyMinG2S()
+        s = adapter.to_isalgraph_string(g, directed=False, algorithm=algo)
+        g2 = adapter.from_isalgraph_string(s, directed=False)
+        assert nx.is_isomorphic(g, g2)
+
 
 # ======================================================================
 # Cross-validation: NetworkX isomorphism vs IsalGraph round-trip

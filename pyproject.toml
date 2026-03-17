@@ -5,16 +5,46 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "isalgraph"
 version = "0.1.0"
-description = "Graph representation by instruction strings"
+description = "Represent graph structure as instruction strings for Transformer models"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Ezequiel Lopez-Rubio", email = "ezeqlr@lcc.uma.es"},
     {name = "Mario Pascual Gonzalez", email="mpascual@uma.es"},
 ]
+keywords = [
+    "graph",
+    "graph-representation",
+    "instruction-strings",
+    "graph-isomorphism",
+    "graph-distance",
+    "transformer",
+    "deep-learning",
+    "graph-neural-networks",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
 # Core has zero dependencies
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/MarioPasc/IsalGraph"
+Documentation = "https://github.com/MarioPasc/IsalGraph#readme"
+Repository = "https://github.com/MarioPasc/IsalGraph"
+Issues = "https://github.com/MarioPasc/IsalGraph/issues"
 
 [project.optional-dependencies]
 networkx = ["networkx>=3.0"]
@@ -46,6 +76,9 @@ eval = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+isalgraph = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
