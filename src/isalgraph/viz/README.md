@@ -35,7 +35,26 @@ Produced by `StringToGraph.run_with_trace()` and
 `GraphToString.run_with_trace(initial_node)`. Neither changes the existing
 `run()` signatures or the instruction semantics.
 
-Two decisions worth knowing:
+### What a `"g2s"` trace does and does not show
+
+`GraphToString.run_with_trace` takes the string from the frozen `run()` and then
+**replays it** through `StringToGraph.run_with_trace`; it does not instrument the
+encoder. The replay is exact — the encoder allocates output nodes and grows the
+CDLL with the same calls the interpreter makes, so the replay reconstructs the
+encoder's output graph identically, not merely up to isomorphism — and it is the
+only way to obtain one state per instruction, because the encoder emits a whole
+displacement group (`"NNN"` + `"V"`) per iteration and jumps its pointer straight
+to the tentative slot.
+
+The consequence matters when reading a figure. **A `"g2s"` step figure shows an
+interpreter executing the finished string, not the encoder searching.** The
+encoder's search is strictly richer: tentative pointer positions it walks and
+abandons, displacement pairs it rejects because no operation applies, and the
+`V ≻ v ≻ C ≻ c` cascade it runs at each pair. None of that is in the trace. For
+the decision structure, use `canonical_search_tree_figure` instead — that is
+exactly what it draws.
+
+Two further decisions worth knowing:
 
 - **Snapshots store graph node ids, already resolved.** CDLL indices are
   not graph node ids (`core/README.md`, invariant 1). Resolving at

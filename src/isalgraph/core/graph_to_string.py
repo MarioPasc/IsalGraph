@@ -266,8 +266,21 @@ class GraphToString:
         """Encode the graph and return a structured :class:`AlgorithmTrace`.
 
         The string is produced by :meth:`run`, unmodified. The trace is
-        then obtained by replaying that string through
+        then obtained by **replaying that string** through
         :meth:`StringToGraph.run_with_trace`, and re-labelled ``"g2s"``.
+
+        .. warning::
+
+            The snapshots are replay states, not encoder states. The
+            encoder's own search is strictly richer than what this trace
+            records: it walks *tentative* pointer positions, rejects
+            displacement pairs that admit no operation, and cascades
+            through the ``V``/``v``/``C``/``c`` priority at each pair.
+            None of that appears here. A figure built from a ``"g2s"``
+            trace shows the state sequence an interpreter passes through
+            while executing the finished string -- it does not show the
+            encoder deciding. For the decision structure, see
+            :func:`isalgraph.viz.search_tree.canonical_search_tree_figure`.
 
         The replay is not an approximation. ``GraphToString`` allocates
         output-graph nodes with ``add_node`` in insertion order and grows
