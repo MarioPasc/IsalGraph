@@ -14,49 +14,15 @@ The hierarchy:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import TypeVar
 
 from isalgraph.core.sparse_graph import SparseGraph
-from isalgraph.errors import EncodingError
 
-T = TypeVar("T")
-
-# ----------------------------------------------------------------------
-# WAVE SHIM -- delete at integration.
-#
-# Introduced for wave 2026-08-10-cpp-and-viz on the instruction of `main`
-# ("Keep your shim in algorithms/*.py, but make it unconditional and
-# self-documenting").  The dispatch layer raises the isalgraph.errors classes,
-# but errors.py does not yet give them their builtin mixins, so
-# DisconnectedGraphError is not a ValueError.  Six existing tests pin the
-# ValueError contract on these algorithm classes, among them
-# tests/unit/test_algorithms.py::TestExhaustiveG2S::test_disconnected_raises
-# and ::test_directed_unreachable_raises.
-#
-# TO REMOVE: once errors.py declares
-# `class DisconnectedGraphError(EncodingError, ValueError)`, delete this
-# function and every `_as_legacy_value_error(...)` call, then re-run
-# `pytest tests/unit/test_algorithms.py` to confirm it was a no-op.
-# ----------------------------------------------------------------------
-
-
-def _as_legacy_value_error(call: Callable[[], T]) -> T:
-    """Run *call*, re-raising any encoding failure as a plain ``ValueError``.
-
-    Args:
-        call: Zero-argument callable performing the encode.
-
-    Returns:
-        Whatever *call* returns.
-
-    Raises:
-        ValueError: If *call* raises :class:`~isalgraph.errors.EncodingError`.
-    """
-    try:
-        return call()
-    except EncodingError as exc:
-        raise ValueError(str(exc)) from exc
+# The wave 2026-08-10-cpp-and-viz `_as_legacy_value_error` shim lived here.  It
+# translated the dispatch layer's EncodingError into a plain ValueError so that
+# tests pinning the pure-Python contract kept passing.  It was removed at
+# integration once errors.py gave each leaf its builtin mixin
+# (DisconnectedGraphError is now a ValueError), and the test suite confirmed the
+# removal was a no-op.  See the "Why the builtin mixins" note in errors.py.
 
 
 class G2SAlgorithm(ABC):

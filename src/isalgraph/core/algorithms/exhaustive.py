@@ -15,7 +15,7 @@ byte-identical strings; see ``tests/native/test_native_differential.py``.
 
 from __future__ import annotations
 
-from isalgraph.core.algorithms.base import G2SAlgorithm, _as_legacy_value_error
+from isalgraph.core.algorithms.base import G2SAlgorithm
 from isalgraph.core.backends import canonical_string
 from isalgraph.core.sparse_graph import SparseGraph
 
@@ -60,15 +60,14 @@ class ExhaustiveG2S(G2SAlgorithm):
             The canonical string w*_G.
 
         Raises:
-            ValueError: If no starting node can reach all other nodes.
+            DisconnectedGraphError: If no starting node can reach all other
+                nodes.  This is also a ``ValueError``.
         """
-        return _as_legacy_value_error(
-            lambda: canonical_string(
-                graph,
-                timeout_s=self._timeout_s,
-                threads=self._threads,
-                backend=self._backend,
-            )
+        return canonical_string(
+            graph,
+            timeout_s=self._timeout_s,
+            threads=self._threads,
+            backend=self._backend,
         )
 
     @property

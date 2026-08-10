@@ -44,6 +44,16 @@ def _blocked_imports(names: tuple[str, ...]) -> Iterator[None]:
     for mod in list(sys.modules):
         root = mod.split(".")[0]
         if root in names or root == "isalgraph":
+            # Never evict the compiled extension. Purging it makes the next
+            # `import isalgraph` re-run nanobind's module init, which registers
+            # every bound type a second time and emits
+            # "nanobind: type 'Cdll' was already registered!". That warning is
+            # a test artifact, but it also leaves two distinct type objects for
+            # the same C++ class, so isinstance() across them would fail.
+            # Keeping it loaded costs the test nothing: it is a C extension and
+            # cannot import matplotlib.
+            if mod == "isalgraph.core._native":
+                continue
             del sys.modules[mod]
     finder = _BlockingFinder(names)
     sys.meta_path.insert(0, finder)

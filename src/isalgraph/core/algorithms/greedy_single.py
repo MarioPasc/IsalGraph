@@ -10,7 +10,7 @@ or when encoding speed is critical.
 
 from __future__ import annotations
 
-from isalgraph.core.algorithms.base import G2SAlgorithm, _as_legacy_value_error
+from isalgraph.core.algorithms.base import G2SAlgorithm
 from isalgraph.core.backends import graph_to_string
 from isalgraph.core.sparse_graph import SparseGraph
 
@@ -52,7 +52,7 @@ class GreedySingleG2S(G2SAlgorithm):
         if v0 < 0 or v0 >= n:
             raise ValueError(f"start_node={v0} out of range [0, {n})")
 
-        return _as_legacy_value_error(lambda: graph_to_string(graph, v0, backend=self._backend))
+        return graph_to_string(graph, v0, backend=self._backend)
 
     @property
     def name(self) -> str:

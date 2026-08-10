@@ -138,7 +138,10 @@ select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
 "tests/**/*.py" = ["N802"]
 # E402: imports after sys.path manipulation for plotting_styles
 # ANN: benchmark scripts use dynamic typing for flexibility
-"benchmarks/**/*.py" = ["E402", "ANN"]
+# N803/N806: uppercase names for mathematical objects (N nodes, M edges, K/D matrices)
+# E741: `l` is used for a lattice/level index in the topology benchmarks
+# B905: zip() without strict= in scripts where the lengths are structurally equal
+"benchmarks/**/*.py" = ["E402", "ANN", "N803", "N806", "E741", "B905"]
 # E402: imports after pytest.importorskip() for optional deps
 # ANN: test fixtures/methods don't need return type annotations
 # N806: uppercase variables for mathematical notation (K, D matrices)
