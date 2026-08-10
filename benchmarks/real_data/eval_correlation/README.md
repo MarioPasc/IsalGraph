@@ -30,7 +30,7 @@ python -m benchmarks.eval_correlation.eval_correlation \
     --csv --plot --table
 
 # Picasso submission
-bash slurm/launch.sh --benchmark eval_correlation
+bash experiments/synthetic_suite/launch.sh --benchmark eval_correlation
 ```
 
 ## Output Structure

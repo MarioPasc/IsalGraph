@@ -100,14 +100,22 @@ steps:
     cpus: 1
     mem_gb: 8
 
+# Checklist of basenames step 4 is expected to emit.
+# Provenance for every entry: experiments/README.md section 3.
 paper_outputs:
+  # --- consumed by the submitted manuscript ---
+  # NOTE: the manuscript file is fig_composite_method_tradeoff_v2.pdf; the code
+  # emits this basename without the fig_ prefix. See experiments/README.md 3.1.
   - composite_method_tradeoff_v2
   - fig_aggregated_density_correlation
+  - fig_complexity_ratio_combined
+  - fig_message_length_scatter_log
+  - table_information_content
+  - table_performance_summary
+  # --- emitted, currently commented out of the manuscript ---
   - fig_algorithm_overview
   - fig_algorithm_overview_full
   - fig_empirical_complexity
   - fig_neighborhood_topology
   - fig_shortest_path_comparison
   - fig_message_length_scatter
-  - table_message_length_summary
-  - table_performance_summary

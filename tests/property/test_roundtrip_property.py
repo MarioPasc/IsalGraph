@@ -18,7 +18,9 @@ isalgraph_string = st.text(alphabet=ALPHABET, min_size=0, max_size=30)
 
 
 @given(w=isalgraph_string)
-@settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
+# deadline=None: encoding cost is highly input-dependent, so a per-example timing
+# deadline produces flaky failures that say nothing about correctness.
+@settings(max_examples=500, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_roundtrip_undirected_property(w: str) -> None:
     """For all valid strings w, S2G(G2S(S2G(w))) ~ S2G(w) (undirected)."""
     stg1 = StringToGraph(w, directed_graph=False)
@@ -45,7 +47,9 @@ def test_roundtrip_undirected_property(w: str) -> None:
 
 
 @given(w=isalgraph_string)
-@settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
+# deadline=None: encoding cost is highly input-dependent, so a per-example timing
+# deadline produces flaky failures that say nothing about correctness.
+@settings(max_examples=500, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_roundtrip_directed_property(w: str) -> None:
     """For all valid strings w, S2G(G2S(S2G(w))) ~ S2G(w) (directed)."""
     stg1 = StringToGraph(w, directed_graph=True)

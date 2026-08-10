@@ -8,6 +8,8 @@ from isalgraph.core.algorithms import (
     GreedySingleG2S,
     PrunedExhaustiveG2S,
 )
+from isalgraph.core.canonical import canonical_string, graph_distance, levenshtein
+from isalgraph.core.canonical_pruned import pruned_canonical_string, pruned_graph_distance
 from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.graph_to_string import GraphToString
 from isalgraph.core.sparse_graph import SparseGraph
@@ -18,6 +20,11 @@ __all__ = [
     "SparseGraph",
     "StringToGraph",
     "GraphToString",
+    "canonical_string",
+    "pruned_canonical_string",
+    "graph_distance",
+    "pruned_graph_distance",
+    "levenshtein",
     "G2SAlgorithm",
     "GreedyMinG2S",
     "ExhaustiveG2S",

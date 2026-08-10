@@ -215,3 +215,6 @@ __marimo__/
 
 # Pipeline run outputs
 runs/
+
+# Claude Code subagent worktrees
+.claude/worktrees/

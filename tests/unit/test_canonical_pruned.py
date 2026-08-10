@@ -408,7 +408,7 @@ class TestPrunedPerformance:
         )
 
         t0 = time.perf_counter()
-        w_pruned = pruned_canonical_string(g)
+        pruned_canonical_string(g)
         t_pruned = time.perf_counter() - t0
 
         t0 = time.perf_counter()

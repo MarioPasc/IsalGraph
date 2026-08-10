@@ -61,5 +61,5 @@ python -m benchmarks.canonical_invariance.canonical_invariance \
     --num-tests 200 --max-nodes 8 --n-workers 8 --csv --plot --table
 
 # Picasso (via SLURM)
-bash slurm/launch.sh --benchmark canonical_invariance
+bash experiments/synthetic_suite/launch.sh --benchmark canonical_invariance
 ```

@@ -66,5 +66,5 @@ python -m benchmarks.string_length_analysis.string_length_analysis \
     --seed 42 --max-nodes 200 --no-canonical --csv --plot --table
 
 # Picasso (via SLURM)
-bash slurm/launch.sh --benchmark string_length_analysis
+bash experiments/synthetic_suite/launch.sh --benchmark string_length_analysis
 ```

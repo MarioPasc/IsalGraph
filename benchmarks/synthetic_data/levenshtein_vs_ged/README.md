@@ -68,5 +68,5 @@ python -m benchmarks.levenshtein_vs_ged.levenshtein_vs_ged \
     --csv --plot --table
 
 # Picasso (via SLURM)
-bash slurm/launch.sh --benchmark levenshtein_vs_ged
+bash experiments/synthetic_suite/launch.sh --benchmark levenshtein_vs_ged
 ```

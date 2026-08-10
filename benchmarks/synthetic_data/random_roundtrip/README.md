@@ -63,5 +63,5 @@ python -m benchmarks.random_roundtrip.random_roundtrip \
     --num-tests 1000 --seed 42 --n-workers 8 --csv --plot --table
 
 # Picasso (via SLURM)
-bash slurm/launch.sh --benchmark random_roundtrip
+bash experiments/synthetic_suite/launch.sh --benchmark random_roundtrip
 ```

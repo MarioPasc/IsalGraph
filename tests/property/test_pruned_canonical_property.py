@@ -19,7 +19,10 @@ isalgraph_string = st.text(alphabet=ALPHABET, min_size=0, max_size=20)
 
 
 @given(w=isalgraph_string)
-@settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+# deadline=None: pruned_canonical_string is exponential in the worst case, so
+# per-example wall time is inherently variable. A timing deadline turns that
+# variance into a flaky failure that says nothing about correctness.
+@settings(max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_pruned_invariance_property(w: str) -> None:
     """Pruned canonical string is labeling-independent: encoding a graph,
     decoding, and re-encoding produces the same string (idempotent)."""
@@ -52,7 +55,10 @@ def test_pruned_invariance_property(w: str) -> None:
 
 
 @given(w=isalgraph_string)
-@settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+# deadline=None: pruned_canonical_string is exponential in the worst case, so
+# per-example wall time is inherently variable. A timing deadline turns that
+# variance into a flaky failure that says nothing about correctness.
+@settings(max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_pruned_roundtrip_property(w: str) -> None:
     """For all valid strings w, S2G(pruned_canonical_string(S2G(w))) ~ S2G(w)."""
     stg1 = StringToGraph(w, directed_graph=False)

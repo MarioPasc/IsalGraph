@@ -50,7 +50,9 @@ Issues = "https://github.com/MarioPasc/IsalGraph/issues"
 networkx = ["networkx>=3.0"]
 igraph = ["igraph>=0.11"]
 pyg = ["torch>=2.0", "torch-geometric>=2.4"]
-viz = ["matplotlib>=3.7"]
+# networkx is declared explicitly: isalgraph.viz.layout needs it for
+# spring layouts. Relying on it arriving transitively is a packaging bug.
+viz = ["matplotlib>=3.7", "networkx>=3.0"]
 bench = [
     "isalgraph[networkx,viz]",
     "scipy>=1.10",
