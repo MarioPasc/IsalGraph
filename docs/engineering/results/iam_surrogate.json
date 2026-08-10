@@ -1,0 +1,89 @@
+{
+  "hardware": {
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13700KF",
+    "logical_cores": "24",
+    "platform": "Linux-6.1.0-51-amd64-x86_64-with-glibc2.36",
+    "python": "3.11.15",
+    "compiler": "gcc 12.2.0",
+    "isa_level": "x86-64-v3",
+    "build_hash": "298fc1188bf1b051"
+  },
+  "protocol": {
+    "warmups": 3,
+    "best_of": 9,
+    "median_of": 4
+  },
+  "note": "SURROGATE. The IAM Letter dataset is not present on this machine; source_dir in experiments/paper_pipeline/config.yaml points at a Picasso path. Graphs are generated to match published IAM LOW statistics and every figure here must be labelled a surrogate.",
+  "iam_low_target": {
+    "graphs": 1180,
+    "mean_edges": 3.07,
+    "max_nodes": 12,
+    "connected": true
+  },
+  "surrogate_realised": {
+    "graphs": 1180,
+    "mean_nodes": 3.8228813559322035,
+    "median_nodes": 4.0,
+    "max_nodes": 7,
+    "mean_edges": 3.038135593220339,
+    "median_edges": 3.0,
+    "mean_density": 0.6147417271993506,
+    "node_histogram": {
+      "2": 108,
+      "3": 372,
+      "4": 436,
+      "5": 171,
+      "6": 71,
+      "7": 22
+    },
+    "all_connected": true
+  },
+  "canonical_string_mismatches": 0,
+  "canonical_strings_compared": 1180,
+  "levenshtein_pairs_compared": 250,
+  "levenshtein_mismatches": 0,
+  "buckets": [
+    {
+      "nodes": 2,
+      "graphs": 8,
+      "python_s_per_graph": 8.096749752439791e-06,
+      "cpp_s_per_graph": 9.80125150817912e-07,
+      "speedup": 8.260934581347161
+    },
+    {
+      "nodes": 3,
+      "graphs": 8,
+      "python_s_per_graph": 3.519168740240275e-05,
+      "cpp_s_per_graph": 1.4401875887415372e-06,
+      "speedup": 24.435488597116645
+    },
+    {
+      "nodes": 4,
+      "graphs": 8,
+      "python_s_per_graph": 0.0001678141247793974,
+      "cpp_s_per_graph": 2.345687335036928e-06,
+      "speedup": 71.54155725394472
+    },
+    {
+      "nodes": 5,
+      "graphs": 8,
+      "python_s_per_graph": 0.000586285874760506,
+      "cpp_s_per_graph": 3.857250248984201e-06,
+      "speedup": 151.99580968719962
+    },
+    {
+      "nodes": 6,
+      "graphs": 8,
+      "python_s_per_graph": 0.00200366756234871,
+      "cpp_s_per_graph": 8.248124686360825e-06,
+      "speedup": 242.92401467475304
+    },
+    {
+      "nodes": 7,
+      "graphs": 8,
+      "python_s_per_graph": 0.003581710250273318,
+      "cpp_s_per_graph": 1.2092312772438163e-05,
+      "speedup": 296.19728811820505
+    }
+  ]
+}

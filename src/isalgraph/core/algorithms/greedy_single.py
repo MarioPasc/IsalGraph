@@ -10,8 +10,8 @@ or when encoding speed is critical.
 
 from __future__ import annotations
 
-from isalgraph.core.algorithms.base import G2SAlgorithm
-from isalgraph.core.graph_to_string import GraphToString
+from isalgraph.core.algorithms.base import G2SAlgorithm, _as_legacy_value_error
+from isalgraph.core.backends import graph_to_string
 from isalgraph.core.sparse_graph import SparseGraph
 
 
@@ -20,12 +20,14 @@ class GreedySingleG2S(G2SAlgorithm):
 
     Args:
         start_node: The starting node index. If None, defaults to 0.
+        backend: ``"cpp"``, ``"python"``, or ``None`` to follow the active engine.
 
     Time complexity: O(T_greedy) for a single greedy execution.
     """
 
-    def __init__(self, start_node: int | None = None) -> None:
+    def __init__(self, start_node: int | None = None, backend: str | None = None) -> None:
         self._start_node = start_node
+        self._backend = backend
 
     def encode(self, graph: SparseGraph) -> str:
         """Encode graph using greedy algorithm from a single starting node.
@@ -50,9 +52,7 @@ class GreedySingleG2S(G2SAlgorithm):
         if v0 < 0 or v0 >= n:
             raise ValueError(f"start_node={v0} out of range [0, {n})")
 
-        gts = GraphToString(graph)
-        s, _ = gts.run(initial_node=v0)
-        return s
+        return _as_legacy_value_error(lambda: graph_to_string(graph, v0, backend=self._backend))
 
     @property
     def name(self) -> str:

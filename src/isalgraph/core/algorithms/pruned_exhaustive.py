@@ -6,14 +6,16 @@ the maximum lexicographic triplet (|N_1|, |N_2|, |N_3|) are explored,
 dramatically reducing the branching factor while preserving the complete
 invariant property.
 
-The implementation delegates to ``pruned_canonical_string()`` in
-``isalgraph.core.canonical_pruned``.
+The implementation delegates to
+``isalgraph.core.backends.pruned_canonical_string``, which dispatches to the
+C++ engine when it is available and to the Python reference in
+``isalgraph.core.canonical_pruned`` otherwise.
 """
 
 from __future__ import annotations
 
-from isalgraph.core.algorithms.base import G2SAlgorithm
-from isalgraph.core.canonical_pruned import pruned_canonical_string
+from isalgraph.core.algorithms.base import G2SAlgorithm, _as_legacy_value_error
+from isalgraph.core.backends import pruned_canonical_string
 from isalgraph.core.sparse_graph import SparseGraph
 
 
@@ -28,7 +30,23 @@ class PrunedExhaustiveG2S(G2SAlgorithm):
     Time complexity: same worst case as exhaustive, but typically
     much faster on heterogeneous graphs where triplet pruning
     reduces the branching factor to 1.
+
+    Args:
+        backend: ``"cpp"``, ``"python"``, or ``None`` to follow the active engine.
+        timeout_s: Wall-clock budget per encode; ``cpp`` backend only.
+        threads: Worker threads over the starting-node loop.
     """
+
+    def __init__(
+        self,
+        backend: str | None = None,
+        *,
+        timeout_s: float | None = None,
+        threads: int = 1,
+    ) -> None:
+        self._backend = backend
+        self._timeout_s = timeout_s
+        self._threads = threads
 
     def encode(self, graph: SparseGraph) -> str:
         """Encode graph using pruned exhaustive canonical search.
@@ -42,7 +60,14 @@ class PrunedExhaustiveG2S(G2SAlgorithm):
         Raises:
             ValueError: If no starting node can reach all other nodes.
         """
-        return pruned_canonical_string(graph)
+        return _as_legacy_value_error(
+            lambda: pruned_canonical_string(
+                graph,
+                timeout_s=self._timeout_s,
+                threads=self._threads,
+                backend=self._backend,
+            )
+        )
 
     @property
     def name(self) -> str:
