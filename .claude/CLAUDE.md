@@ -227,12 +227,19 @@ Violating these causes silent corruption -- wrong graphs, no error raised.
 4. **Pointer immobility on V/v.** The pointer does not advance after insertion.
 5. **Displacement pairs sort by `(|a|+|b|, |a|, (a,b))`** -- all three key
    components. Sorting by `a+b` is historical bug B2.
-6. **The canonical string does not encode directedness.** A single undirected
-   edge and a single directed arc both canonicalise to `"V"`; 63 of 441 small
-   graphs collide this way. `S2G` needs the `directed` flag as separate
+6. **The canonical string does not encode directedness.** The witness is exact
+   and needs no enumeration: a single undirected edge and a single directed arc
+   both canonicalise to `"V"`. So `S2G` needs the `directed` flag as separate
    metadata, and any deduplication over a mixed corpus must key on
    `(directed, string)`. The complete-invariant theorem holds **within** a
    fixed directedness class, not across.
+
+   Do not quote a collision *rate* without stating its enumeration window --
+   the ratio moves with the window and is not a property of the encoding.
+   Over labeled edge sets with `n <= 4` and `<= 4` edges: 63 of 441 encode to
+   the same string under both semantics. Over distinct canonical strings in
+   that same window: 6 of the 7 undirected classes are also produced by some
+   directed graph. Those are two different measurements of one phenomenon.
 7. **Greedy G2S depends on set iteration order.** `_find_new_neighbor` returns
    the *first* neighbour from a Python `set`, whose order for small ints is slot
    order, not ascending. The C++ engine achieves byte-parity only because
