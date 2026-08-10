@@ -1,6 +1,25 @@
 [build-system]
-requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
-build-backend = "setuptools.build_meta"
+requires = [
+    "scikit-build-core>=0.9",
+    "nanobind>=2.0",
+]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.18"
+ninja.version = ">=1.10"
+build-dir = "build/{wheel_tag}"
+# wheel.packages lists the Python source trees; the .so is installed into
+# isalgraph/core/ by CMake's install() rule, not by this list.
+wheel.packages = ["src/isalgraph"]
+# The C++ sources live inside the package tree (src/isalgraph/core/native/) so
+# the whole extension travels with the checkout, but only the compiled .so
+# belongs in a wheel -- ship no .cpp/.hpp.
+wheel.exclude = ["isalgraph/core/native/**"]
+
+[tool.scikit-build.cmake.define]
+CMAKE_BUILD_TYPE = "Release"
 
 [project]
 name = "isalgraph"
@@ -69,18 +88,21 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.0",
 ]
+# Build-time requirements for the C++ engine. The extension is built by the
+# build backend, so these are only needed when compiling from source; the
+# extra exists so `pip install -e ".[dev,native]"` reads as intent.
+native = [
+    "nanobind>=2.0",
+    "scikit-build-core>=0.9",
+    "ninja>=1.10",
+    "cmake>=3.18",
+]
 all = ["isalgraph[networkx,igraph,viz,bench,dev]"]
 eval = [
     "isalgraph[networkx,viz,bench]",
     "torch>=2.0",
     "python-Levenshtein>=0.21",
 ]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-isalgraph = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -121,3 +143,10 @@ select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
 # ANN: test fixtures/methods don't need return type annotations
 # N806: uppercase variables for mathematical notation (K, D matrices)
 "tests/eval_validation/*.py" = ["E402", "ANN", "N806"]
+# E402: the native suite calls pytest.importorskip("isalgraph.core._native") at
+# module top level, before its imports. That placement is mandatory, not
+# stylistic: @pytest.mark.parametrize decorators dereference the extension at
+# COLLECTION time, so a pytestmark skipif arrives too late to prevent an
+# ImportError when the .so is absent.
+# ANN/N806: differential harnesses use mathematical variable names.
+"tests/native/*.py" = ["E402", "ANN", "N806"]
