@@ -123,8 +123,33 @@ Rules:
 
 Threading exists but **defaults to 1, deliberately**. Measured on this
 workload, 4 threads are 1.8x *slower* at n=6 and only 1.35x faster at n=10;
-the paper's graphs average under 4 nodes. See
-`docs/engineering/CPP_OPTIMIZATION_LOG.md`.
+the paper's graphs average under 4 nodes.
+
+### Coverage, and two things that are not native
+
+Native: `string_to_graph` (S2G), `graph_to_string` (greedy G2S from one start),
+`canonical_string`, `pruned_canonical_string`, `levenshtein`,
+`compute_structural_triplets`, `Cdll`. `graph_distance` and
+`pruned_graph_distance` are compositions of native halves.
+
+1. **`GreedyMinG2S` is a hybrid** -- native per starting node, Python loop over
+   `range(n)`, so n FFI crossings per encode. Measured, it retains 93-102% of
+   the single-call speedup, so the marshalling is cheap relative to one greedy
+   encode. Leaving the loop in Python is a deliberate non-optimisation.
+2. **The class API is Python-only.** Only the free functions in
+   `isalgraph.core.backends` dispatch. `StringToGraph`, `GraphToString` and the
+   `run_with_trace()` methods `isalgraph.viz` calls always execute the frozen
+   reference, whatever `engine()` reports. Intentional -- traces draw 6-8 node
+   examples, and routing the reference through the engine would make the
+   differential circular -- but tracing a large graph gets no speedup.
+
+**Branch and bound (O5) is an addition, not a translation**: it has no
+counterpart in the Python reference. Parity over 3,079 graphs says it is
+output-preserving, but if a canonical string is ever suspected wrong, re-run
+with `_native.set_branch_and_bound(False)` first; that isolates it in one step.
+`set_pairs_memo(False)` does the same for the memoisation.
+
+Full measurements and negative results: `docs/engineering/CPP_OPTIMIZATION_LOG.md`.
 
 ---
 

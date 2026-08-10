@@ -355,9 +355,87 @@ it with a dense bitmatrix is therefore sound.
    `exc_type=ImportError`. The library-level fallback in `backends.py` was
    already correct — it catches `ImportError` — so only the harness was wrong.
 
-3. **The canonical string does not encode directedness.** The 3-node directed
-   path and the 3-node undirected path canonicalise to the same string. The
-   string is a complete invariant *within* a directedness class only, so any
-   deduplication over a mixed corpus must key on `(directed, string)`. This is
-   a property of the encoding, not a defect in either implementation, but it
-   is a live trap for the evaluation pipeline.
+3. **The canonical string does not encode directedness.** The string is a
+   complete invariant *within* a directedness class only, so any deduplication
+   over a mixed corpus must key on `(directed, string)`. This is a property of
+   the encoding, not a defect in either implementation, but it is a live trap
+   for the evaluation pipeline.
+
+   The witness is the **single edge**: an undirected `0-1` and a directed
+   `0 -> 1` both canonicalise to `"V"`, because `V` creates an edge from an
+   existing node to a new one, which is the same operation under both
+   semantics.
+
+   An earlier revision of this log named the 3-node path as the witness. That
+   is wrong and was corrected on verification: the undirected 3-path gives
+   `"VV"` and the directed 3-path `"Vpv"`. Collision requires the graph to be
+   buildable by `V`/`v` alone, or for the `C`/`c` steps to coincide.
+
+   Do not quote a collision *rate* without its enumeration window; the ratio
+   moves with the window. Over labeled edge sets with `n <= 4` and `<= 4`
+   edges, 63 of 441 collide; over distinct canonical strings in that window,
+   6 of the 7 undirected classes are also produced by some directed graph.
+
+---
+
+## Engine coverage — what is native and what is not
+
+Verified against `dir(isalgraph.core._native)` rather than from the source list.
+
+| Routine | Native symbol | Status |
+|---|---|---|
+| S2G decoder | `string_to_graph` | fully native |
+| G2S greedy, single start | `graph_to_string` | fully native |
+| Exhaustive canonical | `canonical_string` | fully native |
+| Pruned canonical | `pruned_canonical_string` | fully native |
+| Levenshtein | `levenshtein` | fully native |
+| Structural triplets | `compute_structural_triplets` | fully native |
+| CDLL | `Cdll` | native; exposed for the datastructure differential |
+| `graph_distance`, `pruned_graph_distance` | — | compositions; both halves native |
+| **`GreedyMinG2S`** | — | **hybrid**: native per start node, Python loop |
+
+Runtime toggles, for A/B verification on identical outputs:
+`set_pairs_memo()` / `pairs_memo()` / `pairs_cache_size()`,
+`set_branch_and_bound()` / `branch_and_bound()`.
+
+### `GreedyMinG2S` is a hybrid, and measurement says leave it that way
+
+`GreedyMinG2S.encode` loops `for v in range(n)` in Python, calling the native
+`graph_to_string` once per starting node, then sorts by `(len, string)`. An
+n-node graph therefore pays n FFI crossings, each copying the whole graph.
+
+That looks like it should hurt: the FFI copy is a fixed cost, and this workload
+is dominated by tiny graphs. Measured, it does not. Random labeled trees,
+best-of-7, `isalgraph-cpp` env:
+
+| n | single `graph_to_string` speedup | `greedy_min` speedup | retained |
+|---|---|---|---|
+| 4 | 11.6x | 10.8x | 93% |
+| 6 | 23.0x | 22.9x | 99% |
+| 8 | 42.1x | 41.8x | 99% |
+| 10 | 64.8x | 65.8x | 102% |
+| 12 | 103.8x | 96.9x | 93% |
+
+`greedy_min` retains 93-102% of the single-call speedup, so marshalling is cheap
+relative to even one greedy encode. Pushing the loop into C++ would buy nothing
+measurable. **Recorded as a deliberate non-optimisation, not an oversight.**
+
+### The class API is Python-only
+
+Only the free functions in `isalgraph.core.backends` dispatch to the engine.
+The classes `StringToGraph` and `GraphToString` — including the
+`run_with_trace()` methods used by `isalgraph.viz` — are the frozen Python
+reference and always execute in Python, whatever `engine()` reports.
+
+This is intentional: traces exist to draw 6-8 node worked examples, and the
+frozen reference is what parity is defined *against*, so routing it through the
+engine would make the differential circular. The consequence to know: tracing a
+large graph gets no speedup.
+
+### Branch and bound is an addition, not a translation
+
+O5 has no counterpart in the Python reference. Byte-exact parity over 3,079
+graphs per canonical variant says it is output-preserving, but it is the only
+place where the C++ does something the reference does not. If a canonical
+string is ever suspected wrong, re-run with `set_branch_and_bound(False)`
+first — that isolates it in one step.
