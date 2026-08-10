@@ -11,46 +11,30 @@ References:
 
 from __future__ import annotations
 
+from isalgraph.viz import style as _viz_style
+
 # =============================================================================
 # Paul Tol Color Palettes (SRON - colorblind safe)
 # =============================================================================
+#
+# These are re-exported from ``isalgraph.viz.style``, which is now the
+# single source of truth. Keeping two independent copies would let the
+# revision's library-built figures drift in colour from the ones the
+# existing scripts produce, which is precisely what must not happen.
+# The names, values and container types below are unchanged.
 
-PAUL_TOL_BRIGHT = {
-    "blue": "#4477AA",
-    "red": "#EE6677",
-    "green": "#228833",
-    "yellow": "#CCBB44",
-    "cyan": "#66CCEE",
-    "purple": "#AA3377",
-    "grey": "#BBBBBB",
-}
-
-PAUL_TOL_HIGH_CONTRAST = {
-    "blue": "#004488",
-    "yellow": "#DDAA33",
-    "red": "#BB5566",
-}
-
-PAUL_TOL_MUTED = [
-    "#CC6677",  # rose
-    "#332288",  # indigo
-    "#DDCC77",  # sand
-    "#117733",  # green
-    "#88CCEE",  # cyan
-    "#882255",  # wine
-    "#44AA99",  # teal
-    "#999933",  # olive
-    "#AA4499",  # purple
-]
+PAUL_TOL_BRIGHT = dict(_viz_style.PAUL_TOL_BRIGHT)
+PAUL_TOL_HIGH_CONTRAST = dict(_viz_style.PAUL_TOL_HIGH_CONTRAST)
+PAUL_TOL_MUTED = list(_viz_style.PAUL_TOL_MUTED)
 
 # =============================================================================
 # IEEE Column Width Specifications
 # =============================================================================
 
-IEEE_COLUMN_WIDTH_INCHES = 3.39  # Single column (86 mm)
-IEEE_COLUMN_GAP_INCHES = 0.24  # Gap between columns (6 mm)
-IEEE_TEXT_WIDTH_INCHES = 7.0  # Full print area width (178 mm)
-IEEE_TEXT_HEIGHT_INCHES = 9.0  # Full print area height (229 mm)
+IEEE_COLUMN_WIDTH_INCHES = _viz_style.IEEE_COLUMN_WIDTH_INCHES  # Single column (86 mm)
+IEEE_COLUMN_GAP_INCHES = _viz_style.IEEE_COLUMN_GAP_INCHES  # Gap between columns (6 mm)
+IEEE_TEXT_WIDTH_INCHES = _viz_style.IEEE_TEXT_WIDTH_INCHES  # Full print area (178 mm)
+IEEE_TEXT_HEIGHT_INCHES = _viz_style.IEEE_TEXT_HEIGHT_INCHES  # Full print area (229 mm)
 
 # =============================================================================
 # Main Plot Settings Dictionary
@@ -271,7 +255,7 @@ def get_effect_size_interpretation(d: float) -> str:
 
 def get_figure_size(
     width: str = "single",
-    height_ratio: float = None,
+    height_ratio: float | None = None,
 ) -> tuple[float, float]:
     """Get figure size tuple for IEEE format.
 
@@ -297,7 +281,8 @@ def get_figure_size(
 # IsalGraph Instruction Colors (one color per instruction character)
 # =============================================================================
 
-INSTRUCTION_COLORS: dict[str, str] = {
+INSTRUCTION_COLORS: dict[str, str] = dict(_viz_style.INSTRUCTION_PALETTE)
+_INSTRUCTION_COLORS_REFERENCE: dict[str, str] = {
     "N": "#4477AA",  # blue   (primary movement next)
     "P": "#004488",  # dark blue (primary movement prev)
     "n": "#66CCEE",  # cyan   (secondary movement next)
