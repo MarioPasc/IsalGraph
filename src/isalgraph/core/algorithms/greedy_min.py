@@ -12,8 +12,9 @@ choice at V/v steps is not isomorphism-equivariant.
 from __future__ import annotations
 
 from isalgraph.core.algorithms.base import G2SAlgorithm
-from isalgraph.core.graph_to_string import GraphToString
+from isalgraph.core.backends import graph_to_string
 from isalgraph.core.sparse_graph import SparseGraph
+from isalgraph.errors import EncodingError
 
 
 class GreedyMinG2S(G2SAlgorithm):
@@ -25,7 +26,13 @@ class GreedyMinG2S(G2SAlgorithm):
 
     Time complexity: O(N * T_greedy) where T_greedy is the per-node
     greedy execution cost.
+
+    Args:
+        backend: ``"cpp"``, ``"python"``, or ``None`` to follow the active engine.
     """
+
+    def __init__(self, backend: str | None = None) -> None:
+        self._backend = backend
 
     def encode(self, graph: SparseGraph) -> str:
         """Encode graph using greedy-min algorithm.
@@ -48,10 +55,9 @@ class GreedyMinG2S(G2SAlgorithm):
         results: list[tuple[int, str]] = []
         for v in range(n):
             try:
-                gts = GraphToString(graph)
-                s, _ = gts.run(initial_node=v)
+                s = graph_to_string(graph, v, backend=self._backend)
                 results.append((len(s), s))
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError, EncodingError):
                 continue
 
         if not results:

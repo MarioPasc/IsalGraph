@@ -34,4 +34,15 @@ const std::vector<Pair>& pairs_sorted_by_cost(int32_t m);
 /// Exposed only so the test suite can prove the cache is live.
 std::size_t pairs_cache_size() noexcept;
 
+/// Memoisation A/B switch, for the optimisation log only.
+///
+/// With the memo OFF the list is rebuilt and re-sorted at every call, which
+/// is what the Python reference does at every recursion frame.  This exists
+/// so the cost of that choice can be measured rather than asserted -- the
+/// answer is quoted in the response to Reviewer 3, who asks whether the
+/// ordered lists are recomputed each iteration or precomputed.  Both settings
+/// must produce identical strings.
+void set_pairs_memo(bool on) noexcept;
+[[nodiscard]] bool pairs_memo() noexcept;
+
 }  // namespace isalgraph

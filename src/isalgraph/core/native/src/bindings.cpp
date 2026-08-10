@@ -160,6 +160,9 @@ NB_MODULE(_native, m) {
         "m"_a, "Displacement pairs sorted by (|a|+|b|, |a|, a, b).");
     m.def("pairs_cache_size", &isalgraph::pairs_cache_size,
           "Number of memoised m values on this thread.");
+    m.def("set_pairs_memo", &isalgraph::set_pairs_memo, "on"_a,
+          "A/B switch for pair memoisation (benchmarking only).");
+    m.def("pairs_memo", &isalgraph::pairs_memo);
 
     // -------------------------------------------------------- string_to_graph
     m.def(

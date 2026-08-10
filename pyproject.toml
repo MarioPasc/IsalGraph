@@ -149,4 +149,6 @@ select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
 # COLLECTION time, so a pytestmark skipif arrives too late to prevent an
 # ImportError when the .so is absent.
 # ANN/N806: differential harnesses use mathematical variable names.
-"tests/native/*.py" = ["E402", "ANN", "N806"]
+# N812: `import graphs as G` -- G is the conventional symbol for a graph and
+# the helper module is referenced on almost every line of these harnesses.
+"tests/native/*.py" = ["E402", "ANN", "N806", "N812"]

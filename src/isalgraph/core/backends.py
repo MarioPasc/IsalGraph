@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from isalgraph import errors
 from isalgraph.core.sparse_graph import SparseGraph
@@ -56,14 +56,19 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Attempt to import the C++ extension -- graceful fallback to Python.
 # ---------------------------------------------------------------------------
-try:
-    from isalgraph.core import _native as _cpp_ext  # type: ignore[attr-defined]
+# The module object is deliberately typed Any: it is a compiled extension with
+# no stub, and binding it through a pre-declared name keeps mypy --strict
+# happy whether or not the .so is present on the machine doing the checking.
+_cpp_ext: Any = None
+_CPP_AVAILABLE: bool = False
 
-    _CPP_AVAILABLE: bool = True
+try:
+    from isalgraph.core import _native as _native_module  # type: ignore[attr-defined]
+
+    _cpp_ext = _native_module
+    _CPP_AVAILABLE = True
     log.debug("isalgraph.core._native loaded (C++ engine active)")
-except ImportError as _err:  # pragma: no cover - exercised by the fallback test
-    _cpp_ext = None  # type: ignore[assignment]
-    _CPP_AVAILABLE = False
+except ImportError as _err:  # pragma: no cover - exercised by the fallback run
     log.debug("isalgraph.core._native not available (%s); using Python engine", _err)
 
 Backend = Literal["cpp", "python"]

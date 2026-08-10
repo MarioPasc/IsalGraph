@@ -17,7 +17,16 @@ import random
 
 import pytest
 
-pytest.importorskip("isalgraph.core._native", reason="C++ extension not built")
+pytest.importorskip(
+    "isalgraph.core._native",
+    reason="C++ extension not built",
+    # exc_type is load-bearing. pytest only catches ModuleNotFoundError by
+    # default, but a DELETED .so under a scikit-build-core editable install
+    # still resolves through the import redirect and fails later with a plain
+    # ImportError ("cannot open shared object file"). Without this the
+    # extension-absent run dies at collection instead of skipping.
+    exc_type=ImportError,
+)
 
 import graphs as G
 

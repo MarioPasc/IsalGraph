@@ -6,6 +6,9 @@
 #include <unordered_map>
 
 namespace isalgraph {
+
+static bool g_pairs_memo = true;
+
 namespace {
 
 std::vector<Pair> build_pairs(int32_t m) {
@@ -44,6 +47,15 @@ const std::vector<Pair>& pairs_sorted_by_cost(int32_t m) {
     // plain Python ValueError, which is exactly what the reference raises
     // here. This is an internal precondition, unreachable from user input.
     if (m <= 0) throw std::invalid_argument("m must be a positive integer.");
+
+    if (!g_pairs_memo) {
+        // A/B path: rebuild every call, as the reference does at every frame.
+        // A thread_local scratch keeps the reference return type valid.
+        static thread_local std::vector<Pair> scratch;
+        scratch = build_pairs(m);
+        return scratch;
+    }
+
     auto& c = cache();
     const auto it = c.find(m);
     if (it != c.end()) return it->second;
@@ -51,5 +63,8 @@ const std::vector<Pair>& pairs_sorted_by_cost(int32_t m) {
 }
 
 std::size_t pairs_cache_size() noexcept { return cache().size(); }
+
+void set_pairs_memo(bool on) noexcept { g_pairs_memo = on; }
+bool pairs_memo() noexcept { return g_pairs_memo; }
 
 }  // namespace isalgraph
