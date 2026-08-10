@@ -34,6 +34,8 @@ from copy import deepcopy
 
 from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.sparse_graph import SparseGraph
+from isalgraph.core.string_to_graph import StringToGraph
+from isalgraph.core.trace import AlgorithmTrace
 
 
 def generate_pairs_sorted_by_sum(m: int) -> list[tuple[int, int]]:
@@ -255,6 +257,49 @@ class GraphToString:
             )
 
         return self._output_string, graph_trace
+
+    # ------------------------------------------------------------------
+    # Structured trace
+    # ------------------------------------------------------------------
+
+    def run_with_trace(self, initial_node: int) -> tuple[str, AlgorithmTrace]:
+        """Encode the graph and return a structured :class:`AlgorithmTrace`.
+
+        The string is produced by :meth:`run`, unmodified. The trace is
+        then obtained by replaying that string through
+        :meth:`StringToGraph.run_with_trace`, and re-labelled ``"g2s"``.
+
+        The replay is not an approximation. ``GraphToString`` allocates
+        output-graph nodes with ``add_node`` in insertion order and grows
+        the CDLL with the same ``insert_after`` calls that ``StringToGraph``
+        performs while consuming the emitted string, so the replay
+        reconstructs ``self._output_graph`` exactly -- not merely up to
+        isomorphism. Replaying also yields a *finer* trace than the
+        encoder could: ``GraphToString`` emits a whole displacement group
+        (``"NNN" + "V"``) in one iteration and jumps its pointer straight
+        to the tentative slot, whereas the snapshot contract requires one
+        state per instruction. Walking the string supplies exactly that,
+        and it keeps :meth:`run` byte-for-byte untouched.
+
+        Args:
+            initial_node: Index of the starting node in the input graph.
+
+        Returns:
+            A 2-tuple ``(instruction_string, trace)``. The trace holds
+            ``len(instruction_string) + 1`` snapshots and has direction
+            ``"g2s"``.
+        """
+        instruction_string, _ = self.run(initial_node)
+
+        replay = StringToGraph(instruction_string, directed_graph=self._input_graph.directed())
+        _, s2g_trace = replay.run_with_trace()
+
+        return instruction_string, AlgorithmTrace(
+            direction="g2s",
+            directed=s2g_trace.directed,
+            final_graph=s2g_trace.final_graph,
+            snapshots=s2g_trace.snapshots,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

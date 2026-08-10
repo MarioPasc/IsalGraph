@@ -19,6 +19,15 @@ from copy import deepcopy
 
 from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.sparse_graph import SparseGraph
+from isalgraph.core.trace import (
+    AlgorithmTrace,
+    Edge,
+    StepSnapshot,
+    cdll_forward_order,
+    graph_edges,
+    graph_to_dict,
+    normalise_edge,
+)
 from isalgraph.types import VALID_INSTRUCTIONS
 
 
@@ -145,6 +154,108 @@ class StringToGraph:
                 )
 
         return self._output_graph, graph_trace
+
+    # ------------------------------------------------------------------
+    # Structured trace
+    # ------------------------------------------------------------------
+
+    def _snapshot(
+        self,
+        step_idx: int,
+        instruction: str | None,
+        created_edge: Edge | None,
+        partial: str,
+    ) -> StepSnapshot:
+        """Capture the current VM state as a :class:`StepSnapshot`."""
+        directed = self._directed_graph
+        return StepSnapshot(
+            step_idx=step_idx,
+            instruction=instruction,
+            cdll_node_order=cdll_forward_order(self._cdll),
+            primary_node=self._cdll.get_value(self._primary_ptr),
+            secondary_node=self._cdll.get_value(self._secondary_ptr),
+            active_nodes=tuple(range(self._output_graph.node_count())),
+            active_edges=graph_edges(self._output_graph),
+            created_edge=(
+                None if created_edge is None else normalise_edge(*created_edge, directed=directed)
+            ),
+            partial_string=partial,
+        )
+
+    def _created_edge_for(self, instruction: str) -> Edge | None:
+        """Predict the edge *instruction* is about to create, from live VM state.
+
+        Called immediately *before* :meth:`_execute_instruction`, so the
+        pointer reads and the ``has_edge`` probe reflect the pre-step
+        state. Recording attribution here rather than re-deriving it from
+        the token stream is deliberate: ``C``/``c`` between two already
+        adjacent nodes is a genuine no-op in IsalGraph, so any counter
+        keyed on ``V``/``C`` occurrences desynchronises the first time the
+        string revisits an existing edge.
+
+        Args:
+            instruction: The single character about to be executed.
+
+        Returns:
+            The ``(source, target)`` pair the step will add, or ``None``
+            for movement instructions, ``W``, and no-op ``C``/``c``.
+        """
+        if instruction in ("N", "P", "n", "p", "W"):
+            return None
+
+        primary_gn = self._cdll.get_value(self._primary_ptr)
+        secondary_gn = self._cdll.get_value(self._secondary_ptr)
+
+        # V/v always allocate a fresh node, so the edge is always new.
+        # The new node takes the next contiguous id.
+        new_node = self._output_graph.node_count()
+        if instruction == "V":
+            return (primary_gn, new_node)
+        if instruction == "v":
+            return (secondary_gn, new_node)
+
+        source, target = (
+            (primary_gn, secondary_gn) if instruction == "C" else (secondary_gn, primary_gn)
+        )
+        if self._output_graph.has_edge(source, target):
+            return None  # genuine no-op: the edge already exists
+        return (source, target)
+
+    def run_with_trace(self) -> tuple[SparseGraph, AlgorithmTrace]:
+        """Execute the conversion, recording a structured :class:`AlgorithmTrace`.
+
+        Semantically identical to ``run()``: the same instruction dispatch
+        drives both, so the returned graph equals the one ``run()``
+        produces. The difference is the second element, which carries id
+        masks over the final graph rather than deep copies of intermediate
+        ones.
+
+        Returns:
+            A 2-tuple ``(graph, trace)``. The trace holds
+            ``len(input_string) + 1`` snapshots and has direction
+            ``"s2g"``.
+        """
+        initial_graph_node = self._output_graph.add_node()
+        initial_cdll_node = self._cdll.insert_after(-1, initial_graph_node)
+        self._primary_ptr = initial_cdll_node
+        self._secondary_ptr = initial_cdll_node
+
+        snapshots: list[StepSnapshot] = [self._snapshot(0, None, None, "")]
+
+        for idx, instruction in enumerate(self._input_string):
+            created = self._created_edge_for(instruction)
+            self._execute_instruction(instruction)
+            snapshots.append(
+                self._snapshot(idx + 1, instruction, created, self._input_string[: idx + 1])
+            )
+
+        trace = AlgorithmTrace(
+            direction="s2g",
+            directed=self._directed_graph,
+            final_graph=graph_to_dict(self._output_graph),
+            snapshots=tuple(snapshots),
+        )
+        return self._output_graph, trace
 
     # ------------------------------------------------------------------
     # Instruction dispatch
