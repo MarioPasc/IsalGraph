@@ -153,6 +153,110 @@ Full measurements and negative results: `docs/engineering/CPP_OPTIMIZATION_LOG.m
 
 ---
 
+## GED computation on Picasso (GEDLIB)
+
+The Pattern Recognition revision recomputes every GED itself under **one cost model**
+(node ins/del = 1, edge ins/del = 1, substitutions free -- see
+`.claude/notes/review/source/statistics.md` D6). Exact GED comes from `networkx` below ~12 nodes;
+above that we report a bracket from **GEDLIB**.
+
+### Why GEDLIB and not our own implementation
+
+GEDLIB is by Blumenthal and Gamper -- the authors of the BRANCH/BRANCH-FAST lower bound we cite
+(*IEEE TKDE* 30(3):503-516, 2018). Using the reference implementation is what makes the bounds
+defensible to a reviewer. Repo status, checked 2026-08-11:
+
+| Repo | Last push | Verdict |
+|---|---|---|
+| `Ryurin/gedlibpy` | **2019-10-03** | dead -- **do not use** |
+| `dbblumenthal/gedlib` | 2023-06-22 | canonical C++ library |
+| `jajupmochi/graphkit-learn` | **2025-06-07** | **maintained**; carries the Cython wrapper *and* its own gedlib fork |
+
+**`pip install graphkit-learn` is not enough** -- the PyPI wheel ships Python glue with no compiled
+`.so` and no `.pyx`. The Cython sources exist only in the **git** repo.
+
+### Install (login node, ~20 min)
+
+```bash
+CE=/mnt/home/users/tic_163_uma/mpascual/fscratch/conda_envs/isalgraph
+module load gcc/12.2.0 cmake/3.31.4
+$CE/bin/python -m pip install cython numpy scipy networkx
+
+cd /mnt/home/users/tic_163_uma/mpascual/fscratch/build_gedlib
+git clone --depth 1 https://github.com/jajupmochi/graphkit-learn.git
+cd graphkit-learn/gklearn/gedlib
+$CE/bin/python setup.py build_ext --inplace     # fetches its own gedlib fork and builds it
+```
+
+`setup.py` downloads `jajupmochi/gedlib` into `include/gedlib-master/` and builds NOMAD, fann,
+libsvm, lsape and Eigen from the bundled `ext/` tree. **No network access is needed beyond the two
+clones**, and no separate Boost module is required.
+
+**Do not also clone `dbblumenthal/gedlib` separately.** `setup.py` fetches its own copy; a manual
+second build is redundant and costs ~92,000 files against the quota (see below).
+
+### Verify the install (verified working 2026-08-11)
+
+The build is **in-place**, so `PYTHONPATH` must point at the checkout, not at site-packages:
+
+```bash
+export PYTHONPATH=/mnt/home/users/tic_163_uma/mpascual/fscratch/build_gedlib/graphkit-learn
+$CE/bin/python - <<'EOF'
+from gklearn.gedlib import libraries_import          # note: snake_case, loads the .so files
+from gklearn.gedlib import gedlibpy_gxl as g         # GXL bindings -- our data is GXL
+print(g.list_of_method_options)
+env = g.GEDEnvGXL()                                  # class is GEDEnvGXL, not GEDEnv
+EOF
+```
+
+**Names that changed in the refactor** -- most stale tutorials online use the old ones:
+
+| Old (broken) | Current |
+|---|---|
+| `librariesImport` | `libraries_import` |
+| `gedlibpy` | **`gedlibpy_gxl`** (GXL input) / `gedlibpy_attr` (attribute input) |
+| `GEDEnv` | **`GEDEnvGXL`** |
+
+**Verified method list** (21): `BRANCH`, **`BRANCH_FAST`**, `BRANCH_TIGHT`, `BRANCH_UNIFORM`,
+`BRANCH_COMPACT`, `PARTITION`, `HYBRID`, `RING`, **`ANCHOR_AWARE_GED`**, `WALKS`, **`IPFP`**,
+`BIPARTITE`, `SUBGRAPH`, `NODE`, `RING_ML`, `BIPARTITE_ML`, **`REFINE`**, `BP_BEAM`,
+`SIMULATED_ANNEALING`, `HED`, `STAR`.
+
+**Verified edit-cost list** (11): `CONSTANT` (our unit model -- see `statistics.md` D6), plus the
+published IAM per-dataset models `LETTER`, `LETTER2`, `GREC_1`, `GREC_2`, `CHEM_1`, `CHEM_2`,
+`PROTEIN`, `FINGERPRINT`, `CMU`, `NON_SYMBOLIC`. We use **`CONSTANT`**; the per-dataset models are
+available as a sensitivity analysis but reintroduce exactly the heterogeneity R3.5b objects to.
+
+Roles for this project: **`BRANCH_FAST`** = lower bound, **`IPFP`** / **`REFINE`** = tight upper
+bounds, `BIPARTITE` = the loose Riesen-Bunke reference point, `BRANCH_TIGHT` = anytime lower bound,
+**`ANCHOR_AWARE_GED`** = exact -- benchmark it against `networkx` A*, it may push the exact-GED
+ceiling past n = 12.
+
+A failure of the form `libdoublefann.so: cannot open shared object file` means the wheel is
+installed but the C++ side was never built -- rerun `build_ext`.
+
+**Cross-check, do not skip**: `scratchpad/ged_bounds.py` in the revision notes implements BP and
+BRANCH-FAST directly. GEDLIB and it must agree on the same pairs; disagreement is a bug in one of
+them and we need to know which.
+
+### fscratch quota: it is a FILE COUNT limit, not a space limit
+
+```
+fscratch  0.48TB / 1.40TB space   <- fine
+          399.7k / 250.0k files   <- EXCEEDED, hard limit 400.0k
+```
+
+A GEDLIB build creates **50,000-90,000 small files** (headers, objects). Two builds will hit the
+hard limit and the failure surfaces as a confusing `shutil.Error: [Errno 122] Disk quota exceeded`
+mid-`copytree`, not as a compile error. Check with:
+
+```bash
+quota -s                    # the fancy banner shows both space and file quotas
+find <dir> -type f | wc -l  # per-directory file count
+```
+
+Delete build trees once the `.so` is produced, and prefer `--depth 1` clones.
+
 ## Visualization: `isalgraph.viz`
 
 All figures go through this package. **Do not hand-roll matplotlib in a figure
