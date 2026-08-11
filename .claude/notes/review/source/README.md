@@ -1,8 +1,11 @@
 # PR-D-26-03293 — Major Revision: source notes
 
 Reference documentation for agents and authors working the IsalGraph revision.
-These files record **what the reviewers said and what is verifiably true in the sources**.
-They do not contain proposed answers — drafting the response letter is a separate task.
+
+The directory holds two kinds of file and **they must not be mixed**. The *evidence* files record
+what the reviewers said and what is verifiably true in the sources, and propose nothing. The
+*response* files carry the author decisions, the experiment designs and the schedule. When the two
+disagree, the evidence files win and the response file is wrong.
 
 Manuscript: *Representation of Graphs by Sequences of Instructions* (IsalGraph).
 Journal: **Pattern Recognition** (Elsevier).
@@ -14,6 +17,8 @@ Decision letter: `.claude/notes/review/source/mail.txt`
 
 ## Files in this directory
 
+### Evidence — what was said and what is verifiably true
+
 | File | Content |
 |------|---------|
 | `mail.txt` | The decision letter as received. Source of every verbatim quotation in this package. |
@@ -23,6 +28,20 @@ Decision letter: `.claude/notes/review/source/mail.txt`
 | `manuscript-map.md` | Where every section, theorem, definition, algorithm, table and figure lives; cross-walk between the numbers reviewers cited and the actual `\label`s. |
 | `verified-discrepancies.md` | Every factual claim by a reviewer, checked against the `.tex` sources and the code, with `file:line`, marked CORRECT / INCORRECT / PARTIALLY CORRECT. Plus discrepancies no reviewer caught. |
 | `codebase-pointers.md` | Where the implementations, datasets and result files are, for anyone who has to re-run or re-measure. |
+
+### Response — what we decided to do about it
+
+These *do* propose answers, unlike the evidence files above.
+
+| File | Content |
+|------|---------|
+| **`plan.md`** | **Start here.** Author decisions, the **§0.5 traceability matrix** locking every demand to a ticket and an artifact, the ticket board, the schedule and the risk register. |
+| `data.md` | Measured dataset inventory, GED and encoding cost, compute budget. **§0 is the only table a printed number may be taken from.** |
+| `statistics.md` | The locked statistical protocol, D1–D15. |
+| `labels.md` | The R1.3 / AE.4b response, in four costed tiers. **§0 carries a PI decision on effort, due 2026-08-18.** |
+| `competitors.md` | Competitor backends and **T-04a**, the metric-feasibility experiment that selects each representation's distance by measurement. |
+| `manuscript.md` | Section-by-section rewrite map, artifact inventory, **page budget**, response-letter architecture, submission and compliance checklist. |
+| `gap-audit.md` | The 2026-08-11 coverage audit that produced §0.5: 10 unowned demands and 16 flawed or infeasible locked decisions, with severities and evidence. |
 
 ## There is no Reviewer #2
 
@@ -113,6 +132,59 @@ Nothing here prescribes a response. Identifiers are defined in the per-reviewer 
 **Prose / presentation**
 - R3.7 — a schematic of the canonical search space in Section 2.3.
 - AE.4 — "more detailed and rigorous analysis ... and in the associated analysis of the results."
+
+## Read this before scoping any response — the R1.3 lesson
+
+**What happened, 2026-08-11.** Reviewer 1's comment 3 devotes most of its word count to node and edge
+labels, so the first scoping pass read it as a demand for a label experiment and designed one: a
+label-aware GED arm under a second cost model, with its own results subsection, tables and page
+budget. That was wrong on three counts, and each was checkable in minutes. First, **the volume of
+text about a topic is not the size of the ask about it** — the operative request sits in the
+comment's last two sentences ("*A more thorough **discussion** of this limitation, along with its
+impact on the reported results, would strengthen the paper*"), and it asks for prose. Second, **the
+manuscript already satisfied two of the three asks**: the limitation is discussed at
+`conclusion.tex:70–71` and the future-work direction at `:81`, so the only genuine gap was the
+"impact on the reported results" clause — one paragraph joining §5 to §4. Third, **the comment's
+opening sentence names the real complaint** — "*the discussion of the experimental results is rather
+overlooked*" — and the target is the **density attribution**, with labels serving as the illustration
+that we never examined it; the label hypothesis itself is refutable by argument alone, because for
+AIDS both sides of the correlation are topology-only. Cost of the first plan: ~1 day plus a page we
+do not have. Cost of the correct response: one paragraph, one table column, and two arguments that
+were free. **The failure mode is designing work before checking what the comment asks for, what the
+manuscript already does, and whether an argument would do the job of an experiment.**
+
+### The six-question test — run it on every comment
+
+1. **Where is the ask?** Usually the final sentence, in the imperative or subjunctive. The rest is
+   justification. Quote the operative clause verbatim before scoping anything.
+2. **What is the modal?** "should be described" / "please report" = requirement. "would strengthen" /
+   "could benefit from" / "would be helpful" = suggestion. R3.2 and R3.7c are suggestions; R3.5a and
+   R3.5c are requirements. Do not spend a requirement's budget on a suggestion.
+3. **Does the manuscript already do it?** Check `verified-discrepancies.md` and the sources *before*
+   designing. Two of R1.3's three asks were already in the submitted text.
+4. **Is there an explicit `or`?** R3.6a offers "either narrow the claim accordingly **or** include
+   comparisons with established reversible graph serializations". One branch is free.
+5. **Can an argument replace a measurement?** A causal hypothesis about an existing number can often
+   be refuted logically, or with a counter-example already in our own tables — as IAM's ρ ≈ 0.93
+   under class-defining attribute loss refutes the label hypothesis for AIDS at zero cost.
+6. **Who else is this work for?** If a measurement survives only because of one soft comment, it is a
+   candidate for the cut list. If it has a second customer (as the collision count does — R1.2's
+   expressiveness axis and the AE.3 table), it stays.
+
+### Where the same error is most likely — audit these first
+
+| Comment | What it literally asks | What we planned | Check |
+|---|---|---|---|
+| **R3.5b** | interpret Figure 3 cautiously; treat **dataset-level correlations as primary** | recompute **every** GED under one cost model — **1,000–1,650 core-hours**, the single largest item in the revision | `statistics.md` D5 alone (per-dataset primary, pooled demoted) satisfies the literal ask. The recompute is a deliberate decision to **retire** the objection rather than caveat it, and it is also driven by F2 and by the new cohort — but the cheap branch must be recorded as the fallback if T-03 fails |
+| **R3.6a** | "**either** narrow the claim **or** include comparisons with established reversible serializations" | build six competitor backends | Narrowing is free. The competitors survive because **R1.1 and AE.4a demand them independently** — but R3.6a alone would not justify them |
+| **`statistics.md` D4 (MRM)** | *nobody asked for this* | promoted to the **confirmatory** family | Justified as pre-empting a size-confound attack, and it is cheap. Confirm it stays cheap |
+| **`statistics.md` §7 symmetry stratification** | *nobody asked for this*, stated openly in the file | new stratification variable | Cheap (nauty is vendored anyway) and it converts a limitation into a characterisation. Keep, but it belongs on the cut list |
+| **AE.1 / Suite 2** | "How graph size might impact the presented results **should be clear**" | 5 → 10 datasets, 40 M pairs | Requirement modal, and the extension costs ~1.3 core-hours. Proportionate — verify the *page* cost, not the compute cost |
+
+**Twenty days.** Every hour spent over-satisfying a suggestion is an hour not spent on T-20, which
+rewrites five sections and had no owner at all until the coverage audit.
+
+---
 
 ## Hard constraints on the revision
 

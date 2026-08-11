@@ -1,7 +1,17 @@
 # Data and compute feasibility — measured
 
-**Status**: v1.0, 2026-08-11. Every number below is **measured on this machine**, not quoted from
+**Status**: **v1.1, 2026-08-11.** Every number below is **measured on this machine**, not quoted from
 literature. Reproduction scripts are named per section.
+
+> **v1.1 correction.** §2.1's size columns were raw-set statistics presented as connected-set
+> statistics, and the error propagated into `plan.md` decision 12, §2.3 and §4.2. **§0 is correct and
+> reproduces exactly**; §2.1 carries a correction banner; the cohort's retained ceiling is **n = 98**,
+> not 417. §2.2.1's Fingerprint row could not be reproduced. Q4, Q6, Q7, Q8 closed; Q9 opened. Full
+> derivation in `gap-audit.md` **MF1**. **§0 is the only table any printed number may be taken from.**
+>
+> **No dataset moves in or out.** The cohort, its counts and its pair totals are unchanged; the drop
+> decisions for COIL-RAG, Fingerprint and Web were re-checked on connected-set numbers and all
+> survive (§2.3). The correction is to *descriptions*, not to *data*.
 
 **Machine**: local workstation, single thread, `time.process_time()`, `isalgraph.engine() == 'cpp'`.
 **Environment**: `~/.conda/envs/isalgraph-cpp` (engine), `~/.conda/envs/isalsr` (torch, for the
@@ -116,6 +126,38 @@ ceiling with a characterised one, but only if we state them first.
 Topology-only parse of every GXL file; "connected" means `n ≥ 1` and `nx.is_connected`.
 Script: `scratchpad/iam_audit.py` → `iam_audit.json`.
 
+> ### ⚠ CORRECTION 2026-08-11 — the size columns below are RAW-set statistics
+>
+> Independently re-derived by re-parsing every GXL file under the pipeline's own filter
+> (`dataset_filter.py::filter_graphs`, `min_nodes = 2`, `require_connected = True`);
+> script `scratchpad/audit_recheck.py`. **`data.md` §0 is correct and reproduces exactly. This table
+> is not.**
+>
+> `N conn` and `ret. %` are computed over the **connected** subset. **`n med`, `n mean`, `n p90`,
+> `n p99`, `n max`, `m mean` and `density` are computed over the RAW set** and are labelled as though
+> they were connected-set values. The identity is exact, not approximate — for Mutagenicity,
+> `(4040 × 28.53 + 297 × 54.70) / 4337 = 30.32`, this table's figure to the decimal; likewise Letter
+> LOW (4.679 → 4.68), GREC (11.51) and Protein (32.64 → 32.63).
+>
+> | Dataset | n̄ **retained** | n max **retained** | n̄ raw | n max raw |
+> |---|---:|---:|---:|---:|
+> | Letter LOW | 4.07 | **7** | 4.68 | 8 |
+> | Letter MED | 4.11 | **8** | — | 9 |
+> | Letter HIGH | 4.58 | **9** | — | 9 |
+> | GREC | 11.45 | **24** | 11.51 | 24 |
+> | AIDS-IAM | 14.02 | **85** | 15.69 | 95 |
+> | COIL-DEL | 21.48 | **79** | 21.48 | 79 |
+> | **Mutagenicity** | **28.53** | **98** | 30.32 | **417** |
+> | Protein | 31.68 | **96** | 32.63 | 126 |
+>
+> **Consequence — the 417-node Mutagenicity graph is disconnected and is discarded by the filter.**
+> The cohort's true ceiling is **n = 98**. Three statements inherit the error and are corrected
+> below and in `plan.md`: decision 12's rationale ("Mutagenicity already reaches n = 417"), §2.3's
+> "20 → 417", and §4.2's heavy-tail explanation. See `gap-audit.md` **MF1**.
+>
+> **Use §0 for every number that will be printed.** This table is retained only because its
+> raw-versus-connected split is what quantifies the connectivity discard in §2.2.1.
+
 | Dataset | Source | N raw | N conn | ret. % | n med | n mean | n p90 | n p99 | **n max** | m mean | density |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Letter LOW | IAM | 2,250 | 1,181 | 52.5 | 5 | 4.68 | 6 | 8 | **8** | 3.13 | 0.4165 |
@@ -143,9 +185,12 @@ The manuscript states the connectivity requirement (`computational_experiments.t
 **never quantifies the loss**. On Letter LOW it discards **47.5 %** of the corpus. This belongs in
 the pair-accounting ladder.
 
-**Reconciliation item.** This audit gives 1,181 / 1,257 / 2,067 connected Letter graphs; the
-manuscript reports **1,180 / 1,253 / 2,059**. Differences of +1 / +4 / +8, most likely a `n ≥ 2`
-or `n ≥ 3` threshold in `dataset_filter.py`. **Must be reconciled before any count is reprinted.**
+**Reconciliation item — CLOSED 2026-08-11.** This audit gives 1,181 / 1,257 / 2,067 connected Letter
+graphs against the manuscript's **1,180 / 1,253 / 2,059**. The mechanism is the `min_nodes`
+threshold: `filter_graphs(graphs, graph_ids, n_max, require_connected=True, min_nodes=2)`
+(`dataset_filter.py:37–43`). Applying `min_nodes = 2` reproduces **1,180 / 1,253 / 2,059 / 650 /
+1,811 / 7,200 / 4,040 / 569** exactly — verified independently, `scratchpad/audit_recheck.py`. §0 was
+already right; Q4 in §9 is closed.
 
 ### 2.2.1 The connectivity discard is size-biased — and GREC is the *least* affected
 
@@ -154,13 +199,23 @@ Script: `scratchpad/grec_check.py`. Retained vs discarded graphs compared by Man
 | Dataset | retained | n̄ retained | n̄ **discarded** | p(n) | density ret. | density disc. |
 |---|---:|---:|---:|---:|---:|---:|
 | **GREC** | **59.1 %** | 11.45 | **11.59** | 1.6e−02 | 0.243 | 0.202 |
-| Fingerprint | 67.2 % | 5.02 | **11.56** | 3.6e−252 | 0.550 | 0.179 |
+| Fingerprint | ~~67.2 %~~ **51.4 %** | 5.03 | ~~11.56~~ **5.98** | 3.6e−252 | 0.550 | 0.179 |
 | Letter LOW | 52.5 % | 4.06 | 5.35 | 9.2e−122 | 0.543 | 0.277 |
 | Letter HIGH | 91.9 % | 4.57 | 5.83 | 1.9e−33 | 0.605 | 0.290 |
 | **Mutagenicity** | 93.2 % | 28.53 | **54.70** | 1.6e−38 | 0.094 | 0.059 |
 | **Protein** | 94.8 % | 31.68 | **50.19** | 4.9e−04 | 0.163 | 0.103 |
 | **AIDS-IAM** | 90.5 % | 14.02 | **31.76** | 7.8e−17 | 0.202 | 0.114 |
 | COIL-DEL | 100 % | — | — | — | — | — |
+
+> **Verified 2026-08-11**, `scratchpad/audit_recheck.py` / `audit_dropped.py`. **This table is
+> correct except for the Fingerprint row.** GREC, Mutagenicity, Protein and AIDS-IAM reproduce to
+> the decimal on all three columns; Letter LOW/HIGH differ only by the `n ≥ 1` vs `n ≥ 2` threshold.
+>
+> **Fingerprint could not be reproduced**: measured retention is **51.4 %** (2,056 of 4,000 — which
+> is what §2.1 itself reports) and the discarded mean is **5.98**, not 11.56. The internal check
+> holds on the measured values: `(2056 × 5.03 + 1944 × 5.98) / 4000 = 5.49`, matching the raw mean.
+> The origin of 67.2 % / 11.56 is unknown. **Not load-bearing** — Fingerprint is dropped either way
+> — but no number from that row may be quoted.
 
 **GREC: include it.** Its retention rate (59.1 %) looks alarming, but the discarded graphs are the
 same size as the retained ones (11.59 vs 11.45 nodes — a 0.14-node difference, significant only
@@ -190,11 +245,22 @@ measured on a subsample from which the large graphs have been preferentially rem
 | Verdict | Datasets | Rationale |
 |---|---|---|
 | **Keep — exact-GED regime** | Letter LOW/MED/HIGH, LINUX, AIDS-GraphEdX | the submitted study; n ≤ 12 throughout |
-| **Add — size extension** | **Mutagenicity** (n̄ 30, sparse 0.09, 4,040 graphs), **Protein** (n̄ 33, 0.16, 569), **COIL-DEL** (n̄ 21, **dense 0.33**, 7,200), **AIDS-IAM** (n̄ 16, max 95, 1,811) | span n̄ = 5 → 33 and density 0.09 → 0.58; COIL-DEL is the density stress test |
-| **Add — marginal** | GREC (n̄ 11.5) | only 59.1 % retention; include if the density strata need filling |
-| **Drop** | COIL-RAG (n̄ 3.0, density 0.93 — near-complete tiny graphs), Fingerprint (51.4 % retention, n̄ 5.5), Web (unparsed) | add no size or density coverage |
+| **Add — size extension** | **Mutagenicity** (n̄ **28.5**, sparse 0.094, 4,040 graphs), **Protein** (n̄ **31.7**, 0.163, 569), **COIL-DEL** (n̄ **21.5**, **dense 0.328**, 7,200), **AIDS-IAM** (n̄ **14.0**, max **85**, 1,811) | span n̄ = 4.1 → 31.7 and density 0.094 → 0.607; COIL-DEL is the density stress test |
+| **Add — marginal** | GREC (n̄ 11.45) | only 59.1 % retention, but the discard is **size-unbiased** (§2.2.1) — the cleanest in the cohort |
+| **Drop** | COIL-RAG (**kept 7,100, n̄ 3.02, n max 6, density 0.936** — near-complete tiny graphs), Fingerprint (**51.4 % retention, kept n̄ 5.03, n max 19**), Web (unparsed) | add no size or density coverage |
 
-This cohort takes the maximum node count from **20 → 417** and the study from 5 datasets to 9–10.
+> **The drop decisions were re-checked on connected-set numbers and all three survive**
+> (`scratchpad/audit_dropped.py`, 2026-08-11). The MF1 correction **changes no dataset in or out**:
+> §0's cohort and its counts were always right, and every retained dataset is unaffected. What
+> changed is the prose that described them.
+
+This cohort takes the maximum **retained** node count from **12 → 98** and the study from 5 datasets
+to 10.
+
+> **Corrected 2026-08-11.** The previous text read "**20 → 417**". Both endpoints were wrong: 20 is
+> AIDS-GraphEdX's *pre-filter* maximum where Suite 1's ceiling is 12, and the 417-node Mutagenicity
+> graph is disconnected and discarded. All figures in this row are now retained-set values from §0.
+> See `gap-audit.md` MF1.
 
 ---
 
@@ -394,8 +460,11 @@ are already vendoring as a competitor. This also gives R3.7d a *characterised* w
 Two independent runs with different sampling (`feasibility.py`: 40 graphs, full corpora;
 `feas2.py`: 15 graphs, subsampled corpora) agree to within sampling noise on greedy and pruned
 timings. The exception is **Mutagenicity pruned: 240 µs vs 1.62 ms**, a 6.7× spread caused by its
-heavy tail (median n = 27, max n = 417) — with 15–40 samples the median is unstable. **Mutagenicity
-encoding cost must be re-measured on the full corpus** before any timing is reported.
+heavy tail (median n = 27, **max n = 98 in the retained corpus** — corrected from 417, which is a
+discarded disconnected graph, `gap-audit.md` MF1) — with 15–40 samples the median is unstable.
+**Mutagenicity encoding cost must be re-measured on the full corpus** before any timing is reported.
+The spread is in any case governed by `|Aut(G)|` rather than by `n` (§4.4), so the re-measurement
+must report the distribution and not only a median.
 
 ---
 
@@ -597,9 +666,14 @@ plain BP; expect materially more with IPFP).
 | `ged_bounds.py` | BP upper + BRANCH-FAST lower |
 | `feas2.py` | §5 bound validation, §4 per-dataset encoding, §6 approx-GED cost → `feas2.json` |
 | `budget.py` | §6 all-pairs budget table |
+| **`audit_recheck.py`** *(2026-08-11)* | **§0 / §2.1 reconciliation** — re-parses every GXL under `min_nodes = 2` + connected and emits retained *and* discarded `n̄`, `n_max`, `m̄`, density per dataset. The script that established MF1 |
+| **`audit_dropped.py`** *(2026-08-11)* | **§2.3 drop-decision re-check** — connected-set statistics for COIL-RAG, Fingerprint and GREC. Confirmed all three dispositions and surfaced the unreproducible §2.2.1 Fingerprint row |
 
 **These live in a session scratchpad and will not survive.** Port them to
 `benchmarks/real_data/eval_setup/` and `tests/` as part of T-01/T-05 before relying on them.
+`audit_recheck.py` in particular must become a **test**: it is the only thing standing between the
+raw/connected mix-up and a printed number, and it caught one that had already reached two locked
+decisions.
 
 ---
 
@@ -610,8 +684,9 @@ plain BP; expect materially more with IPFP).
 | **Q1** | Adopt **BRANCH-FAST as the primary large-n reference** instead of BP (H4)? | ρ 0.966 vs 0.840. Changes what every large-n number means |
 | **Q2** | Add a **BP refinement pass** (BP-Beam / IPFP) so the upper bound is not the loosest in its family? | +78 % overestimate is an easy reviewer target |
 | **Q3** | **All-pairs vs stratified-subsample exact GED on AIDS?** | 985–1,640 vs ~100 core-hours; dyadic dependence means little power is lost |
-| **Q4** | Reconcile Letter connected counts: audit 1,181/1,257/2,067 (`n ≥ 1`) vs 1,058/–/1,927 (`n ≥ 3`) vs manuscript 1,180/1,253/2,059. **The threshold on `n` is the mechanism** | the manuscript reprints these numbers; find the exact rule in `dataset_filter.py` |
+| ~~Q4~~ | ~~Reconcile Letter connected counts~~ | **Closed 2026-08-11.** `dataset_filter.py:37–43` defaults to `min_nodes = 2`; applying it reproduces 1,180 / 1,253 / 2,059 exactly. Verified independently, `scratchpad/audit_recheck.py` |
 | ~~Q5~~ | ~~Exhaustive canonical above n = 12~~ | **Closed** by §4.1 — measured; it fails on 55 % of Protein graphs while pruned completes all |
-| **Q6** | Include GREC despite **59.1 %** connectivity retention? | a >40 % discard invites a selection-bias objection |
-| **Q7** | Write a **Web** loader (`doc.*.xml` schema) for the largest IAM graphs? | probably unnecessary — Mutagenicity max n = 417 already |
-| **Q8** | Which cost model: unit node+edge (IAM tradition) or topology-only zero-node (GraphEdX)? | must be **one** model across all datasets to retire R3.5b |
+| ~~Q6~~ | ~~Include GREC despite 59.1 % retention?~~ | **Closed** by §2.2.1 — the discard is size-unbiased (11.59 vs 11.45 nodes), the cleanest in the cohort. Include |
+| ~~Q7~~ | ~~Write a **Web** loader?~~ | **Closed — and its stated reason was wrong.** "Mutagenicity max n = 417" counts a *discarded* disconnected graph; the retained ceiling is **98** (`gap-audit.md` MF1). Still declined: Web needs a new schema loader, and Protein/Mutagenicity already carry the size range at n̄ ≈ 30 |
+| **Q8** | Which cost model: unit node+edge (IAM tradition) or topology-only zero-node (GraphEdX)? | **Resolved** — `statistics.md` D6, unit node + unit edge, substitutions free |
+| ~~Q9~~ | ~~Does decision 12 hold on the corrected ceiling of 98?~~ | **Closed 2026-08-11 — AFFIRMED by the author.** 98 vs 12 is an 8.2× extension on ten datasets with published edit costs. Re-measurement confirmed no dataset moves in or out and that the COIL-RAG / Fingerprint / Web drops all survive. The residual "real-world graphs are far larger than 98" objection is acknowledged in the paper via `plan.md` §3.5's three-statement framing |
