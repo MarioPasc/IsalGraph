@@ -31,6 +31,7 @@ from benchmarks.eval_setup.ged_sampling import (
     DEFAULT_Q,
     DEFAULT_SEED,
     GedSamplingError,
+    _cell_to_pair,
     build_pair_strata,
     main,
     sampling_report,
@@ -101,6 +102,55 @@ def test_there_are_ninety_strata_six_size_cells_by_fifteen_density_cells() -> No
     assert int(strata.population_counts.sum()) == n_pairs(200)
     assert strata.quantile_edges.size == 4
     assert set(np.unique(strata.density_bin).tolist()).issubset({0, 1, 2, 3, 4})
+
+
+def test_the_top_quintile_stays_reachable_when_q80_equals_the_maximum_density() -> None:
+    """A density equal to an edge goes into the UPPER bin, so quintile 4 never collapses.
+
+    This is not a hypothetical corpus. After ``min_nodes=2`` the AIDS cohort contains
+    ``n = 2`` graphs, and a connected two-node graph has exactly one edge, so its
+    density is exactly ``1.0``. Whenever enough of those are present the 80th
+    percentile equals the maximum, and under ``np.searchsorted``'s default
+    ``side="left"`` every one of them would fall to bin 3 -- leaving the top quintile
+    empty on the real data and silently removing every stratum that involves it from
+    the top-up.
+
+    Fixture: 40 graphs at density exactly 1.0 and 60 strictly below it, so
+    ``q80 == max == 1.0`` by construction.
+    """
+    n_nodes = np.concatenate([np.full(40, 2), np.full(60, 6)]).astype(np.int64)
+    # n=2 -> m=1 -> density 1.0; n=6 -> m in 5..10 -> density m/15 <= 0.667.
+    n_edges = np.concatenate([np.full(40, 1), 5 + np.arange(60) % 6]).astype(np.int64)
+    strata = build_pair_strata(n_nodes, n_edges)
+
+    assert float(strata.quantile_edges[3]) == pytest.approx(1.0)
+    assert float(strata.density.max()) == pytest.approx(1.0)
+    assert float(strata.quantile_edges[3]) == pytest.approx(float(strata.density.max()))
+
+    top = strata.density_bin == 4
+    assert int(np.count_nonzero(top)) == 40, "every density-1.0 graph belongs to quintile 4"
+    assert bool(np.all(strata.density_bin[:40] == 4)), "ties must fall consistently"
+    assert bool(np.all(strata.density_bin[40:] < 4))
+
+    # The strata that involve quintile 4 are non-empty in the population, so the
+    # top-up will actually reach them.
+    involving_top = [
+        s
+        for s in range(strata.n_strata)
+        if 4 in _cell_to_pair(s % 15, 5) and strata.population_counts[s] > 0
+    ]
+    assert involving_top, "quintile 4 must appear in at least one non-empty stratum"
+    assert int(strata.population_counts[involving_top].sum()) >= n_pairs(40)
+
+
+def test_density_binning_is_stable_under_repetition() -> None:
+    """The same population always yields the same bins; no order or tie dependence."""
+    n_nodes, n_edges = _synthetic_population(300, seed=99)
+    first = build_pair_strata(n_nodes, n_edges)
+    second = build_pair_strata(n_nodes, n_edges)
+    assert np.array_equal(first.density_bin, second.density_bin)
+    assert np.array_equal(first.stratum, second.stratum)
+    assert np.array_equal(first.quantile_edges, second.quantile_edges)
 
 
 def test_strata_reject_node_counts_outside_the_covered_range() -> None:

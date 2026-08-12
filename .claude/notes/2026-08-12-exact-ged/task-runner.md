@@ -23,7 +23,7 @@ a Pattern Recognition table, so the index arithmetic and the resume logic got th
 | `benchmarks/real_data/eval_setup/ged_exact_runner.py` | 1270 | CONTRACT C chunk driver: process pool, in-place checkpoint, resume, `--seed-from`, SIGTERM |
 | `benchmarks/real_data/eval_setup/ged_merge_shards.py` | 612 | CONTRACT D merge + gate 4 |
 | `tests/unit/test_ged_pair_index.py` | 94 tests | |
-| `tests/unit/test_ged_sampling.py` | 22 tests | |
+| `tests/unit/test_ged_sampling.py` | 24 tests | |
 | `tests/unit/test_ged_exact_runner.py` | 30 tests | |
 | `tests/unit/test_ged_merge_shards.py` | 22 tests | |
 
@@ -115,6 +115,35 @@ density quintiles (15 cells) = 90. Seed 42. `K/q/f` are CLI flags defaulting to 
 RNG consumption order is fixed — core draw, then non-core graphs in ascending index order,
 then strata in ascending id order — so the sample is reproducible from the design note alone.
 
+### Amendment 2026-08-12: `np.searchsorted(..., side="right")`
+
+CONTRACTS §8 fixes the quantiles and the use of `searchsorted` but **not the side**. The
+first implementation took numpy's default, `side="left"`, which puts a density equal to an
+edge in the *lower* bin. Consequence: when `q80` equals the maximum density the top quintile
+is unreachable. That is not hypothetical — after `min_nodes=2` the AIDS cohort contains `n=2`
+graphs, and a connected two-node graph has exactly one edge, so its density is exactly `1.0`.
+
+Corrected to `side="right"` on the orchestrator's instruction, before any production pair was
+computed. This is a disambiguation of an under-specified detail, not a change to the
+pre-registered design: `K/q/f` remain 180/10/30, the seed remains 42, and the core remains a
+simple random sample. The orchestrator is recording it in the design changelog.
+
+`test_the_top_quintile_stays_reachable_when_q80_equals_the_maximum_density` pins it on a
+fixture where `q80 == max == 1.0` by construction. The guard bites rather than restating the
+implementation — verified directly:
+
+```
+quantile edges: [0.45333333 0.57333333 0.8  1.0]   max density: 1.0
+side=left   bins present=[0, 1, 2, 3]   count in quintile 4 =  0     <- top quintile lost
+side=right  bins present=[0, 1, 2, 4]   count in quintile 4 = 40
+```
+
+**The mirror case, for the record.** `side="right"` empties the *bottom* quintile if `q20`
+equals the minimum density. That needs at least a fifth of the corpus sharing one exact
+density value at the floor, which the dry run does not exhibit — the graph-level quintile
+populations came out `[154, 154, 151, 151, 159]` against a perfect fifth of 153.8. Worth
+re-checking once the real AIDS densities are in hand; it is a one-line assertion.
+
 ### Dry run, 769 synthetic graphs (seed 20260812 for the population, 42 for the sample)
 
 Population fabricated to span the frozen bins: `n ∈ [2,12]` uniform, `m` uniform between
@@ -123,94 +152,126 @@ and so will these counts.
 
 ```
 K=180 q=10 f=30 seed=42
-graphs=769  population pairs=295296  sampled pairs=21988  (7.45%)
-core pairs=16110  halo new=5860  top-up=18
+graphs=769  population pairs=295296  sampled pairs=22106  (7.49%)
+core pairs=16110  halo new=5860  top-up=136
 graphs covered=769 complete=True
-strata: 90 total, 60 non-empty, 30 empty; all meet floor=True
+strata: 90 total, 90 non-empty, 0 empty; all meet floor=True
 density quintile edges: ['0.4381', '0.6127', '0.7857', '1.0000']
+graphs per density quintile: [154, 154, 151, 151, 159]
 ```
 
-21,988 pairs sits just under the design note's 22,500–24,500 envelope. Core 16,110 is exact.
+22,106 pairs, just under the design note's 22,500–24,500 envelope. Core 16,110 is exact.
+**All 90 strata are now non-empty** and the graph-level quintiles are balanced against a
+perfect fifth of 153.8 — both are consequences of the `side="right"` correction. Under
+`side="left"` this same population gave 60 non-empty strata, 30 empty, and only 18 top-up
+pairs; the corrected binning finds 30 more strata to fill and the top-up rises to 136.
 
 ```
 id   size cells     dens cells      pop  sampled  floor
-0    2-5/2-5        0,0              15       15     15     <- stratum smaller than f, taken in full
+0    2-5/2-5        0,0              15       15     15     <- smaller than f, taken in full
 1    2-5/2-5        0,1             204       38     30
 2    2-5/2-5        0,2             360       82     30
-3    2-5/2-5        0,3             984      151     30
+3    2-5/2-5        0,3             186       33     30
+4    2-5/2-5        0,4             798      118     30
 5    2-5/2-5        1,1             561       33     30
 6    2-5/2-5        1,2            2040      194     30
-7    2-5/2-5        1,3            5576      409     30
+7    2-5/2-5        1,3            1054       82     30
+8    2-5/2-5        1,4            4522      327     30
 9    2-5/2-5        2,2            1770      193     30
-10   2-5/2-5        2,3            9840      826     30
-12   2-5/2-5        3,3           13366      822     30
+10   2-5/2-5        2,3            1860      169     30
+11   2-5/2-5        2,4            7980      657     30
+12   2-5/2-5        3,3             465       32     30
+13   2-5/2-5        3,4            4123      266     30
+14   2-5/2-5        4,4            8778      524     30
 15   2-5/6-9        0,0             426       98     30
 16   2-5/6-9        0,1            2792      269     30
-17   2-5/6-9        0,2            4614      544     30
-18   2-5/6-9        0,3           12184     1015     30
+17   2-5/6-9        0,2            4596      544     30
+18   2-5/6-9        0,3            2645      246     30
+19   2-5/6-9        0,4            9557      769     30
 20   2-5/6-9        1,1            2142      140     30
-21   2-5/6-9        1,2            5786      398     30
-22   2-5/6-9        1,3           13392      799     30
-24   2-5/6-9        2,2            3540      256     30
-25   2-5/6-9        2,3           15076      999     30
-27   2-5/6-9        3,3           14760      876     30
+21   2-5/6-9        1,2            5684      396     30
+22   2-5/6-9        1,3            4469      287     30
+23   2-5/6-9        1,4            9025      514     30
+24   2-5/6-9        2,2            3360      251     30
+25   2-5/6-9        2,3            6176      482     30
+26   2-5/6-9        2,4            8588      508     30
+27   2-5/6-9        3,3            2294      144     30
+28   2-5/6-9        3,4           10431      634     30
+29   2-5/6-9        4,4            2527      112     30
 30   2-5/10-12      0,0             462       63     30
 31   2-5/10-12      0,1            2960      250     30
 32   2-5/10-12      0,2            4830      404     30
-33   2-5/10-12      0,3           12946      847     30
+33   2-5/10-12      0,3            2663      226     30
+34   2-5/10-12      0,4           10283      621     30
 35   2-5/10-12      1,1            1938      165     30
 36   2-5/10-12      1,2            4610      443     30
-37   2-5/10-12      1,3           11150      977     30
+37   2-5/10-12      1,3            3331      328     30
+38   2-5/10-12      1,4            7819      649     30
 39   2-5/10-12      2,2            2100      120     30
-40   2-5/10-12      2,3            8920      697     30
-42   2-5/10-12      3,3            8692      813     30
+40   2-5/10-12      2,3            3845      449     30
+41   2-5/10-12      2,4            5075      248     30
+42   2-5/10-12      3,3            1426      148     30
+43   2-5/10-12      3,4            6335      615     30
+44   2-5/10-12      4,4             931       50     30
 45   6-9/6-9        0,0            2485      274     30
 46   6-9/6-9        0,1            4473      329     30
-47   6-9/6-9        0,2            4189      298     30
-48   6-9/6-9        0,3            6390      505     30
+47   6-9/6-9        0,2            3976      292     30
+48   6-9/6-9        0,3            5254      447     30
+49   6-9/6-9        0,4            1349       64     30
 50   6-9/6-9        1,1            1953       94     30
-51   6-9/6-9        1,2            3717      201     30
-52   6-9/6-9        1,3            5670      299     30
-54   6-9/6-9        2,2            1711       84     30
-55   6-9/6-9        2,3            5310      282     30
-57   6-9/6-9        3,3            4005      211     30
+51   6-9/6-9        1,2            3528      198     30
+52   6-9/6-9        1,3            4662      251     30
+53   6-9/6-9        1,4            1197       51     30
+54   6-9/6-9        2,2            1540       79     30
+55   6-9/6-9        2,3            4144      239     30
+56   6-9/6-9        2,4            1064       41     30
+57   6-9/6-9        3,3            2701      154     30
+58   6-9/6-9        3,4            1406       58     30
+59   6-9/6-9        4,4             171       30     30     <- exactly at the floor, topped up
 60   6-9/10-12      0,0            5467      433     30
 61   6-9/10-12      0,1            8898      718     30
-62   6-9/10-12      0,2            7028      400     30
-63   6-9/10-12      0,3           10693      890     30
+62   6-9/10-12      0,2            6797      396     30
+63   6-9/10-12      0,3            8964      804     30
+64   6-9/10-12      0,4            1960       90     30
 65   6-9/10-12      1,1            3591      246     30
-66   6-9/10-12      1,2            5568      328     30
-67   6-9/10-12      1,3            8469      648     30
-69   6-9/10-12      2,2            2065       84     30
-70   6-9/10-12      2,3            6277      385     30
-72   6-9/10-12      3,3            4770      420     30
+66   6-9/10-12      1,2            5397      321     30
+67   6-9/10-12      1,3            7116      577     30
+68   6-9/10-12      1,4            1524       78     30
+69   6-9/10-12      2,2            1960       82     30
+70   6-9/10-12      2,3            5166      333     30
+71   6-9/10-12      2,4            1057       51     30
+72   6-9/10-12      3,3            3404      336     30
+73   6-9/10-12      3,4            1392       82     30
+74   6-9/10-12      4,4             133       30     30     <- exactly at the floor, topped up
 75   10-12/10-12    0,0            2926      169     30
 76   10-12/10-12    0,1            4389      313     30
 77   10-12/10-12    0,2            2695      129     30
-78   10-12/10-12    0,3            4081      355     30
+78   10-12/10-12    0,3            3542      330     30
+79   10-12/10-12    0,4             539       30     30
 80   10-12/10-12    1,1            1596      166     30
 81   10-12/10-12    1,2            1995      103     30
-82   10-12/10-12    1,3            3021      370     30
-84   10-12/10-12    2,2             595       30     30     <- exactly at the floor, topped up
-85   10-12/10-12    2,3            1855       98     30
-87   10-12/10-12    3,3            1378      190     30
+82   10-12/10-12    1,3            2622      348     30
+83   10-12/10-12    1,4             399       30     30
+84   10-12/10-12    2,2             595       30     30
+85   10-12/10-12    2,3            1610       93     30
+86   10-12/10-12    2,4             245       30     30
+87   10-12/10-12    3,3            1035      170     30
+88   10-12/10-12    3,4             322       30     30
+89   10-12/10-12    4,4              21       21     21     <- smaller than f, taken in full
 
-EMPTY strata (population, never topped up):
-[4, 8, 11, 13, 14, 19, 23, 26, 28, 29, 34, 38, 41, 43, 44,
- 49, 53, 56, 58, 59, 64, 68, 71, 73, 74, 79, 83, 86, 88, 89]
+EMPTY strata (population, never topped up): []
 ```
 
-**Read the empty list before recomputing K/q/f.** Every empty stratum involves density
-quintile 4, and quintile 4 is unreachable here: the 80th percentile is exactly `1.0000`, and
-`np.searchsorted` with the default `side="left"` puts a value equal to an edge in the *lower*
-bin. So when `q80 == max(density)` the top quintile collapses. CONTRACTS §8 fixes the
-quantiles and the use of `searchsorted` but not the `side`, so this is a choice I had to make
-and am recording, not a defect. It is amplified in this fixture (uniform `m` between connected
-and complete produces many complete small graphs) but it is **not purely an artefact**: after
-`min_nodes=2` the AIDS cohort contains `n=2` graphs, whose density is exactly 1.0 by
-construction. On sparse molecular AIDS `q80` is very unlikely to equal 1.0, so expect more
-than 60 non-empty strata there — but the top-up budget moves with that count, so measure it
-before fixing `f`. Reported to `main`.
+Two strata fall below the floor and are taken in full — stratum 0 (15 pairs) and stratum 89
+(21 pairs), the two extremes of the cross product. Eight more sit exactly at `f = 30` after
+the top-up. Nothing is over-drawn: `sampled <= population` everywhere, asserted in
+`test_every_non_empty_stratum_reaches_its_floor`.
+
+**Still measure the real AIDS densities before fixing `K/q/f`.** This table is synthetic, and
+the top-up budget scales with the number of non-empty strata. Here the corrected binning took
+that count from 60 to 90 and the top-up from 18 to 136 pairs — a small absolute change against
+a 22,106-pair total, but the same mechanism on a differently-shaped real density distribution
+could move it further.
 
 ---
 
@@ -327,7 +388,12 @@ there is a test for that specifically.
    §5 invariant 1 ("0 is legal when the graphs are isomorphic") on any corpus with isomorphic
    duplicates. Implemented: an off-diagonal 0 passes **only** when certified with
    `lb == ub == 0`, is counted as `n_zero_offdiag_certified`, and is rejected under the added
-   `--strict-nonzero`. An *uncertified* zero always fails — that trap stays shut. Reported.
+   `--strict-nonzero`. An *uncertified* zero always fails — that trap stays shut.
+   **Confirmed by the orchestrator**, who added that `--strict-nonzero` must stay opt-in (it
+   would fail on true duplicates) and that `n_zero_offdiag_certified` is a *reported* quantity,
+   not a diagnostic: it is the `GED > 0` rung of the per-dataset pair-accounting ladder
+   `raw → connected → GED-available → GED > 0 → Lev > 0 → analysed`. It is written to the
+   merged metadata both top-level and inside `gate4`, and a test now asserts its presence.
 2. **The merge needs a CONTRACT A input.** `node_counts`, `edge_counts`, `graph_ids` and
    `labels` exist in no shard. Added an optional `--input`, with convention-based fallback and
    an explicit error. No frozen flag changed. Reported.
@@ -337,8 +403,10 @@ there is a test for that specifically.
 4. **`--seed-from` carries values through** rather than omitting them. If stage 2 omitted the
    overlap, the merge's cross-shard agreement check would have nothing to compare and the
    stated verification of stage-1 reuse would be vacuous. Flag it if you meant otherwise.
-5. **Density quintile `side="left"`**, per numpy's default. §8 does not specify. Consequence
-   documented above.
+5. **Density quintile `side="right"`.** §8 does not specify the side. Initially implemented as
+   numpy's default `side="left"`; corrected to `"right"` on the orchestrator's instruction
+   after the dry run showed the top quintile collapsing. See the amendment above. Resolved,
+   no longer an open assumption.
 6. **Halo partners exclude self**, drawn without replacement from the other `N-1` graphs. §8
    says "uniformly from all 769"; a self-pair is not a pair.
 7. **`--timeout-per-pair` is enforced by the backend**, not the runner. Killing a running C++
@@ -379,21 +447,17 @@ All checks passed!
 
 $ $PY -m pytest tests/unit/test_ged_pair_index.py tests/unit/test_ged_sampling.py \
       tests/unit/test_ged_exact_runner.py tests/unit/test_ged_merge_shards.py -q
-tests/unit/test_ged_pair_index.py ......................................  [ 22%]
-........................................................                 [ 55%]
-tests/unit/test_ged_sampling.py ......................                   [ 69%]
-tests/unit/test_ged_exact_runner.py ..............................       [ 86%]
-tests/unit/test_ged_merge_shards.py ......................               [100%]
-============================= 168 passed in 13.42s =============================
+============================= 170 passed =======================================
 
 $ $PY -m pytest tests/unit/ -q
-============================= 554 passed in 15.93s =============================
+============================= 556 passed in 13.96s =============================
 
 $ $PY -m pytest tests/unit/ -q --ignore=<the four new files>      # the before state
 ============================= 386 passed in 2.51s ==============================
 ```
 
-386 + 168 = 554. No pre-existing test changed behaviour or runtime.
+386 + 170 = 556. No pre-existing test changed behaviour or runtime. (Two of the 170 were
+added by the `side="right"` amendment: the `q80 == max` guard and a binning-stability check.)
 
 Slowest test is the kill/resume subprocess proof at ~12 s; the exhaustive 1,333,300-index
 scalar sweep runs in 0.66 s.
@@ -454,7 +518,10 @@ transient.
    `ged_sampling._load_counts`. Three readers of one format is two too many; I kept them
    separate only because the peer module does not exist on this branch.
 4. **Measure the density quintiles on real AIDS before recomputing `K/q/f`.** The non-empty
-   stratum count drives the top-up budget, and the `side="left"` behaviour above moves it.
+   stratum count drives the top-up budget. Also re-check the mirror of the amended binning:
+   `side="right"` empties the bottom quintile if `q20` equals the minimum density. It does not
+   here (quintile populations `[154, 154, 151, 151, 159]`), but it is one assertion to add
+   once the real densities exist.
 5. **Benchmark `--batch-size 1` against the real solver** on gate 3's timings. If GEDLIB
    round-trip turns out to be a non-trivial share of a fast pair, raise it — but weigh the
    tail-latency cost stated above.

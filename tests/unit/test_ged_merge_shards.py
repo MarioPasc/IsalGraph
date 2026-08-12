@@ -185,6 +185,13 @@ def test_merge_writes_contract_d_with_every_required_key(shard_dir: Path) -> Non
     assert meta["n_censored"] == 2
     assert meta["n_valid_pairs"] == TOTAL - 2
     assert meta["gate4"]["passed"] is True
+    # n_zero_offdiag_certified is a REPORTED quantity, not a diagnostic: it is the
+    # "GED > 0" rung of the per-dataset pair-accounting ladder
+    # (raw -> connected -> GED-available -> GED > 0 -> Lev > 0 -> analysed), so it
+    # must reach the merged metadata rather than existing only in a log line.
+    assert "n_zero_offdiag_certified" in meta
+    assert meta["n_zero_offdiag_certified"] == 0
+    assert meta["n_certified"] + meta["n_censored"] == TOTAL
 
 
 def test_the_matrix_places_every_pair_at_the_index_it_came_from(shard_dir: Path) -> None:

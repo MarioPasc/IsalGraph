@@ -30,9 +30,18 @@ Pair strata, AIDS-internal:
 * stratum -- the cross product, 90 cells.
 
 Quintile edges come from ``np.quantile(density, [.2, .4, .6, .8])`` and are applied
-with ``np.searchsorted``, so ties fall consistently. Whether a stratum is empty is
-judged on the **population**, never on the sample; empty strata are reported as
-empty and are never topped up.
+with ``np.searchsorted(..., side="right")``, so ties fall consistently and a density
+exactly equal to an edge lands in the **upper** bin. CONTRACTS §8 fixes the quantiles
+and the use of ``searchsorted`` but left the side unspecified; it was disambiguated to
+``"right"`` on 2026-08-12, before any production pair was computed, because under
+``"left"`` the top quintile is unreachable whenever the 80th percentile equals the
+maximum density -- which happens on the real AIDS cohort, where every ``n = 2`` graph
+has density exactly 1.0. The mirror case is worth knowing: ``"right"`` would empty the
+*bottom* quintile if the 20th percentile equalled the minimum density, which needs at
+least a fifth of the corpus sharing one exact density value and does not occur here.
+
+Whether a stratum is empty is judged on the **population**, never on the sample; empty
+strata are reported as empty and are never topped up.
 """
 
 from __future__ import annotations
@@ -229,7 +238,12 @@ def build_pair_strata(n_nodes: np.ndarray, n_edges: np.ndarray) -> PairStrata:
     size_bin = np.searchsorted(_SIZE_EDGES, nn, side="right").astype(np.int64)
     density = 2.0 * ne.astype(np.float64) / (nn.astype(np.float64) * (nn.astype(np.float64) - 1.0))
     edges = np.quantile(density, list(_QUANTILES))
-    density_bin = np.searchsorted(edges, density).astype(np.int64)
+    # side="right" sends a density equal to an edge into the UPPER bin, which keeps
+    # the top quintile reachable when q80 equals the maximum density. That case is
+    # not hypothetical: after min_nodes=2 the AIDS cohort contains n=2 graphs, whose
+    # density is exactly 1.0 by construction, so under side="left" every one of them
+    # would fall to bin 3 and quintile 4 would be empty on the real cohort.
+    density_bin = np.searchsorted(edges, density, side="right").astype(np.int64)
 
     i, j = np.triu_indices(n, k=1)
     # np.triu_indices enumerates the triangle in exactly the order the linear
