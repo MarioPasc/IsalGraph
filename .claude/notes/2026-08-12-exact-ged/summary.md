@@ -280,3 +280,60 @@ The wave-2 failure mode was new: both agents died on an account-level session li
 The lesson is that agent work must be **committed incrementally**, not at the end — `task-gates-v2`
 had finished a substantial module and left it uncommitted, and it survived only because a worktree
 persists after the agent does not.
+
+---
+
+## 9. COMPLETE — all five Suite-1 datasets, 2026-08-13
+
+Twelve SLURM jobs, all `COMPLETED`. **~2,081 core-hours, ~6.5 h wall, zero requeues, zero failures.**
+
+| Dataset | graphs | pairs | certified | censored | core-h |
+|---|---:|---:|---:|---:|---:|
+| IAM Letter LOW | 1,180 | 695,610 | 695,610 (100 %) | 0 | 1.2 |
+| IAM Letter MED | 1,253 | 784,378 | 784,378 (100 %) | 0 | 1.5 |
+| IAM Letter HIGH | 2,059 | 2,118,711 | 2,118,711 (100 %) | 0 | 11.5 |
+| LINUX | 89 | 3,916 | 3,870 (98.83 %) | 46 | 5.8 |
+| AIDS | 769 | 295,296 | 234,258 (79.33 %) | 61,038 | 2,060.6 |
+| **Total** | **5,350** | **3,897,911** | **3,836,827 (98.43 %)** | **61,084 (1.57 %)** | **≈ 2,081** |
+
+Every matrix symmetric, diagonal zero, gate 4 passed. **The pair total reproduces the locked cohort
+exactly.** AIDS is 99 % of the cost, as the plan predicted; the total came in 26 % above the plan's
+upper estimate of 1,650 core-h, because `sr` is ~2× slower per core than the machines the plan's
+per-pair figures were measured on.
+
+**Stage 1 and stage 2 agree on their 22,051-pair overlap** — the merge asserts no conflicting value
+on any pair index present in more than one shard, and it passed. That was the designed verification
+of decision 21's two-stage structure.
+
+### Censoring is a reported result, not a footnote
+
+| Dataset | censoring at 60 s |
+|---|---:|
+| Letter LOW / MED / HIGH | **0 %** |
+| LINUX | 1.17 % |
+| AIDS | **20.67 %** |
+
+⚠ **The censoring rate is hardware-dependent and this must be stated wherever it is printed.** The
+same LINUX cohort censored **5 / 3,916 (0.13 %)** on the workstation and **46 / 3,916 (1.17 %)** on
+`sr` — a 9× difference from nothing but a slower core against a fixed 60 s wall. A censoring rate is
+therefore a property of *(cohort, timeout, machine)*, never of the cohort alone.
+
+### Deliverable
+
+`GED_PRECOMPUTED/extended_merged_exact_ged/` — 38 MB, 9 files:
+`computed/{5}.npz` (ours), `reference/{aids,linux}_graphedx.npz` (GraphEdX, within-split),
+`manifest.json`, `PROVENANCE.md`. Mirrored at `results/exact_ged/` and in
+`execs/isalgraph/exact_ged` on Picasso.
+
+### The finding that came out of building it
+
+Testing the plan's premise rather than inheriting it **retracted amendment 3** — see the design
+note's changelog. GraphEdX's matrix uses **unit node costs, the same as D6**, so the earlier
+"their reference is approximate" conclusion was the arithmetic of a wrong cost model. Like-for-like
+over the full overlap: **0 pairs where ours exceeds theirs**, agreement on all but 2 of 131,148.
+
+That error was mine twice over: I drew the conclusion from a gate configured off the plan's premise,
+then "independently verified" it with a script that inherited the same premise. **An independent
+check that reuses the original assumption is not independent**, and the tell was available all along
+— 77,739 supposedly-equal AIDS pairs had differing node counts, which is impossible if one side
+charges for node operations and the other does not.
