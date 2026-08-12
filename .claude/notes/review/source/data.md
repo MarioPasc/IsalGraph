@@ -435,7 +435,20 @@ is not a coincidence: the triplet `(|N₁|,|N₂|,|N₃|)` is a *truncated, weak
 it counts neighbourhood sizes at depth 1–3, whereas WL propagates the full multiset of neighbour
 colours to stability. **WL strictly subsumes the current pruning key.**
 
-**Recommendation** — one new C++ variant, `wl_pruned_canonical` (ticket **T-16**):
+> ### ⚠ SUPERSEDED 2026-08-11 — do not execute this recommendation
+>
+> **T-16 was REJECTED** by author decision 17 (`plan.md` §7.2, S-b resolved 2026-08-11): no reviewer
+> or editor asked for `wl_pruned_canonical`, and it originated as a transfer from IsalSR / IsalHG.
+> **The WL *measurement* below is retained and moves into T-13**, where it answers R3.7d with a
+> characterised worst case (`plan.md:818–836`).
+>
+> The measurement and its justification are left in place because T-13 must read them. **The
+> "Recommendation" verb is what is retired** — build nothing from this section.
+> Found by audit-2026-08-11b (I-10): `data.md` is required reading before executing any ticket
+> (`plan.md:13`), so a live "Recommendation" here contradicts a signed decision elsewhere.
+
+**Recommendation (RETIRED — see banner above)** — one new C++ variant, `wl_pruned_canonical`
+(ticket **T-16**):
 
 - **Correctness**: WL colour is isomorphism-invariant, and we keep the *whole* argmin-colour class
   rather than a representative, so no raw node id is read. This is exactly the admissibility
@@ -690,3 +703,15 @@ decisions.
 | ~~Q7~~ | ~~Write a **Web** loader?~~ | **Closed — and its stated reason was wrong.** "Mutagenicity max n = 417" counts a *discarded* disconnected graph; the retained ceiling is **98** (`gap-audit.md` MF1). Still declined: Web needs a new schema loader, and Protein/Mutagenicity already carry the size range at n̄ ≈ 30 |
 | **Q8** | Which cost model: unit node+edge (IAM tradition) or topology-only zero-node (GraphEdX)? | **Resolved** — `statistics.md` D6, unit node + unit edge, substitutions free |
 | ~~Q9~~ | ~~Does decision 12 hold on the corrected ceiling of 98?~~ | **Closed 2026-08-11 — AFFIRMED by the author.** 98 vs 12 is an 8.2× extension on ten datasets with published edit costs. Re-measurement confirmed no dataset moves in or out and that the COIL-RAG / Fingerprint / Web drops all survive. The residual "real-world graphs are far larger than 98" objection is acknowledged in the paper via `plan.md` §3.5's three-statement framing |
+
+> **Note, audit-2026-08-11b**: `plan.md:925` records **Q3** as resolved ("all-pairs, recover
+> everything", author decision 2026-08-11); it is still listed live above. The plan is the authority.
+
+---
+
+## 10. Change log
+
+| Date | Ver | Change |
+|---|---|---|
+| 2026-08-12 | **v1.3** | **Third-auditor pass** (`.claude/notes/audit-2026-08-11b/third-auditor.md`). **Triage of the 24 standing defects, which v1.2 listed without ranking**: only **four reach a number a reviewer will read** — **I-02** (AIDS raw 819 vs the true 911, which feeds Tab. 2's retention row and R3.5a's ladder), **I-03** (§3.1's inflated Letter pair counts, against which risk R1's ~100 core-h fallback is costed), **I-05** (Fingerprint 2.3×, a counter-example to the sentence citing it, inside §2.2.1's discarded-subset columns) and **I-08b** (uncommenting `Fischer2015hausdorff` / `Lerouge2017ilp` takes bibliography headroom from 12 to 10). Fix those four; batch the rest as document hygiene after the manuscript work. ⚠ **I-11 is DOWNGRADED and must not be applied as written**: "AIDS 131,148 contradicts F2's 181,909" compares **different populations** — `C(769,2) = 295,296` is on the 769 filtered graphs while `C(546,2)+C(182,2)+C(183,2) = 181,909` is within-split on the 911 **raw** graphs, so I-11's proposed **1.62×** would itself be MF1's defect class. The population-matched comparator is ≈ 129,600, within 1.2 % of 131,148. New disposition: *provenance not recorded* (minor) — record the source when T-03 reproduces the run, keep **2.25×** |
+| 2026-08-12 | **v1.2** | **Over-scope and integrity audit `audit-2026-08-11b`** — re-measured, not argued, over four populations side by side (`RAW` / `CONN_ge1` / `KEPT_ge2` / `DISC_ge2`) so the MF1 defect class becomes detectable everywhere rather than only where already suspected. **Applied here**: §4.4's live "**Recommendation** — build `wl_pruned_canonical` (T-16)" now carries a SUPERSEDED banner — T-16 was **rejected** by signed decision 17, and `data.md` is required reading before executing any ticket, so a live recommendation here contradicted a signed decision (I-10). **Confirmed clean and reproducible, on record**: §0 Suite 1 and Suite 2 reproduce **cell for cell**; the six "what this buys" ratios; §2.1's correction banner; §2.1's density convention (it averages over `RAW`, counting n=1 graphs as 0 — verified by identity, **not a defect**); §2.2.1 for GREC, Letter LOW/HIGH, Mutagenicity, Protein, AIDS-IAM; **MF17's Fingerprint correction (51.4 %, 5.03/5.98) reproduces exactly**; §2.3's drop row, so all three drop decisions survive. **Outstanding defects recorded but not yet applied** — I-01 (blocking: **13 of the 16 scripts §8 names no longer exist**, including `ged_bounds.py`, which makes §7.3 validation gate 2 unexecutable and leaves §5/H4's ρ = 0.966 vs 0.840 unreproducible), I-02 (§0's AIDS "raw" column is the **connected** count, 819 vs the true 911 — MF1's class inside the table §0 declares authoritative), I-03 (§3.1 mixes n≥1 and n≥2 pair counts, 22,698-pair gap), I-04 (§2.1 Fingerprint `N conn` is a different population and off by one), I-05 (the retracted 11.56 survives as "Fingerprint 2.3×", making the cited example a **counter-example** to the sentence citing it), I-11 (AIDS "131,148" unsourced, contradicts F2's measured 181,909), I-12–I-16, I-24. Full detail and the re-measurement log: `.claude/notes/audit-2026-08-11b/findings-integrity.md` |

@@ -1,19 +1,36 @@
 # Revision plan — PR-D-26-03293 (IsalGraph)
 
-**Status**: **v0.7, 2026-08-11.** **GED implementation LOCKED** (§7.3); cohort locked from measured
-counts (`data.md` §0); statistics locked (`statistics.md` v2.1); **coverage audited and closed**
-(§0.5, `gap-audit.md`); **T-16 rejected**, competitor distances handed to a measured selection
-(`competitors.md`), labels tiered and referred to the PI (`labels.md` §0).
-**Decision**: Major Revision, Pattern Recognition. **Due 2026-08-31 (20 days remaining).**
+**Status**: **v0.9, 2026-08-12.** **GED implementation LOCKED** (§7.3); cohort locked from measured
+counts (`data.md` §0); statistics locked (`statistics.md` v2.2); coverage audited (§0.5,
+`gap-audit.md`), **re-audited in both directions** (`.claude/notes/audit-2026-08-11b/`) and that
+re-audit **itself audited** (`.claude/notes/audit-2026-08-11b/third-auditor.md`);
+**T-16 rejected**, competitor distances handed to a measured selection (`competitors.md`), labels
+tiered and referred to the PI (`labels.md` §0).
+**Decision**: Major Revision, Pattern Recognition. **Due 2026-08-31 (19 days remaining).**
+
+> ⚠ **Three things this plan asserts are not true, found 2026-08-11b by re-measurement. Read before
+> executing anything.** (i) **Validation gate 2 cannot be run** — `ged_bounds.py` and 12 other named
+> scripts do not exist (§7.3 banner, T-25, **S-e**). (ii) **The board is 93.5 days, not 76.5**, and
+> the declared critical path is 27.5 days serial against a 19-day window (§7 banner, **S-f**).
+> (iii) **§0.5 carried two demands the letter does not make and missed one it does** (§0.5 banner).
+> Coverage is otherwise sound: **41 letter demands across 42 matrix rows, all owned** — the one
+> genuine hole (R3.1a(ii)) is now on T-07.
+>
+> ⚠ **And one thing the 2026-08-11b audit itself asserts is not true** (`third-auditor.md`, 2026-08-12):
+> its verdict that **T-03's all-pairs AIDS census is proportionate** does not survive the plan's own
+> `statistics.md` **D2**. The census's drivers are real but its *dose* is not: 769 AIDS graphs are the
+> independent unit either way, so the census buys coverage, not precision — **~900–1,550 core-hours
+> and 2–5 days of the long pole for no statistical gain.** See §7.1 and **S-f option E**.
 **Mode**: full recompute. Lock data → lock methods → lock statistics → recompute → write.
 Page budget is **not** a constraint during drafting; trim at the end — under the ordering and
 priority rules in `manuscript.md` §3, which are now part of the lock.
 
 **Companion documents** — read these before executing any ticket:
-- **`data.md`** (v1.1) — measured dataset inventory, exact/approximate GED cost, encoding cost,
+- **`data.md`** (v1.2) — measured dataset inventory, exact/approximate GED cost, encoding cost,
   compute budget. All numbers measured 2026-08-11, not quoted. **§0 is the only table a printed
   number may be taken from**; §2.1's size columns are raw-set values and carry a correction banner.
-- **`statistics.md`** (v2.1) — the locked statistical protocol (D1–D15): Mantel, graph-level
+  Its §0 AIDS "raw" column is the *connected* count (I-02) — use 911, not 819.
+- **`statistics.md`** (v2.2) — the locked statistical protocol (D1–D15): Mantel, graph-level
   bootstrap, partial Mantel/MRM, Friedman/CD, multiplicity, calibration ladder, censoring rule,
   resampling budget.
 - **`labels.md`** (v2.0) — the R1.3 / AE.4b response, **tiered and awaiting a PI decision on effort**
@@ -25,6 +42,9 @@ priority rules in `manuscript.md` §3, which are now part of the lock.
   letter architecture, submission and compliance package.
 - **`gap-audit.md`** — the coverage audit that produced §0.5 and tickets T-17…T-24: 10 unowned
   demands, 16 flawed or infeasible locked decisions, with severities.
+- **`.claude/notes/audit-2026-08-11b/third-auditor.md`** — the audit **of** that re-audit. Read §1
+  before submitting T-03 and §2 before applying any `data.md` integrity fix: **I-11 must not be
+  applied as written**, and only 4 of the 24 integrity defects reach a printed number.
 
 ---
 
@@ -40,7 +60,7 @@ priority rules in `manuscript.md` §3, which are now part of the lock.
 | 6 | Render an S2G/G2S example figure as in IsalSR / IsalHG | T-09 |
 | 7 | Ignore the page budget while drafting | T-15 |
 | 8 | gSpan vendored from `github.com/LasseRegin/gSpan` | §4.2 |
-| 9 | IsalChem source at `github.com/icai-uma/IsalChem`; paper unavailable | T-07 |
+| 9 | IsalChem source at `github.com/icai-uma/IsalChem`; ~~paper unavailable~~ — **CORRECTED 2026-08-11b: [29] is fully published.** `cas-refs.bib` gives `ThurnhoferHemsi:2025`, *Representation of Molecules by Sequences of Instructions*, **J. Chem. Inf. Model. 65(15):7936–7955, 2025**, and it is already cited in the manuscript. T-07 was budgeted 1–4 days partly on the premise that only source code was available; **the paper is obtainable, which should make T-07 cheaper and D19 ([29]'s LSTM experiment) directly resolvable** rather than inferred from code | T-07 |
 | 10 | **[28] is and will remain arXiv-only** | §5.3 |
 | **11** | **GED comes from GEDLIB, not our own code.** Exact = `ANCHOR_AWARE_GED`; proven lower bound = `BRANCH_FAST`; proven upper bound = `IPFP`. Verified working on Picasso 2026-08-11 | **§7.3 — authoritative** |
 | **12** | **Cohort locked** to the IAM Graph Database; **TUDataset dropped** — the cohort reaches **n = 98 retained**, an 8.2× extension of the submitted ceiling. Rationale corrected 2026-08-11 (the 417-node graph is disconnected and discarded, `gap-audit.md` MF1); re-measurement confirmed **no dataset moves in or out**. **RE-AFFIRMED by the author 2026-08-11 on the corrected number** | `data.md` §0 |
@@ -66,7 +86,27 @@ and disclosure of the self-found defects E1–E12 to the reviewers (`manuscript.
 ## 0.5 Traceability matrix — every demand, locked to a decision, a ticket and an artifact
 
 **This is the coverage contract.** One row per numbered demand in `mail.txt`, plus every self-found
-defect. A row with no ticket is a hole; there are none. Derived and verified in `gap-audit.md`.
+defect. A row with no ticket is a hole. Derived in `gap-audit.md`; **re-audited independently in
+`.claude/notes/audit-2026-08-11b/`, which did not inherit `gap-audit.md`'s verdicts.**
+
+> **Audit 2026-08-11b — what changed here.** The demand inventory was rebuilt from `mail.txt` alone
+> (`.claude/notes/audit-2026-08-11b/inventory.md`, 41 demands). Against it, this matrix carried **two
+> rows the letter does not contain** and **missed one it does**:
+> - **R1.3b** and **M3** were booked as demands; neither has an imperative in the letter. R1.3b is a
+>   premise ("may come from"), M3 is inferred from `:67`, which is the Area Editor's **priority
+>   statement**, not a request for a point-by-point response. Both rows are retained — a
+>   point-by-point letter is journal convention and the R1.3b work has other owners — but they are
+>   now labelled so no budget is allocated to them directly.
+> - **AE.5** (`mail.txt:69`, "There are additional comments from the reviewers that **should** also be
+>   addressed") had no row. Added below.
+> - The claim "there are none" was also inaccurate on its own terms: **M2** and **R3.2** carry
+>   section pointers (`§12`, `§6`) rather than tickets (I-18). R3.2's owner is legitimately a
+>   *decision*; M2's is a calendar. The contract wording now admits both.
+>
+> `gap-audit.md` was treated as an object under audit, not as evidence. Three of its own findings —
+> **MF12, MF13, MF17** — have no downstream owner anywhere in the corpus (I-25), and `data.md`
+> §2.2.1's banner implementing MF17 carries no MF pointer while the neighbouring MF1 corrections all
+> do.
 
 Legend — **✓** covered before this audit · **NEW** owner created by this audit · **FIX** a locked
 decision that was wrong and has been corrected.
@@ -77,13 +117,13 @@ decision that was wrong and has been corrected.
 |---|---|---|---|---|---|
 | M1 | Upload **source files**, not PDF (`:22`) | assemble the LaTeX package | **T-24** | — | **NEW** |
 | M2 | Due **2026-08-31** (`:20`) | dated calendar with gates | §12 | — | **NEW** |
-| M3 | Point-by-point response (inferred, `:67`) | fragments accrue per ticket; T-14 assembles | T-14 | response letter | **NEW** spec |
-| EiC.a1 | Bibliography **35–55** items (`:126`) | 43 → ≤ 55; 12 slots, budget in §5.4 | T-08 | `cas-refs.bib` | ✓ |
-| EiC.a2 | Cover **last and current year** (`:126`) | ≥ 6 refs from 2025–2026; protocol + acceptance criteria | **T-19** | related work | **NEW** |
+| M3 | Point-by-point response — **the deliverable is right, its cited authority is not** | **MISMATCHED, audit-2026-08-11b.** `:67` is the Area Editor's **priority statement**, and it requests no response document; the letter contains no imperative for one. T-14 is justified independently by Editorial Manager convention (`00-editor-and-decision.md:34–35` reached this separately), so the ticket stands — but the citation must change. **Second defect: `:67`'s actual content — "Please address these concerns thoroughly, as they will strongly influence the potential impact of the work", a weighting over AE.1–AE.4c — appears nowhere in this matrix.** It is the sentence that converts AE.4a and AE.4b from soft to requirement. Fix ≈ 15 min | T-14 | response letter | **FIX** |
+| EiC.a1 | Bibliography **35–55** items (`:126`) | 43 printed → ≤ 55, **12 slots**. **The allocations do not fit.** §5.4 sums 5–6 + 3 + 1 + 1 + 2–3 = 12–14 ("over by ~2"), but **T-19 requires ≥ 6 from 2025–2026**, not 2–3, so the true sum is **16–17 against 12 — over by 4–5**. No ticket sees it: T-08 owns the table, T-19 owns the ≥ 6. And §5.4's stated relief — "retire a dead citation" — **frees nothing**: `elsarticle-num` prints only *cited* entries, so the 13 dead entries never consumed a slot. The only real relief is removing existing citations from the text, which no ticket contemplates | **T-26** (reconcile), T-08, T-19 | `cas-refs.bib` | **FIX — UNDER-blocking, audit-2026-08-11b** |
+| EiC.a2 | Cover **last and current year** (`:126`) | ≥ 6 refs from 2025–2026; protocol + acceptance criteria. **Measured baseline, audit-2026-08-11b**: of 43 printed refs only **5** postdate 2023 — 3 from 2024, **2 from 2025, and both 2025 entries are group self-citations** (`lopezrubio2025isalgraph` = [28], `ThurnhoferHemsi:2025` = [29]). **Zero third-party refs after 2024; zero from 2026.** T-19's "≥ 6 from 2025–2026" must therefore exclude self-citation, or it can be satisfied without adding a single external reference | **T-19** | related work | **FIX** — baseline was unmeasured |
 | EiC.a3 | No excessive arXiv (`:126`) | strip `note = {arXiv:…}` from the 5 peer-reviewed entries: 6 → 1 | T-08 | `cas-refs.bib` | ✓ §5.3 |
 | EiC.a4 | No uncommented citation groups (`:126`) | comment `\cite{garey1979,Zeng:2009}` individually; **do not "fix"** `introduction.tex:31` | T-08 | `methodology.tex:803` | ✓ §5.4 |
-| EiC.b | Cite **recent pattern-recognition** work (`:128`) | venue audit of the existing 43 + targeted additions. ⚠ Fischer 2015 satisfies *venue*, **not recency** | **T-19** | related work | **FIX** |
-| EiC.c | **≤ 35 pages** (`:130`) | page budget, priority ranking, supplementary query | T-15 | whole document | **FIX** — `manuscript.md` §3 |
+| EiC.b | Cite **recent pattern-recognition** work (`:128`) | venue audit + targeted additions. **Two corrections.** (i) ⚠ **Fischer 2015 is not in the printed bibliography at all** — `Fischer2015hausdorff` is cited only from commented-out LaTeX (`methodology.tex:805–806`), so it satisfies neither venue nor recency and the baseline was off by one (I-08b). (ii) **T-19's b-half has no threshold**: "a stated PR-community share" fixes no value, so no outcome can fail it — T-19 could close with all 6 additions at non-PR venues. **Measured**: PR-field coverage is 6× *Pattern Recognition* journal (2021–2023), PR Letters ×1 (**1983**), SSPR ×1 (2008); **zero** CVPR/ICCV/ECCV/ICPR/TPAMI/IJCV; **no PR-field reference after 2023** — which is exactly what `:128` prohibits. Proposed criterion: **≥ 3 of the 6 at PR-field venues other than the PR journal, ≥ 1 dated 2025–26** | **T-19** | related work | **FIX — UNDER-blocking** |
+| EiC.c | **≤ 35 pages** (`:130`) | page budget, priority ranking, supplementary query. **`manuscript.md:65`'s "≈12–13 gross addition" is not derivable and its composition is wrong in both directions**: it **over-counts ≈3.5–4.5** by pricing Figs. 1–4 and Tabs. 1–3 (6.0 p) as new when they are *replacements* (Tab. 1 is "keep"; Fig. 3 "demote" shrinks), and **under-counts ≈4.8–5.8** by omitting §1.x related work, §2.2.x complexity, §3.2 protocol prose, §3.3 implementation, §5 limitations and the Suite 1/2 framing — all committed in `manuscript.md` §1, none in §2's page column. The magnitudes nearly cancel, **but the composition is what the strategy rests on**: the supplementary-relief plan targets calibration / ladder / CD (≈2–2.5 p, all inventory rows), while the ≈5 p of genuine growth is **main-text prose that cannot move to supplementary**. Also: **decision 16's query to patcog@elsevier.com is scheduled Day 1 and nothing records it sent** | **T-26** (re-derive), T-15 | whole document | **FIX — UNDER-blocking** |
 
 ### Area Editor
 
@@ -95,16 +135,17 @@ decision that was wrong and has been corrected.
 | AE.4a | Choice of benchmark models (`:66`) | six competitor representations enter three experiments; **each one's distance selected by measurement** (T-04a, `competitors.md`) | T-04, **T-04a**, T-06 | Tabs. 2–3, Fig. 1–2 | ✓ §4.3 + **FIX** |
 | AE.4b | **Fully labeled vs partially labeled** (`:66`) | a **label-content column** in the dataset table (Tier 0) | **T-18** | §3.1 dataset table | **NEW** |
 | AE.4c | Associated analysis of results (`:66`) | `statistics.md` D1–D15 | T-02, T-06 | §3.2, §4 | ✓ |
+| **AE.5** | **"There are additional comments from the reviewers that *should* also be addressed in the revised paper -- please check their comments carefully" (`:69`)** | **Catch-all, requirement modal.** Largely subsumed by the 20 numbered rows, but **not entirely**: R3's un-numbered preamble ends in a requirement-modal sentence — `mail.txt:83`, "the **rationale**, novelty, methodological details, and interpretation of the results **require further clarification**" — naming four targets. Novelty → R3.1, details → R3.4, interpretation → R3.5/R3.6; **"rationale" has no clean owner.** R1's `:73` is pure framing and drops nothing. **Fix ≈ 0, not 0.25 d** (`third-auditor.md` §5.1): "rationale" is housed in the *same* §2.x closing paragraph R3.1a(ii) already buys, so the only marginal work is one verification pass over `:73–116` inside T-14 | **T-14** + **T-07** (rationale, no marginal cost) | response letter, §2.x | **NEW — UNDER-major, audit-2026-08-11b** |
 
 ### Reviewer 1
 
 | ID | Demand | Locked decision / experiment | Ticket | Manuscript artifact | |
 |---|---|---|---|---|---|
 | R1.1 | GED runtime comparison unfair; compare against a similar problem setting (`:75`) | competitor encode-time curves; **per-graph and per-pair costs stop sharing an axis** | T-04, T-06, T-20 | Fig. 2 restructured | ✓ §4.3(c) |
-| R1.2a | AGM and gSpan uncited (`:77`) | both cited; gSpan min-DFS code vendored as a running competitor | T-04, T-08 | §1.x | ✓ |
+| R1.2a | AGM and gSpan uncited (`:77`) | both cited. **T-08 is the owner** — the ask is *discussion*, ≈0.5 d, and it is satisfied by citation alone. gSpan's vendoring (T-04) serves R1.1/AE.4a, **not** this row: if T-04 slips, R1.2a is still answered | **T-08** (T-04 only enriches it) | §1.x | ✓ + **FIX** — T-04 demoted from owner to enrichment |
 | R1.2b | Five axes: uniqueness, expressiveness, efficiency, scalability, **downstream learning** (`:77`) | all five are printed rows; downstream reads **"not evaluated"** — R3.2 is declined and the table says so | **T-17** | comparison table | **NEW** |
 | R1.3a | Density insufficient to explain AIDS (`:79`) | true density computed; within-AIDS density stratification, **which can refute** `conclusion.tex:30–36` | T-02, T-06 | §4.x | ✓ §8 |
-| R1.3b | **Label loss is the uncontrolled confound** (`:79`) | rebuttal (both sides topology-only) **leads**; **topological collision count** quantifies R1's actual scenario. The cohort breaks the label × density confound by construction | **T-18** (Tier 0–1) | §4 paragraph + 2 table columns | **NEW** |
+| R1.3b | **PREMISE, not a demand** — "the performance degradation on AIDS **may come from** the loss of label information" (`:79`). Declarative; the letter contains no imperative here | rebuttal (both sides topology-only) **leads** and is free: `computational_experiments.tex:52` makes AIDS a **topology-only variant** and `:30–31` discards labels, so a variable absent from both sides of the correlation cannot have determined it. **Licenses no work of its own** — every Tier 0–1 item is served by R1.3c, R1.2b or AE.4b, and is verified to be so | served by **R1.3c / R1.2b / AE.4b** — no independent allocation | §4 paragraph + 2 table columns | **FIX** — was booked as a demand |
 | R1.3c | Discuss the limitation and its impact (`:79`) | R1.3 asks for a **discussion**, not an experiment — the missing piece is the *connection* between the §5 limitation and the §4 AIDS interpretation | T-18, T-12 | §5 limitations | **NEW** |
 | R1.3d | Labels as future work (`:79`) | concrete `Σ × L` extension; **already named as future work at `conclusion.tex:71`, `:81`**; [29] as precedent **conditional on T-07** | T-07, T-12 | §5 future work | ✓ + **NEW** substance |
 
@@ -112,7 +153,8 @@ decision that was wrong and has been corrected.
 
 | ID | Demand | Locked decision / experiment | Ticket | Manuscript artifact | |
 |---|---|---|---|---|---|
-| R3.1a | Inherited / modified / new vs [28], [29] (`:86`) | read both sources; delta table | T-07 | **§2.x delta table (new)** | ✓ |
+| R3.1a**(i)** | Inherited / modified / new vs [28], [29] (`:86`) | read both sources; delta table | T-07 | **§2.x delta table (new)** | ✓ |
+| **R3.1a(ii)** | **"…and explain why the combined extension constitutes a sufficiently substantive contribution" (`:86`)** — the second conjunct of the same sentence | **one paragraph closing §2.x**: the completeness theorem (`methodology.tex:628–637`) is the new result; generic topology replaces [28]'s fixed node ordering and [29]'s molecular restriction; scope extends to unlabeled, unbounded-degree graphs. Re-orders facts T-07 already gathers — **no new investigation** | **T-07** | **§2.x closing paragraph** | **NEW — audit-2026-08-11b** |
 | R3.1b | "No existing method satisfies all four" too absolute (`:86`) | §10 B6; softened and attached to the T-17 table | T-12, T-17 | §1, §5 | ✓ |
 | R3.2 | **Sequential-model evaluation** (`:89`) | **DECLINED** (decision 5) + claims come down + contingency with a **2026-08-22 go/no-go** | §6 | abstract, §5 | ✓ + **FIX** (contingency) |
 | R3.3a | Narrow "any finite simple graph" / "arbitrary graphs" (`:92`) | §10 B1: undirected **connected**; directed **root reaching all nodes**; S2G total, G2S partial | T-12 | abstract, §1, §5 | ✓ |
@@ -122,7 +164,7 @@ decision that was wrong and has been corrected.
 | R3.4b | `P(M)` recomputed or precomputed; cost the four operations (`:97`) | **recomputed per frame**; four operations costed; `|Aut(G)|`-governed worst case | T-13 | **§2.2.x (new)** | ✓ |
 | R3.4c | `n^{4.9}` vs `n^{9.0}`; "super-polynomial" (`:99`) | all exponents re-derived; three-way separation | T-06, T-13 | §4.2, §5 | ✓ §9 |
 | R3.5a | Justify exclusions, report removals per dataset (`:102`) | pair-accounting ladder, per dataset | T-02, T-06 | ladder table | ✓ |
-| R3.5b | Heterogeneous cost models (`:104`) | **D6 — one cost model, everything recomputed**; pooled results demoted | T-03, T-05 | §3.1, §4.3 | ✓ |
+| R3.5b | **Interpret Fig. 3 cautiously; dataset-level correlations are primary** (`:104`) — the row previously read "Heterogeneous cost models", which is the comment's *premise*, not its ask | **`statistics.md` D5 answers the literal clause at ~0 cost** (per-dataset primary, pooled demoted): one caveat at `results.tex:187` + demote `conclusion.tex:38–41`. **D6's full recompute is a separate, deliberate choice** to retire the objection rather than caveat it, and it is driven by **F2** (473,147-pair gap; ~378–630 core-h of AIDS alone, independent of any cost model) and by **Cor. 2.13's pseudometric problem** — *not* by the Suite-2 cohort, which costs 1.24 core-h total. ⚠ **Those drivers set the direction, not the dose** (`third-auditor.md` §1): they justify recomputing AIDS GED under one cost model; they do not justify the **census**. See §7.1's two-stage structure | **D5** (floor, T-02/T-06) · T-03 **stage 1**, T-05 | §3.1, §4.3 | ✓ + **FIX** |
 | R3.5c | Pair dependence; describe the bootstrap; graph level (`:106`) | D2 graph-level cluster bootstrap, D3 Mantel; **D15 makes it affordable** | T-02, T-06 | §3.2 | ✓ + **FIX** |
 | R3.6a | "GED standard construction" not established (`:109`) | B3 rename + real serializations beside it + shared edit-operation alphabet | T-12, T-17 | §3.2.3, Tab. 2 | ✓ |
 | R3.6b | "Strongly correlates" is not uniform (`:111`) | B4 — the results section's conditional framing propagates to abstract and conclusion | T-12 | abstract, §5 | ✓ |
@@ -141,7 +183,7 @@ decision that was wrong and has been corrected.
 | E3 | Fits declared `n = 3–20`, greedy data to 50 | T-06, T-20 | ✓ |
 | E4 | A fourth node range (`n = 3–11`) | T-20 | ✓ |
 | E5 | Abstract self-contradiction (`:106` vs `:114`) | T-12 | ✓ |
-| E6 | "Labels present in all five datasets" — **false for LINUX** | T-12 | ✓ |
+| E6 | "Labels present in all five datasets" — **false for LINUX**. Two sites, both verified verbatim: `conclusion.tex:70` and `:81` | **T-12 owns the edit** (was claimed by T-12, T-18 Tier 0 **and** §9/T-11 simultaneously — I-19) | **FIX** |
 | E7 | Algorithms float to pp. 33–35 | **T-11** | **FIX** — moved out of T-15; it changes pagination and must precede the trim |
 | E8 | Draft self-correction printed in Example 2.3 | T-11 | ✓ |
 | E9 | 13 dead bibliography entries | T-08 | **NEW** |
@@ -241,6 +283,15 @@ values with GraphEdX's.
 - retires **F2** — no split-shaped holes;
 - gives LINUX 3,916 pairs (from 1,685, **2.3×**) and AIDS 295,296 (from 131,148, **2.25×**), on the
   two datasets where ρ is weakest;
+
+  > ⚠ **Do not "fix" 131,148 to F2's 181,909** (`third-auditor.md` §2). `audit-2026-08-11b` I-11
+  > reports the two as contradictory and offers **1.62×**; they count **different populations** and
+  > 1.62× would be the population-mismatched ratio — MF1's own defect class. Exactly:
+  > `C(769,2) = 295,296` is on the **769 filtered** graphs, while
+  > `C(546,2)+C(182,2)+C(183,2) = 181,909` is within-split on the **911 raw** graphs. The
+  > population-matched comparator is within-split-and-filtered, ≈ 129,600 under proportional
+  > retention — **within 1.2 % of 131,148**. I-11 is downgraded to *provenance not recorded*: record
+  > the source when T-03 reproduces the run, and print 2.25×.
 - **keeps GraphEdX as a validation arm**: recompute ~500 within-split AIDS pairs and assert exact
   agreement. If they disagree, the cost models differ and everything downstream is suspect. **This
   check runs first and gates T-03.**
@@ -441,13 +492,21 @@ edit-distance-compatible is the contribution. Report it either way.
 
 ## 5. Prior-work and bibliography
 
-### 5.1 [29] IsalChem — code only
+### 5.1 [29] IsalChem — **published; read the paper, not just the code**
 
-Source at `github.com/icai-uma/IsalChem`; the paper is unavailable. The code is sufficient for the
-**architecture** rows of the inherited/modified/new table (CDLL, two-pointer VM, alphabet,
-incremental construction, normalisation). It is **not** sufficient for R3's claim that [29] contains
-an LSTM experiment — but if the repo carries an LSTM training script, that half of
-`verified-discrepancies.md` **D19** is confirmed. Check on day 1 of T-07.
+> **CORRECTED 2026-08-12** (`third-auditor.md` X-1). This section previously read "the paper is
+> unavailable" and sent T-07 to infer [29]'s contents from source. That contradicts **decision 9**,
+> corrected in the same revision and not propagated here.
+
+[29] is **published and already cited**: `ThurnhoferHemsi:2025` — Thurnhofer-Hemsi, García-Aguilar,
+Fernández-Rodríguez, López-Rubio, *Representation of Molecules by Sequences of Instructions*,
+**J. Chem. Inf. Model. 65(15):7936–7955, 2025** (entry verified in `cas-refs.bib`).
+
+Consequences for T-07: the inherited/modified/new table is written from the **paper**, with
+`github.com/icai-uma/IsalChem` as the implementation cross-check rather than the primary source; and
+**D19's [29] half — the LSTM experiment — is directly resolvable** by reading it instead of inferred
+from the presence of a training script. T-07's 1–4 day range was budgeted partly on the missing-paper
+premise and should come down accordingly.
 
 ### 5.2 [28] — the preprint
 
@@ -519,6 +578,13 @@ Two required consequences:
 > **Go/no-go: 2026-08-22.** If T-03 has finished and the critical path has slack, run a **minimal**
 > sequence-model arm. Otherwise the decline stands and nothing further is discussed.
 >
+> > **Condition tightened 2026-08-12** (`third-auditor.md` §10). §7's banner establishes there is
+> > **no slack** — the critical path is 27.5–28.0 days minimum in a 19-day window — so as written
+> > this go/no-go is unreachable and would spend a decision cycle on day 11 concluding what §7
+> > already knows. **The contingency is live only if S-f's extension request is granted.** If it is
+> > not, the decline stands and 08-22 is struck from the calendar. This costs nothing to decide now
+> > and removes a phantom gate from the schedule.
+>
 > **Fixed minimal scope, decided now so it cannot expand**: character-level Transformer, ≤ 2 M
 > parameters, on canonical strings, **graph classification only**, on the datasets that already
 > carry class labels — Letter (15 classes), GREC (22), Mutagenicity (2), Protein (6), AIDS (2),
@@ -571,10 +637,46 @@ Two required consequences:
 | **T-23** | **Clear the Picasso `fscratch` file-count quota** — 305.8k against a 250k soft quota, 400k hard, **grace expires ≈ 2026-08-18**. T-03 checkpoints frequently and fails partway if it hits the limit | — | 0.5 | **P0 — blocks T-03** |
 | **T-24** | **Submission package and Elsevier compliance** — LaTeX source files; AI declaration; author biographies and photos; acknowledgements; highlights; graphical abstract (**fix the `graphical_abtract.pdf` filename**); competing-interest and data-availability statements. Checklist in `manuscript.md` §5 | T-15 | 1 | **P0** |
 
+### Tickets added by the 2026-08-11b over-scope and integrity audit (`.claude/notes/audit-2026-08-11b/`)
+
+| ID | Ticket | Depends | Days | Pri |
+|---|---|---|---|---|
+| **T-25** | **Restore validation gate 2, or retire it on the record** — `scratchpad/ged_bounds.py` and 12 other measurement scripts **do not exist** (I-01, measured). Gate 2 of three (`§7.3`) is currently unexecutable and it gates **T-03 production**. Also re-establishes the evidence for the "BRANCH-FAST is the primary large-`n` reference" decision (§11 item 4), which is presently unreproducible. Option set and decision in **S-e** | — | **0.1–0.2** (S-e's recommended path C+B; **0.5–1 if the PI chooses option A**, rewriting the script) | **P0 — blocks T-03** |
+| **T-26** | **Bibliography-slot and page-budget reconciliation** — the two compliance arithmetics the EiC checks independently, neither of which any existing ticket owns end to end. (a) Reconcile reference allocations: **16–17 requested against 12 slots**, with "retire a dead entry" providing **zero** relief; decide what is cut from the text or accept 55 as the ceiling and re-plan T-19's additions. (b) Re-derive `manuscript.md`'s page budget as **deltas, not gross sizes**, separating movable inventory rows from immovable main-text prose. **Must run after T-08 and T-19 and before T-15** — §12.1 currently has no such gate. Decision in **S-h** | T-08, T-19 | 0.5 | **P0 — EiC pass/fail** |
+
 **Critical path**: **T-23** → T-01 → T-03/T-05 → T-06 → **T-20** → T-15 → T-24, with T-14 accruing
 throughout. **T-04 → T-04a → T-17**, T-07 → T-08 → T-19, T-22 and T-13 run in parallel off it.
 T-04a gates T-06's distance matrices, so it is on the path for everything downstream of the
-competitors even though it is half a day.
+competitors even though it is half a day. **T-25 joins T-23 as a day-1 gate on T-03.**
+
+> ### ⚠ The board does not fit the window — audit-2026-08-11b, I-06 / I-07, measured
+>
+> **§12's "76.5 days" is the v0.5 board.** Re-summing §7's own Days column: T-01…T-15 (excluding
+> merged T-10) = 72.5, **+ T-16 (3–4 d) = 76.5** — the quoted figure, which predates both v0.6
+> (T-17…T-24) and v0.7 (T-16 rejected), yet is attributed to the audit that created those tickets.
+> **The current board is 93.5 days at upper bounds, 54.8 at lower** — understated by 17.0 days
+> (22 %). §7's "T-16 removes 3–4 days" and §12.3's relief both read against the wrong baseline: the
+> board grew **17.0 days net** in the same revision that returned 3–4.
+>
+> > **Corrected again 2026-08-12** (`third-auditor.md` §4). `audit-2026-08-11b` published **91.0 /
+> > 52.8**, which sums T-01…**T-23** and stops — omitting **T-24 (1 d)**, **T-25 (0.5–1 d)** and
+> > **T-26 (0.5 d)**, i.e. the submission package *and the two tickets that audit created in the same
+> > revision*. That is I-06's own failure mode. Re-parsed programmatically from §7's Days columns the
+> > board is **93.5 upper / 54.8 lower**. Quote these.
+>
+> **Worse, the declared critical path is serial and does not fit.** T-23 → T-01 → T-03 → T-05 →
+> T-06 → T-20 → T-15 → T-24 sums to **27.5 days at lower bounds** (44.5 at upper) against a
+> **20-day window** — **28.0 with T-25**, which the same audit makes a day-1 gate on T-03. §12's
+> mitigation — "survivable only because most tickets parallelise" — does not apply to a critical
+> path, by definition. **The largest single lever on this path is §7.1's two-stage T-03**: it takes
+> 985–1,640 core-hours of AIDS census off the path without giving the census up.
+>
+> §12.1 also allocates **below the board's own minima** on the two largest tickets: **T-05** (5–10 d)
+> gets Days 5–8 = **4**; **T-06** (10–14 d) gets Days 8–12 = **5**, half its minimum. The other 18
+> tickets are at or above minimum. Risk R1 budgets for T-03 slipping; **nothing budgets for T-06
+> receiving 5 of the 10–14 days it needs.**
+>
+> **This is not a scope finding and no ticket fixes it. Decision required — see S-f.**
 
 **T-16 is rejected**, not deferred — see §7.2. That removes 3–4 days of C++ from the board.
 
@@ -592,7 +694,49 @@ split structure, no reliance on GraphEdX's within-split coverage.
 | **AIDS (GraphEdX)** | 769 | **295,296** | 12–20 | **985–1,640** |
 | **Total** | | **3.90 M** | | **≈ 1,000–1,650** |
 
-**16–26 h on 64 cores.** Counts are pre-reconciliation (open question 3).
+**16–26 h on 64 cores.** Counts are **post**-reconciliation — open question 3 is closed (I-22), and
+`third-auditor.md` §8 confirms this table uses the correct `KEPT_ge2` population, unlike `data.md`
+§3.1 (I-03).
+
+> ### ⚠ Run this in two stages — `third-auditor.md` §1, 2026-08-12
+>
+> **The census is disproportionate to every demand that drives it, and this plan already contains
+> the proof.** `audit-2026-08-11b` cleared T-03 on the cut-guard test — F2 and Cor. 2.13 are genuine
+> non-R3.5b drivers, both verified. But a driver fixes the *direction* of the work, not its *dose*,
+> and the dose here is 98 % of the compute budget and the whole critical path.
+>
+> **The internal contradiction, stated plainly.** `statistics.md` **D2** — locked, and the literal
+> answer to R3.5c — resamples **graphs**, not pairs, because pairs are dyadically dependent. §12.2
+> risk R1 draws the consequence in this plan's own words: "effective sample size is governed by the
+> **number of graphs**, so very little power is lost". AIDS contributes **769 graphs** whether we
+> compute 131,148 pairs or all 295,296. **If D2 is right, the census buys no precision. If the census
+> buys precision, D2 is wrong and R3.5c is unanswered.** Both cannot hold.
+>
+> What the census *does* buy, fairly: a pair-accounting ladder that says "all pairs" rather than "a
+> stratified sample" (rhetorically stronger against R3.5a); no sampling design to defend; and more
+> pairs inside each §8 density stratum — though the independent-unit count per stratum is again the
+> number of graphs in it.
+>
+> **Structure that keeps both.** Do not choose between census and subsample — *order* them:
+>
+> | Stage | Content | Cost | Role |
+> |---|---|---|---|
+> | **1** | Stratified sample over **all 769 AIDS graphs**, spanning every density and size stratum §8 needs | **~100 core-h**, hours | **Pre-declared as the reported analysis.** Unblocks T-06 |
+> | **2** | The full 295,296-pair census, submitted at the same time, unattended | 985–1,640 core-h | **Supersedes stage 1 only if it lands before the T-20 text freeze** |
+>
+> The supersession rule is fixed **now**, in advance, so the choice between the two ρ values cannot
+> be made after seeing which is more favourable. Letter wording either way: "GED was recomputed under
+> a single unit cost model over a stratified sample of N pairs spanning all 769 graphs / over all
+> 295,296 pairs."
+>
+> **Why this beats S-f's options A and D.** A gives the census up; D keeps it on the critical path
+> and absorbs a 7.5-day overrun. Staging removes T-03 from the path *and* keeps the census.
+> **Cost: one paragraph of protocol in §3.2. Saving: 2–5 elapsed days on the long pole.**
+> Recorded as **S-f option E**.
+>
+> **Re-cost stage 1 from the table above, not from `data.md` §3.1** — I-03 shows §3.1's Letter rows
+> use the n≥1 population and are inflated by 22,698 pairs, and risk R1's "~100 core-h" is costed
+> against it.
 
 **Configuration** — fixed:
 - cost model: **unit node + unit edge, substitutions free** (`statistics.md` D6)
@@ -798,11 +942,33 @@ a constant dummy label before adding (topology-only is what we want anyway).
 2. **Cross-implementation agreement**: GEDLIB's `BRANCH_FAST` and `BIPARTITE` must reproduce
    `scratchpad/ged_bounds.py` on the same 300–400 pairs. Disagreement is a bug in one of them and we
    need to know which before either is trusted.
+
+   > ### 🚫 GATE 2 IS NOT EXECUTABLE — `ged_bounds.py` DOES NOT EXIST
+   >
+   > **audit-2026-08-11b, I-01 (blocking), MEASURED**: `find / -name 'ged_bounds.py'` returns
+   > nothing. It was never committed. **13 of the 16 scripts `data.md` §8 names are gone** —
+   > `size_audit.py`, `graphedx_audit.py`, `real_cost.py`, `iam_audit.py`, `feas2.py`, `budget.py`,
+   > `grec_check.py`, `feasibility.py`, `tail.py`, `timeout_check.py`, `symmetry_diag.py`,
+   > `timeout_rate.py` and `ged_bounds.py` itself. Only `export_graphs.py`, `audit_recheck.py`,
+   > `audit_dropped.py`, `final_counts.py` and `gedlib_api.py` survive. `data.md:672` predicted this
+   > ("they **will not** survive"); T-01's scope (`plan.md:541`) ports only `audit_recheck.py`.
+   >
+   > **This gate blocks T-03 production, which is the long pole.** Do not quietly drop it — it is the
+   > only check that would catch a GEDLIB cost-model misconfiguration, and `.claude/CLAUDE.md` calls
+   > it "Cross-check, do not skip". **Owner: T-25. Decision required — see S-e.**
+   >
+   > **Collateral**: `data.md` §5 / H4 — ρ(exact, LB) = 0.966 vs ρ(exact, UB) = 0.840, and the
+   > +78 % / −11 % bias figures — is the evidence for decision "BRANCH-FAST is the primary large-`n`
+   > reference" (§11 item 4, `plan.md:673–675`). **That evidence is now unreproducible from any
+   > surviving artifact**, as is every timing in `data.md` §§3, 4, 4.1, 4.3, 4.4, 6. The decision may
+   > well be right; it is currently unsupported.
+
 3. **Exact-solver agreement**: `ANCHOR_AWARE_GED` and `networkx` A* must agree exactly on a shared
    sample under the same cost model.
 
 Keep `ged_bounds.py` in the repo permanently as the independent cross-check, even once GEDLIB is
-the reported source.
+the reported source. **(Aspirational, not descriptive — it was never in the repo. See the gate-2
+banner above.)**
 
 ### 7.2 T-16 — REJECTED (author decision, 2026-08-11)
 
@@ -866,10 +1032,14 @@ itself topology-only**, so both sides of the correlation are label-blind and a l
 cannot explain that number. But we now also test the authors' *own* density claim:
 
 - report true density per dataset (**currently uncomputable from the paper** — E1);
-- **stratify AIDS pairs by density and report ρ within strata**, on 295,296 pairs instead of 131,148.
+- **stratify AIDS pairs by density and report ρ within strata**, on 295,296 pairs instead of 131,148
+  (**do not restate this as 181,909 → 1.62×** — see the §3.2 banner; the two count different
+  populations).
 
 **This can refute `conclusion.tex:30–36`.** If ρ does not recover on sparse AIDS strata, the density
-explanation is wrong and must be rewritten. Run it early.
+explanation is wrong and must be rewritten. Run it early — **which is an argument for §7.1's stage 1,
+not against it**: the stratification needs every stratum *populated*, not *saturated*, and stage 1
+delivers it days earlier than the census would.
 
 ---
 
@@ -952,6 +1122,123 @@ Consolidated. Data-side detail in `data.md` §9, statistics-side in `statistics.
 | ~~S-b~~ | ~~T-16 publication status~~ | **RESOLVED 2026-08-11 — rejected** | §7.2 |
 | ~~S-c~~ | ~~Disclose E1–E12?~~ | **RESOLVED 2026-08-11 — yes, but the reviewer's comment is answered first and our own findings follow.** Ordering rule in `manuscript.md` §4.3 | `manuscript.md` §4.3 |
 | **S-d** | **PI: which `labels.md` tier?** Tier 0 is not optional; Tier 1 recommended; **Tier 2 proposed** (0.5 d + 0.3 core-h, logged not written up); Tier 3 declined by default. The counter-case for Tier 0 alone is stated fairly in that file | **2026-08-18** — before T-06 launches | `labels.md` §0 |
+| **S-e** | **Validation gate 2 — restore or retire?** (I-01, blocking) | **2026-08-13** — before T-03 is submitted | §7.3, T-25 |
+| **S-f** | **The schedule does not fit** (I-06 / I-07) | **2026-08-13** — the value of every mitigation falls with time | §12 |
+| **S-g** | **Two over-scope cuts, 1.0–1.5 d** (audit-2026-08-11b) | **2026-08-14** — before T-04 starts building backends | §7, §12.3 |
+| **S-h** | **The bibliography does not fit, and T-19's recency criterion is satisfiable without adding an external reference** | **2026-08-16** — T-19's search strategy depends on it | §0.5 EiC.a1/a2/b, T-26 |
+
+#### S-h — the bibliography arithmetic
+
+**Floor (not optional)**: EiC.a1 and EiC.b are **pass/fail items the Editor-in-Chief checks
+independently of the reviewers** (`mail.txt:124`), so rubric §4 guard 3 applies: they do not
+negotiate. What needs deciding is *how* they are met, and the current allocation cannot meet them.
+
+Two measured facts, both new:
+
+1. **16–17 slots requested against 12 available**, and the stated relief is illusory — retiring a
+   dead `.bib` entry frees nothing, because `elsarticle-num` prints only *cited* keys, so the 13
+   dead entries never occupied a slot. The only real relief is **removing existing citations from
+   the text**, which no ticket contemplates.
+2. **Of 43 printed references, 5 postdate 2023 and both 2025 entries are group self-citations**
+   ([28] and [29]). Zero third-party references after 2024, none from 2026, and **no
+   pattern-recognition-venue reference after 2023**.
+
+| Option | Effort | What it buys | What it risks |
+|---|---|---|---|
+| **A — accept 55 as the working ceiling** and spend all 12 slots, dropping the weakest 4–5 planned additions | ~0 | no text surgery; stays compliant | arrives at the ceiling with no margin for round 2, when reviewers routinely ask for more citations |
+| **B — remove 4–5 existing citations** from the text to fund the additions | 0.5 d | keeps every planned addition and lands mid-range | touching the introduction's related-work prose late; each removal must be checked against R1.2a/AE.2, which *added* those obligations |
+| **C — re-scope T-19 to ≥ 4** rather than ≥ 6 from 2025–26 | ~0 | fits inside 12 with margin | `:126`'s "last and current year" is the EiC's own emphasis; 4 is defensible, 2 would not be |
+
+**Recommendation: A + C together**, with T-19's criterion tightened so it cannot be gamed:
+**≥ 4 additions dated 2025–2026, at least 3 of them at pattern-recognition venues other than the
+Pattern Recognition journal, and self-citations excluded from the count.** That is the smallest
+change that makes both EiC.a2 and EiC.b testable and fits the slots.
+
+> **A + C needs its allocation written out, or it does not visibly fit** (`third-auditor.md` §8):
+> 5–6 + 3 + 1 + 1 + 4 is still **14–15 against 12**. One allocation that does fit, and what makes it
+> fit:
+>
+> | Purpose | Slots | Note |
+> |---|---:|---|
+> | AGM (Inokuchi 2000), gSpan (Yan & Han 2002), nauty/Traces (McKay & Piperno 2014), Babai 2016 | **4** | graph6/sparse6 cite the nauty manual — same key, no extra slot. **If S-g cuts the bliss/Traces backends, the bliss citation goes with them** — that is the S-g ↔ S-h link neither audit drew |
+> | Riesen–Bunke 2009 (BIPARTITE), Fischer 2015 (*Pattern Recognition*, HED), Blumenthal & Gamper 2018 (*IEEE TKDE*, BRANCH-FAST) | **3** | §5.4 says "Blumenthal 2020"; §7.3 cites **TKDE 30(3):503–516, 2018**. Reconcile — they are not the same paper |
+> | IAM Graph Database (Riesen & Bunke, SSPR 2008) | **1** | |
+> | GEDLIB (Blumenthal et al., GbRPR 2019) | **1** | |
+> | Recency / PR-venue additions, 2025–26 | **4** | ≥ 3 at PR-field venues other than the PR journal; self-citations excluded |
+> | **Total** | **13** | **one over** — drop Babai (cited nowhere load-bearing) **or** one of the three GED-approximation entries |
+>
+> **Also budget for I-08b**: `Fischer2015hausdorff` and `Lerouge2017ilp` are cited only from
+> commented-out LaTeX at `methodology.tex:805–806`. The revision expands the GED discussion, so
+> uncommenting either is plausible — and takes the printed count to 44–45 and headroom to **11–10**.
+> Fischer 2015 is *in the table above*, so plan for it: the fitting allocation is **12 with Fischer
+> counted**, not 12 plus Fischer.
+
+**Counter-case, stated fairly**: option B is the only one that preserves the full related-work
+build-out, and R1.2a and AE.2 both explicitly ask for *more* references — cutting existing ones to
+fund new ones can read as churn if a reviewer diffs the bibliography. If the supplementary query
+(decision 16) comes back saying supplementary material sits outside the page limit, B also becomes
+cheaper, because the pressure moves off the main text.
+
+**Owner: PI. Date: 2026-08-16.**
+
+#### S-e — validation gate 2: restore or retire
+
+**Floor (not optional)**: gate 2 currently cites a script that does not exist. Either it is restored
+or it is **struck with the reason recorded**. Leaving an unexecutable gate in a locked section is the
+one option that is not available, because T-05 will be run by someone who reads §7.3 as a checklist.
+
+| Option | Effort | What it buys | What it risks |
+|---|---|---|---|
+| **A — rewrite `ged_bounds.py`** (BP + BRANCH-FAST direct, per `.claude/CLAUDE.md`) | **0.5–1 d** | an independent implementation to cross-check GEDLIB; restores the H4 evidence for §11 item 4 | a day off the critical path, which I-07 says has none to give |
+| **B — retire gate 2, keep gates 1 and 3** | ~0 | gate 1 (bracket validity `LB ≤ exact ≤ UB`) and gate 3 (`ANCHOR_AWARE_GED` vs `networkx` A*) still run; both are cost-model-sensitive | loses the only *cross-implementation* check; a systematic GEDLIB misconfiguration that respects the bracket would pass 1 and 3 |
+| **C — defer to a spot-check** — 20 pairs by hand against `networkx` under the unit model | ~1 h | most of B's coverage at a fraction of A | not the 300–400-pair agreement the gate specifies |
+
+**Recommendation: C, then B.** Gate 1 already catches the failure mode that matters most (a bracket
+violation *is* a cost-model mismatch), and `.claude/CLAUDE.md`'s GEDLIB section documents the silent
+traps far better than a re-written script would re-derive them. **Counter-case, stated fairly**:
+option A is the only one that restores the evidence for the *primary large-`n` reference* decision —
+ρ(exact, LB) = 0.966 vs ρ(exact, UB) = 0.840 currently has no surviving artifact behind it, and that
+decision determines what the whole Suite-2 size story is measured against. If a reviewer asks how the
+lower bound was chosen, C and B leave us citing a number we cannot reproduce.
+
+**Owner: PI. Date: 2026-08-13.**
+
+#### S-f — the schedule does not fit
+
+**Floor (not optional)**: §12 is the plan's feasibility argument and it is built on a stale total.
+The number is corrected in §7 regardless of what is decided here. What needs a decision is the
+response.
+
+| Option | Effort | What it buys | What it risks |
+|---|---|---|---|
+| **A — invoke risk R1's subsample now**, not on day 10 | saves ~900–1,550 core-h and 2–5 elapsed days | it is **already pre-approved and costed** (`plan.md` §12.2 R1, ~100 core-h, ~10× cheaper); dyadic dependence means effective sample size tracks the **number of graphs**, so little power is lost | the exact-GED story becomes "stratified sample" rather than "all pairs", which is weaker against R3.5a's pair-accounting ladder |
+| **B — request a deadline extension** from patcog@elsevier.com | one email | Elsevier routinely grants 2–4 weeks on major revisions; converts a 27.5-day path into a feasible one | none material; it is asked on day 2, not day 19 |
+| **C — cut to fit** | see §12.3 + S-g | keeps the deadline | §12.3's list totals ~2 days against a 7.5-day lower-bound overrun; **it is not large enough to close the gap** |
+| **D — accept and absorb** | — | — | T-06 gets 5 of the 10–14 days it needs, on the ticket every downstream artifact depends on |
+| **E — stage T-03** (`third-auditor.md` §1) | one paragraph of protocol | **Strictly dominates A.** A stratified stage-1 sample (~100 core-h, hours) is pre-declared as the reported analysis and unblocks T-06 on schedule; the census runs unattended behind it and supersedes stage 1 if it lands before the T-20 freeze. Takes 985–1,640 core-h **off the critical path without giving the census up**. ~2–5 elapsed days | the pre-declared supersession rule must be written before either runs, or the choice between two ρ values becomes outcome-dependent |
+
+**Recommendation: B immediately, with E as the technical structure** (E replaces A, which it
+dominates). B is nearly free and is the only option that does not degrade the science; it also pairs
+naturally with decision 16's day-1 query to the same mailbox. **E is free** and is the only option
+that shortens the critical path without cutting anything. **Counter-case, stated fairly**: an extension request signals the revision is
+struggling, and some handling editors read it as a predictor of a weak resubmission. Against that —
+`mail.txt:67` says these concerns "will strongly influence the potential impact of the work", which
+is an argument for doing them properly rather than quickly. **C alone will not work**, and that is
+the finding, not an opinion: §12.3's four items return ~2 days against a 7.5-day minimum overrun.
+
+**Owner: PI (B is Ezequiel's to send). Date: 2026-08-13.**
+
+#### S-g — two over-scope cuts
+
+Both are **sub-ticket** items, so neither appears in §12.3's cut order, which operates on whole
+tickets. Neither is on the critical path.
+
+| Item | Effort returned | Recommendation | Counter-case |
+|---|---|---|---|
+| **bliss / Traces backends** (`plan.md:384`, "0.5 d each") | **1.0 d** | **Cut.** Absent from the `ReprBackend` set at `plan.md:371`; functionally duplicate nauty (all three emit a canonical labelling serialised to graph6, differing in *speed*, not representation); produce no table row; requested by no reviewer or editor. nauty alone discharges the `:374–375` rationale ("we need canonical relabelling anyway, to make the graph6 comparison fair") | they are cheap insurance if `pynauty` fails to build on Picasso, which would otherwise take the graph6 **and** AGM rows down with it |
+| **T-09 split** (`plan.md:1002–1006`) | **0.5–0.75 d** if the S2G/G2S half is cut | **Split the cut.** T-09 merges two figures with different justifications: the search-space schematic answers **R3.7c** and its renderer already exists (`viz/search_tree.py`, ~2–3 h, ≈0.25–0.5 p); the S2G/G2S worked example answers **no demand at all** (author decision 6) and is what rubric §4's cut order names first. Bundling them protects the unasked-for figure behind the requested one | both feed the refreshed graphical abstract, which is submitted separately and costs no manuscript pages — so cutting either loses part of that. This argument does **not** distinguish them, and §12.3 currently uses it to protect both |
+
+**Owner: PI. Date: 2026-08-14** — before T-04 starts building backends.
 
 ---
 
@@ -966,6 +1253,10 @@ tickets parallelise and most of the compute is unattended — but only if the se
 | Window | Gate that must close | Why it is a gate |
 |---|---|---|
 | **Day 1 — 08-12** | **T-23** quota cleared · **decision 16** query sent to patcog@elsevier.com · T-01 started | T-03 fails partway without the quota; the page strategy branches on the query and latency is not ours to control |
+| **Day 2 — 08-13** | **S-e** (validation gate 2) · **S-f** (the schedule does not fit) | **Both gate T-03**, the long pole. S-f's best option — request an extension — loses value every day it is delayed, and its fallback (risk R1's pre-approved subsample) must be chosen *before* T-03 is submitted, not on day 10 |
+| **Day 3 — 08-14** | **S-g** (bliss/Traces cut · T-09 split) | T-04 starts building backends; after that the 1.0 d is spent |
+| **Day 5 — 08-16** | **S-h** (bibliography arithmetic) | T-19's search strategy branches on it, and T-19 feeds T-08 → T-26 → T-15 |
+| **After T-08 + T-19, before T-15** | **T-26** — slot and page-budget reconciliation | The two arithmetics the **EiC checks independently**. There is currently no gate between the tickets that *spend* slots and the trim that discovers the overrun |
 | **Days 2–4** | T-01, T-02 closed · **T-03 gate passed** (GraphEdX agreement under `[0,0,0,1,1,0]`, §7.1) · T-03 submitted | T-03 is the long pole: 16–26 h of compute **plus unbudgeted queue time** on a cluster with offline nodes |
 | **Days 2–6, parallel** | T-04 → **T-04a** · T-07 · T-22 · T-13 | none depends on T-03. **T-04a gates every production distance matrix**, so it cannot slip past T-06 |
 | **Days 5–8** | T-05 calibration arm · **`statistics.md` §5 MRM** · **§8 AIDS density stratification** | both can refute a central claim; a refutation on day 15 has no absorption time |
@@ -1005,8 +1296,27 @@ T-16 is not on this list: it is **rejected**, not deferred (§7.2), and its 3–
    which is submitted separately and therefore costs no manuscript pages. Cutting it saves ~1.5 days
    and 0.5–1.25 pages but loses the graphical abstract update as well.
 
-Nothing below this line is cuttable: every remaining ticket is the sole owner of at least one
-numbered reviewer or editor demand (§0.5).
+> **Restated in the currency that binds — `third-auditor.md` §9.** This list is denominated in
+> **days**, but `manuscript.md` §3 measures a **≈ 8-page gap that "cannot be closed by editing"**
+> against a document at exactly 35/35. Days are recoverable by an extension (S-f); **pages are
+> pass/fail at the EiC (EiC.c) and no extension returns any.** In pages, from `manuscript.md` §2's
+> own inventory: **S2G/G2S worked example 0.75 p** (unrequested, author decision 6) ·
+> `labels.md` **Tier 3 subsection ≈ 1.0 p** (already declined) · **Tier 1 label/collision table
+> 0.75 p** (driver is R1.2/AE.3, not R1.3) · **search-space schematic 0.5 p** (R3.7c, requested —
+> cut last). The S2G/G2S figure is ~9 % of the gap and answers no demand; that, not the 0.5–0.75 d,
+> is why S-g's split is worth taking.
+
+**The "nothing below this line" claim is false at component granularity, and both prior audits say
+so.** `audit-2026-08-11b` falsified it with bliss/Traces (1.0 d, in no `ReprBackend` row, duplicates
+nauty). The **next component item after it, if T-04 slips**, is the **AGM `ReprBackend`
+implementation** (1 d, §4.2): R1.2a's owner has already been demoted from T-04 to T-08 because "the
+ask is *discussion*", and AE.3 is satisfied by a **qualitative** properties row in T-17. **Not
+recommended as a cut** — AGM is named by R1 by name and a measured row is more defensible than an
+asserted one — but it is the correct next candidate, and naming it is better than declaring the line
+uncuttable.
+
+Below the component items, every remaining **ticket** is the sole owner of at least one numbered
+reviewer or editor demand (§0.5).
 
 ---
 
@@ -1020,4 +1330,6 @@ numbered reviewer or editor demand (§0.5).
 | 2026-08-11 | v0.4 | **`data.md`** and **`statistics.md`** added, all figures measured. Cohort resolved to the IAM Graph Database alone (TUDataset unnecessary — Mutagenicity reaches n = 417). Key measured results: pruned canonical encodes n̄ = 32 in 3.9 ms with no timeout to n = 96; exact GED is 36.9 s/pair at n = 12; the whole approximate-GED extension costs 1.24 core-hours; **BRANCH-FAST lower bound tracks exact GED better than the BP upper bound** (ρ 0.966 vs 0.840). Open questions restructured by decision deadline |
 | 2026-08-11 | **v0.5** | **GED implementation LOCKED in §7.3**, and every earlier statement superseded: §3.1 regime table, §3.3 "write BP ourselves" (struck through), §3.3 reference list, §3.4 cohort, §3.5 size story, §4.1 `GEDBackend` row, §5.4 bibliography budget, T-01b (closed), T-05. **Exact = `ANCHOR_AWARE_GED`; proven lower = `BRANCH_FAST`; proven upper = `IPFP` — all via GEDLIB**, verified end-to-end on Picasso, with the accessor-capability matrix and the silent-failure traps documented. Cohort locked from measured post-filter counts; **TUDataset dropped**. §3.5 gains the \|Aut(G)\| finding |
 | 2026-08-11 | **v0.6** | **Coverage audited and closed.** New **§0.5 traceability matrix** — every demand in `mail.txt` plus every self-found defect, locked to a decision, a ticket and a manuscript artifact; no row is unowned. **Eight tickets added** (T-17…T-24) for demands that had none: the AE.3 comparison table as a paper artifact, labels, bibliography recency, the **manuscript rewrite** (which had no owner at all), implementation/artifact release, the Thm 2.12 / Cor. 2.13 formal audit, the **blocking Picasso quota**, and the submission package. **Decisions 13–16 added.** Corrections to locked decisions: decision 12's rationale (the 417-node graph is **disconnected**; the retained ceiling is **98** — verified), Hamming undefined for unequal-`n` competitor pairs, sparse6 identified as the head-to-head competitor for Claim A, Fischer 2015 does not satisfy EiC.a's recency, the GraphEdX gate needs its own cost model, E7 moved out of the page trim, R3.2's decline given a dated contingency. New **§12 schedule and risk register**. Companions added: **`gap-audit.md`**, **`labels.md`**, **`manuscript.md`**; `data.md` → v1.1, `statistics.md` → v2.1 |
+| 2026-08-12 | **v0.9** | **Third-auditor pass over `audit-2026-08-11b`** (`.claude/notes/audit-2026-08-11b/third-auditor.md`). The wave is substantively sound — its bibliography arithmetic (43 cited / 13 dead / 12 slots), venue audit (6× *Pattern Recognition* 2021–23, zero CVPR/ICCV/ECCV/ICPR/TPAMI/IJCV, nothing PR-field after 2023), 35/35 page count, missing-script finding and R3.1a(ii) coverage hole all reproduce independently. **One major understatement**: it cleared T-03's all-pairs AIDS census on the cut-guard test, which verifies a driver exists but never asks whether the **dose** is proportionate. `statistics.md` **D2** and §12.2 risk R1 already prove it is not — 769 AIDS graphs are the independent unit whether we compute 131,148 pairs or 295,296 — so **T-03 now runs in two stages** (§7.1): a pre-declared stratified stage 1 (~100 core-h) unblocks T-06, the census runs unattended behind it and supersedes stage 1 only if it lands before the T-20 freeze. **~900–1,550 core-hours and 2–5 days off the critical path, with the census kept.** Recorded as **S-f option E**, which dominates option A. **One misdirected finding**: **I-11** must not be applied — 131,148 and 181,909 count different populations and the proposed 1.62× would itself be MF1's defect class; downgraded to *provenance not recorded*, 2.25× stands. **One invented consequence**: I-09's correction (417 → 98) is right but "sizes the heavy-tail strata T-02 must freeze" is not — §6.1 already read 98 in v2.1; banner amended in `statistics.md`. **One arithmetic error**: the corrected board total **91.0 / 52.8 omits T-24, T-25 and T-26** — i.e. I-06's own failure mode — and is **93.5 / 54.8**. **Three effort inflations** trimmed (AE.5 0.25 d → ≈ 0, double-counted with R3.1a(ii)'s paragraph; T-25 booked at S-e's recommended path rather than option A; R3.1a(ii)'s "blocking" label). **Three consistency defects the wave introduced, fixed**: §5.1 still said [29]'s paper was unavailable after decision 9 recorded it published (**verified: JCIM 65(15):7936–7955, 2025**); companion versions still read v1.1/v2.1; the coverage banner still read "40 covered". **Two items neither audit priced**: the cut order is denominated in days when the binding constraint is `manuscript.md` §3's **≈ 8-page gap at 35/35** (restated in pages, §12.3), and the **AGM `ReprBackend`** is named as the next component cut after bliss/Traces. S-h gains a concrete 12-slot allocation; the R3.2 08-22 contingency is tied to S-f's outcome, since §7 establishes there is no slack for it |
+| 2026-08-12 | **v0.8** | **Over-scope and integrity audit (`audit-2026-08-11b`), four read-only agents against a demand inventory rebuilt from `mail.txt` alone.** Coverage re-checked without inheriting `gap-audit.md`. **Under-coverage: one hole — R3.1a(ii)**, the second conjunct of R3's strongest-modal sentence ("explain why the combined extension constitutes a sufficiently substantive contribution"), unowned in every document; now on T-07 at ~2 h. **Over-scope: 1.0–1.5 days**, both sub-ticket and therefore invisible to §12.3's whole-ticket cut order — bliss/Traces (1.0 d, duplicates nauty, in no `ReprBackend` row) and the T-09 bundle (**S-g**). **Both rows the README nominated as likely over-scope survive**: R3.5b's recompute has two verified non-R3.5b drivers (F2's 473,147-pair gap; Cor. 2.13's pseudometric problem) and the Suite-2 cohort is *not* one of them at 1.24 core-h — but **D5 answers the literal clause for free and was recorded in no ticket**, so R3.5b now carries a zero-compute floor; R3.6a's expensive branch is owned by AE.4a, not by R3.6a, and the free branch is already taken unconditionally. **Corrections to the matrix**: R1.3b is a *premise* and M3 is *inferred*, both relabelled so no budget attaches; **AE.5 added**; R1.2a's owner demoted from T-04 to T-08; E6's three simultaneous owners resolved to T-12. **Integrity: 24 defects stand, 1 rejected on re-measurement** (the bibliography is **43 cited / 13 dead / 12 slots** — the plan was right; `elsarticle-num` prints only uncommented `\cite` keys). **One blocking**: validation gate 2 is unexecutable (**T-25**, **S-e**), which also leaves the "BRANCH-FAST is the primary large-`n` reference" decision without reproducible evidence. **Two major schedule findings** (**S-f**): the 76.5-day total is the v0.5 board and the critical path does not fit. **Eight of the 24 are one recurring defect** — a statistic computed over one population and printed under another's header, MF1's class, recurring across five documents. Stale numbers corrected in place with their superseded values recorded: `statistics.md:116` (`max n = 417` → **98**, inside the locked protocol), `data.md:438` (live "Recommendation: build T-16", rejected by decision 17) |
 | 2026-08-11 | **v0.7** | **Author review of v0.6, with three findings re-verified against the data and the manuscript rather than argued.** (i) **T-16 REJECTED** — no reviewer asked for `wl_pruned_canonical`; it was an IsalSR/IsalHG transfer. The WL *measurement* is retained inside T-13, where it answers R3.7d with a characterised worst case. **3–4 days returned.** (ii) **MF1 blocks nothing** — re-measured: the cohort, its counts and its pair totals are unchanged, and the COIL-RAG / Fingerprint / Web drop decisions all survive on connected-set numbers. A second error surfaced in passing: `data.md` §2.2.1's Fingerprint row (67.2 %, discarded n̄ 11.56) is unreproducible; measured 51.4 % / 5.98. (iii) **`labels.md` rescoped to v2.0 and handed to the PI** — grepping the sources confirms the manuscript **never claimed label handling** (`computational_experiments.tex:30`, `conclusion.tex:70`, `:71`, `:81`), R1.3 asks for a **discussion**, and `conclusion.tex:81` already names the label-aware GED study as future work needing a variant that does not exist. Four costed tiers, PI decision due 2026-08-18. (iv) **T-09 and T-10 merged**, and both figures now double as the refreshed graphical abstract, which costs no manuscript pages. (v) **The padded-Hamming decision is withdrawn** in favour of **T-04a**, a measured metric-feasibility experiment in the new **`competitors.md`**, with the selection rule fixed in advance and ties broken on cost, never on correlation with GED. (vi) `statistics.md` D13–D15 rewritten with worked examples after the author reported them unclear |

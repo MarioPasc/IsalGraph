@@ -113,7 +113,24 @@ Unit = graph. No dependence problem.
 | Which method wins overall? | **Friedman + Wilcoxon–Holm + CD diagram** over datasets (D8) |
 
 Never report a mean bit count without dispersion: length distributions are right-skewed
-(Mutagenicity median n = 27, max n = 417).
+(Mutagenicity median n = 27, **max n = 98**).
+
+> **Corrected 2026-08-11 (audit-2026-08-11b, I-09).** This line previously read "max n = 417".
+> **Superseded**: 417 is the **raw-set** maximum; the 417-node graph is disconnected and is
+> discarded by the `min_nodes = 2, require_connected = True` filter. The retained maximum is
+> **98** (`data.md` §0, re-measured). The parenthesis mixed populations — median 27 is a
+> retained-set value, 417 was not — which is `gap-audit.md` MF1's defect class inside the **locked**
+> protocol.
+>
+> > **Consequence corrected 2026-08-12** (`third-auditor.md` §3). The banner originally read "this
+> > is the number that sizes the heavy-tail strata T-02 must freeze before T-06 runs, so re-check
+> > the stratum boundaries against 98 rather than 417". **It sizes no stratum.** This line sits in
+> > §3 (Claim A) and its only function is to justify *reporting dispersion*; strata are defined in
+> > `plan.md` §8 (node count × true density) and §7 below, and the size-regime boundary lives in
+> > **§6.1, which already read `n ≤ 98` in v2.1** — before the audit. **T-02 has nothing to re-check
+> > here.** What *should* be re-checked is the claim this line makes: at max 98 the skew is **3.6×
+> > the median**, not 15.4×. The distribution is still right-skewed and the instruction still holds,
+> > but do not lean on the tail as hard as the retired number allowed.
 
 ---
 
@@ -469,4 +486,6 @@ S2 (cost model) is resolved by D6 above.
 |---|---|---|
 | 2026-08-11 | v1.0 | First draft, presented as options |
 | 2026-08-11 | v2.0 | **Converted to decisions D1–D12.** Bootstrap replicates 10,000 → 2,000 (67 M pairs). Spearman kept primary, Kendall demoted to robustness check. MRM promoted to confirmatory. Symmetry added as a stratification variable (`data.md` H8). Cost model fixed. Open questions reduced to two |
+| 2026-08-12 | **v2.3** | **Third-auditor pass** (`.claude/notes/audit-2026-08-11b/third-auditor.md` §3). I-09's **correction stands** — 417 is a raw-set value and 98 is right — but the **consequence the v2.2 banner attached to it does not**: §3's line justifies reporting dispersion and defines no stratum, §6.1 already read `n ≤ 98` in v2.1, and T-02 has no boundary to re-check. Banner amended in place; the real consequence (skew is 3.6× the median, not 15.4×, so the tail argument is weaker than the retired number allowed) substituted. **Separately relevant to D2**: `third-auditor.md` §1 shows D2's own logic — resample **graphs**, because pairs are dyadically dependent — makes `plan.md` §7.1's all-pairs AIDS census statistically redundant. D2 is unchanged; the plan's T-03 now runs in two stages because of it |
+| 2026-08-12 | **v2.2** | **audit-2026-08-11b, I-09 (major, measured).** §3's dispersion note printed **`max n = 417`** — a **raw-set** value, inside the *locked* protocol. The 417-node Mutagenicity graph is disconnected and is discarded by the `min_nodes = 2, require_connected = True` filter; the retained maximum is **98**. Corrected in place with the superseded value recorded. The parenthesis mixed populations (median 27 is retained-set, 417 was not), which is `gap-audit.md` MF1's defect class recurring in a document marked locked. **Consequence for T-02**: this number sizes the heavy-tail strata that must be frozen before T-06 runs, so the stratum boundaries need re-checking against 98. Separately noted, not changed: **D4 (MRM) is correctly self-labelled as unasked-for, but it is promoted to *confirmatory***, so it joins D9's multiplicity family and can produce a headline — the promotion is scope the label does not cover (`audit-r3`) |
 | 2026-08-11 | **v2.1** | **D13–D15 added**, closing `gap-audit.md` MF2–MF5 and MF16. §4.1 — resampling effort tiered by dataset size, with the 10²–10³× compute under-estimate corrected and written down. §6.1 — size-stratified exact calibration ladder, because the calibration regime (`n ≤ 12`, bounds validated at `n = 3–9`) did not reach the inference regime (`n ≤ 98`). §6.2 — the large-`n` bracket-agreement rule gains a pre-declared threshold. §6.3 — encoding-censored graphs are analysed with a greedy-min fallback plus a complete-case sensitivity arm, instead of being dropped and silently biasing against high-\|Aut\| graphs. §4 — Friedman/CD restricted to the ten-dataset approximate regime; five datasets is underpowered. §10 — confirmatory family must be enumerated and counted; label rows added |

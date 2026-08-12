@@ -232,6 +232,45 @@ bounds, `BIPARTITE` = the loose Riesen-Bunke reference point, `BRANCH_TIGHT` = a
 **`ANCHOR_AWARE_GED`** = exact -- benchmark it against `networkx` A*, it may push the exact-GED
 ceiling past n = 12.
 
+### Working invocation, and two traps that fail silently
+
+```python
+import importlib
+importlib.import_module("gklearn.gedlib.libraries_import")   # MUST come first
+g = importlib.import_module("gklearn.gedlib.gedlibpy_gxl")
+
+env = g.GEDEnvGXL()
+i0 = env.add_nx_graph(g0, "")     # node/edge attrs must be STRINGS
+i1 = env.add_nx_graph(g1, "")
+env.set_edit_cost("CONSTANT", edit_cost_constant=[1, 1, 0, 1, 1, 0])
+#                  [node_ins, node_del, node_rel, edge_ins, edge_del, edge_rel]
+env.init(init_option="EAGER_WITHOUT_SHUFFLED_COPIES")
+env.set_method("BRANCH_FAST", ""); env.init_method()
+env.run_method(i0, i1)
+lb = env.get_lower_bound(i0, i1)
+```
+
+**Trap 1 -- import order.** `libraries_import` `dlopen()`s libdoublefann/libsvm/libnomad and must
+load *before* `gedlibpy_gxl`, or you get `ImportError: libdoublefann.so.2: cannot open shared object
+file`. **isort/ruff will reorder plain `from ... import` lines alphabetically and break this** --
+use `importlib.import_module`, which formatters cannot reorder.
+
+**Trap 2 -- wrong accessor returns garbage, not an error.** Methods differ in what they can produce:
+
+| Capability | Methods | Read |
+|---|---|---|
+| **Exact** | `ANCHOR_AWARE_GED` | both; `LB == UB` certifies optimality |
+| **Lower bound** | `BRANCH`, `BRANCH_FAST`, `BRANCH_TIGHT`, `STAR` | `get_lower_bound()` |
+| **Upper bound** | `BIPARTITE`, `IPFP`, `REFINE`, `BP_BEAM` | `get_upper_bound()` |
+
+Calling `get_lower_bound()` on an upper-bound method returns **0.00**; `HED` returns
+`get_upper_bound() = inf`. Neither raises. **Assert `0 < value < inf` on every read** -- otherwise a
+whole GED matrix silently fills with zeros.
+
+Verified on Picasso 2026-08-11 with P4 vs C4 (true GED = 1): `ANCHOR_AWARE_GED` 1.00/1.00,
+`BRANCH_FAST` LB 1.00 (0.20 ms), `IPFP` UB 1.00 (0.33 ms), `BIPARTITE` UB 1.00, `STAR` LB 1.00.
+`HED` returned LB 0.00 / UB inf under default options -- **unresolved, do not use yet**.
+
 A failure of the form `libdoublefann.so: cannot open shared object file` means the wheel is
 installed but the C++ side was never built -- rerun `build_ext`.
 
