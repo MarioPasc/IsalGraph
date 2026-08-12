@@ -269,4 +269,70 @@ the IAM Letter GXL tree (6,767 files) is never transferred.
 
 ## Changelog
 
-- **2026-08-12** — written, before any production job. No entries yet.
+- **2026-08-12** — written, before any production job.
+
+- **2026-08-12, amendment 1 — `np.searchsorted` side.** CONTRACTS §8 fixed the density quintile
+  edges but not `side`. With the default `"left"` a density equal to the top edge falls in the lower
+  bin, so the top quintile is unreachable whenever `q80` equals the maximum — which fires on the real
+  cohort, since AIDS after `min_nodes = 2` contains n = 2 graphs at density exactly 1.0. Changed to
+  `side="right"`. This disambiguates an under-specified implementation detail **before any pair was
+  computed**; it is not a change to the pre-registered design. Measured effect on the 769-graph dry
+  run: non-empty strata 60/90 → **90/90**, sampled pairs 21,988 → 22,106, graph-level quintile
+  populations `[154, 154, 151, 151, 159]` against a perfect fifth of 153.8. Guarded by a test that
+  fails under the old behaviour.
+
+- **2026-08-12, amendment 2 — the exact solver changes; decision 11's exact half is refuted.**
+  **Authorised by the PI after review of the evidence below.**
+
+  `ANCHOR_AWARE_GED` is **not exact and not deterministic**. Measured on Picasso today:
+
+  | Evidence | Result |
+  |---|---|
+  | Same real AIDS pair, 6 fresh `GEDEnvGXL` instances, default options | e.g. `[10, 6, 6, 6, 6, 4]`; brute force = **2** |
+  | Non-determinism across 15 real AIDS pairs | **14 / 15** |
+  | Wrong vs exhaustive brute force, 18 small pairs | **4 / 18**, always over, never under |
+  | Same test, `networkx` A* | **0 / 18 wrong** |
+  | `--threads 1`, `--map-root-to-root`, `--search-method DFS` | none restore determinism or exactness |
+
+  It behaves as a **randomised upper-bound heuristic** that reports `LB == UB` — a *false optimality
+  certificate*, which is worse than a wrong value because it defeats the check designed to catch one.
+  The 2026-08-11 verification that put it in decision 11 was **a single trivial pair** (P₄ vs C₄,
+  GED = 1), which it passes by luck.
+
+  **New assignment.** Exact = **`networkx` A***, run to completion; a pair whose A* did not complete
+  is interval-censored under D11. Bounds = **GEDLIB `BRANCH_FAST` (LB) and `IPFP` (UB)**, unchanged —
+  the bracket held 8/8 and these are the roles the R3.5b defensibility argument actually needs.
+  **`ANCHOR_AWARE_GED` is removed from the pipeline and no core-hour is spent on it** (PI direction:
+  do not spend compute on an approach already shown invalid).
+
+  Cost consequence, measured on **real** AIDS graphs (not synthetic): median **6.5 s/pair**, mean
+  **10.1 s** among completions, **27 %** exceed 30 s → **≈ 1,260 core-hours** for the 295,296-pair
+  census. That is inside the plan's 985–1,640 band, so §3's parallelisation and decision 21's
+  two-stage structure stand exactly as designed. Synthetic G(n,m) graphs at the same order and
+  density were **2–3× harder** than real molecular graphs; the plan's figures were right and my
+  earlier synthetic probe was pessimistic.
+
+- **2026-08-12, amendment 3 — gate 0 is re-anchored; GraphEdX's published AIDS matrix is approximate.**
+  **Authorised by the PI.**
+
+  Gate 0 as specified cannot pass, because its reference is not an oracle. Measured over 208 certified
+  pairs: **150 ours-lower, 58 equal, 0 ours-higher**, mean Δ = −1.58, max −8. Independently verified
+  on 9 fresh pairs: **5 proved suboptimal, 0 in the falsifying direction** — e.g. GraphEdX publishes
+  **11** for AIDS train pair (76, 211) while A* found an **achievable** path of cost **6** in 0.50 s.
+  GED is a minimum and we exhibited a cheaper achievable path, so the published value is not optimal.
+  The one-sidedness is what distinguishes "their reference is approximate" from "our solver is buggy":
+  a buggy solver errs in both directions.
+
+  **Gate 0 is therefore re-anchored on exhaustive brute-force enumeration** over small pairs, which is
+  a genuine oracle and which `networkx` A* passes 18/18. The GraphEdX comparison is **demoted from a
+  gate to a reported finding**.
+
+  > **This strengthens the recompute.** It was justified by D6 as a cost-model unification. It is now
+  > also a **correctness fix**: the submitted LINUX ρ = 0.433 and AIDS ρ = 0.349 were computed against
+  > a reference that is an approximate upper bound, and both are within-split figures besides. This
+  > belongs in the R3.5a/R3.5b response as a result, not a caveat.
+
+  **Gate 3 is redefined** accordingly: it no longer compares `ANCHOR_AWARE_GED` against `networkx`,
+  since one side is retired. It becomes brute-force-vs-A* on an exhaustively enumerable sample, plus
+  the per-dataset GEDLIB bound-quality table (ρ(exact, LB), ρ(exact, UB), bias, certification rate)
+  that T-05's calibration ladder needs re-derived per dataset.
