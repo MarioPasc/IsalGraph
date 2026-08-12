@@ -783,7 +783,11 @@ def gate2_replay(
        different graphs.
     2. **Bound reproduction.** :mod:`ged_bounds` must return the archived
        bounds on the same pairs, which catches drift in the cross-check
-       implementation itself.
+       implementation itself. The archive predates the ``symmetrise``
+       parameter of :func:`bipartite_upper_bound`, so its upper bound is the
+       single forward orientation: that is what must be reproduced exactly.
+       The symmetrised minimum is then allowed to be *tighter*, and by how
+       often is reported, but never looser.
     3. **Solver bounds.** Where the backend is GEDLIB, its ``BRANCH_FAST``
        lower bound must equal ours -- on unlabelled graphs with uniform edge
        costs BRANCH and BRANCH-FAST coincide -- and its ``IPFP`` upper bound
@@ -850,6 +854,8 @@ def gate2_replay(
         solver_records, solver_stats = evaluate_pairs(heur_spec, replay, workers=workers)
 
     bound_mismatch: list[dict[str, Any]] = []
+    ub_improved: list[dict[str, Any]] = []
+    ub_regression: list[dict[str, Any]] = []
     solver_lb_mismatch: list[dict[str, Any]] = []
     solver_ub_worse: list[dict[str, Any]] = []
     exact_regression: list[dict[str, Any]] = []
@@ -858,16 +864,28 @@ def gate2_replay(
 
     for k, rec in enumerate(records):
         a = archived[k]
-        if abs(rec["ind_lb"] - a["lb"]) > CERT_TOL or abs(rec["ind_ub"] - a["ub"]) > CERT_TOL:
+        # The archive was written before bipartite_upper_bound gained its
+        # symmetrise parameter, so its upper bound is the single, forward
+        # orientation. Reproducing *that* pins the archive to a specific code
+        # path; the symmetrised minimum is then allowed to be tighter but
+        # never looser.
+        if abs(rec["ind_lb"] - a["lb"]) > CERT_TOL:
+            bound_mismatch.append(
+                {"idx": k, "quantity": "lb", "archived": a["lb"], "replay": rec["ind_lb"]}
+            )
+        if abs(rec["ind_ub_fwd"] - a["ub"]) > CERT_TOL:
             bound_mismatch.append(
                 {
                     "idx": k,
-                    "archived_lb": a["lb"],
-                    "replay_lb": rec["ind_lb"],
-                    "archived_ub": a["ub"],
-                    "replay_ub": rec["ind_ub"],
+                    "quantity": "ub_forward_orientation",
+                    "archived": a["ub"],
+                    "replay": rec["ind_ub_fwd"],
                 }
             )
+        if rec["ind_ub"] > a["ub"] + CERT_TOL:
+            ub_regression.append({"idx": k, "archived": a["ub"], "replay": rec["ind_ub"]})
+        elif rec["ind_ub"] < a["ub"] - CERT_TOL:
+            ub_improved.append({"idx": k, "archived": a["ub"], "replay": rec["ind_ub"]})
         if solver_records:
             s = solver_records[k]
             if abs(s["lb"] - rec["ind_lb"]) > CERT_TOL:
@@ -888,7 +906,9 @@ def gate2_replay(
         else:
             exact_agree += 1
 
-    passed = not identity_failures and not bound_mismatch and not exact_regression
+    passed = (
+        not identity_failures and not bound_mismatch and not ub_regression and not exact_regression
+    )
     if spec.kind == "gedlib":
         passed = passed and not solver_lb_mismatch and not solver_ub_worse
 
@@ -900,6 +920,10 @@ def gate2_replay(
         "n_replayed": len(records),
         "n_identity_failures": len(identity_failures),
         "identity_failures": identity_failures[:20],
+        "n_ub_improved_by_symmetrisation": len(ub_improved),
+        "ub_symmetrisation_gain_rate": (len(ub_improved) / len(records)) if records else 0.0,
+        "n_ub_regression": len(ub_regression),
+        "ub_regression": ub_regression[:20],
         "n_bound_mismatch": len(bound_mismatch),
         "bound_mismatch": bound_mismatch[:20],
         "n_solver_lb_mismatch": len(solver_lb_mismatch),
@@ -914,6 +938,13 @@ def gate2_replay(
         "backend_stats": stats,
         "solver_heuristic_stats": solver_stats,
     }
+    if ub_improved:
+        details["ub_interpretation"] = (
+            f"{len(ub_improved)} of {len(records)} upper bounds are tighter than the "
+            "archived value. The archived bound is reproduced exactly by the forward "
+            "orientation alone, so the difference is the gain from symmetrising, not a "
+            "disagreement between implementations"
+        )
     if archive_suboptimal:
         details["interpretation"] = (
             f"{len(archive_suboptimal)} archived 'exact' values exceed a newly certified "
@@ -1203,6 +1234,40 @@ def _json_default(obj: Any) -> Any:
     return str(obj)
 
 
+def _sanitize(obj: Any) -> Any:
+    """Recursively replace values ``json`` refuses to emit.
+
+    ``json.dumps(..., allow_nan=False)`` raises on a native ``float('inf')``
+    *before* it consults ``default=``, so a hook alone is not enough. Censored
+    pairs and cross-split GraphEdX entries are both ``inf``, which makes this
+    the difference between a report and a crashed cluster job.
+
+    Parameters
+    ----------
+    obj : object
+        Any part of a report payload.
+
+    Returns
+    -------
+    object
+        The same structure with non-finite floats rendered as strings.
+    """
+    if isinstance(obj, dict):
+        return {str(k): _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return _sanitize(obj.tolist())
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, (np.floating, float)):
+        value = float(obj)
+        return value if math.isfinite(value) else str(value)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    return obj
+
+
 def write_report(result: GateResult, out_dir: Path, extra: dict[str, Any]) -> Path:
     """Write one gate's JSON report.
 
@@ -1222,7 +1287,7 @@ def write_report(result: GateResult, out_dir: Path, extra: dict[str, Any]) -> Pa
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"gate{result.gate}.json"
-    payload = {**asdict(result), "environment": extra}
+    payload = _sanitize({**asdict(result), "environment": extra})
     path.write_text(json.dumps(payload, indent=2, default=_json_default, allow_nan=False))
     logger.info("Gate %s report -> %s", result.gate, path)
     return path
@@ -1443,7 +1508,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "gates_summary.json").write_text(
-        json.dumps(summary, indent=2, default=_json_default, allow_nan=False)
+        json.dumps(_sanitize(summary), indent=2, default=_json_default, allow_nan=False)
     )
     return 0 if summary["all_passed"] else 1
 
