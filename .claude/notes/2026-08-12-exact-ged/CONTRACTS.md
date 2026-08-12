@@ -137,7 +137,16 @@ graphs edge-for-edge) is a required test.
 conforming `.npz` in their own test fixtures from the key table above. Do **not** import
 `export_graphs` — you do not own it and it does not exist on your branch.
 
-`manifest.json`: `{"<key>": {"sha256": "...", "bytes": N, "n_kept": N, "n_pairs": N}, ...}`.
+`manifest.json`: `{"<key>": {"sha256": "...", "bytes": N, "n_kept": N, "n_pairs": N,
+"content_sha256": "..."}, ...}`.
+
+> **Patch, 2026-08-12** — `content_sha256` added after `task-export` measured that
+> `np.savez_compressed` stamps every zip member with local time, so two byte-identical exports of the
+> same data produce **different** file `sha256` values (`aids.npz` even changed size, 13,307 → 13,305
+> bytes, because the timestamp bytes compress differently). The contracted `sha256` therefore
+> certifies **transfer integrity only** and can never certify build reproducibility;
+> `content_sha256` digests the array contents alone and was identical across runs for all five
+> datasets. `--verify-only` checks it only when the manifest carries it.
 
 ---
 
@@ -164,9 +173,25 @@ class GedBackend(Protocol):
     def name(self) -> str: ...
 ```
 
+> ### 🔴 Patch, 2026-08-12 — `ANCHOR_AWARE_GED` is RETIRED. Read this before §5's invariant 4.
+>
+> Measured on Picasso: **non-deterministic on 14/15 real AIDS pairs** (same pair, six fresh
+> environments, e.g. `[10, 6, 6, 6, 6, 4]` where brute force says **2**), **wrong on 4/18** small
+> pairs against exhaustive enumeration — always over, never under — and it reports `LB == UB` on
+> those wrong values. No option (`--threads 1`, `--map-root-to-root`, `--search-method DFS`) restores
+> it. `networkx` A* was correct 18/18 on the same oracle.
+>
+> **So `LB == UB` from that method is a false certificate, and invariant 4 below cannot rest on it.**
+> New assignment, PI-authorised (design note, amendment 2): **exact = `networkx` A* run to
+> completion**; **GEDLIB is bounds-only**, `BRANCH_FAST` for LB and `IPFP` for UB. Certification is
+> now decided by *whether A\* completed*, not by any solver's self-report — a pair whose A* hit its
+> timeout is interval-censored `[lb, ub]` under D11, never promoted to exact. `ANCHOR_AWARE_GED` and
+> `HED` are hard-guarded and no core-hour is spent on either.
+
 Concrete backends, all in `ged_backends.py`:
 
 - `GedlibBackend(costs=UNIT_COSTS, *, timeout_s=300.0, exact_method="ANCHOR_AWARE_GED", lb_method="BRANCH_FAST", ub_method="IPFP")`
+  — **superseded**: `exact_method` is retired, the backend returns `exact=None, certified=False`
 - `NetworkxBackend(costs=UNIT_COSTS, *, timeout_s=300.0)` — uses `ged_bounds` for `lb`/`ub` and
   `nx.graph_edit_distance` for `exact`
 - `StubBackend(...)` — deterministic, no solver; exists so `task-runner` can test without GEDLIB
@@ -242,8 +267,23 @@ round-trip over **every** `k` for `N` in `{2,…,200}`, and over 10⁵ random `k
 **Merge CLI**, same owner:
 ```
 python -m benchmarks.real_data.eval_setup.ged_merge_shards \
-  --shards <dir> --key aids --n-graphs 769 --out <dir>/aids.npz [--delete-shards]
+  --shards <dir> --key aids --n-graphs 769 --out <dir>/aids.npz \
+  [--input <key>.npz] [--delete-shards] [--strict-nonzero]
 ```
+
+> **Patch, 2026-08-12 — `--input` was missing and the contract was unbuildable as written.**
+> Contract D requires `node_counts`, `edge_counts`, `graph_ids` and `labels`, and **no shard carries
+> them** — they exist only in the Contract A file. `task-slurm` must pass `--input`; the fallback
+> resolution order is `<shards>/<key>.npz` then `<shards>/../<key>.npz`, and a missing input is a
+> named error rather than a silent omission.
+>
+> **Patch — off-diagonal zeros.** §7's `0 < v < inf` contradicted §5 invariant 1's allowance for
+> isomorphic pairs, and both IAM Letter and AIDS contain isomorphic duplicates. Resolution: an
+> off-diagonal zero passes **only** when certified with `lb == ub == 0`; an **uncertified** zero
+> always fails, which keeps the "matrix silently fills with zeros" trap closed. The count is
+> exported as `n_zero_offdiag_certified` — it is a *reported* quantity, the `GED > 0` rung of the
+> pair-accounting ladder the statistical protocol requires. `--strict-nonzero` makes any
+> off-diagonal zero fail and is **opt-in**, never the default.
 Merge asserts: every `k ∈ [0, C(N,2))` present exactly once; no conflicting values on any `k` present
 in more than one shard (this is how stage-1 reuse is verified); then **gate 4** below.
 
@@ -294,8 +334,15 @@ top-up   : every NON-EMPTY pair-stratum holding < f = 30 sampled pairs is filled
 
 **Pair strata**: size cell = unordered pair of node-count bins over `{2–5, 6–9, 10–12}` (6 cells);
 density cell = unordered pair of AIDS-internal density quintiles (15 cells); stratum = the cross
-product. Quintile edges from `np.quantile(density, [.2,.4,.6,.8])` with `np.searchsorted`, so ties
-fall consistently. "Non-empty" is judged on the **population**, not on the sample. Empty strata are
+product. Quintile edges from `np.quantile(density, [.2,.4,.6,.8])` with
+**`np.searchsorted(..., side="right")`**, so ties fall consistently.
+
+> **Patch, 2026-08-12** — `side` was under-specified. With the default `"left"` a density equal to
+> the top edge falls in the *lower* bin, so the top quintile is unreachable whenever `q80` equals the
+> maximum — which fires on the real cohort, since AIDS after `min_nodes = 2` contains n = 2 graphs at
+> density exactly 1.0. Corrected before any pair was computed. Measured on the 769-graph dry run:
+> non-empty strata **60/90 → 90/90**, quintile populations `[154, 154, 151, 151, 159]` against a
+> perfect fifth of 153.8. "Non-empty" is judged on the **population**, not on the sample. Empty strata are
 reported as empty, never topped up.
 
 `K`, `q`, `f` are recalculated **once** by the orchestrator from the measured per-pair rate, holding
