@@ -33,14 +33,38 @@ except ImportError:
 print(f"[gates] GEDLIB ok (P4/C4 BRANCH_FAST lb={lb}), isalgraph correctly absent")
 EOF
 
-echo "[gates] running all gates"
-run_py benchmarks.real_data.eval_setup.ged_gates \
-    --gate all \
-    --input-dir "${DATA_DIR}" \
-    --out "${MYLOCAL}/out/gates" \
-    --seed 42 \
-    --timeout "${TIMEOUT_PER_PAIR}" \
-    --workers "${SLURM_CPUS_PER_TASK:-4}"
-RC=$?
+# Gate 0 is NOT run here, and that is a property of the data rather than an omission.
+# It compares against GraphEdX's published matrix, which lives in .pt files that need
+# torch to read -- and torch is deliberately absent from this cluster, which is the whole
+# reason the datasets arrive pre-serialized as CONTRACT A. Gate 0 therefore runs on the
+# workstation, where the .pt files and torch both are, and its report is carried here.
+# Gates 1-3 are the ones that need GEDLIB, which exists only on this cluster.
+GATE0="${OUT_DIR}/gates/gate0.json"
+if [[ -f "${GATE0}" ]]; then
+    echo "[gates] gate 0 report present (run on the workstation):"
+    "${PY}" -c "import json,sys; d=json.load(open('${GATE0}')); print('   ', {k:v for k,v in d.items() if not isinstance(v,(list,dict))})"
+else
+    echo "[gates] WARNING: no gate 0 report at ${GATE0}."
+    echo "[gates] Run it on the workstation before trusting production:"
+    echo "  python -m benchmarks.real_data.eval_setup.ged_gates --gate 0 \\"
+    echo "     --input-dir <exported> --source-dir <data/source> --out <dir>"
+fi
+
+echo "[gates] running the GEDLIB-dependent gates (1, 2, 3)"
+RC=0
+for G in probe 1 2 3; do
+    echo "--- gate ${G} ---"
+    if ! run_py benchmarks.real_data.eval_setup.ged_gates \
+        --gate "${G}" \
+        --input-dir "${DATA_DIR}" \
+        --out "${MYLOCAL}/out/gates" \
+        --backend gedlib \
+        --seed 42 \
+        --timeout "${TIMEOUT_PER_PAIR}" \
+        --workers "${SLURM_CPUS_PER_TASK:-4}"; then
+        echo "[gates] gate ${G} FAILED"
+        RC=1
+    fi
+done
 echo "[gates] exit=${RC}"
 exit ${RC}

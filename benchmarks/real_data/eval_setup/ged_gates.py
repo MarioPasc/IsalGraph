@@ -1455,7 +1455,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             if gate == "probe":
                 results.append(gedlib_probe())
             elif gate == "0":
+                # _acquire prefers the CONTRACT A export, which is right for every other
+                # gate and wrong for this one: the export deliberately does not carry
+                # GraphEdX's published matrix, and gate 0 exists to compare against it.
+                # So when a source tree is available, go to it directly.
                 ds, published = _acquire(args, "aids")
+                if published is None and args.source_dir:
+                    ds, published = load_graphedx_local("AIDS", args.source_dir, n_max=args.n_max)
                 if published is None:
                     raise GateError(
                         "gate 0 needs GraphEdX's published matrix, which the Contract A "
