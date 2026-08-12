@@ -29,19 +29,25 @@ Decision letter: `.claude/notes/review/source/mail.txt`
 | `verified-discrepancies.md` | Every factual claim by a reviewer, checked against the `.tex` sources and the code, with `file:line`, marked CORRECT / INCORRECT / PARTIALLY CORRECT. Plus discrepancies no reviewer caught. |
 | `codebase-pointers.md` | Where the implementations, datasets and result files are, for anyone who has to re-run or re-measure. |
 
-### Response — what we decided to do about it
-
-These *do* propose answers, unlike the evidence files above.
+### Audit history
 
 | File | Content |
 |------|---------|
-| **`plan.md`** | **Start here.** Author decisions, the **§0.5 traceability matrix** locking every demand to a ticket and an artifact, the ticket board, the schedule and the risk register. |
-| `data.md` | Measured dataset inventory, GED and encoding cost, compute budget. **§0 is the only table a printed number may be taken from.** |
-| `statistics.md` | The locked statistical protocol, D1–D15. |
-| `labels.md` | The R1.3 / AE.4b response, in four costed tiers. **§0 carries a PI decision on effort, due 2026-08-18.** |
-| `competitors.md` | Competitor backends and **T-04a**, the metric-feasibility experiment that selects each representation's distance by measurement. |
-| `manuscript.md` | Section-by-section rewrite map, artifact inventory, **page budget**, response-letter architecture, submission and compliance checklist. |
-| `gap-audit.md` | The 2026-08-11 coverage audit that produced §0.5: 10 unowned demands and 16 flawed or infeasible locked decisions, with severities and evidence. |
+| `gap-audit.md` | The 2026-08-11 coverage audit that produced the traceability matrix: 10 unowned demands and 16 flawed or infeasible locked decisions, with severities and evidence. |
+| `../../audit-2026-08-11b/` | The over-scope and integrity re-audit — demand inventory rebuilt from `mail.txt` alone, four voice slices, 24 integrity defects — **and `third-auditor.md`, the audit of that audit.** |
+
+### The response moved — see [`../plan/`](../plan/)
+
+**This directory no longer holds the plan.** As of 2026-08-12 the response documents
+(`plan.md`, `data.md`, `statistics.md`, `competitors.md`, `labels.md`, `manuscript.md`) were
+refactored into one file per edge of the proposal under **[`../plan/`](../plan/)**, and removed from
+here. Git history holds the originals.
+
+**Start at [`../plan/README.md`](../plan/README.md)**, or go straight to
+[`../plan/tickets.md`](../plan/tickets.md), which names per ticket exactly which files to read.
+
+The evidence/response separation stated above still governs: when the two disagree, **the evidence
+files in this directory win** and the plan file is wrong.
 
 ## There is no Reviewer #2
 
@@ -144,7 +150,16 @@ comment's last two sentences ("*A more thorough **discussion** of this limitatio
 impact on the reported results, would strengthen the paper*"), and it asks for prose. Second, **the
 manuscript already satisfied two of the three asks**: the limitation is discussed at
 `conclusion.tex:70–71` and the future-work direction at `:81`, so the only genuine gap was the
-"impact on the reported results" clause — one paragraph joining §5 to §4. Third, **the comment's
+"impact on the reported results" clause — one paragraph joining §5 to §4.
+
+> ⚠ **This lesson has a defect of its own, found 2026-08-12.** Both sentences it recommends pointing
+> at are **false**: `conclusion.tex:70` and `:81` claim labels are "present in all five benchmark
+> datasets", which is **wrong for LINUX** (self-found defect **E6**). Answering R1.3 by quoting them
+> would quote a false sentence to a reviewer. **Fix E6 first** ([`../plan/corrections.md`](../plan/corrections.md)),
+> then point at the corrected text. The lesson's *reasoning* survives — the manuscript did already
+> discuss the limitation — but the citation does not.
+
+Third, **the comment's
 opening sentence names the real complaint** — "*the discussion of the experimental results is rather
 overlooked*" — and the target is the **density attribution**, with labels serving as the illustration
 that we never examined it; the label hypothesis itself is refutable by argument alone, because for

@@ -1,0 +1,313 @@
+# Statistical protocol — DECIDED
+
+**Owner**: T-02 (lock and pre-registration), T-06 (execution) · **Serves**: R3.5a, R3.5b, R3.5c, AE.4c
+**Status**: LOCKED. **These are decisions, not options.** Fixed before T-06 so nothing is computed
+twice. Deviations require a changelog entry.
+
+Related: [exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [data](data.md) ·
+[labels](labels.md) · [corrections](corrections.md)
+
+---
+
+## 1. The story, in one paragraph
+
+The paper makes two claims and they need different statistics because **their units of analysis
+differ**.
+
+> **Claim A (information content).** IsalGraph encodes a graph in fewer bits than competing
+> reversible serialisations. Unit = **one graph**. Observations are independent. Ordinary paired
+> non-parametric statistics apply.
+>
+> **Claim B (metric locality).** Levenshtein distance on IsalGraph strings tracks graph edit distance
+> better than competing representations' distances do. Unit = **one graph pair**. Observations are
+> **dyadically dependent** — `d(G₁,G₂)` and `d(G₁,G₃)` share `G₁`. Ordinary statistics do **not**
+> apply, and the submitted version used them.
+
+Everything below follows from that distinction. Stating it explicitly in the paper is itself part of
+the answer to R3.5c.
+
+---
+
+## 2. The decisions
+
+| # | Decision | Replaces | Driver |
+|---|---|---|---|
+| **D1** | **Spearman ρ is the primary association measure**; Kendall τ-b as a tie-robustness check | — | continuity: reviewers quote ρ = 0.433 / 0.349 |
+| **D2** | **All uncertainty comes from a graph-level cluster bootstrap**, 2,000 replicates, percentile CI, seed 42 | pair-level `bootstrap_correlation` | **R3.5c** |
+| **D3** | **All significance comes from the Mantel permutation test**, 9,999 permutations of graph labels | asymptotic Spearman test on pair counts | **R3.5c** |
+| **D4** | **MRM is a confirmatory analysis**: `GED ~ Lev + \|Δn\| + \|Δdensity\|`, permutation inference | nothing — new | pre-empts the size-confound attack |
+| **D5** | **Per-dataset results are primary; pooled results are secondary** and never a headline | pooled OLS β at `conclusion.tex:38–41` | **R3.5b** |
+| **D6** | **One GED cost model across all datasets**: node ins/del = 1, edge ins/del = 1, substitutions free | IAM uniform vs GraphEdX topology-only | **R3.5b** |
+| **D7** | **Method comparison within a dataset** = bootstrap CI on the difference of ρ | — | dependence |
+| **D8** | **Method comparison across datasets** = Friedman + Wilcoxon–Holm + critical-difference diagram | — | Demšar, *JMLR* 7:1–30, 2006 |
+| **D9** | **Multiplicity** = Benjamini–Hochberg FDR at q = 0.05 over a **pre-declared** confirmatory family | nothing | scale of the design |
+| **D10** | **Effect sizes with CIs lead. p-values are supporting detail.** | significance-as-effect-size at `conclusion.tex:37` | **R3.6b** |
+| **D11** | **Non-computable exact GED is interval-censored `[LB, UB]`, not missing** | silent exclusion | **R3.5a** |
+| **D12** | **Censoring and timeout rates are reported per stratum, never pooled** | nothing | censoring is symmetry-correlated |
+| **D13** | **The large-`n` bracket-agreement rule has a pre-declared threshold** ([approx_ged](approx_ged.md) §4) | "if they agree" — undefined | audit MF3 |
+| **D14** | **Encoding-censored graphs are analysed, not dropped**: greedy-min fallback + complete-case sensitivity arm | silent exclusion | audit MF4 |
+| **D15** | **Resampling effort is scaled per dataset under a written compute budget** (§5) | 2,000 × 9,999 everywhere, unbudgeted | audit MF5 |
+
+### D6 explained — one cost model, for *both* experiments
+
+The submission uses **two**: IAM Letter charges node ins/del = 1, edge ins/del = 1; LINUX and AIDS
+(from GraphEdX) charge **zero for node operations**. The same pair of graphs gets different GED values
+depending on which dataset it came from, and Table 3 pools both onto one axis. **That is R3.5b.**
+
+**Decision: unit cost — node insert/delete = 1, edge insert/delete = 1, substitutions free.** Four
+justifications, in the order they should appear in the response letter:
+
+1. **It keeps GED a metric.** With zero node cost, inserting an isolated vertex is free, so two
+   non-isomorphic graphs can sit at distance 0 and GED is only a *pseudo*metric. Corollary 2.13
+   asserts the IsalGraph graph distance **is** an isomorphism-invariant metric. Validating a metric
+   against a pseudometric reference is incoherent. **Formal, short, and not disputable.**
+2. **It is dimensionally commensurate with Levenshtein**, which counts unit edit operations on a
+   string. A zero-node-cost GED silently reweights the comparison along exactly the size axis we
+   stratify by.
+3. **It is the community convention** — Riesen & Bunke's IAM benchmark uses it, eight of our ten
+   datasets are IAM, and it is GEDLIB's default, so BP, BRANCH and BRANCH-FAST are all specified
+   against it in their source papers.
+4. **It restores a single operation alphabet**, which also fixes the message-length experiment:
+   `B_GED(G) = (N − 1 + M) + 2M⌈log₂ N⌉` already counts node plus edge insertions. The submission
+   never says so and calls the result "standard" without support (R3.6a).
+
+> **One edit-operation alphabet** — {node insert/delete, edge insert/delete}, unit cost — underlies
+> both experiments. **Claim B** measures the *number* of operations separating two graphs and asks
+> whether Levenshtein tracks it. **Claim A** measures the *bits* needed to transmit the operations
+> that build one graph from empty, and asks whether IsalGraph is shorter.
+
+⚠ **Corollary 2.13 is D6's lead justification, so auditing it is a prerequisite for the argument
+that justifies T-03.** Owner **T-22**, see [corrections](corrections.md).
+
+---
+
+## 3. Claim A — information content
+
+Unit = graph. No dependence problem.
+
+| Question | Procedure |
+|---|---|
+| Is IsalGraph shorter than competitor X on dataset D? | **Wilcoxon signed-rank** on paired per-graph bit counts |
+| By how much? | **median per-graph difference + bootstrap CI**; matched-pairs rank-biserial correlation |
+| "shorter for 98.8–99.6 % of graphs" (`results.tex:11`, currently **no CI**) | proportion + **Clopper–Pearson** binomial CI |
+| Which method wins overall? | **Friedman + Wilcoxon–Holm + CD diagram** over datasets (D8) |
+
+Never report a mean bit count without dispersion: length distributions are right-skewed
+(Mutagenicity median `n = 27`, **max `n = 98`** — the retained-set maximum; 417 is a raw-set value
+and the 417-node graph is disconnected). At max 98 the skew is **3.6× the median**, not 15.4× — still
+right-skewed, but do not lean on the tail as hard as the retired number allowed.
+
+---
+
+## 4. Claim B — metric locality
+
+Unit = graph pair. Dyadically dependent.
+
+**Point estimate** — Spearman ρ per (dataset × representation × GED reference), Kendall τ-b beside it.
+
+**Uncertainty (D2)** — resample **graphs** with replacement, recompute ρ over the induced pair
+submatrix, 2,000 replicates, percentile CI.
+
+> Expect intervals to widen substantially. Effective sample size is governed by the number of
+> **graphs**, not pairs: LINUX has **89 graphs**, not 3,916 independent observations. Some currently
+> "significant" statements will weaken. **That is the correct outcome and we report it.**
+>
+> This is also why [exact_ged](exact_ged.md) §3 runs T-03 in two stages: if D2 is right, the AIDS
+> all-pairs census buys coverage, not precision.
+
+**Significance (D3)** — Mantel test, 9,999 joint row/column permutations. `mantel_test` already
+exists in `correlation_metrics.py` and has never been reported (E10).
+*Known critique*: Mantel has been criticised for inflated type-I error under autocorrelation
+(Guillot & Rousset, 2013). Our defence is D10 — inference is carried by bootstrap CIs; Mantel
+p-values accompany them.
+
+**Two representations on one dataset (D7)** — resample graphs, recompute **both** correlations on the
+**same** resample, take the difference, percentile CI. Significant iff the CI excludes 0.
+
+> Explicitly **not** Hotelling–Williams or Steiger. Those are the textbook tools for dependent
+> correlations sharing a variable, but they assume independent observations — exactly the error
+> R3.5c identified. Using them would repeat it in a more sophisticated form.
+
+**Across datasets (D8)** — Friedman omnibus on per-dataset ranks, pairwise Wilcoxon signed-rank with
+Holm correction, presented as a critical-difference diagram. **The exact and approximate regimes are
+never mixed in one omnibus.**
+
+> **The exact regime has five datasets.** Friedman is conservative at `N = 5` and the critical
+> difference is wide enough to separate almost nothing, so a CD diagram there would be an
+> underpowered figure dressed as a result. **Locked: the omnibus and CD diagram are reported for the
+> ten-dataset approximate regime only. The exact regime is reported descriptively** — per-dataset ρ
+> with graph-level bootstrap CIs and D7 paired differences — **and the reason is stated in the text.**
+
+`jonckheere_terpstra` and `holm_bonferroni` already exist alongside `mantel_test` and
+`bootstrap_correlation` in `benchmarks/real_data/eval_correlation/correlation_metrics.py`; only the
+resampling **unit** changes, not the machinery.
+
+---
+
+## 5. D15 — resampling effort and its budget
+
+> **In plain terms.** D2 says: resample the *graphs* 2,000 times and recompute ρ from scratch each
+> time. On COIL-DEL one recomputation touches **25.9 M pairs**, so 2,000 of them is 5 × 10¹⁰
+> operations — once per (dataset × competitor × bracket end) cell, of which there are ~120. The
+> original budget was 4–8 core-hours. It is closer to **40–80**.
+
+Spearman requires **re-ranking inside every replicate**, so per-replicate cost is `O(p log p)`; ranks
+computed once on the full matrix cannot be reused.
+
+**Locked policy** — effort is a function of dataset size, fixed in advance and reported:
+
+| Pairs in the dataset | Bootstrap replicates | Mantel permutations | Within-replicate pairs |
+|---|---:|---:|---|
+| ≤ 10⁶ | 2,000 | 9,999 | all |
+| 10⁶ – 5 × 10⁶ | 2,000 | 4,999 | all |
+| > 5 × 10⁶ | **1,000** | **1,999** | **uniform subsample of 2 × 10⁶ induced pairs, seed 42** |
+
+Three rules that keep this honest:
+
+1. **The resampling unit is unchanged.** Graphs are always resampled with replacement; subsampling
+   applies to the *induced pairs within a replicate*, never to the graph list. D2's answer to R3.5c
+   is untouched.
+2. **The subsample is validated, not assumed.** On IAM Letter HIGH (2.1 M pairs) both protocols run
+   and the CIs are compared. If they differ materially the tier is revised; either way the comparison
+   is reported.
+3. **Every table states its replicate count, permutation count and subsample size.** A CI from 1,000
+   replicates is not silently presented beside one from 2,000.
+
+**Budget: ≈ 40–80 core-hours, ~1 h on 64 cores.** Fifty times the original estimate and still
+negligible beside T-03 — the point is that it is now written down instead of discovered in week three.
+
+---
+
+## 6. D4 — the confound nobody asked about
+
+Both Levenshtein and GED grow with graph size. A reviewer can ask whether the reported correlation is
+structural agreement or merely size agreement. **We must have the answer before they ask.**
+
+```
+GED_ij  ~  β₁·Lev_ij  +  β₂·|n_i − n_j|  +  β₃·|density_i − density_j|
+```
+
+Report the standardised partial coefficient β₁ with a permutation CI, plus the simple **partial
+Mantel** of Lev and GED controlling for `|n_i − n_j|` — the same idea in the form reviewers recognise.
+
+**Interpretation, fixed in advance:**
+- β₁ remains large → the association is structural. Claim B stands as stated.
+- β₁ collapses → the correlation was largely size agreement, and **Claim B must be restated**.
+
+**Run this in the first week.** It can refute the paper's central result and we need time to absorb
+that if it does.
+
+> D4 is self-labelled "asked for by nobody" **and is promoted to confirmatory**, so it joins D9's
+> multiplicity family and can produce a headline. Cheap, but the promotion is scope the label does
+> not cover — keep it visible.
+
+---
+
+## 7. D14 — encoding-censored graphs
+
+> **In plain terms.** A few large, highly symmetric graphs will not finish canonicalisation inside
+> the 300 s timeout. The obvious move is to drop them. The problem is *which* graphs get dropped:
+> the failures are exactly the ones with a huge automorphism group (`|Aut| > 20,000`), so dropping
+> them removes the hardest cases and the paper then reports "IsalGraph handles n̄ ≈ 30" on a sample
+> the hard cases were quietly deleted from — the same silent selection bias as the connectivity
+> discard.
+
+**Locked.** A graph whose canonical encoding is censored is **not** removed from the corpus.
+
+- **Primary arm** — the censored graph enters with its **greedy-min** string, which is always
+  available (25.7 ms at `n = 96`), and every affected pair is **flagged** in the output.
+- **Sensitivity arm** — complete-case analysis over uncensored graphs only. Both ρ values are
+  reported; a material gap between them **is** the selection-bias measurement.
+- **Reporting** — censoring rate **per symmetry stratum** (D12), plus the retained-versus-censored
+  `n̄`, density and orbit-count comparison, in the same form as the connectivity-discard table.
+
+The greedy-min substitution is a *stated degradation of the representation*, not a missing
+observation, and it is exactly the fallback a practitioner would use. Reporting both arms converts an
+exclusion into a characterisation.
+
+---
+
+## 8. Stratification
+
+"Arity" belongs to hypergraphs (IsalHG). For simple graphs the variables are:
+
+| Variable | Definition | Bins |
+|---|---|---|
+| **Node count** | `n` | 3–5, 6–9, 10–12, 13–20, 21–40, > 40 |
+| **Density** | `2m / (n(n−1))` | quintiles, pooled across datasets |
+| **Mean degree** | `2m / n` | quartiles |
+| **Symmetry** — *new* | orbit count / `\|Aut(G)\|` from nauty | quartiles |
+
+The symmetry variable comes from the finding that canonicalisation cost tracks structural symmetry,
+not size or density (Protein `n = 96` → 1.1 s; Mutagenicity `n = 98` → > 5 min, at the same density).
+nauty is already vendored as a competitor backend, so the orbit count is free. **No reviewer asked
+for this**, and it converts the scalability limitation from an apology into a characterisation.
+
+Procedure: within-stratum ρ with graph-level bootstrap CI; pool across datasets so strata contain
+structurally comparable graphs regardless of provenance. Formal monotone-trend testing via
+**Jonckheere–Terpstra** only if a trend is claimed. With ~5 strata, correlating stratum-level ρ
+against stratum density is **descriptive** — labelled as such.
+
+**Stratified analyses are exploratory** and excluded from the D9 confirmatory family.
+
+> **This is where the AIDS question is settled.** R1.3 attributes the AIDS degradation to label loss;
+> the rebuttal stands (the GraphEdX GED is itself topology-only, so both sides of the correlation are
+> label-blind). But we also test the authors' *own* density claim: **stratify AIDS pairs by density
+> and report ρ within strata.** If ρ recovers on sparse strata, `conclusion.tex:30–36` is supported;
+> if not, **that passage is wrong and gets rewritten.** Run it early.
+
+---
+
+## 9. Confirmatory / exploratory split
+
+**Confirmatory family** — BH-FDR at q = 0.05 applies to exactly these:
+
+| Claim | Comparison | Unit |
+|---|---|---|
+| A | IsalGraph vs **each** competitor serialisation, **per dataset**, on bits per graph | graph |
+| A | Friedman omnibus + Wilcoxon–Holm across datasets | dataset |
+| B | ρ(Lev-on-IsalGraph, GED) vs ρ(competitor distance, GED), **per dataset** | graph pair |
+| B | Friedman omnibus + Wilcoxon–Holm across datasets, exact and approximate regimes **separately** | dataset |
+| B | MRM partial coefficient β₁ (D4) | graph pair |
+| Cal. | ρ(Lev, exact) − ρ(Lev, approx) on shared pairs — the calibration gate | graph pair |
+| L | ρ(Lev, GED_topo) − ρ(Lev, GED_lab) per labeled dataset — [labels](labels.md) Tier 2 only | graph pair |
+
+> **The family must be enumerated and counted before any p-value is computed.** With 6 competitor
+> representations, 10 datasets and 2 bracket ends, Claim B alone contributes ~120 comparisons.
+> BH-FDR at q = 0.05 behaves very differently over 20 tests than over 200, and the count is not
+> something to discover afterwards. **Write the explicit list into T-02's pre-registration section,
+> with its cardinality, and freeze it before T-06 runs.**
+
+**Exploratory** — reported with CIs, labelled as such, **excluded** from FDR: all stratified analyses;
+per-stratum timeout and censoring rates; the pruned-vs-exhaustive encoding comparison; encode-time
+regressions; D14's complete-case arm; the dataset-level regression (`N = 10`); the per-dataset GEDLIB
+cost-model sensitivity arms. **Also excluded** by D13: any dataset whose bracket is uninformative.
+
+---
+
+## 10. Mandatory reporting
+
+The manuscript's entire description of its bootstrap is one parenthesis (`results.tex:175–176`).
+Every item below appears in the revision:
+
+- resampling **unit** (graph), replicate count, CI method (percentile), seed (42);
+- permutation count and what is permuted (graph labels, jointly on rows and columns);
+- **the pair-accounting ladder, per dataset**:
+  `raw → connected → GED-available → GED > 0 → Lev > 0 → analysed`, with the
+  **connectivity-retention** column ([data](data.md) measures 51.4 %–100 %, never reported);
+- **which numbers are exact GED and which are bounds**, on every table row;
+- **encoding timeout rate per stratum** (D12), with the timeout value used;
+- software and library versions, including GEDLIB.
+
+---
+
+## 11. What we drop, and why
+
+| Dropped | Reason |
+|---|---|
+| Asymptotic Spearman test on pair counts (`computational_experiments.tex:208–209`) | the defect R3.5c identified |
+| Pair-level bootstrap (`correlation_metrics.py::bootstrap_correlation`) | wrong resampling unit — replaced, not supplemented |
+| Pooled OLS β as a headline (`conclusion.tex:38–41`) | R3.5b |
+| Hotelling–Williams / Steiger | assume independence |
+| Bonferroni | too conservative at this family size |
+| Significance as a stand-in for effect size (`conclusion.tex:37`) | R3.6b |

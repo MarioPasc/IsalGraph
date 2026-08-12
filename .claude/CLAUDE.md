@@ -8,9 +8,12 @@ University of Malaga. Extends IsalChem (molecular graphs) to graphs with
 unlabeled, indistinguishable nodes and no degree restrictions.
 
 **Status: major revision at Pattern Recognition** (PR-D-26-03293), decision
-received 2026-08-10, **revision due 2026-08-31**. Reviewer notes and the
-verified-claims audit live in `.claude/notes/review/source/`. Read those before
-changing anything the manuscript reports.
+received 2026-08-10, **revision due 2026-08-31**.
+**The plan is `.claude/notes/review/plan/` — start at its `README.md`, or at
+`tickets.md`, which names per ticket exactly which files to read.** Reviewer
+notes, the decision letter and the verified-claims audit are the *inputs*, in
+`.claude/notes/review/source/`. Read the relevant ones before changing anything
+the manuscript reports.
 
 > Mathematical foundation, architecture and adapter design:
 > `src/isalgraph/core/README.md`.
@@ -157,7 +160,7 @@ Full measurements and negative results: `docs/engineering/CPP_OPTIMIZATION_LOG.m
 
 The Pattern Recognition revision recomputes every GED itself under **one cost model**
 (node ins/del = 1, edge ins/del = 1, substitutions free -- see
-`.claude/notes/review/source/statistics.md` D6). Exact GED comes from `networkx` below ~12 nodes;
+`.claude/notes/review/plan/statistics.md` D6). Exact GED comes from `networkx` below ~12 nodes;
 above that we report a bracket from **GEDLIB**.
 
 ### Why GEDLIB and not our own implementation
@@ -373,7 +376,8 @@ experiments/                ORCHESTRATION: what runs, where, with what resources
 benchmarks/                 ROUTINES: the Python that does the science
   real_data/ synthetic_data/  invoked via the benchmarks/<name> symlinks
 docs/original_code_and_files/  Advisor's original code, READ-ONLY
-.claude/notes/review/       Pattern Recognition revision material
+.claude/notes/review/plan/    THE PLAN -- one file per edge; start at README.md
+.claude/notes/review/source/  INPUTS -- decision letter, reviewer notes, audits
 ```
 
 `benchmarks/<name>` are **symlinks** into `real_data/` or `synthetic_data/`;
