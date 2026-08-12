@@ -127,7 +127,39 @@ the GraphEdX comparison is demoted from a gate to a **reported finding**.
 | **1** bracket validity | local, `networkx` backend, 24 pairs | **PASS**, 0 violations |
 | **2** archived 400-pair LINUX replay | local, 25 pairs | **PASS** |
 | **3** exact-solver agreement + benchmark | local, 24 pairs | **PASS**, 0 disagreements |
-| **1, 2, 3 on GEDLIB** | Picasso job **1967743** | submitted, running |
+| **probe, 1, 2, 3 on GEDLIB** | Picasso job **1967801** | see below |
+
+### Picasso gates run, job 1967801 (sr008, AMD EPYC 7H12, 4 cores)
+
+**GEDLIB works on the compute node**: `P4/C4 BRANCH_FAST lb=1.0`, and `isalgraph` correctly absent.
+**Gate 3 runs against real GEDLIB** — 500 cross-dataset pairs, ~2.2 s/pair, environment built once
+with per-pair `restart_env`. Three failures, each with a distinct and useful cause:
+
+1. **Gate 1 — the invariant-1 guard fired**:
+   `BRANCH_FAST.get_lower_bound returned 0.00 for a pair whose distance cannot be zero`.
+   Two readings and they must be separated before production:
+   - the documented accessor trap is real for this pair, or
+   - **the guard is a false positive on a genuinely isomorphic duplicate.** AIDS and IAM Letter both
+     contain isomorphic duplicates, for which `LB = 0` is correct. The guard's "cannot be zero" test
+     must therefore be an isomorphism check, not a node/edge-count comparison.
+
+   The distinction matters: reading 1 invalidates GEDLIB as a bound source; reading 2 is a defect in
+   our own guard. **Diagnose by taking the offending pair and testing `nx.is_isomorphic`.**
+2. **Gate 2 — `No module named 'torch'`.** It replays the archived LINUX sample through
+   `validate_ged_bounds.load_pairs`, which reads GraphEdX `.pt` files. Torch is deliberately absent
+   from the cluster, which is the entire reason the datasets arrive pre-serialized. Gate 2 must
+   either load LINUX from the CONTRACT A export or run on the workstation. It **passed locally**.
+3. **Gate 0** — same structural cause; runs on the workstation by design.
+
+> **The split is now clear and should be written into the plan**: gates that read GraphEdX's `.pt`
+> ground truth (0 and 2) are **workstation** gates; gates that exercise GEDLIB (probe, 1, 3) are
+> **cluster** gates. No single machine can run all four, and the earlier `--gate all` design assumed
+> one could.
+
+⚠ **The job header prints `Git commit: d6a9f4b`, which is stale.** The rsync excludes `.git`, so the
+cluster's git metadata predates the code it is running. The *code* is current; the *provenance line*
+is wrong, and a provenance line that lies is worse than none. Fix by exporting the local SHA through
+`--export` rather than reading git on the far side.
 | **0** GraphEdX report | local | **runs**; the finding is established (§4), the packaged report is unfinished |
 | **4** structural | in `ged_merge_shards` | **PASS** on the real LINUX matrix |
 
