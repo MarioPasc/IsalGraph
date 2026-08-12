@@ -13,8 +13,9 @@ R3.5b. Read this before writing any GED code; read [exact_ged](exact_ged.md) and
 
 GEDLIB is by Blumenthal and Gamper — **the authors of the BRANCH / BRANCH-FAST lower bound we cite**
 (*IEEE TKDE* 30(3):503–516, 2018). Using the reference implementation is the difference between a
-bound a reviewer accepts and one they audit. Our own plain BP measured **+78 % overestimate**, the
-loosest member of its family.
+bound a reviewer accepts and one they audit. Our own plain BP measures **+135 % overestimate** on
+LINUX (§7), the loosest member of its family — which is the case for `IPFP` as the reported upper
+bound, and for keeping our BP as a cross-check rather than a source.
 
 | Repo | Last push | Verdict |
 |---|---|---|
@@ -48,10 +49,27 @@ Boost module.
 second build costs ~92,000 files against the quota.
 
 > ### fscratch quota is a FILE COUNT limit, not a space limit
-> A GEDLIB build creates **50,000–90,000 small files**. Two builds hit the 400k hard limit, and the
-> failure surfaces as `shutil.Error: [Errno 122] Disk quota exceeded` mid-`copytree`, not as a
-> compile error. `quota -s` shows both quotas. Delete build trees once the `.so` exists.
-> **T-23 owns clearing this and it blocks T-03.**
+> A GEDLIB build creates **50,000–90,000 small files** — 12–22 % of the 400k hard limit. Two builds
+> hit it, and the failure surfaces as `shutil.Error: [Errno 122] Disk quota exceeded`
+> mid-`copytree`, not as a compile error. `quota -s` shows both quotas.
+>
+> **This build tree is the only part of the GED work that pressures the quota.** T-03 and T-05's
+> combined output is **30 files** ([exact_ged](exact_ged.md) §5.1), so the answer is not to delete
+> another project's data — it is to **prune the build tree once the shared objects exist**:
+>
+> ```bash
+> cd $BUILD/graphkit-learn
+> find . -type f | wc -l                       # before pruning
+> find . -name '*.so*' -o -name '*.py'         # what must survive
+> rm -rf gklearn/gedlib/include/gedlib-master  # headers, build-time only
+> rm -rf gklearn/gedlib/ext                    # NOMAD/fann/libsvm/lsape/Eigen sources
+> find . -type f | wc -l                       # after
+> ```
+>
+> The runtime needs the `gklearn/` package and the `.so` files it `dlopen()`s, nothing else.
+> **Verify with the counts above before and after, and re-run the §4 smoke test after pruning** —
+> if it still imports and returns 1.00 on P₄ vs C₄, the prune was safe.
+> **T-23 is this prune, not a quota cleanup, and it does not block T-03's output.**
 
 The build is **in-place**, so `PYTHONPATH` must point at the checkout, not at site-packages:
 
@@ -168,10 +186,29 @@ reintroduce exactly the heterogeneity R3.5b objects to. They are cut candidate #
 
 ---
 
-## 7. Cross-check that no longer exists
+## 7. The independent cross-check — written 2026-08-12
 
 `.claude/CLAUDE.md` names `scratchpad/ged_bounds.py` as an independent BP + BRANCH-FAST
-implementation and says "cross-check, do not skip". **It does not exist and never did** —
-`find / -name 'ged_bounds.py'` returns nothing. This makes validation gate 2 unexecutable and leaves
-the ρ(exact, LB) = 0.966 vs ρ(exact, UB) = 0.840 evidence unreproducible. Decision **S-e**;
-options in [decisions](decisions.md).
+implementation and says "cross-check, do not skip". **That file never existed.** It has now been
+written, and it lives in the repository rather than a scratchpad:
+
+| Artifact | Path |
+|---|---|
+| BRANCH lower bound + Riesen–Bunke upper bound + exact A*, one cost model | `benchmarks/real_data/eval_setup/ged_bounds.py` |
+| Gate runner, seeded sample, per-pair JSON for replay | `benchmarks/real_data/eval_setup/validate_ged_bounds.py` |
+| Invariant tests | `tests/unit/test_ged_bounds.py` (35 passing) |
+
+It reproduces this file's §5 smoke test exactly — P₄ vs C₄ → LB 1.00 / exact 1.00 / UB 1.00 — and
+passed gate 2 with **0 bracket violations on 400 LINUX pairs**.
+
+**Two things to carry into any GEDLIB work here:**
+
+1. **Every upper-bound method is direction-dependent.** `BIPARTITE`, `IPFP`, `REFINE` and `BP_BEAM`
+   construct an edit path from a *directed* assignment; swapping the two graphs can change the
+   answer. Measured on our own implementation: differences of 12 vs 14 and 5 vs 7, tighter in one
+   orientation on 33 % of pairs. **Fill both triangles and take the `min`, or assert symmetry and
+   fail loudly** — otherwise the GED matrix is not symmetric and is not a distance matrix. The lower
+   bound is unaffected.
+2. **The published bound-quality figures do not reproduce.** ρ(exact, LB) measures **0.859**, not
+   0.966; ρ(exact, UB) **0.522**, not 0.840; certification **1.5 %**, not 9.8–11.3 %. Re-derive per
+   dataset. Full result: [exact_ged](exact_ged.md) §4.

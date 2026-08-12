@@ -59,10 +59,14 @@ Three reasons `BRANCH_FAST` is primary:
 
 1. **Tightest family.** The literature ordering is `BED ≥ LED` and `BED ≥ HED` — branch edit distance
    dominates the linear and Hausdorff bounds. Tighter LB → narrower bracket → stronger claim.
-2. **Measured**: ρ(exact, BRANCH-FAST) = **0.966** with **−11 %** bias, against ρ(exact, BP) = 0.840
-   with **+78 %** bias. The lower bound is the better proxy on our data — *not* the intuitive
-   expectation, which is why we measured it. ⚠ **This evidence is currently unreproducible** — see
-   [exact_ged](exact_ged.md) §4 gate 2 and decision **S-e**.
+2. **Measured, and re-measured 2026-08-12 on a reproducible artifact**: on 400 LINUX pairs under unit
+   costs, ρ(exact, LB) = **0.859** with **−26.3 %** bias, against ρ(exact, UB) = **0.522** with
+   **+135.2 %** bias. The lower bound is the better proxy on our data — *not* the intuitive
+   expectation, which is why we measured it.
+   ⚠ **The earlier figures (0.966 / 0.840, −11 % / +78 %) do not reproduce and must not be quoted.**
+   All six miss in the flattering direction, consistent with having been measured on IAM Letter and
+   printed as a cohort property. **Re-derive per dataset in §3.1's ladder and print each with its
+   population.** Full result: [exact_ged](exact_ged.md) §4 gate 2.
 3. **It is a pseudo-metric** on a graph collection (same paper). Corollary 2.13 claims the IsalGraph
    distance is a metric; validating it against a reference with metric structure is coherent in a way
    validating against an arbitrary heuristic is not.
@@ -77,8 +81,11 @@ Three reasons `BRANCH_FAST` is primary:
 | Alternative | `BP_BEAM` | Neuhaus & Riesen | proven UB |
 
 `BIPARTITE` is reported because it is the comparator every reader knows, **not** because it is good:
-our own implementation of it overestimates by **+78 %** and it is the loosest member of the family.
-`IPFP` and `REFINE` handle node and edge assignment simultaneously rather than sequentially.
+our own implementation of it overestimates by **+135 % on LINUX** (measured 2026-08-12, symmetrised;
++165 % in a single orientation) and it is the loosest member of the family. `IPFP` and `REFINE`
+handle node and edge assignment simultaneously rather than sequentially, and should do much better —
+**but that is now a prediction to test, not a recorded fact**, since the figure it was based on did
+not reproduce.
 
 > **Select the primary UB by measured tightness on the calibration set**, criterion fixed in advance:
 > the method minimising **mean relative overestimate against exact GED**, subject to costing under
@@ -163,8 +170,15 @@ governing **every result above n = 12**.
 **Also report**, per size and density stratum:
 
 - **bracket width** `UB − LB`, absolute and relative;
-- **certification rate** — the fraction with `LB = UB`, where GED is exact for free (measured
-  9.8–11.3 % with a plain BP; expect materially more with `IPFP`).
+- **certification rate** — the fraction with `LB = UB`, where GED is exact for free. ⚠ **Measured
+  1.5 % on LINUX** with our BP, not the 9.8–11.3 % previously recorded ([exact_ged](exact_ged.md)
+  §4). `IPFP` should do materially better, but **do not promise a rate in the text before T-05
+  measures it per dataset** — the difference between 1.5 % and 10 % is the difference between "exact
+  for free on a tenth of pairs" and "essentially never".
+- **symmetry**: every upper-bound method GEDLIB offers builds its edit path from a *directed*
+  assignment and is **not symmetric**. Fill both triangles and take the `min`, or assert symmetry and
+  fail loudly. Measured on our own implementation: tighter on 33.2 % of pairs, mean gain 1.15 edit
+  operations. The lower bound is symmetric and needs no treatment.
 
 A disagreement between the two ends is itself an informative and publishable outcome.
 

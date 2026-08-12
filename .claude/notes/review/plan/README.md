@@ -52,8 +52,10 @@ ticket, exactly which of these to read.
 2. **Pages, not days, are the binding constraint.** `main.pdf` is exactly 35 of 35 and the revision
    adds ≈ 12–13 gross against ≈ 4.75 recoverable. An extension returns days; nothing returns pages.
    The day-1 supplementary query to patcog@elsevier.com is free insurance on ~8 of them.
-3. **Validation gate 2 cannot be run.** `ged_bounds.py` and 12 other named scripts do not exist, and
-   the evidence for "BRANCH-FAST is the primary large-`n` reference" went with them. **S-e.**
+3. ~~**Validation gate 2 cannot be run.**~~ **Closed 2026-08-12** — `ged_bounds.py` written, tracked
+   and passing (0 bracket violations / 400 LINUX pairs). The decision it supported survives; **its
+   published numbers do not** and must be re-derived per dataset. It also produced a live finding:
+   **GEDLIB's upper bounds are direction-dependent**, so the production matrix must be symmetrised.
 4. **Two GEDLIB accessors return garbage rather than raising.** An upper-bound method returns
    `get_lower_bound() = 0.00`. A whole GED matrix can fill silently with zeros. **Assert
    `0 < value < inf` on every read.**

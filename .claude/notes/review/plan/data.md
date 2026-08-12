@@ -167,10 +167,20 @@ one batched pass after the manuscript work, not before it.
 
 ## 6. Reproduction
 
-**13 of the 16 measurement scripts named in the v1.x record no longer exist**, including
-`ged_bounds.py`. Surviving: `export_graphs.py`, `audit_recheck.py`, `audit_dropped.py`,
-`final_counts.py`, `gedlib_api.py`. T-01 ports what survives into `tests/`; everything else must be
-re-derived if challenged. Consequences for the GED validation gates: [exact_ged](exact_ged.md) §4.
+**13 of the 16 measurement scripts named in the v1.x record no longer exist.** Surviving:
+`export_graphs.py`, `audit_recheck.py`, `audit_dropped.py`, `final_counts.py`, `gedlib_api.py`.
+T-01 ports what survives into `tests/`; everything else must be re-derived if challenged.
+
+**`ged_bounds.py` was rewritten 2026-08-12 and is no longer among the missing** — it now lives at
+`benchmarks/real_data/eval_setup/ged_bounds.py` with `validate_ged_bounds.py` and 35 unit tests,
+**tracked in the repository rather than in a scratchpad**, which is the failure mode that lost the
+other twelve. Any measurement a locked decision rests on belongs in `benchmarks/` or `tests/`, never
+in `scratchpad/`. Result: [exact_ged](exact_ged.md) §4.
+
+> **The re-measurement showed the loss was not cosmetic.** Of the six figures the retired
+> `ged_bounds.py` had produced, **none reproduced**, and all six were more flattering than the truth.
+> Treat any surviving number whose script is gone as unverified until re-derived, not as
+> presumptively correct.
 
 **Machine**: local workstation, single thread, `time.process_time()`, `isalgraph.engine() == 'cpp'`.
 **Env**: `~/.conda/envs/isalgraph-cpp`. **Data roots**: `…/data/source/GED_PRECOMPUTED/{AIDS,Letter,LINUX}`

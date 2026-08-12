@@ -120,19 +120,83 @@ everything downstream is invalid.
 `LB ≤ exact ≤ UB` on every calibration pair. Our own implementation gave **0 violations in 400
 pairs**; GEDLIB must match. A single violation is a cost-model mismatch.
 
-### Gate 2 — cross-implementation agreement · **NOT EXECUTABLE**
+### Gate 2 — cross-implementation agreement · **EXECUTABLE, T-25 CLOSED 2026-08-12**
 
-> Specified as: GEDLIB's `BRANCH_FAST` and `BIPARTITE` must reproduce `scratchpad/ged_bounds.py` on
-> the same 300–400 pairs. **`ged_bounds.py` does not exist and never did.**
+The missing implementation was **written rather than retired** (S-e option A, not the recommended
+C+B). It is tracked in the repository, not in a scratchpad:
+
+| Artifact | Path |
+|---|---|
+| The bounds | `benchmarks/real_data/eval_setup/ged_bounds.py` |
+| The gate runner | `benchmarks/real_data/eval_setup/validate_ged_bounds.py` |
+| Invariant tests | `tests/unit/test_ged_bounds.py` — **35 tests, all passing** |
+
+`branch_lower_bound` is the BRANCH lower bound (Blumenthal & Gamper 2018): branch costs, incident
+edges halved, minimised by `scipy.optimize.linear_sum_assignment`. `bipartite_upper_bound` is the
+Riesen–Bunke assignment, and **returns the exact cost of the induced node mapping, not the assignment
+objective** — that recomputation is what makes it a *proven* upper bound; the objective itself
+double-counts edges and is not achievable.
+
+**Reproduces the GEDLIB Picasso smoke test exactly**: P₄ vs C₄ → LB 1.00 / exact 1.00 / UB 1.00.
+
+#### Gate 2 result — 400 LINUX pairs, unit costs, seed 42
+
+```
+GATE PASSED: 0 bracket violations on 400 pairs
+```
+
+| Quantity | **Measured 2026-08-12** | Retired H4 claim |
+|---|---:|---:|
+| bracket violations `LB ≤ exact ≤ UB` | **0 / 400** | 0 / 400 ✓ |
+| ρ(exact, LB) | **0.859** | 0.966 |
+| ρ(exact, UB) | **0.522** | 0.840 |
+| mean relative bias, LB | **−26.3 %** | −11 % |
+| mean relative bias, UB | **+135.2 %** | +78 % |
+| certification rate `LB = UB` | **1.5 %** | 9.8–11.3 % |
+
+> ### The decision survives; its numbers do not
 >
-> **Collateral**: ρ(exact, LB) = 0.966 vs ρ(exact, UB) = 0.840 and the +78 % / −11 % biases — the
-> evidence for "BRANCH-FAST is the primary large-`n` reference" — are **unreproducible from any
-> surviving artifact**. The decision may well be right; it is currently unsupported.
+> **"BRANCH-FAST is the primary large-`n` reference" is confirmed** and now has a reproducible
+> artifact behind it: the lower bound tracks exact GED far better than the upper bound (**ρ 0.859 vs
+> 0.522**) and is far tighter (**−26 % vs +135 %**). That is the same conclusion, on the same side,
+> by a wide margin.
 >
-> **Owner T-25, decision S-e.** Recommended: spot-check 20 pairs against `networkx` under the unit
-> model (~1 h), then **retire gate 2 on the record**. Gate 1 already catches the failure mode that
-> matters most — a bracket violation *is* a cost-model mismatch. Do not quietly drop it; strike it
-> with the reason recorded.
+> **But not one of the retired numbers reproduces, and all six miss in the same direction** — the
+> retired figures are uniformly more flattering. The most likely explanation is that H4 was measured
+> on IAM Letter (n̄ ≈ 4.1, density 0.54) and quoted as if it characterised the cohort, while this
+> sample is LINUX (n̄ = 8.71, density 0.255). Larger and sparser is harder for both bounds. **That is
+> `gap-audit.md` MF1's defect class once more: a statistic measured on one population and printed
+> under another's header.**
+>
+> **Do not quote 0.966 / 0.840 / −11 % / +78 % / 9.8–11.3 % anywhere.** Re-derive them **per dataset**
+> in T-05's calibration ladder, which already stratifies by `n`, and print each with the population
+> it was measured on. The certification rate in particular is a *reported* quantity
+> ([approx_ged](approx_ged.md) §4) and 1.5 % versus 9.8–11.3 % is the difference between "GED is
+> exact for free on a tenth of pairs" and "essentially never".
+
+#### The finding the gate produced — the upper bound is not symmetric
+
+`bipartite_upper_bound(g1, g2) ≠ bipartite_upper_bound(g2, g1)` — measured 12 vs 14 and 5 vs 7 on
+small connected pairs. The star costs driving the assignment are asymmetric in the two graphs' roles.
+Both values are valid upper bounds, but **a pairwise matrix filled in one orientation is not a
+distance matrix**, and Levenshtein would be correlated against an asymmetric reference.
+
+**The exposed bound therefore takes the minimum of both orientations**, which is symmetric, still
+provably an upper bound (each orientation is an achievable edit path), and never worse. Measured
+gain: tighter on **33.2 %** of pairs, mean **1.15 edit operations**, ρ(exact, UB) from 0.479 → 0.522.
+
+> **This applies to GEDLIB and it is T-05's problem, not just ours.** `BIPARTITE`, `IPFP`, `REFINE`
+> and `BP_BEAM` all construct an edit path from a directed assignment and have the same property.
+> **T-05 must either fill both triangles and symmetrise with `min`, or assert symmetry and fail
+> loudly.** The lower bound needs no such treatment — its cost matrix depends only on
+> `|deg(u) − deg(v)|` and its assignment optimum is invariant under transposition (verified by test).
+
+#### What still runs on Picasso
+
+Gate 2 is now a **two-sided** check: the numbers above are our side. **T-05 replays the same seeded
+sample through GEDLIB and compares.** `validate_ged_bounds.py --out` writes the per-pair records for
+exactly that purpose. Disagreement is a bug in one of the two implementations and we need to know
+which before either is trusted.
 
 ### Gate 3 — exact-solver agreement
 
@@ -148,8 +212,50 @@ pairs**; GEDLIB must match. A single violation is a cost-model mismatch.
 - non-computable pairs are **interval-censored `[LB, UB]`**, not dropped (D11)
 - checkpoint every 5,000 pairs (`ged_computer.py` already does)
 - one `cpu` job, 64–128 cores, `1-00:00:00`, 128 GB, written with the **`picasso-sbatch`** skill
-- **T-23 must clear the fscratch file-count quota first** — T-03 checkpoints frequently and fails
-  partway if it hits the limit
+
+### 5.1 Output footprint — T-03 is not what threatens the quota
+
+**Measured from `ged_computer.py`, 2026-08-12.** `save_ged_matrix` writes **one
+`np.savez_compressed` per dataset**, and `_save_checkpoint` writes **a single `.npz` that is
+overwritten in place** — it does not accumulate files.
+
+| | Files | Raw bytes |
+|---|---:|---:|
+| Suite 1 finals (5 datasets, one N×N matrix each) | 5 | 60 MB |
+| Suite 1 checkpoints (one per dataset, overwritten) | 5 | — |
+| Suite 2 finals (10 datasets, LB + UB in one `.npz` each) | 10 | 1,222 MB |
+| Suite 2 checkpoints | 10 | — |
+| **Total** | **30** | **1.25 GB raw, ~130–260 MB compressed** |
+
+**30 files is 0.0075 % of the 400k hard limit.** T-23's stated rationale — "T-03 checkpoints
+frequently and fails partway if it hits the limit" — **is false**, and T-03 does **not** need the
+quota cleared before it can write its output.
+
+> **What actually consumes the quota is the GEDLIB build tree: 50,000–90,000 files, 12–22 % of the
+> hard limit.** That is a one-time *install* artifact, not a *run* artifact. The fix is not to delete
+> another project's data — it is to prune the build tree once `build_ext` has produced the shared
+> objects, keeping the `gklearn/` package and its `.so` files and discarding
+> `include/gedlib-master/` and `ext/`. See [gedlib](gedlib.md) §2.
+>
+> **Verify before assuming**, since the pruning has not been executed:
+> ```bash
+> quota -s
+> find $BUILD/graphkit-learn -type f | wc -l          # before
+> find $BUILD/graphkit-learn -name '*.so*' | wc -l    # what must survive
+> ```
+
+If headroom is genuinely tight, two further tightenings are available and neither has been needed so
+far: store the upper triangle as `uint16` rather than a full `float64` matrix (**8× smaller**, and
+GED values are small non-negative integers), and write to node-local `$TMPDIR` during the run,
+copying one file out at the end.
+
+### 5.2 No format conversion is needed
+
+The `.pt` files under `GED_PRECOMPUTED/{AIDS,LINUX}` are **GraphEdX's input distribution**, read by
+`graphedx_loader.py` and nothing else. Our computed GED is `.npz` with key `ged_matrix`, which is
+already what `eval_correlation.py`, `method_comparator.py`, `dataset_filter.py` and `validator.py`
+consume. **Bring the `.npz` files home and use them directly** — there is no conversion step, and
+writing our recomputed values into GraphEdX's `.pt` layout would misrepresent their provenance.
 
 ---
 

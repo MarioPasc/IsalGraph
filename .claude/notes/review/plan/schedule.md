@@ -12,17 +12,23 @@ Related: [tickets](tickets.md) · [decisions](decisions.md) S-f · [manuscript](
 
 Re-parsed programmatically from [tickets](tickets.md)'s Days column:
 
-| | Value |
-|---|---:|
-| **Board, upper bound** | **93.5 days** |
-| **Board, lower bound** | **54.8 days** |
-| **Declared critical path, lower bound** | **27.5 days** (28.0 with T-25) |
-| Declared critical path, upper bound | 44.5 days |
-| **Window** | **19–20 days** |
+| | 2026-08-11b | **Now (2026-08-12)** |
+|---|---:|---:|
+| Board, upper bound | 93.5 days | **92.1 days** |
+| Board, lower bound | 54.8 days | **53.9 days** |
+| Critical path, lower bound | 27.5 days (28.0 with T-25) | **27.0 days** |
+| Critical path, upper bound | 44.5 days | **44.0 days** |
+| **Window** | | **19–20 days** |
 
-**The critical path is serial and does not fit.** T-23 → T-01 → T-03 → T-05 → T-06 → T-20 → T-15 →
-T-24 sums to 27.5 days at *lower* bounds. "Survivable because most tickets parallelise" does not
+**The critical path is serial and still does not fit.** T-01 → T-03 → T-05 → T-06 → T-20 → T-15 →
+T-24 sums to 27.0 days at *lower* bounds. "Survivable because most tickets parallelise" does not
 apply to a critical path, by definition.
+
+> **What closing T-25 and rescoping T-23 bought, stated honestly: 0.5 days off the path, and the
+> removal of two day-1 gates.** The board is 1.4 days lighter. **It does not fix the schedule** —
+> S-f is still the open decision, and its two components (an extension, plus staging T-03) are still
+> where the real time comes from. What it does buy is that **T-03 can be submitted as soon as T-01
+> locks the cohort**, instead of waiting on two gates and a PI decision.
 
 Two earlier figures were both wrong and both wrong the same way — a total that predated the tickets
 added alongside it. **76.5** was the pre-audit board (T-01…T-15 + the now-rejected T-16). **91.0 /
@@ -42,8 +48,8 @@ T-06 receiving 5 of the 10–14 days it needs.**
 
 | Window | Gate that must close | Why it is a gate |
 |---|---|---|
-| **Day 1 — 08-12** | **T-23** quota cleared · **decision 16** query sent to patcog@elsevier.com · T-01 started | T-03 fails partway without the quota; the page strategy branches on the query and latency is not ours to control |
-| **Day 2 — 08-13** | **S-e** (validation gate 2) · **S-f** (the schedule) | **Both gate T-03**, the long pole. S-f's best option — request an extension — loses value every day it is delayed, and staging T-03 must be chosen *before* submission, not on day 10 |
+| **Day 1 — 08-12** | ~~T-23~~ **done — rescoped** · ~~S-e / T-25~~ **done — gate 2 written, executable and passing** · **decision 16** query sent to patcog@elsevier.com · T-01 started | The page strategy branches on the query and latency is not ours to control. **The two day-1 gates on T-03 are cleared** |
+| **Day 2 — 08-13** | **S-f** (the schedule) | Gates the long pole's *shape*. Requesting an extension loses value every day it is delayed, and staging T-03 must be chosen *before* submission, not on day 10 |
 | **Day 3 — 08-14** | **S-g** (bliss/Traces cut · T-09 split) | T-04 starts building backends; after that the 1.0 d is spent |
 | **Days 2–4** | T-01, T-02 closed · **T-03 gate 0 passed** (GraphEdX agreement under `[0,0,0,1,1,0]`) · **T-03 stage 1 submitted** | T-03 is the long pole: compute **plus unbudgeted queue time** on a cluster with offline nodes |
 | **Days 2–6, parallel** | T-04 → **T-04a** · T-07 · T-22 · T-13 | none depends on T-03. **T-04a gates every production distance matrix**, so it cannot slip past T-06 |

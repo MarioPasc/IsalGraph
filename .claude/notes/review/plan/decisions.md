@@ -94,31 +94,11 @@ exactly that exchange.
 
 | # | Decision | Owner | Due | Blocks |
 |---|---|---|---|---|
-| **S-e** | **Validation gate 2 — restore, spot-check, or retire on the record** | PI | **2026-08-13** | T-03 production |
+| ~~**S-e**~~ | ~~Validation gate 2~~ — **RESOLVED 2026-08-12 by execution, option A.** See §6 | — | closed | — |
 | **S-f** | **The schedule does not fit** — extension, stage T-03, cut, or absorb | PI (Ezequiel sends) | **2026-08-13** | everything downstream of T-06 |
 | **S-g** | **Two over-scope cuts**: bliss/Traces (1.0 d); split the T-09 bundle | PI | **2026-08-14** | T-04 backend build |
 | **S-h** | **Bibliography** — 16–17 slots requested against 12 | PI | **2026-08-16** | T-19 search strategy |
 | **S-d** | **Which [labels](labels.md) tier?** | PI | **2026-08-18** | T-06 configuration |
-
-### S-e — validation gate 2
-
-**Floor, not optional**: gate 2 cites a script that does not exist. Either it is restored or it is
-**struck with the reason recorded**. Leaving an unexecutable gate in a locked section is the one
-option not available, because T-05 will be run by someone reading [exact_ged](exact_ged.md) §4 as a
-checklist.
-
-| Option | Effort | Buys | Risks |
-|---|---|---|---|
-| **A — rewrite `ged_bounds.py`** | 0.5–1 d | an independent implementation to cross-check GEDLIB; **restores the evidence for "BRANCH-FAST is primary"** | a day off a critical path with none to give |
-| **B — retire gate 2, keep 1 and 3** | ~0 | gates 1 and 3 still run; both are cost-model-sensitive | loses the only *cross-implementation* check; a systematic misconfiguration that respects the bracket would pass 1 and 3 |
-| **C — spot-check 20 pairs** by hand against `networkx` under the unit model | ~1 h | most of B's coverage at a fraction of A | not the 300–400-pair agreement the gate specifies |
-
-**Recommended: C, then B.** Gate 1 already catches the failure mode that matters most — a bracket
-violation *is* a cost-model mismatch. **Counter-case, stated fairly**: option A is the only one that
-restores the evidence for the *primary large-`n` reference* decision. ρ(exact, LB) = 0.966 vs
-ρ(exact, UB) = 0.840 currently has no surviving artifact behind it, and that decision determines what
-the whole Suite-2 size story is measured against. **If a reviewer asks how the lower bound was chosen,
-C and B leave us citing a number we cannot reproduce.**
 
 ### S-f — the schedule does not fit
 
@@ -172,13 +152,51 @@ removes a gate from the critical path.
 | Cohort / GREC | **Closed.** Add Mutagenicity, Protein, COIL-DEL, AIDS-IAM **and GREC**; drop COIL-RAG, Fingerprint, Web. GREC's 59.1 % retention is misleading — its discard is **size-unbiased**, the cleanest in the cohort |
 | Exact-GED scope | **All-pairs approved**, then **staged** (decision 21). Applies to the five original datasets only |
 | One cost model | **Unit node + unit edge** (D6). Published GraphEdX values will no longer match ours; stated in the text |
-| Primary large-`n` reference | **BRANCH-FAST**, ρ(exact, LB) = 0.966 vs ρ(exact, UB) = 0.840 — ⚠ **evidence currently unreproducible**, see S-e |
+| Primary large-`n` reference | **BRANCH-FAST — confirmed 2026-08-12 on a reproducible artifact**: ρ(exact, LB) = **0.859** vs ρ(exact, UB) = **0.522**, bias **−26 %** vs **+135 %**, on 400 LINUX pairs. ⚠ The earlier 0.966 / 0.840 / −11 % / +78 % **do not reproduce** and must not be quoted — see §6 |
 | Bounds implementation | **GEDLIB** (decision 11) |
 | Kendall τ-b | Spearman primary, τ-b as a robustness check (D1) |
 | Confirmatory vs exploratory | **Decided** ([statistics](statistics.md) §9). Outstanding: the family must be **enumerated and its cardinality frozen** in T-02 before T-06 runs |
 | G2S timeout | **Keep at 300 s**, record per-graph time, report the rate per stratum — and D14 fixes what the analysis does with a censored graph |
 | Symmetry stratification | **Adopted** ([statistics](statistics.md) §8) |
 | Exhaustive canonical above n = 12 | Measured — **fails on 55 % of Protein graphs**; report the pruned/exhaustive gap **as a result** |
+
+---
+
+## 6. S-e — resolved by execution, 2026-08-12
+
+**S-e recommended option C then B — spot-check and retire. Option A was taken instead**, because it
+turned out to cost hours rather than the budgeted 0.5–1 day, and because retiring the gate would have
+left the *primary large-`n` reference* decision resting on numbers no surviving artifact could
+produce.
+
+**Delivered**, all tracked in the repository rather than a scratchpad — which is the defect that
+created T-25 in the first place:
+
+| Artifact | Path |
+|---|---|
+| BRANCH lower bound, Riesen–Bunke upper bound, exact A*, one parametrised cost model | `benchmarks/real_data/eval_setup/ged_bounds.py` |
+| Gate runner, seeded sampling, per-pair JSON for the GEDLIB replay | `benchmarks/real_data/eval_setup/validate_ged_bounds.py` |
+| Invariant tests — bracket validity, identity, symmetry, relabelling, cost-model tracking | `tests/unit/test_ged_bounds.py` — **35 passing** |
+
+**Gate 2 result**: 400 LINUX pairs, unit costs, seed 42 — **0 bracket violations**. Reproduces the
+GEDLIB Picasso smoke test exactly (P₄ vs C₄ → 1.00 / 1.00 / 1.00). Full table:
+[exact_ged](exact_ged.md) §4.
+
+**Three consequences, all carried forward:**
+
+1. **The decision survives, its numbers do not.** BRANCH-FAST is confirmed as the better reference by
+   a wide margin, but all six retired figures miss in the flattering direction — consistent with
+   having been measured on IAM Letter and printed as a cohort property. **T-05 re-derives them per
+   dataset**, and no draft may quote the old ones.
+2. **The upper bound is not symmetric** — a finding the gate produced on its first run. Every GEDLIB
+   upper-bound method builds its edit path from a directed assignment and shares the property, so a
+   pairwise matrix filled in one orientation **is not a distance matrix**. T-05 must symmetrise with
+   `min` or assert and fail loudly.
+3. **Gate 2 is now two-sided.** Our numbers are on record; T-05 replays the same seeded sample
+   through GEDLIB and compares. Disagreement is a bug in one of the two, and that is precisely what
+   the gate exists to surface.
+
+---
 
 ### Still open, and it is a scope limitation rather than a decision
 

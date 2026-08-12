@@ -3,8 +3,8 @@
 **A brief index, not a specification.** Each row names the ticket in one line and lists the files an
 agent must read before starting it. The *content* lives in those files — do not duplicate it here.
 
-**Board: 93.5 days upper / 54.8 lower. Critical path: 27.5–28.0 days serial against 19.**
-See [schedule](schedule.md).
+**Board: 92.1 days upper / 53.9 lower. Critical path: 27.0 days serial against 19.**
+See [schedule](schedule.md). **T-25 closed and T-23 rescoped 2026-08-12 — T-03 is unblocked.**
 
 **Read for every ticket**: [decisions](decisions.md) (do not re-litigate a signed decision) and
 [demands](demands.md) (what the ticket is answering, and to whom).
@@ -17,7 +17,7 @@ See [schedule](schedule.md).
 |---|---|---|---|---|---|
 | **T-01** | **Data lock** — size/density/connectivity audit tables (retained **and** discarded); `n_max = 12` retained for Suite 1, dropped for Suite 2; merge splits; define cohorts; port surviving scripts into `tests/` | — | 1–2 | **P0** | [data](data.md) |
 | **T-02** | **Statistics lock** — graph-level bootstrap, Mantel, pair-accounting ladder, **and the frozen confirmatory family with its cardinality** | T-01 | 2–4 | **P0** | [statistics](statistics.md), [data](data.md) |
-| **T-03** | **Exact GED on Picasso** — Suite 1, **two stages**: stratified stage 1 is the reported analysis, census unattended behind it | T-01, T-23, T-25 | 3–8 | **P0 — long pole** | [exact_ged](exact_ged.md), [gedlib](gedlib.md), [statistics](statistics.md) D6/D11 |
+| **T-03** | **Exact GED on Picasso** — Suite 1, **two stages**: stratified stage 1 is the reported analysis, census unattended behind it. **UNBLOCKED 2026-08-12** | T-01 | 3–8 | **P0 — long pole** | [exact_ged](exact_ged.md), [gedlib](gedlib.md), [statistics](statistics.md) D6/D11 |
 | **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS** | — | 3–8 | **P0** | [competitors](competitors.md) |
 | **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix** | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3 |
 | **T-05** | **Bounded GED via GEDLIB** — wire `BRANCH_FAST` + `IPFP`, pass the validation gates, run the **calibration ladder**, then all 40 M Suite-2 pairs | T-01, T-03 | 5–10 | **P0** | [approx_ged](approx_ged.md), [gedlib](gedlib.md), [exact_ged](exact_ged.md) §4 |
@@ -36,9 +36,9 @@ See [schedule](schedule.md).
 | **T-20** | **Manuscript rewrite** — §3.1, §3.2, §3.3, §4, §5, abstract. The largest single writing task | T-06 | 5–7 | **P0** | [manuscript](manuscript.md) §1, [statistics](statistics.md), [data](data.md) |
 | **T-21** | **Implementation, reproducibility and artifact release** — C++ engine and GEDLIB in §3.3; versions; the `-march` and non-rsyncing-`.so` traps; data-availability statement | T-06 | 1–2 | P1 | [compliance](compliance.md) §8, [gedlib](gedlib.md) |
 | **T-22** | **Formal-statement audit** — restate Thm 2.12 within a fixed directedness class, move the flag hypothesis into the statement, **re-verify all three proof steps**, propagate to **Cor. 2.13** | — | 1–2 | **P0** | [corrections](corrections.md) §2, [statistics](statistics.md) D6 |
-| **T-23** | **Clear the Picasso `fscratch` file-count quota** — a **file-count** limit, not a space limit | — | 0.5 | **P0 — blocks T-03** | [gedlib](gedlib.md) §2 |
+| ~~**T-23**~~ | ~~Clear the Picasso `fscratch` file-count quota~~ → **RESCOPED 2026-08-12, no longer blocking.** T-03 + T-05 output is **30 files** (0.0075 % of the hard limit); the pressure is the GEDLIB **build tree** (50–90k files), pruned after `build_ext`. Folded into T-05's environment setup | — | 0.1 | P2 | [gedlib](gedlib.md) §2, [exact_ged](exact_ged.md) §5.1 |
 | **T-24** | **Submission package and Elsevier compliance** — source files, AI declaration, biographies, acknowledgements, highlights, graphical abstract (**fix the misspelt filename**), competing-interest and data-availability statements | T-15 | 1 | **P0** | [compliance](compliance.md) §8 |
-| **T-25** | **Restore validation gate 2, or retire it on the record** — `ged_bounds.py` and 12 other named scripts do not exist. Also re-establishes the evidence for "BRANCH-FAST is primary" | — | **0.1–0.2** (recommended path); 0.5–1 if option A | **P0 — blocks T-03** | [exact_ged](exact_ged.md) §4, [decisions](decisions.md) S-e |
+| ~~**T-25**~~ | ~~Restore validation gate 2, or retire it on the record~~ → **CLOSED 2026-08-12 by option A.** `ged_bounds.py` written and **tracked in the repo**; gate 2 executable and **passing** (0 violations / 400 LINUX pairs); 35 unit tests. Two findings carried to T-05: the upper bound is **not symmetric**, and **the retired H4 numbers do not reproduce** | — | **done** | — | [exact_ged](exact_ged.md) §4 |
 | **T-26** | **Bibliography-slot and page-budget reconciliation** — the two arithmetics the EiC checks independently and no other ticket owns end to end. **Runs after T-08 and T-19, before T-15** | T-08, T-19 | 0.5 | **P0 — EiC pass/fail** | [compliance](compliance.md) §2, [manuscript](manuscript.md) §2–§3 |
 
 **Retired**: ~~T-01b~~ (new-dataset audit — done) · ~~T-10~~ (merged into T-09) ·
@@ -48,8 +48,9 @@ See [schedule](schedule.md).
 
 ## Dependency structure
 
-**Critical path** — T-23 → T-01 → T-03 → T-05 → T-06 → T-20 → T-15 → T-24, with T-14 accruing
-throughout. **T-25 joins T-23 as a day-1 gate on T-03.**
+**Critical path** — **T-01 → T-03 → T-05 → T-06 → T-20 → T-15 → T-24**, with T-14 accruing
+throughout. **Both day-1 gates on T-03 are cleared**: T-25 is closed and T-23 is rescoped off the
+path, so **T-03 can be submitted as soon as T-01 locks the cohort.**
 
 **Parallel off it** — T-04 → T-04a → T-17 · T-07 → T-08 → T-19 → T-26 · T-22 · T-13 · T-09 · T-11.
 
