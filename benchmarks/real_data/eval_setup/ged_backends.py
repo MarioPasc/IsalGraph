@@ -338,6 +338,9 @@ class BackendStats:
     n_lb_asymmetric: int = 0
     max_lb_gap: float = 0.0
     n_zero_values_accepted: int = 0
+    # A zero LOWER bound on a non-isomorphic pair: valid but uninformative. Its rate is
+    # a reported bound-quality statistic, not an error -- see GedlibBackend.bounds.
+    n_trivial_lower_bounds: int = 0
     n_lb_above_exact: int = 0
     n_ub_below_exact: int = 0
 
@@ -922,11 +925,25 @@ class GedlibBackend:
         env.set_edit_cost("CONSTANT", edit_cost_constant=self._costs.as_gedlib_constant())
         env.init(init_option=self._init_option)
 
+        # A LOWER bound of zero is always mathematically valid -- it is the trivial
+        # bound, merely uninformative -- so it must not trip the zero-guard. Measured on
+        # Picasso 2026-08-12, BRANCH_FAST returns 0.00 for real pairs whose true GED is
+        # 2 and 6; the guard rejected those and failed gates 1 and 3 after ~50 pairs.
+        #
+        # The `0 < v < inf` rule the plan states exists to catch an accessor MISMATCH --
+        # calling get_lower_bound() on an upper-bound method, which silently returns
+        # 0.00. That can only manifest on the UPPER bound, where a zero really is
+        # impossible unless a zero-cost edit path exists. The lower bound is protected
+        # instead by the constructor guard, which refuses any method not in
+        # LOWER_BOUND_METHODS. Zero lower bounds are counted, because their rate is the
+        # bound-quality signal T-05's calibration ladder reports.
         self._run(env, self._lb_method, self._heuristic_options, i0, i1)
-        lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok)
+        lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok=True)
+        if lb == 0.0 and not zero_ok:
+            self.stats.n_trivial_lower_bounds += 1
         if self.stats.n_lb_orientations_compared < self._lb_symmetry_probes:
             self._run(env, self._lb_method, self._heuristic_options, i1, i0)
-            lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok)
+            lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok=True)
             self.stats.record_lb_orientations(lb, lb_rev)
             lb = max(lb, lb_rev)
 

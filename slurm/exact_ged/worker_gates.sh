@@ -55,9 +55,13 @@ else
     echo "     --input-dir <exported> --source-dir <data/source> --out <dir>"
 fi
 
-echo "[gates] running the GEDLIB-dependent gates (1, 2, 3)"
+# Gate 2 is a WORKSTATION gate for the same reason as gate 0: it replays the archived
+# LINUX sample through validate_ged_bounds.load_pairs, which reads GraphEdX .pt files and
+# therefore needs torch. It passed locally (0 violations). Only the GEDLIB-dependent
+# gates run here.
+echo "[gates] running the GEDLIB-dependent gates (probe, 1, 3)"
 RC=0
-for G in probe 1 2 3; do
+for G in probe 1 3; do
     echo "--- gate ${G} ---"
     if ! run_py benchmarks.real_data.eval_setup.ged_gates \
         --gate "${G}" \

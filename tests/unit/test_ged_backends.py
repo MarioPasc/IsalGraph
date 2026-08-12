@@ -387,11 +387,32 @@ class TestInvariant1ZeroGuard:
     def test_wrong_accessor_zero_raises_instead_of_filling_a_matrix(
         self, fake_gedlib: _InstallFake
     ) -> None:
+        """The trap can only manifest on the UPPER bound, so that is where it is tested.
+
+        Moved off the lower bound, where the original version put it. A lower bound of
+        zero is the trivial bound and is always valid: BRANCH_FAST really does return
+        0.00 on real pairs with true GED 2 and 6 (measured on Picasso, 2026-08-12), and
+        guarding it failed gates 1 and 3 after ~50 pairs on a correct read. An upper
+        bound of zero on a non-isomorphic pair is impossible, so a zero there is the
+        signature of ``get_upper_bound()`` having been called on a lower-bound method.
+        """
         behaviour = _default_behaviour()
-        behaviour["values"]["BRANCH_FAST"]["lb"] = 0.0  # what an UB method returns
+        behaviour["values"]["IPFP"]["ub"] = 0.0  # what a LB-only method returns here
         fake_gedlib(behaviour)
         with pytest.raises(GedBackendError, match="wrong accessor"):
             GedlibBackend(UNIT_COSTS).pair(P4, C4)
+
+    def test_a_trivial_zero_lower_bound_is_recorded_not_refused(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """BRANCH_FAST returning 0 is loose, not broken; the rate is a reported figure."""
+        behaviour = _default_behaviour()
+        behaviour["values"]["BRANCH_FAST"]["lb"] = 0.0
+        fake_gedlib(behaviour)
+        backend = GedlibBackend(UNIT_COSTS)
+        r = backend.pair(P4, C4)  # P4 and C4 are NOT isomorphic
+        assert r.lb == 0.0
+        assert backend.stats.n_trivial_lower_bounds == 1
 
     def test_infinite_read_raises(self, fake_gedlib: _InstallFake) -> None:
         behaviour = _default_behaviour()
