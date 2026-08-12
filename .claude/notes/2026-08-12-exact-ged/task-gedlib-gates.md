@@ -142,12 +142,53 @@ that the GEDLIB run will be compared against, on known hardware: the cost of one
 roughly 4× per node from n = 8, reaching ~1.27 s at n = 10. Extrapolating that curve is what makes
 the n = 12 ceiling in the plan plausible and what a GEDLIB speedup would move.
 
-### Gate 0 — see the closing status below
+### Gate 0 — FAIL, and the failure is GraphEdX's, not ours
 
-Gate 0 needs the AIDS `.pt` tree and `torch`, both of which exist locally. Result recorded in the
-final message; the mechanism (sampling within-split pairs, comparing under `GRAPHEDX_COSTS`,
-recording the signed discrepancy distribution) is covered by 5 unit tests including one that asserts
-a systematic offset produces the "ours is systematically below" interpretation.
+```
+--gate 0 --backend networkx --n-pairs 300 --timeout 15 --workers 6
+AIDS: 769 of 911 graphs pass the cohort filter      <- reproduces CONTRACTS §2 exactly
+passed False   n_pairs 208   seconds 487.5   cost_model [0,0,0,1,1,0]
+n_sampled 300   n_certified 208   n_uncertified 92
+n_equal 58      n_ours_lower 150      n_ours_higher 0
+signed_delta: min -8.0  p25 -2.0  median -1.0  p75 0.0  max 0.0  mean -1.582
+```
+
+Signed discrepancy histogram (`ours - published`):
+
+| delta | -8 | -7 | -6 | -5 | -4 | -3 | -2 | -1 | 0 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| pairs | 2 | 2 | 6 | 2 | 12 | 21 | 37 | 68 | 58 |
+
+**The distribution is strictly one-sided. Not one pair of 208 has our value above theirs.** That is
+the whole reason the gate records a distribution instead of a boolean, and it is decisive: a solver
+defect on our side would produce errors in both directions, or at minimum one pair where we exceed a
+true optimum. Zero such pairs, and 150 where we are strictly below, is the signature of GraphEdX's
+published values being **upper bounds from an approximate solver**, not exact distances.
+
+Our side is provably optimal on every one of the 208: `certified` means `lb == ub`. I additionally
+re-ran six disagreeing pairs through NetworkX A* with **no timeout at all**, and every one
+reproduced our value exactly:
+
+```
+aids_train_0164 / aids_train_0263   ours 3.0   published 4.0   unbounded A* 3.0   BRANCH LB 2.0
+aids_train_0035 / aids_train_0037   ours 4.0   published 5.0   unbounded A* 4.0   BRANCH LB 1.0
+aids_train_0109 / aids_train_0254   ours 5.0   published 7.0   unbounded A* 5.0   BRANCH LB 2.0
+aids_train_0257 / aids_train_0502   ours 6.0   published 9.0   unbounded A* 6.0   BRANCH LB 5.0
+aids_train_0184 / aids_train_0336   ours 5.0   published 9.0   unbounded A* 5.0   BRANCH LB 4.0
+aids_train_0250 / aids_train_0407   ours 2.0   published 3.0   unbounded A* 2.0   BRANCH LB 1.0
+```
+
+The gate is left **failing**. Its stated pass condition is exact agreement, that condition is not
+met, and weakening it to accommodate the reference would destroy the only check we have on our own
+solver. The verdict to carry forward is the distribution, not the boolean.
+
+**This has a consequence for the manuscript.** The submitted AIDS correlation (rho ~ 0.35) is
+computed against this published matrix. If the reference carries a mean error of +1.58 edit
+operations on within-split pairs, with a tail to +8, then that correlation was measured against a
+noisy target — which is an argument *for* R3.5b's recomputation, and a number the response letter can
+use. It is also a claim that needs checking against how GraphEdX generated the AIDS matrix before it
+goes anywhere near a reviewer; 92 of 300 pairs did not certify at a 15 s budget, so the measured
+distribution covers the tractable 69%, not the whole cohort.
 
 ### Test suite
 
@@ -275,6 +316,13 @@ deviation — but it is a change to a frozen file and I am flagging it rather th
 
 ## Follow-ups for the orchestrator
 
+0. **Gate 0 fails, and you need to decide what that means.** GraphEdX's published AIDS values sit
+   *above* our certified optima on 150 of 208 pairs and below on none. I did not weaken the gate.
+   Three things follow: (a) verify how GraphEdX generated that matrix before the response letter
+   cites this; (b) the submitted AIDS correlation was computed against it, so its noise is now
+   quantified (mean +1.58, max +8); (c) if you accept the reference as approximate, gate 0's pass
+   condition should be restated as "no pair where ours exceeds theirs", which **passes** on this
+   sample — but that is a scientific decision about what the gate certifies, and it is yours.
 1. **Run the probe before anything else.** One command, answers five open questions.
 2. **`compute_ged_pair`'s timeout defect is real and I did not touch it** (frozen, another ticket).
    `ged_computer.py::compute_ged_pair` returns `nx.graph_edit_distance(..., timeout=t)`'s best-so-far
