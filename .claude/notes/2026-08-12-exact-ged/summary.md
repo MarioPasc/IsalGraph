@@ -193,15 +193,74 @@ explicitly. Censoring is reported per stratum, never pooled (D12).
 
 ---
 
+## 6b. Production launched 2026-08-12 16:00 UTC — Suite 1, all five datasets
+
+| Job | Content | Resources | Projected |
+|---|---|---|---|
+| **1972177** | Letter LOW/MED/HIGH + LINUX, all 3,602,615 pairs | 4 c | ~2.3 h |
+| **1972178** | AIDS stage 1 — **22,051 pairs over 769/769 graphs** | 50 c | ~2.5 h |
+| **1972179** | AIDS stage 2 census, 295,296 pairs, array `0-9%8` | 10 × 64 c | ~2.6 h/task |
+
+Sized from **20 s/pair**, the conservative reading of the real-AIDS measurement (median 6.5 s, mean
+10.1 s among completions, 27 % over 30 s) at a 60 s timeout. Every task clears the two-hour floor.
+
+**Stage 1 on the real cohort**: 22,051 pairs — core 16,110, halo +5,860, top-up +81 — covering
+**769/769 graphs**, with **35 of 90 strata non-empty**. The synthetic dry run gave 90/90; real AIDS
+is sparse and its densities concentrate, so most size × density cells are genuinely empty in the
+*population*. The sampler reports them empty rather than topping them up, which is the specified
+behaviour. The requirement that binds — every graph represented — holds exactly.
+
+### Why production is not gated on the GEDLIB gates
+
+**GEDLIB is not in the production path.** The workers run `--backend networkx`: A* for the exact
+value and our own `ged_bounds.py` for the bracket. GEDLIB's exact role was retired by amendment 2,
+and its bound role belongs to T-05's calibration ladder, not to computing these matrices. Blocking
+production on gates that validate an unused component would have been the wrong dependency, so the
+`afterok` chain was cut and job **1972154** continues as a standalone T-05 diagnostic.
+
+What does gate production, and its evidence:
+
+| Check | Evidence |
+|---|---|
+| A* is exact | brute-force enumeration, **18/18**; local gate 3, **0 disagreements** |
+| bracket validity | local gate 1 **PASS**, non-vacuous; gate 2 **PASS**; archived 400-pair gate 2, **0 violations**, 35 unit tests |
+| structural | gate 4 **PASS** on the complete real LINUX matrix |
+
+### Two defects the cluster gate run exposed, both ours
+
+1. **The zero-guard rejected a valid lower bound.** `BRANCH_FAST` returning `0.00` is the *trivial*
+   bound — always valid, merely uninformative — and my own probe had already recorded it on real
+   pairs with true GED 2 and 6. The plan's `0 < v < inf` rule exists to catch an accessor
+   *mismatch*, which can only manifest on the **upper** bound. Fixed; gate 1 then passed. The rate of
+   zero lower bounds is now counted as the bound-quality statistic it actually is.
+2. **Gate 1 "PASSED on 0 pairs" — vacuously.** With a bounds-only GEDLIB backend there is no `exact`
+   to bracket, so it evaluated nothing and reported success. **A gate that can pass on an empty set
+   is not a gate.** It needs `ExactPlusBoundsBackend`, and it needs a minimum-pair assertion.
+   Open — see §7.
+
+---
+
 ## 7. What is not done
 
-1. **Gates 1–3 have not yet returned from Picasso** (job 1967743). Production is gated on them.
-2. **The brute-force oracle gate is specified and only partly implemented.** Its *content* is
+1. **Gate 1 must be made non-vacuous.** It passed on **0 pairs** because a bounds-only backend
+   supplies no `exact`. Give it `ExactPlusBoundsBackend` and assert a minimum pair count, so an
+   empty evaluation can never read as a pass. **This is the highest-priority follow-up**: it is the
+   one defect that could let a future run start on an unvalidated bracket.
+2. **The gate probe fails on 1 pair.** Its report was still on the node's `$LOCALSCRATCH` when the
+   job was running; read `gates/gateprobe.json` from the mirrored output and diagnose.
+3. **The brute-force oracle gate is specified and only partly implemented.** Its *content* is
    established — my own enumeration put `networkx` A* at 18/18 — but it is not yet a repeatable gate.
-3. **Letter LOW/MED/HIGH and AIDS have not been computed.** The scripts, sizing and gates are in
-   place; they were not submitted because gate 1–3 results on GEDLIB must land first.
-4. **Stage 1's `K/q/f` have not been recomputed** from the final measured rate. Defaults 180/10/30
-   stand; the recomputation holds the ~100 core-hour budget and the `K : q : f` ratios.
+4. **The gate set needs splitting in the plan**, not just in the worker: gates 0 and 2 read GraphEdX
+   `.pt` ground truth and are **workstation** gates; probe, 1 and 3 exercise GEDLIB and are
+   **cluster** gates. No single machine runs all four, and `--gate all` assumed one could.
+5. **Stage 1's `K/q/f` were not recomputed** from the final measured rate. Defaults 180/10/30 stand
+   and produced 22,051 pairs ≈ 122 core-hours at 20 s/pair, close enough to the ~100 core-hour
+   budget that re-deriving them would have changed the pre-registered design for no gain.
+6. **The job header prints a stale git SHA** (`d6a9f4b`), because rsync excludes `.git`. The code is
+   current; the provenance line is not, and a provenance line that lies is worse than none. Export
+   the local SHA through `--export` instead of reading git on the far side.
+7. **The census supersession decision is still pending**, by design: stage 2 replaces stage 1 only if
+   it lands before the T-20 freeze, decided on the calendar and never on the values.
 
 ---
 
