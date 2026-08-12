@@ -4,7 +4,12 @@
 #
 # Runs under --dependency=afterany, so it must tolerate a partly failed array: it
 # reports what is missing rather than merging a hole into silence.
-source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# SLURM copies the batch script into a per-job spool directory, so BASH_SOURCE
+# resolves to /var/spool/slurmd/... and a sibling path finds nothing. Source from
+# REPO_DIR, which the launcher exports. Keep set -euo here too: _env.sh sets it,
+# so a failure to source it would otherwise silently disable it as well.
+set -euo pipefail
+source "${REPO_DIR:?REPO_DIR must be exported by the launcher}/slurm/exact_ged/_env.sh"
 
 KEY=aids
 SHARDS="${OUT_DIR}/shards_${KEY}_s2"

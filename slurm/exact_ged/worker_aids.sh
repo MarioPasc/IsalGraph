@@ -9,7 +9,12 @@
 #                 computed once and agreement on it is asserted at merge.
 #
 # Supersession is decided on the CALENDAR, not on the values -- see the design note.
-source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# SLURM copies the batch script into a per-job spool directory, so BASH_SOURCE
+# resolves to /var/spool/slurmd/... and a sibling path finds nothing. Source from
+# REPO_DIR, which the launcher exports. Keep set -euo here too: _env.sh sets it,
+# so a failure to source it would otherwise silently disable it as well.
+set -euo pipefail
+source "${REPO_DIR:?REPO_DIR must be exported by the launcher}/slurm/exact_ged/_env.sh"
 
 KEY=aids
 W="${N_WORKERS:-${SLURM_CPUS_PER_TASK:-64}}"

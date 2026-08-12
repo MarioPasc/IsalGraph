@@ -6,7 +6,12 @@
 # GraphEdX's published AIDS matrix turned out to be an approximate upper bound, so it
 # cannot validate a solver. The GraphEdX comparison still runs, as a REPORT rather than
 # a gate, because its result belongs in the response letter.
-source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# SLURM copies the batch script into a per-job spool directory, so BASH_SOURCE
+# resolves to /var/spool/slurmd/... and a sibling path finds nothing. Source from
+# REPO_DIR, which the launcher exports. Keep set -euo here too: _env.sh sets it,
+# so a failure to source it would otherwise silently disable it as well.
+set -euo pipefail
+source "${REPO_DIR:?REPO_DIR must be exported by the launcher}/slurm/exact_ged/_env.sh"
 
 echo "[gates] verifying the environment before spending anything"
 "${PY}" - <<'EOF'

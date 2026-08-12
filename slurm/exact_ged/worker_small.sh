@@ -6,7 +6,12 @@
 # 18 minutes on 8 cores -- and would violate SCBI's two-hour floor. Grouping short units
 # into one submission is exactly what SCBI asked for (2026-08-07) and it is
 # makespan-neutral: the work is the same, the scheduler places it once.
-source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# SLURM copies the batch script into a per-job spool directory, so BASH_SOURCE
+# resolves to /var/spool/slurmd/... and a sibling path finds nothing. Source from
+# REPO_DIR, which the launcher exports. Keep set -euo here too: _env.sh sets it,
+# so a failure to source it would otherwise silently disable it as well.
+set -euo pipefail
+source "${REPO_DIR:?REPO_DIR must be exported by the launcher}/slurm/exact_ged/_env.sh"
 
 W="${N_WORKERS:-${SLURM_CPUS_PER_TASK:-4}}"
 declare -A NGRAPHS=( [iam_letter_low]=1180 [iam_letter_med]=1253 [iam_letter_high]=2059 [linux]=89 )
