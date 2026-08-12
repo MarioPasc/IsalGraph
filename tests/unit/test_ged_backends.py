@@ -28,6 +28,7 @@ import pytest
 from benchmarks.eval_setup.ged_backends import (
     CERT_TOL,
     FORBIDDEN_METHODS,
+    RETIRED_METHODS,
     BackendSpec,
     GedBackend,
     GedBackendError,
@@ -227,9 +228,21 @@ class TestPairResultContract:
         with pytest.raises(GedBackendError, match="best-so-far"):
             PairResult(1.0, 5.0, 3.0, False, 0.1, False, "m")
 
-    def test_certified_flag_must_match_the_bracket(self) -> None:
-        with pytest.raises(GedBackendError, match="contradicts bracket"):
-            PairResult(1.0, 5.0, None, True, 0.1, False, "m")
+    def test_a_certified_exact_must_lie_inside_the_bracket(self) -> None:
+        """The bracket invariant survives amendment 2; the old equality one does not.
+
+        Before, ``certified`` meant ``lb == ub`` and an open bracket with a certified
+        value was a contradiction. Now ``certified`` means *A\\* ran to completion*, and
+        the bounds come from a different library entirely, so an open bracket around a
+        certified value is the normal case: exact=3 inside GEDLIB's [1, 5] is sound.
+        What must still never happen is a certified value outside its own bracket --
+        that is gate 1's violation condition, caught here at construction.
+        """
+        PairResult(1.0, 5.0, 3.0, True, 0.1, False, "m")  # open bracket, sound
+        with pytest.raises(GedBackendError):
+            PairResult(1.0, 5.0, 7.0, True, 0.1, False, "m")  # above ub
+        with pytest.raises(GedBackendError):
+            PairResult(4.0, 5.0, 2.0, True, 0.1, False, "m")  # below lb
 
     def test_certified_result_must_carry_exact(self) -> None:
         with pytest.raises(GedBackendError, match="must carry an exact value"):
@@ -321,16 +334,26 @@ class TestNetworkxBackend:
         assert r.timed_out
         assert r.ub <= 99.0
 
-    def test_a_cut_off_search_meeting_the_lower_bound_still_certifies(
+    def test_a_cut_off_search_does_not_certify_even_meeting_the_lower_bound(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Meeting the BRANCH bound proves optimality whatever the clock did."""
+        """Certification is decided by completion, not by the value that came back.
+
+        Reversed by design note amendment 2. Meeting the BRANCH bound does prove
+        optimality mathematically, but ``nx.graph_edit_distance`` returns its
+        best-so-far cost on timeout, so "the value happens to equal the bound" is
+        not evidence the search finished. Trusting it is the ged_computer.py defect
+        wearing a proof. The conservative reading costs a handful of pairs, which
+        A* then computes properly; the permissive one silently mints exact values.
+        """
         import benchmarks.eval_setup.ged_backends as mod
 
         lb = mod.branch_lower_bound(*OPEN_PAIR, UNIT_COSTS)
         monkeypatch.setattr(mod, "exact_ged", lambda *a, **k: _slow_value(lb))
         r = mod.NetworkxBackend(timeout_s=0.001).pair(*OPEN_PAIR)
-        assert r.certified and r.exact == lb
+        assert r.timed_out
+        assert not r.certified
+        assert r.exact is None
 
     def test_no_complete_path_leaves_the_bracket_open(
         self, monkeypatch: pytest.MonkeyPatch
@@ -385,22 +408,30 @@ class TestInvariant1ZeroGuard:
             GedlibBackend(UNIT_COSTS).pair(P4, C4)
 
     def test_zero_is_accepted_for_isomorphic_graphs(self, fake_gedlib: _InstallFake) -> None:
+        """A genuine zero must pass the zero-guard; only an UNCERTIFIED zero is the trap.
+
+        The corpus contains isomorphic duplicates -- both IAM Letter and AIDS -- so
+        zero is a legitimate distance. GEDLIB is bounds-only after amendment 2, so it
+        reports the closed bracket without claiming an optimum.
+        """
         behaviour = {
             "values": {
                 "BRANCH_FAST": {"lb": 0.0, "ub": 0.0},
                 "IPFP": {"lb": 0.0, "ub": 0.0},
-                "ANCHOR_AWARE_GED": {"lb": 0.0, "ub": 0.0},
             }
         }
         fake_gedlib(behaviour)
         r = GedlibBackend(UNIT_COSTS).pair(C4, nx.cycle_graph(4))
-        assert r.certified and r.exact == 0.0
+        assert (r.lb, r.ub) == (0.0, 0.0)
+        assert r.exact is None
+        assert not r.certified
 
-    def test_lower_bound_above_a_certified_optimum_raises(self, fake_gedlib: _InstallFake) -> None:
+    def test_lower_bound_above_the_upper_bound_raises(self, fake_gedlib: _InstallFake) -> None:
+        """An inverted bracket means one of the two GEDLIB methods is misconfigured."""
         behaviour = _default_behaviour()
         behaviour["values"]["BRANCH_FAST"]["lb"] = 9.0
         fake_gedlib(behaviour)
-        with pytest.raises(GedBackendError, match="exceeds the certified optimum"):
+        with pytest.raises(GedBackendError, match="inverted"):
             GedlibBackend(UNIT_COSTS).pair(P4, C4)
 
 
@@ -478,19 +509,29 @@ class TestInvariant3UpperBoundOrientation:
 class TestInvariant4ExactOnlyWhenCertified:
     """Invariant 4 -- ``exact`` is ``None`` unless ``lb == ub``."""
 
-    def test_a_closed_bracket_certifies(self, fake_gedlib: _InstallFake) -> None:
+    def test_a_closed_gedlib_bracket_does_not_certify(self, fake_gedlib: _InstallFake) -> None:
+        """Deliberately conservative: GEDLIB never mints an exact value after amendment 2.
+
+        ``lb == ub`` from a *sound* lower and a *sound* upper bound does determine GED,
+        so this is stricter than the mathematics requires. It is stricter on purpose:
+        ANCHOR_AWARE_GED was trusted on exactly that kind of self-report and turned out
+        to be a randomised heuristic with a false certificate. Until gate 1 has
+        validated BRANCH_FAST and IPFP on real pairs, the closed bracket is recorded as
+        a statistic and the value is recomputed by A*. The measured rate is ~1.5% of
+        pairs, so the wasted work is small and the failure it prevents is not.
+        """
         fake_gedlib()
         r = GedlibBackend(UNIT_COSTS).pair(P4, C4)
-        assert r.certified and r.exact == 1.0 and not r.timed_out
+        assert (r.lb, r.ub) == (1.0, 1.0)
+        assert r.exact is None
+        assert not r.certified
 
-    def test_an_open_bracket_does_not(self, fake_gedlib: _InstallFake) -> None:
-        """The heuristic bracket must stay open too, or it certifies on its own."""
+    def test_an_open_bracket_does_not_either(self, fake_gedlib: _InstallFake) -> None:
         behaviour = _default_behaviour()
         behaviour["values"]["IPFP"]["ub"] = 4.0
-        behaviour["values"]["ANCHOR_AWARE_GED"] = {"lb": 1.0, "ub": 4.0}
         fake_gedlib(behaviour)
         r = GedlibBackend(UNIT_COSTS).pair(P4, C4)
-        assert r.exact is None and not r.certified and r.timed_out
+        assert r.exact is None and not r.certified
         assert (r.lb, r.ub) == (1.0, 4.0)
 
     def test_the_exact_stage_can_be_skipped(self, fake_gedlib: _InstallFake) -> None:
@@ -584,14 +625,21 @@ class TestGedlibCallSequence:
         opts = {c[1][1] for c in backend.env().calls if c[0] == "set_method"}
         assert opts == {"--threads 4"}
 
-    def test_time_limit_is_only_sent_when_asked_for(self, fake_gedlib: _InstallFake) -> None:
-        """The option is unverified against ANCHOR_AWARE_GED, so it defaults off."""
+    def test_no_retired_method_ever_reaches_set_method(self, fake_gedlib: _InstallFake) -> None:
+        """The load-bearing assertion after amendment 2: no core-hour goes to ANCHOR.
+
+        Replaces a test of ``exact_time_limit_s``, which existed only to bound
+        ANCHOR_AWARE_GED's runtime. The constructor guard refuses the method by name;
+        this checks the other end -- that a fully exercised pair never emits it, so a
+        method reintroduced through some future code path is caught at the call site
+        rather than at configuration.
+        """
         fake_gedlib()
-        backend = GedlibBackend(UNIT_COSTS, exact_time_limit_s=10)
+        backend = GedlibBackend(UNIT_COSTS)
         backend.pair(P4, C4)
-        opts = [c[1] for c in backend.env().calls if c[0] == "set_method"]
-        assert ("ANCHOR_AWARE_GED", "--threads 1 --time-limit 10") in opts
-        assert ("BRANCH_FAST", "--threads 1") in opts
+        emitted = {c[1][0] for c in backend.env().calls if c[0] == "set_method"}
+        assert emitted == {"BRANCH_FAST", "IPFP"}
+        assert not emitted & set(RETIRED_METHODS) and not emitted & set(FORBIDDEN_METHODS)
 
 
 class TestBackendFactory:

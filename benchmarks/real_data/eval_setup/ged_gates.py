@@ -1,30 +1,51 @@
-"""The four GED validation gates of ticket T-03.
+"""The GED validation gates of ticket T-03.
 
 Every gate is a runnable command that writes a JSON report and returns 0 on
-pass, 1 on fail. All four run before any production pair is computed.
+pass, 1 on fail. All of them run before any production pair is computed.
 
-===== ==================================================== ==================
-Gate  What it proves                                        Cost model
-===== ==================================================== ==================
-0     ~500 within-split AIDS pairs reproduce GraphEdX's     ``GRAPHEDX_COSTS``
-      published matrix
-1     ``LB <= exact <= UB`` on every gate pair              ``UNIT_COSTS``
-2     the archived 400-pair LINUX sample replays            ``UNIT_COSTS``
-3     ``ANCHOR_AWARE_GED`` agrees with NetworkX A*, and     ``UNIT_COSTS``
-      both are timed
-===== ==================================================== ==================
+======= ==================================================== ==================
+Gate    What it proves                                        Cost model
+======= ==================================================== ==================
+0       NetworkX A* matches an exhaustive brute-force oracle  both models
+        on every enumerable pair of the real cohort
+1       ``LB <= exact <= UB`` on every gate pair              ``UNIT_COSTS``
+2       the archived 400-pair LINUX sample replays            ``UNIT_COSTS``
+3a      brute-force oracle vs NetworkX A*, per dataset,       ``UNIT_COSTS``
+        with the timings that size the production run
+3b      the per-dataset GEDLIB bound-quality table T-05       ``UNIT_COSTS``
+        needs: rho(exact, LB), rho(exact, UB), bias, LB == UB
+======= ==================================================== ==================
 
-**Gate 0 runs under a different cost model from production.** GraphEdX charges
-nothing for node insertion or deletion. Running gate 0 under the production
-model produces a guaranteed mismatch that reads exactly like a solver bug, so
-the model is taken from ``GRAPHEDX_COSTS`` and never hard-coded here.
+Plus one **non-gating report**, run on demand:
 
-Agreement under GraphEdX's model validates the *solver*, not our cost model,
-which ``statistics.md`` D6 justifies separately. And if GraphEdX's published
-values are themselves approximate, gate 0 can fail for a reason that is not our
-bug; it therefore records the signed discrepancy distribution rather than a
-boolean, so that "ours is systematically below theirs" is distinguishable from
-noise.
+``graphedx-report``  the signed discrepancy against GraphEdX's published AIDS
+matrix, which is a finding for the response letter rather than a pass/fail.
+
+Amendment 3: gate 0's reference was replaced, its purpose kept
+--------------------------------------------------------------
+Gate 0 used to compare against GraphEdX's published AIDS matrix, and its stated
+purpose was "it validates the solver". That reference cannot serve the purpose,
+because it is not an oracle: over 208 certified pairs we measured **150
+ours-lower, 58 equal, 0 ours-higher**, mean delta -1.58, max -8, and verified
+independently that GraphEdX publishes 11 for AIDS train pair (76, 211) where A*
+exhibits an achievable path of cost 6. GED is a minimum and we exhibited a
+cheaper achievable path, so the published value is not optimal. The
+one-sidedness is what separates "their reference is approximate" from "our
+solver is buggy": a buggy solver errs in both directions.
+
+Gate 0 is therefore re-anchored on **exhaustive brute-force enumeration**,
+which is a genuine oracle, and the GraphEdX comparison is demoted to the
+report. The report is excluded from ``--gate all`` because it needs ``torch``
+and the GraphEdX source tree, neither of which exists on the cluster.
+
+Gate 3 was redefined for the same reason. It compared ``ANCHOR_AWARE_GED``
+against NetworkX A*, and amendment 2 retired that method: it is a randomised
+upper-bound heuristic that reports a false optimality certificate. The
+retired cohort-wide bound-quality figures (rho 0.966 / 0.840, bias -11 % /
++78 %, certification 9.8-11.3 %) were measured on IAM Letter and printed as a
+property of the whole cohort; gate 3b re-derives them **per dataset**, printed
+with the population each was measured on, and they must not be quoted again in
+the old form.
 
 Usage
 -----
