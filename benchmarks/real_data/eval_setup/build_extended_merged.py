@@ -191,12 +191,13 @@ def compare_to_reference(
         finite = np.isfinite(o) & np.isfinite(r)
         o, r = o[finite], r[finite]
         d = o - r
-        # GraphEdX stores its values as floats, and their loader itself rounds anything
-        # within 0.01 of an integer. A 1e-9 tolerance therefore reports pure storage
-        # noise as disagreement: on LINUX it flagged 7 pairs whose deltas were all
-        # between 2.7e-07 and 3.1e-06. GED under both models is integer-valued, so any
-        # real difference is at least 1 and 1e-6 separates the two cleanly.
-        tol = 1e-6
+        # GED is integer-valued under both cost models, so any REAL difference is >= 1
+        # and the tolerance belongs at 0.5. Two successively tighter guesses both
+        # reported storage noise as disagreement: 1e-9 flagged 7 LINUX pairs with deltas
+        # of 2.7e-07..3.1e-06, and 1e-6 still flagged 86 AIDS pairs whose deltas all
+        # round to zero. GraphEdX stores floats and its own loader rounds anything
+        # within 0.01 of an integer, so half-integer separation is the right scale.
+        tol = 0.5
         rep.n_ours_lower = int((d < -tol).sum())
         rep.n_equal = int((np.abs(d) <= tol).sum())
         rep.n_ours_higher = int((d > tol).sum())
@@ -259,9 +260,16 @@ def build(
                     metadata=json.dumps(
                         {
                             "source": "GraphEdX published *_result.pt",
-                            "cost_model": [0, 0, 0, 1, 1, 0],
+                            "cost_model": [1, 1, 0, 1, 1, 0],
+                            "cost_model_note": (
+                                "MEASURED 2026-08-12, not taken from the plan: the "
+                                "published values match a UNIT node cost on 4/4 tested "
+                                "pairs and a zero node cost on 0/4, each differing from "
+                                "the zero-node value by exactly |n1 - n2|. The revision "
+                                "plan asserts zero node cost; that assertion is wrong."
+                            ),
                             "coverage": "within-split pairs only",
-                            "status": "approximate upper bound, not exact GED",
+                            "status": "agrees with ours on 99.998% of the finite overlap",
                         }
                     ),
                 )
@@ -333,25 +341,47 @@ def write_provenance(out_dir: str, reports: dict[str, DatasetReport]) -> None:
     )
     A(
         "| **C — GraphEdX published** | `reference/` | AIDS, LINUX only "
-        "| **within-split only** | `[0,0,0,1,1,0]` | **approximate upper bound** |"
+        "| **within-split only** | `[1,1,0,1,1,0]` — **measured, see below** | agrees with ours |"
     )
     A("")
-    A("## Why class C is not ground truth\n")
-    A("Two independent reasons, both measured during T-03.\n")
-    A("**The cost model differs.** GraphEdX charges zero for node operations. With zero node")
-    A("cost, inserting an isolated vertex is free, so two non-isomorphic graphs can sit at")
-    A("distance 0 and GED is only a *pseudo*metric — while the IsalGraph graph distance is a")
-    A("metric. Validating a metric against a pseudometric reference is incoherent, which is")
-    A("decision D6.\n")
-    A("**The published values are not optimal.** Recomputing 208 AIDS pairs under GraphEdX's")
-    A("*own* cost model gave **150 below** the published value, **58 equal**, and **none above**.")
-    A("GED is a minimum and an A* search returns an *achievable* edit path, so a lower value is")
-    A("a proof that the published one is not the minimum. For AIDS train pair (76, 211) the")
-    A("published matrix gives **11** while we exhibit a path of cost **6**. The strictly")
-    A("one-sided discrepancy is what identifies the reference, rather than our solver, as the")
-    A("source: a faulty solver errs in both directions.\n")
-    A("**IAM Letter has no published GED matrix at all** — the distribution ships raw `.gxl`")
-    A("files. Every Letter value in this study, and in the submitted version, was always ours.\n")
+    A("## Class C's cost model — measured here, and it contradicts the revision plan\n")
+    A("> ### ⚠ Correction, 2026-08-12\n")
+    A("> The revision plan states that GraphEdX charges **zero** for node operations")
+    A("> (`gedlib.md` §6, `statistics.md` D6), and the gate-0 configuration was derived from")
+    A("> that. **It is wrong.** Tested directly by recomputing pairs under both models and")
+    A("> comparing to the published file:\n")
+    A("> ```")
+    A(">   pair    dn | published  zero-node  unit-node | verdict")
+    A("> 241, 475   1 |       8.0        7.0        8.0 | matches UNIT")
+    A("> 207, 377   3 |       8.0        5.0        8.0 | matches UNIT")
+    A("> 135, 339   1 |       2.0        1.0        2.0 | matches UNIT")
+    A("> 211,  67   4 |       9.0        5.0        9.0 | matches UNIT")
+    A("> ```")
+    A("> Zero-node 0/4, unit-node 4/4, and in every case the published value exceeds the")
+    A("> zero-node value by **exactly `|n₁ − n₂|`**. GraphEdX's AIDS matrix uses the **same")
+    A("> unit cost model as D6**.\n")
+    A("**What this retracts.** An earlier T-03 finding held that the published matrix was an")
+    A("approximate upper bound, on the strength of gate 0 measuring 150 pairs below it, 58")
+    A("equal and none above. Gate 0 ran under `[0,0,0,1,1,0]` because the plan said to. Those")
+    A("150 low values were the *arithmetic of the wrong cost model* — each low by exactly the")
+    A("node-count difference — not evidence of non-optimality. **That finding is withdrawn.**\n")
+    A("**What survives.** Comparing like with like, our values and theirs agree on all but")
+    A("**2 of the finite overlap pairs**. Those two are real and both have ours *below* theirs")
+    A("by 2 (`aids_train_0024`/`aids_train_0246` 5 vs 7, `aids_val_0016`/`aids_val_0036` 7 vs")
+    A("9), both certified. Since GED is a minimum and A* returns an achievable path, those two")
+    A("published entries are provably non-optimal — but 2 in 131,148 is a rounding error, not a")
+    A("characterisation. **Treat class C as essentially exact under unit costs.**\n")
+    A("**Why the recompute is still necessary**, on the two grounds that were always the real")
+    A("ones and are untouched by this correction:\n")
+    A("1. **Coverage.** GraphEdX publishes GED for *within-split pairs only* — 43.9 % of AIDS")
+    A("   pairs and 43.0 % of LINUX. The submitted ρ values were computed on that subset")
+    A("   without disclosing it. The columns below quantify exactly how much was missing.")
+    A("2. **One model across all ten datasets.** IAM Letter ships **no GED matrix at all** —")
+    A("   raw `.gxl` files only — so every Letter value in this study, and in the submitted")
+    A("   version, was always ours. A single cost model over the whole cohort is what D6 asks")
+    A("   for, and it is unobtainable from the distributions as shipped.\n")
+    A("D6's own justification is unaffected: it rests on GED remaining a *metric*, which is an")
+    A("argument about zero node costs in general, not about what GraphEdX happened to ship.\n")
     A("## Accounting\n")
     A(
         "| Dataset | graphs | pairs | certified | censored | published overlap "
@@ -368,21 +398,20 @@ def write_provenance(out_dir: str, reports: dict[str, DatasetReport]) -> None:
             f"{r.n_censored:,} | {ov} | {lo} | {eq} | {hi} |"
         )
     A("")
-    A("### Reading the last three columns — the direction depends on which cost model\n")
-    A("This table compares **our D6 values** against **GraphEdX's zero-node-cost values**, so")
-    A("the two differ for two reasons at once and the expected direction is *ours ≥ theirs*:")
-    A("we charge 1 per node insertion or deletion where they charge 0, so any pair whose graphs")
-    A("differ in order costs us an extra `|n₁ − n₂|`. **`ours > ref` is therefore expected and")
-    A("benign here**, and its size tracks how often the two graphs differ in order.\n")
-    A("The falsifying direction in *this* table is **`ours < ref`**: under a strictly cheaper")
-    A("cost model our value can never fall below theirs. A non-zero count there would mean our")
-    A("solver, our alignment, or their file is wrong.\n")
-    A("> **Do not read this table as the solver check.** That check is gate 0, which recomputes")
-    A("> under GraphEdX's *own* cost model, where the inequality reverses: ours ≤ theirs, and")
-    A("> `ours > ref` would be the falsifying column. Gate 0 measured **150 lower, 58 equal, 0")
-    A("> higher** over 208 AIDS pairs — one-sided in the direction that indicts the reference,")
-    A("> not the solver. The two tables answer different questions and their expected")
-    A("> directions are opposite.\n")
+    A("### Reading the last three columns\n")
+    A("Both sides now use the **same unit cost model**, so the two should simply agree, and on")
+    A("the finite overlap they do: every disagreement is a genuine one rather than a modelling")
+    A("artefact. Counts are taken with a tolerance of **0.5**, because GED is integer-valued")
+    A("and GraphEdX stores floats — two tighter tolerances (1e-9, then 1e-6) both reported pure")
+    A("storage noise as disagreement before this was pinned down.\n")
+    A("**`ours > ref` is the falsifying column.** Our value is produced by an A* search run to")
+    A("completion, so it is achievable; a published value *below* an achievable cost would mean")
+    A("our search, our index alignment, or their file is wrong. **`ours < ref`** is not")
+    A("falsifying — it means their entry is not optimal, which is a claim about their file and")
+    A("one we can prove, since we exhibit the cheaper path.\n")
+    A("Censored pairs are excluded from these three columns: with no certified value there is")
+    A("nothing to compare. The overlap column counts *all* published pairs, so")
+    A("`overlap − (lower + equal + higher)` is the number of censored pairs inside it.\n")
     A("## Layout\n")
     A("```")
     A("extended_merged_exact_ged/")

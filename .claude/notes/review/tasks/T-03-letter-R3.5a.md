@@ -93,3 +93,33 @@ quantify everything.
 reported analysis. **The runs so far used 60 s**, the submission's `ged_computer` default. Reconcile
 before printing: either re-run at 300 s or print 60 s. The LINUX censoring rate of 0.13 % is a 60 s
 figure.
+
+---
+
+## ⚠ 2026-08-13 — THIS FRAGMENT IS SUPERSEDED AND MUST BE REWRITTEN
+
+The paragraph beginning *"Second, those distributed values are not exact"* asserts a claim that
+has since been **retracted**. See `T-03-design.md` amendment 4.
+
+GraphEdX's published AIDS matrix uses **unit node costs — the same model as D6** — not the zero
+node cost the plan assumes. Measured 4/4 against unit, 0/4 against zero, with the published value
+exceeding the zero-node value by exactly `|n1 - n2|` in every case. The "150 below, 58 equal, 0
+above" figure was the arithmetic of comparing under the wrong cost model, not evidence of
+non-optimality.
+
+**What the rewritten fragment should say instead**, measured over the full overlap:
+
+- our values and GraphEdX's agree on **105,270 of 105,272** finite AIDS overlap pairs and
+  **1,665 of 1,665** finite LINUX overlap pairs;
+- **zero** pairs where ours exceeds theirs — the direction that would falsify our solver;
+- **two** AIDS pairs where ours is lower by 2, both certified, so those two published entries are
+  provably non-optimal. Two in 131,148 is a rounding error and should be reported as such, not
+  built into an argument.
+
+**The recompute's justification stands on its original two grounds**, both untouched:
+GraphEdX publishes GED for **within-split pairs only** (131,148 of 295,296 AIDS pairs = 44.4 %;
+1,685 of 3,916 LINUX = 43.0 %), and IAM Letter ships **no GED matrix at all**, so one cost model
+across the cohort is unobtainable from the distributions as shipped.
+
+Do not reuse the retracted paragraph. The provenance document generated with the data
+(`GED_PRECOMPUTED/extended_merged_exact_ged/PROVENANCE.md`) carries the corrected version.

@@ -312,8 +312,60 @@ the IAM Letter GXL tree (6,767 files) is never transferred.
   density were **2–3× harder** than real molecular graphs; the plan's figures were right and my
   earlier synthetic probe was pessimistic.
 
+- **2026-08-13, amendment 4 — ⚠ AMENDMENT 3 IS RETRACTED. GraphEdX's matrix is not approximate;
+  the plan's cost model for it is wrong.**
+
+  Found while building the merged distribution, by testing the premise instead of assuming it.
+  Recomputing AIDS pairs under **both** models and comparing to the published file:
+
+  | pair | Δn | published | zero-node | unit-node | verdict |
+  |---|---:|---:|---:|---:|---|
+  | 241, 475 | 1 | 8.0 | 7.0 | **8.0** | matches UNIT |
+  | 207, 377 | 3 | 8.0 | 5.0 | **8.0** | matches UNIT |
+  | 135, 339 | 1 | 2.0 | 1.0 | **2.0** | matches UNIT |
+  | 211, 67 | 4 | 9.0 | 5.0 | **9.0** | matches UNIT |
+
+  **Zero-node 0/4, unit-node 4/4**, and the published value exceeds the zero-node value by
+  **exactly `|n₁ − n₂|`** every time. GraphEdX's AIDS matrix uses the **same unit cost model as
+  D6**.
+
+  **The plan asserts the opposite** — `gedlib.md` §6 and `statistics.md` D6 both state that
+  GraphEdX charges zero for node operations, and gate 0 was configured `[0,0,0,1,1,0]` from that
+  premise. **That assertion is wrong and every conclusion drawn through it is void**, including
+  my own "independent verification", which inherited the same premise and so re-derived the same
+  artefact.
+
+  **What amendment 3 got wrong.** Gate 0's *150 below, 58 equal, 0 above* was the arithmetic of
+  comparing under the wrong cost model — each low by exactly the node-count difference — not
+  evidence of non-optimality. The one-sidedness I read as *indicting the reference* was simply
+  the sign of `−Δn`.
+
+  **What survives, measured like-for-like** over the full 131,148-pair AIDS overlap and the
+  1,685-pair LINUX overlap: **0 pairs where ours exceeds theirs** — the direction that would
+  falsify our solver — and agreement on all but **2** AIDS pairs, both ours-lower-by-2 and both
+  certified, so those two published entries genuinely are non-optimal. **2 in 131,148 is a
+  rounding error, not a characterisation.** Treat the reference as essentially exact.
+
+  **Consequences to carry:**
+  1. The recompute is **not** a correctness fix. Its justification reverts to the two grounds
+     that were always the real ones: within-split coverage of only 43.9 % / 43.0 %, and one cost
+     model across a cohort in which IAM Letter ships **no GED matrix at all**.
+  2. **The R3.5a letter fragment must be rewritten** — it currently asserts the retracted claim
+     at length. See `T-03-letter-R3.5a.md`.
+  3. **D6's own justification is unaffected.** It rests on GED remaining a *metric* under zero
+     node cost, which is an argument about cost models in general, not about what GraphEdX
+     shipped. But D6's *narrative* — "the submission mixes IAM unit costs with GraphEdX
+     topology-only costs" — needs re-checking, since the mixing may never have occurred.
+  4. Gate 0 should be **re-run under unit costs**, where it is now expected to pass.
+  5. The tolerance matters: GED is integer-valued and GraphEdX stores floats. Two successively
+     tighter guesses (1e-9, then 1e-6) both reported storage noise as disagreement. **0.5 is the
+     right scale**; the earlier "7 LINUX pairs disagree" and "86 AIDS pairs disagree" were both
+     artefacts of a too-tight tolerance.
+
+  **Amendment 3 below is superseded and retained only as a record of the error.**
+
 - **2026-08-12, amendment 3 — gate 0 is re-anchored; GraphEdX's published AIDS matrix is approximate.**
-  **Authorised by the PI.**
+  **Authorised by the PI. ⚠ RETRACTED by amendment 4 — see above.**
 
   Gate 0 as specified cannot pass, because its reference is not an oracle. Measured over 208 certified
   pairs: **150 ours-lower, 58 equal, 0 ours-higher**, mean Δ = −1.58, max −8. Independently verified
