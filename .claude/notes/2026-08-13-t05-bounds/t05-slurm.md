@@ -10,9 +10,9 @@
 | Branch | `worktree-agent-a60da166efbbe5eac` |
 | Worktree | `/home/mpascual/research/code/IsalGraph/.claude/worktrees/agent-a60da166efbbe5eac` |
 | Base commit | `885d98d8e6b37dfeb98c4df741510fc28d4a8615` |
-| Head commit | `<final sha>` |
-| Started / finished | `2026-08-13T00:00:00Z` / `<ISO timestamp>` |
-| Status | in progress |
+| Head commit | `922c53f` + this log commit |
+| Started / finished | `2026-08-13` / `2026-08-13` |
+| Status | complete |
 
 Worktree confirmed distinct from `/home/mpascual/research/code/IsalGraph` before any edit
 (`git rev-parse --show-toplevel` → the worktree path above).
@@ -328,36 +328,287 @@ would make it circular.
 
 ## 3. Changes made
 
-*(filled in as work proceeds)*
+**Created**
+| Path | Purpose |
+|---|---|
+| `slurm/approx_ged/launcher.sh` | the only human entry point; every `#SBATCH` flag, the sizing arithmetic, the floor refusal |
+| `slurm/approx_ged/_env.sh` | sourced by every worker: interpreter, `PYTHONPATH`, `$LOCALSCRATCH`, traps, and the frozen role table |
+| `slurm/approx_ged/worker_bounds.sh` | roles `lb`/`ub`/`ubs` over the ten datasets, with the in-job probe |
+| `slurm/approx_ged/worker_subsample.sh` | role `ubt` over the CONTRACTS §5 subsample |
+| `slurm/approx_ged/worker_crossfill.sh` | CONTRACTS §4.2 cross-fill, then gates G4 and `lb-consistency` |
+| `slurm/approx_ged/README.md` | submission order, dependency chain, the three human checks |
+| `benchmarks/real_data/eval_setup/approx_ged_gates.py` | gates G2, G3, G4-verify, `lb-consistency` |
+| `tests/unit/test_approx_ged_gates.py` | 40 tests, most against real recorded data |
+| `.claude/notes/2026-08-13-t05-bounds/t05-slurm.md` | this log |
+
+**Modified / Removed**: none. Nothing outside my ownership set was touched.
+
+**Commits**
+| SHA | Message |
+|---|---|
+| `8051c23` | `docs(notes): t05-slurm plan before implementation` |
+| `270e6e3` | `feat(T-05): Picasso launcher/worker pair for the four bound campaigns` |
+| `baa7482` | `feat(T-05): independent validation gates G2, G3, G4-verify and lb-consistency` |
+| `3cd71b7` | `test(T-05): gates verified in both directions on real recorded data` |
+| `922c53f` | `fix(T-05): apply orchestrator rulings 1 and 4, and the inf correction` |
+| *(final)* | `docs(notes): t05-slurm work log` |
+
+`git diff --name-only 885d98d8..HEAD` returns exactly the eight paths above.
 
 ## 4. Tests
 
-*(filled in as work proceeds)*
+**Tests created** — 40 in `tests/unit/test_approx_ged_gates.py`.
+
+| Test group | What it verifies | The failure mode it catches |
+|---|---|---|
+| `test_g2_passes_on_t27_recorded_values` | a campaign built from T-27's real `BRANCH_FAST`/`BIPARTITE` values passes, 2 × 3,916 comparisons | a gate that rejects correct data |
+| `test_g2_fails_on_a_single_perturbed_entry` | one changed bound in 3,916 is caught and pair `[3, 7]` is named | a gate that cannot fail |
+| `test_g2_reports_graph_order_before_comparing_values` | a swapped cohort reports "graph order differs" with `n_compared == 0` | 3.6 M bounds compared against the wrong pairs (orchestrator amendment 1) |
+| `test_g2_cannot_pass_without_a_graph_order_reference` | an unevaluable precondition fails, never passes vacuously | a silently unchecked precondition |
+| `test_g2_full_coverage_is_3_602_615_pairs` | the four G2 datasets cover exactly the documented count | a partial run reported as the full gate |
+| `test_g3_passes_on_the_real_bracket` | `BF ≤ BIPARTITE`, both bracket T-03's 3,870 certified exact values | — |
+| `test_g3_catches_an_inverted_bracket` / `..._upper_bound_below_exact` | `lb > ub` and `ub < exact` are caught with pair indices | the only claim the large-`n` argument rests on |
+| `test_g3_joins_a_superset_cohort_on_graph_ids` | a campaign cohort strictly containing the reference is joined, and the exact arm runs on the induced submatrix (3,916 pairs, 3,870 certified) | throwing away the largest `lb ≤ exact ≤ ub` arm above Letter (ruling 4) |
+| `test_g3_skips_only_when_there_is_no_overlap` | zero graphs in common is the only case that skips | a positional comparison of unrelated graphs |
+| `test_g3_selects_on_isfinite_not_isnan` | asserts the real census carries 92 `+inf` and 0 NaN | an `isnan` guard passing 92 infinities through, `inf <= x` being False silently |
+| `test_g3_reports_an_inf_bearing_reference_as_censored_not_violated` | an `inf` inside `certified_mask` is counted and excluded | a censoring reported as a bracket violation |
+| `test_g4_*` (10 tests) | all-zero, asymmetric, non-zero diagonal, missing key, wrong dtype, false `certified` diagonal, self-reported mask, empty options string, missing file | each of the silent-corruption modes CONTRACTS §4/§7 names |
+| `test_g4_accepts_an_all_empty_labels_column` | `labels` is checked for presence and dtype only | a class-count assertion failing on LINUX/AIDS-GraphEdX (orchestrator amendment) |
+| `test_legitimate_zeros_are_accepted` | 15.5 % zeros pass; all-zero fails | the CLAUDE.md per-pair `0 < v` rule rejecting correct Letter data |
+| `test_lb_consistency_*` (3 tests) | GEDLIB end-to-end reproduces T-27's census on 400 sampled LINUX pairs; a perturbed LB is caught; the draw is seed-reproducible | the three role campaigns silently disagreeing on the lower bound |
+| `test_launcher_*` (7 tests) | dry-run issues nothing, resolves 1/2/9/31 cores, exits 3 under the floor, `probe` refuses, `--group` merges, warns on flat projection, rejects a bad stage | a short job reaching SCBI's queue |
+| `test_workers_carry_no_sbatch_header` | the launcher/worker split holds | four headers drifting apart |
+| `test_launcher_does_not_use_the_bash_builtin_GROUPS` | regression on the bug found below | `--group` silently ignored |
+
+**Coverage of what matters:** every gate is exercised in both directions — passing on real
+recorded data and failing on a deliberately perturbed copy of that same data, with the perturbed
+entry's pair index asserted in the JSON record. The launcher is exercised through `subprocess`
+against its real code path, not a re-implementation.
+
+**Not tested, and why:**
+- **Anything on Picasso.** No SSH, no `sbatch`, not even `--test-only` (standing obligation 5).
+  The workers' SLURM-side behaviour — `$LOCALSCRATCH` staging, the `TERM` trap firing on a
+  wallclock kill, the copy-back — is verified only by `bash -n` and by reading. This is the
+  largest untested surface and the orchestrator should treat the first submission as the test.
+- **The runner and merge CLIs themselves.** Owned by `wave-t05-runner`; I code against CONTRACTS.
+- **`shellcheck`** — not installed on this machine. Recorded rather than skipped silently.
 
 ## 5. Test results
 
-*(filled in as work proceeds)*
+**Command:** `PYTHONPATH=~/opt/build_gedlib/graphkit-learn $PY -m pytest tests/unit/test_approx_ged_gates.py -q -p no:randomly`
+
+```
+collected 43 items
+tests/unit/test_approx_ged_gates.py .................................... [ 83%]
+.......                                                                  [100%]
+============================== 43 passed in 8.74s ==============================
+```
+
+**Command:** `PYTHONPATH=~/opt/build_gedlib/graphkit-learn $PY -m pytest tests/unit/ -q`
+
+```
+================== 8 failed, 950 passed, 1 skipped in 25.34s ===================
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_low]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_med]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_high]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[linux]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[aids]
+FAILED tests/unit/test_export_graphs.py::test_real_export_all_five_totals
+FAILED tests/unit/test_export_graphs.py::test_real_export_is_deterministic
+FAILED tests/unit/test_real_aids_retains_within_split_structure
+E   FileNotFoundError: GraphEdX dataset not found:
+    /media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data/source/GED_PRECOMPUTED/AIDS
+```
+
+**Result:** 950 passed, 8 failed, 1 skipped · **Run at:** `922c53f`.
+
+**Failures and their resolution:** all eight are **environmental and pre-existing**, not caused by
+this work. `GED_PRECOMPUTED/` on this machine contains only `datasets/` and
+`extended_merged_exact_ged/`; the `AIDS/` source tree the exporter needs is absent (verified with
+`test -d`). They live in `test_export_graphs.py`, which tests `export_graphs.py` — a file I did
+not modify and which nothing I wrote imports, so a causal link is impossible. **I did not fix
+them**: `export_graphs.py` is frozen (CONTRACTS §9) and the missing tree is not mine to restore.
+
+**Lint:** `$PY -m ruff check benchmarks/real_data/eval_setup/approx_ged_gates.py
+tests/unit/test_approx_ged_gates.py` → `All checks passed!`. `ruff check benchmarks/` reports 28
+errors, **all pre-existing** in `eval_visualizations/` and `synthetic_data/`; confirmed identical
+count with my changes stashed.
+
+**`bash -n`:** clean on all five scripts. **`shellcheck`:** not installed (`command -v shellcheck`
+→ not found), so the shell scripts have had syntax checking but no static analysis.
 
 ## 6. Verification beyond unit tests
 
-*(filled in as work proceeds)*
+| Circumstance | What was run | Evidence | Outcome |
+|---|---|---|---|
+| Real data — G2 | gates against T-27's 60 recorded cells | LINUX 2 × 3,916 comparisons, 0 disagreements; all four G2 datasets 2 × 3,602,615 | pass |
+| Real data — G3 | against T-03's exact census | LINUX 3,870 certified of 3,916 (46 censored), 0 bracket violations | pass |
+| Real data — `lb-consistency` | **GEDLIB end-to-end**, real solver | LINUX cohort rebuilt from the CSR export, `BRANCH_FAST` under D6 `[1,1,0,1,1,0]`, 400 sampled pairs, 0 mismatches against T-27 | pass |
+| Reference-schema recon | measured before writing any gate | T-27 cells carry `value`/`value_fwd`/`value_rev`/**`meta`** (not `metadata`); flat, `triu_indices(N,1)`-ordered — verified `array_equal` against the index files' `pair_i`/`pair_j` | informed the code |
+| **NaN discovery** | T-03 computed files | `linux` and `aids` report `max|A - A.T| = nan`: `ged_matrix` carries NaN on censored pairs | G3 now selects on `certified_mask` **and** `isfinite` |
+| **Zero-fraction discovery** | T-03 `iam_letter_low` | 215,968 exactly-zero off-diagonal entries of 1,391,220 (15.5 %) | corrected the `0 < v` rule; see §7 |
+| Launcher, dry-run | `--stage all`, `--stage probe`, `--group lb,ub`, `--rate-lb 0.00001`, `--bins`+`--probe-json` | 5 `[DRY-RUN] sbatch` lines and 0 submissions; probe and low-rate paths both `exit 3`; grouping yields `aged-lb-ub` at 3 cores; binned sizing yields `evidence=*:binned` | all as designed |
+| Environment | Debian 6.1.0-52, bash 5.2.15, Python 3.11.15, numpy per env, GEDLIB via `~/opt/build_gedlib/graphkit-learn` (importable, `GEDEnvGXL` present) | | |
+| **Not exercised** | Picasso | prohibited by standing obligation 5 | — |
 
 ## 7. Decisions, assumptions, open questions
 
-*(filled in as work proceeds)*
+**Decisions with a real trade-off:**
+
+- **`floor` rather than `ceil` in `cores_for_single_task`.** Costs a little parallelism (`ubt`
+  gets 31 cores where `ceil` would give 32); buys the guarantee that the projected wall is
+  **≥ `TARGET_SECONDS`** and therefore never under the floor. `slurm/exact_ged` uses `ceil`
+  correctly for its own workload, where 2,081 core-hours never approached the floor.
+- **Deriving the per-pair rate from the contract's core-hours instead of writing it down.**
+  A written-out `11.957142857` × 28,000 = 334,799.99996, which floors to **30** cores instead of
+  31. Deriving costs one `python3` call per role and keeps the provenance visible.
+- **`--group` as a real mechanism rather than a README sentence.** T-05-design §5 says a role
+  that cannot fill two hours "is merged into the adjacent role's job". Making that executable
+  cost ~15 lines (a role→group resolver, a colon-separated `ROLES`, a loop in the worker) and
+  turns the launcher's refusal into something a human can act on in one flag.
+- **`lb-consistency` calls GEDLIB directly, not `GedlibBackend`.** Costs ~30 lines of duplicated
+  env setup; buys non-circularity. Running the independent check through the campaign's own
+  backend would verify determinism where the intent is to verify correctness.
+- **Duplicating ~30 lines of record scaffolding rather than importing `ged_gates.py`.**
+  `ged_gates.py` imports `ged_backends`, which `wave-t05-runner` is actively editing; importing
+  it would couple my gate to a file under concurrent modification and make the module unusable
+  without GEDLIB installed.
+- **G4 treats `seconds_matrix` asymmetry as recorded-not-fatal**, unlike the three value
+  matrices. The decision §6.2 concern — "an upper-bound matrix filled in one orientation is not a
+  distance matrix" — is about values. A timing matrix is diagnostic.
+
+**Assumptions I proceeded on** (all messaged to `main`):
+
+- **A stratified probe pair list will exist at `$DATA_DIR/probe_pairs.npz`.** If it does not, the
+  worker falls back to a contiguous first chunk of `grec` and logs that the rate is biased low.
+  What breaks if wrong: the first job's measured rate under-sizes the rest of the wave. Chosen
+  because blocking on an input nobody in this wave owns would stall the whole track.
+- ~~The merge CLI will grow a flat-output mode for `ubt`.~~ **Resolved by ruling 1**: a separate
+  `approx_ged_subsample_merge.py` owned by `wave-t05-runner`. My invention is removed; the
+  residual risk is that the module does not exist when `aged-ubt` reaches its merge step.
+- **`aged-ubt`'s `--input` is a directory**, not a file, since the subsample spans ten datasets.
+  Still an assumption about the runner's CLI; unresolved.
+
+**Open questions for the orchestrator:** the four numbered items in my message — the merge-CLI
+gap, the probe list's owner, the `0 < v` rule correction, and T-05-design §4's `aids` overlap
+phrasing. I proceeded on the assumptions above rather than blocking.
 
 ## 8. Coordination
 
-*(filled in as work proceeds)*
+**Messages sent:** one to `main`, covering (1) the merge-CLI gap for `ubt`, (2) the unowned
+stratified probe list, (3) the correction to CLAUDE.md's `0 < v < inf` rule with the 215,968-zero
+evidence, (4) T-05-design §4's `aids`-overlap phrasing, (5) the `GROUPS` bash-builtin bug, (6)
+T-03's NaN-on-censored-pairs, (7) confirmation both amendments landed plus the bin-table schema
+for `wave-t05-export`, (8) the resolved sizing, (9) unowned working-tree changes, (10) the suite
+result. No reply required to finish; all four questions have a recorded fallback.
+
+**Messages received and how they changed the work — second message, four rulings.** All applied
+in `922c53f`:
+
+- **Ruling 1 (my finding upheld, resolved differently than I assumed).** The `ubt` merge is a
+  **separate entry point**, `approx_ged_subsample_merge.py` with CLI
+  `--shards --pair-list --out --role --method --options`, not a flat mode on the dense merger —
+  T-03's dense path is closed and load-bearing and is not widened for a 28,000-row case.
+  `worker_subsample.sh` repointed; my `--pair-list`-in-place-of-`--n-graphs` invention dropped.
+  Its shards now carry no `--delete-shards` because that merger has no such flag; they live
+  outside the mirrored `out/` tree on `$LOCALSCRATCH` and are wiped with the job.
+- **Ruling 2 (upheld).** `wave-t05-export` will emit `probe_pairs.npz` and the bin table in the
+  schema I specified. The loud-warning fallback stays, deliberately.
+- **Ruling 3 (upheld on substance).** My read guard is correct. CLAUDE.md itself is the user's
+  file and is not being edited on my report; the correction is surfaced with my evidence.
+- **Ruling 4 — OVERRIDDEN, in my favour, and I was wrong.** I had G3 *skip* the exact arm on a
+  cohort mismatch. Suite-1 `aids` (769) is a **strict subset** of Suite-2 `aids_graphedx` (819),
+  because Suite 1 is Suite 2 plus `n_max = 12`, so skipping discards the largest
+  `lb ≤ exact ≤ ub` arm available above Letter. G3 now **joins on `graph_ids`** and runs on the
+  induced submatrix; the join reduces to the positional comparison when the cohorts are
+  identical, so it is one code path. My instinct that no *positional* comparison is valid was
+  right — the id join is the fix, not the skip.
+- **Correction to my FYI 6, and I was wrong on the mechanism.** T-03's `ged_matrix` carries
+  **`+inf`** on censored pairs, not NaN: `linux` 92 non-finite, all `+inf`, `n_nan = 0`; `aids`
+  122,076, all `+inf`. The NaN I reported came from `inf - inf` inside my own symmetry
+  difference. My guards already used `np.isfinite` throughout, so no defect shipped, but the
+  regression tests were missing and are now added — including one where an `inf` sits *inside*
+  `certified_mask`.
+- **Fixed while applying ruling 4:** the violation reporting would have double-filtered
+  (`lower[selected]` on an array already reduced by `selected`), naming the wrong pairs. Caught
+  by restructuring to filter once. On a gate whose entire job is naming pairs, that would have
+  been worse than not reporting them.
+
+**First message — two CONTRACTS amendments and two requests.** All four implemented:
+- *Amendment 1* — `graph_ids` is the loader's native id, so **no gate validates the form of an
+  id**. `_graph_ids_match` checks identity against every available reference (T-27 index and
+  T-03 computed) and runs as a G2 **precondition** that short-circuits before any value
+  comparison. `test_g2_reports_graph_order_before_comparing_values` asserts `n_compared == 0`.
+- *Amendment 3* — `worker_subsample.sh` reads `subsample_pairs.npz` and writes `subsample.npz`,
+  and asserts via `readlink -f` that the two never resolve to the same path.
+- *labels* — G4 checks presence and dtype only, with a test that an all-empty column passes.
+- *Request 1* — binned sizing, with a loud fallback and an `evidence` tag per role.
+- *Request 2* — `projected_wall_seconds` vs `realised_wall_seconds` in every job's report.
+
+**Contracts I depend on and confirmed unchanged:** §3 roles and verbatim options strings, §4 ten
+keys and dtypes, §4.1 `certified_mask` as derived proof, §4.2 cross-fill, §6 runner CLI, §8
+Picasso environment, `FLOOR_SECONDS = 7200`.
+
+**Noted:** `CONTRACTS.md:8` records base commit `34e3ade822...`; the wave base is `885d98d8...`.
+Informational only — no contract content depends on it.
 
 ## 9. Deliberately not done
 
-*(filled in as work proceeds)*
+- **The calibration ladder** (T-05-design §6, exact GED above `n = 12`, ~300–500 core-h) — out of
+  scope, a later wave. No worker here computes it and `--stage` has no rung for it.
+- **Any analysis, figure, correlation, bootstrap or D13 evaluation** — out of scope.
+- **T-03's gate 2** (`ged_bounds.py` two-sided cross-check) — T-27 discharged it and
+  T-05-design §4 says so; G2 supersedes it at 9,000× the sample size.
+- **G1 (cohort)** — belongs to `wave-t05-export`, which owns the exporter.
+- **Editing `slurm/exact_ged/`** — read from extensively, modified not at all.
+- **Fixing the 8 pre-existing `test_export_graphs.py` failures** — environmental, and
+  `export_graphs.py` is frozen.
+- **Restoring the unowned working-tree deletions under `.claude/skills/`** — not mine; reported
+  rather than touched.
 
 ## 10. Risks and follow-ups
 
-*(filled in as work proceeds)*
+| Item | Severity | Detail | Suggested owner |
+|---|---|---|---|
+| `ubt` merger does not exist yet | **high** | Ruling 1 assigns `approx_ged_subsample_merge.py` to `wave-t05-runner`. `worker_subsample.sh` now invokes it with the ruled CLI, but I have never seen it run; if the module is absent or its flags differ, `aged-ubt` fails *after* spending its 93 core-hours | `wave-t05-runner` |
+| No Picasso-side execution anywhere | **high** | `$LOCALSCRATCH` staging, the `TERM` trap, and the copy-back are verified by `bash -n` and by reading only. Treat the first `--stage lb` as the integration test and read its log before submitting the rest | orchestrator |
+| Probe list absent → biased-low rate | medium | The fallback is loud but still under-sizes. `probe_stratified: false` in the run report is the tell | `wave-t05-export` |
+| Runner CLI drift | medium | I coded against CONTRACTS §6 without sight of the implementation. The flags most likely to differ: `--compute`, `--role`, and `--input` accepting a directory for `ubt` | orchestrator to reconcile at merge |
+| Projections are lower bounds | medium | T-27 limitation 3. Wallclocks carry 3–4× headroom, which is deliberate but not unlimited; if realised ≫ projected the `ubs`/`ubt` submissions need re-sizing | human check 1 in the README |
+| `shellcheck` never run | low | Not installed here. Worth one pass before the first submission | orchestrator |
+| G2 needs ~700 MB transient RAM on `iam_letter_high` | low | The full-coverage test builds 2,059² matrices; marked `slow` | — |
 
 ## 11. Self-assessment against the definition of done
 
-*(filled in as work proceeds)*
+| # | Criterion | Met | Evidence |
+|---|---|---|---|
+| 1 | `--dry-run` prints every `sbatch` line, issues none; `--stage {probe,lb,ub,ubs,ubt,merge,all}` | yes | `test_launcher_dry_run_issues_no_sbatch` — 5 `[DRY-RUN] sbatch` lines, resolved cores/wallclock/constraint/dependency/job-name; all seven stages accepted, `test_launcher_rejects_an_unknown_stage` |
+| 2 | Refuses with non-zero exit under `FLOOR_SECONDS`, demonstrated | yes | `test_launcher_refuses_a_job_under_the_two_hour_floor` (exit 3, `--rate-lb 0.00001`) and `test_launcher_probe_stage_refuses_and_submits_nothing` |
+| 3 | `bash -n` clean; every `#SBATCH` on the launcher's line | yes | `bash -n` on all five; `test_workers_carry_no_sbatch_header` |
+| 4 | `$LOCALSCRATCH`, `TERM`/`INT` traps, whole-tree mirror, shards deleted only after the gate | partial | Present and reviewed in `_env.sh`/workers, and shard deletion is delegated to the merge's own post-gate `--delete-shards` (CONTRACTS §6.2) with no `rm` of my own. **Never executed on a cluster** — see risk 2 |
+| 5 | G2/G3/G4 verified in both directions on real recorded data | yes | 20 real-data gate tests; each perturbation test asserts the named pair index. `lb-consistency` additionally runs GEDLIB end-to-end |
+| 6 | Every gate writes a JSON record naming its tolerance | yes | `test_every_gate_record_names_its_tolerance_and_why` asserts non-empty `tolerance` and a rationale > 80 chars on G2/G3/G4 |
+| 7 | `README.md` states submission order, dependency chain, human checks | yes | `slurm/approx_ged/README.md` — three numbered human checks, the `afterok` rationale, the traps section |
+| 8 | All work committed, tree clean, log committed | yes | five commits; `git diff --name-only base..HEAD` is exactly my ownership set |
+
+**Overall.** I am confident about the gates: they run against the real T-27 and T-03 records
+rather than fixtures, they fail on perturbed copies of that same data with the offending pair
+named, and `lb-consistency` closes the loop through the real GEDLIB solver — reproducing T-27's
+recorded `BRANCH_FAST` on 400 LINUX pairs at exact equality. I am confident about the launcher's
+arithmetic, which is exercised through its real code path and which refused every case it should.
+
+I am **not** confident about anything that only runs on Picasso. The workers have never executed;
+their `$LOCALSCRATCH` staging, signal traps and copy-back are verified by reading and by `bash -n`
+alone, and `shellcheck` was unavailable. **Scrutinise first**: whether
+`approx_ged_subsample_merge.py` exists with the ruled CLI when `aged-ubt` reaches its merge — that
+failure costs 93 core-hours *after* the compute is done. Second: whether `wave-t05-runner`'s
+runner CLI matches the contract I coded against, particularly `--compute`, `--role`, and `--input`
+accepting a directory for the subsample role.
+
+Two of my own findings turned out to be partly wrong, and both are worth the orchestrator's
+attention as evidence about how much to trust the rest. I reported T-03's censored pairs as NaN
+when they are `+inf` — my guards were already right (`np.isfinite`) but my *explanation* was not,
+and I had drawn it from a `nan` that my own `inf - inf` symmetry difference produced. And I had
+G3 skip the AIDS overlap as an unsafe positional comparison when the correct move was an id join
+on a structural subset. In both cases the code was safe and the reasoning was not, which is the
+failure mode to watch for in what I have written.
