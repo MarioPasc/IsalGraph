@@ -665,3 +665,105 @@ class TestOneSidedGate:
         ged, lb, ub, cert = _clean_matrices()
         with pytest.raises(MergeError, match="computed must be"):
             gate4(ged, lb, ub, cert, computed="lower")
+
+
+# --------------------------------------------------------------------------- #
+# Suite-2 metadata — both defects the local smoke found, before Picasso
+# --------------------------------------------------------------------------- #
+
+
+def _write_suite2_cohort(path: Path, n: int = N_GRAPHS, key: str = "linux") -> None:
+    """A CONTRACT A file as the Suite-2 exporter really writes it.
+
+    The only difference from :func:`_write_cohort` that matters is ``n_max``:
+    Suite 2 applies no size cap and records that as JSON ``null`` rather than by
+    omitting the key. Every fixture above hardcodes ``12``, which is why the
+    merge's ``int(...)`` on it survived the unit suite and died on real data.
+    """
+    _write_cohort(path, n=n, key=key)
+    with np.load(path, allow_pickle=False) as data:
+        payload = {name: data[name] for name in data.files}
+    meta = json.loads(str(payload["metadata"]))
+    meta["filter"] = {"min_nodes": 2, "require_connected": True, "n_max": None}
+    meta["splits_merged"] = True
+    payload["metadata"] = np.array(json.dumps(meta))
+    np.savez_compressed(path, **payload)
+
+
+@pytest.fixture()
+def suite2_shard_dir(tmp_path: Path) -> Path:
+    """A Suite-2-shaped cohort plus three complete, disjoint shards."""
+    _write_suite2_cohort(tmp_path / "linux.npz")
+    for t, chunk in enumerate(np.array_split(np.arange(TOTAL, dtype=np.int64), 3)):
+        _write_shard(tmp_path / f"linux_c{t:04d}.npz", chunk, censor={5, 17})
+    return tmp_path
+
+
+def test_a_null_n_max_merges_and_is_not_recorded_as_twelve(suite2_shard_dir: Path) -> None:
+    """Suite 2 has no size cap; ``int(None)`` used to raise TypeError here.
+
+    ``None`` must survive into the metadata rather than defaulting to 12: "no
+    cap" and "capped at 12" are different facts about the cohort, and the
+    metadata is where a reader goes to tell them apart.
+    """
+    out = suite2_shard_dir / "merged.npz"
+    report, _ = merge_shards(
+        shard_dir=suite2_shard_dir, key="linux", n_graphs=N_GRAPHS, out=out
+    )
+    assert report.passed
+    with np.load(out) as data:
+        meta = json.loads(str(data["metadata"]))
+    assert meta["n_max_filter"] is None
+    assert meta["filter"]["n_max"] is None
+
+
+def test_a_missing_n_max_key_still_defaults_to_twelve(shard_dir: Path) -> None:
+    """The Suite-1 fallback is untouched by the Suite-2 fix."""
+    out = shard_dir / "merged.npz"
+    merge_shards(shard_dir=shard_dir, key="aids", n_graphs=N_GRAPHS, out=out)
+    with np.load(out) as data:
+        assert json.loads(str(data["metadata"]))["n_max_filter"] == 12
+
+
+def test_merged_metadata_carries_every_contracts_section_4_key(
+    suite2_shard_dir: Path,
+) -> None:
+    """The independent G4 gate reported seven of these missing on real output.
+
+    They are asserted here rather than only in the gate so that the merge fails
+    in the unit suite, seconds after a change, instead of after a campaign.
+    """
+    out = suite2_shard_dir / "merged.npz"
+    merge_shards(
+        shard_dir=suite2_shard_dir,
+        key="linux",
+        n_graphs=N_GRAPHS,
+        out=out,
+        ged_from="lb",
+        role="lb",
+    )
+    with np.load(out) as data:
+        meta = json.loads(str(data["metadata"]))
+    for field in (
+        "dataset",
+        "role",
+        "method",
+        "options_string",
+        "accessor",
+        "cost_model",
+        "n_graphs",
+        "n_pairs",
+        "n_zero_offdiag",
+        "n_certified",
+        "seconds_total",
+        "mean_seconds_per_pair",
+        "filter",
+        "splits_merged",
+        "gedlib_source",
+        "code_commit",
+        "computed_utc",
+        "schema_version",
+    ):
+        assert field in meta, f"CONTRACTS section 4 requires {field!r}"
+    assert isinstance(meta["seconds_total"], float)
+    assert isinstance(meta["splits_merged"], bool)

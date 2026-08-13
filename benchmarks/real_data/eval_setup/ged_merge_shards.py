@@ -439,6 +439,58 @@ def _orientation_summary(shards: list[Path]) -> dict[str, Any]:
     }
 
 
+def _repo_commit() -> str | None:
+    """Return the repository HEAD sha, or ``None`` outside a checkout."""
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = out.stdout.strip()
+    return sha if out.returncode == 0 and sha else None
+
+
+def _gedlib_source() -> str | None:
+    """Return the directory the GEDLIB bindings were loaded from.
+
+    Recorded because the bindings are an in-place build outside site-packages,
+    so the merged file cannot otherwise say which build produced its values.
+    Import failure is not an error here: the merge itself never calls GEDLIB.
+    """
+    try:
+        import gklearn.gedlib as _g  # noqa: PLC0415
+    except Exception:  # pragma: no cover - environment dependent
+        return None
+    path = getattr(_g, "__file__", None)
+    return str(Path(path).resolve().parent) if path else None
+
+
+def _optional_int(value: Any) -> int | None:
+    """Coerce a metadata value to ``int``, preserving an explicit ``None``.
+
+    Suite 2 applies no ``n_max`` and its exporter records that as JSON ``null``
+    rather than by omitting the key, so a plain ``int(...)`` raises and a
+    ``dict.get(key, default)`` default never fires. ``None`` is carried through
+    because "no size cap" and "capped at 12" are different facts about the
+    cohort and the metadata is what a reader consults to tell them apart.
+
+    Args:
+        value: The raw metadata value, possibly ``None``.
+
+    Returns:
+        The value as an ``int``, or ``None`` when it was ``None``.
+    """
+    return None if value is None else int(value)
+
+
 def _agreed(shard_meta: list[dict[str, Any]], field_name: str) -> str | None:
     """Return the single value the shards carry for one metadata field.
 
@@ -675,7 +727,12 @@ def merge_shards(
             "source": str(src.get("source", "unknown")),
             "n_graphs": n,
             "n_valid_pairs": n_valid,
-            "n_max_filter": int(dict(src.get("filter", {})).get("n_max", 12)),
+            # Suite 2 runs with NO size cap and its exporter writes `"n_max": null`
+            # (CONTRACTS §2). The key is PRESENT and None, so a `.get(..., 12)`
+            # default never fires and `int(None)` raises. None is the honest value
+            # here -- "no cap" is not the same fact as "capped at 12" -- and the 12
+            # fallback is kept for legacy files that omit the key entirely.
+            "n_max_filter": _optional_int(dict(src.get("filter", {})).get("n_max", 12)),
             "n_dropped": int(
                 src.get("n_dropped_size", 0)
                 + src.get("n_dropped_disconnected", 0)
@@ -709,6 +766,19 @@ def merge_shards(
             "total_solver_seconds": float(np.sum(acc.seconds, dtype=np.float64)),
             "gate4": report.as_dict(),
             "merged_utc": datetime.now(timezone.utc).isoformat(),
+            # CONTRACTS §4's required key list, added by fix(integration) after
+            # the independent G4 gate reported all seven missing. Kept ALONGSIDE
+            # the pre-existing near-synonyms rather than renaming them, so that
+            # readers of `total_solver_seconds` / `merged_utc` keep working.
+            "seconds_total": float(np.sum(acc.seconds, dtype=np.float64)),
+            "mean_seconds_per_pair": (
+                float(np.sum(acc.seconds, dtype=np.float64) / total) if total else 0.0
+            ),
+            "computed_utc": datetime.now(timezone.utc).isoformat(),
+            "filter": dict(src.get("filter", {})),
+            "splits_merged": bool(src.get("splits_merged", True)),
+            "gedlib_source": _gedlib_source(),
+            "code_commit": _repo_commit(),
             "schema_version": 1,
         }
     )
