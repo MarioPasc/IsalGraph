@@ -1,0 +1,13 @@
+   n    m  g6 bits  s6 bits  adj bits  mDFSC bits   g6 ms   s6 ms  nauty ms    mDFSC ms               AGM
+  20   21      198      156       190         210   0.191   0.093     0.168         1.0   budget exceeded
+  20   40      198      264       190         400   0.208   0.109     0.180         5.6   budget exceeded
+  30   31      444      234       435         310   0.274   0.103     0.269         2.1     not attempted
+  30   60      444      384       435         600   0.294   0.153     0.318        10.9     not attempted
+  50   52     1236      426      1225         624   0.605   0.157     0.658         5.2     not attempted
+  50  100     1236      744      1225        1200   0.653   0.234     0.689        28.1     not attempted
+  70   73     2442      714      2415        1022   1.113   0.217     1.140        30.4     not attempted
+  70  140     2442     1218      2415        1960   1.163   0.342     1.209        30.6     not attempted
+  98  102     4782      978      4753        1428   2.106   0.308     2.101       124.0     not attempted
+  98  196     4782     1698      4753        2744   2.215   0.447     2.171        49.1     not attempted
+
+wrote ceiling.json

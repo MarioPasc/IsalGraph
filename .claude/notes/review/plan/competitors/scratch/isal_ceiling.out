@@ -1,0 +1,15 @@
+   n    m     variant  timeout_s  elapsed s    len  outcome
+  20   21      pruned        5.0       0.00     43  ok
+  20   21   canonical        5.0       0.01     34  ok
+  30   31      pruned        5.0       0.00     59  ok
+  30   31   canonical        5.0       0.31     50  ok
+  50   52      pruned        5.0       0.01    111  ok
+  50   52   canonical        5.0       5.00      -  CanonicalizationTimeoutError
+  70   73      pruned        5.0       0.02    170  ok
+  70   73   canonical        5.0       5.00      -  CanonicalizationTimeoutError
+  98  103      pruned        5.0       0.95    280  ok
+  98  103   canonical        5.0       5.00      -  CanonicalizationTimeoutError
+  30   60      pruned        5.0       0.00    177  ok
+  30   60   canonical        5.0       5.00      -  CanonicalizationTimeoutError
+  50  100      pruned        5.0       0.00    323  ok
+  50  100   canonical        5.0       5.00      -  CanonicalizationTimeoutError

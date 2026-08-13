@@ -35,6 +35,30 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 > D6's *metric* argument is unaffected. Full record: `.claude/notes/review/tasks/T-03-design.md`
 > amendment 4.
 
+> ⚠ **T-04 was scouted 2026-08-13 and four of its premises are wrong.** Every competitor was
+> installed and run locally; the evidence is **one file per competitor in
+> [`competitors/`](competitors/README.md)**, whose §4 lists twelve findings with owners. The four
+> that reach a printed number:
+>
+> 1. **[competitors](competitors.md) §4 outcome 3 is inverted.** IsalGraph beats sparse6 on bits at
+>    `m/n ≈ 1` (Mutagenicity 181 vs 222; at `n = 98`, **888 vs 978**) and loses at `m/n ≈ 2`. The
+>    pre-commitment must be restated as `m`-scaling versus `n²`-scaling before it is printed.
+> 2. **AGM's canonical code is not computable above `n ≈ 14`** — exact 5/5 to `n = 11`, 3/5 at
+>    `n = 14`, **0/5 from `n = 20`**. AGM runs on **Suite 1 only**, and
+>    [preregistration](preregistration.md) §5's reduction rule has **no case** for a representation
+>    computable on one suite and not the other. **Inherits: T-02's `N_max = 182`, T-17.**
+> 3. **`canonical_string` times out from `n ≈ 50` and at COIL-DEL (`n=22, m=54`); Suite 2 must use
+>    `pruned_canonical_string`** (0.95 ms at `n = 98`). **Inherits: T-06.**
+> 4. **gSpan's minimum DFS code tracks a unit edit more than twice as tightly as IsalGraph**
+>    (separation 0.32–0.38 vs 0.69–0.73 on synthetic `G(n,m)`, `n ≤ 12`). IsalGraph wins Claim A
+>    against it on 9 of 10 profiles. **Both must be stated; T-04a settles it on real data.**
+>    **Inherits: T-17, T-20.**
+>
+> Also: **three min-DFS repositories tested, all three rejected** — including
+> `kaviniitm/DFSCode`, which builds, claims exactly this, and is **not isomorphism-invariant**
+> (46/90). Vendor nothing. **bliss/Traces stay cut** — the `pynauty` from-source build was rehearsed
+> under gcc 12.2.0 and succeeded, so the insurance rationale has expired.
+
 **Read for every ticket**: [decisions](decisions.md) (do not re-litigate a signed decision) and
 [demands](demands.md) (what the ticket is answering, and to whom).
 
@@ -47,8 +71,8 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 | ~~**T-01**~~ | ~~Data lock — audit tables, cohorts, merge splits, port surviving scripts into `tests/`~~ → **DONE 2026-08-13.** Re-derived, not ported: 15 of 16 scripts were gone and Suite 2 had no loader. `iam_gxl_loader.py` + `cohort_audit.py` + **34 tests**. **Suite 1 reproduces `export_graphs.py` exactly** (3,897,911 pairs). **Suite 2 = 16,370 graphs / 21,710,892 pairs / `n_max` 98** — COIL-DEL corrected 7,200 → **3,900** (decision 27). Nine of ten rows and all three discard ratios reproduced exactly. Four findings: the **size-biased discard is cohort-wide** (Letter 1.23–1.32×); **LINUX is unlabelled**, settling E6; the **density convention** matters (up to 27 %); **I-05 closed** at 1.19× | — | **done** | — | [data](data.md) §1, §7, [T-01 design](../tasks/T-01-design.md) |
 | ~~**T-02**~~ | ~~Statistics lock — graph-level bootstrap, Mantel, pair-accounting ladder, and the frozen confirmatory family with its cardinality~~ → **DONE 2026-08-13.** Family enumerated and frozen at **`N_max = 197`** in three fixed-sequence families — F0 calibration gate 5, F1 bracket gate 10, F2 primary 182 — BH-FDR q = 0.05 within each; `N_actual = 182 − 15k − 8d`. **Four defects fixed in the locked protocol**: §9's exact-regime omnibus contradicted §4; two gates sat inside the family they gate; the labels row made the cardinality indeterminate; **D15 validated a 7.72 % subsample by drawing 94.4 % of a smaller dataset**. **D13 promoted to confirmatory**; ρ(Lev, UB) gets no primary rows. Raised **T-27** | T-01 | **done** | — | [preregistration](preregistration.md), [T-02 design](../tasks/T-02-design.md), [statistics](statistics.md) §12 |
 | ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
-| **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS** | — | 3–8 | **P0** | [competitors](competitors.md) |
-| **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix** | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3 |
+| **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS**. **Scouted 2026-08-13** — every backend built and measured in scratchpad; **one file per competitor now in [competitors/](competitors/)**, and the twelve findings in its §4 change the plan before any code lands | — | **2–5** (was 3–8) | **P0** | **[competitors/README](competitors/README.md) first**, then [competitors](competitors.md) |
+| **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix.** F3 and the separation ratio already have synthetic priors ([competitors/README](competitors/README.md) §3); T-04a is what makes them real | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3, [competitors/README](competitors/README.md) |
 | **T-05** | **Bounded GED via GEDLIB** — wire the **bounds T-27 selects** (not `BRANCH_FAST` + `IPFP` by default), pass the validation gates, run the **calibration ladder**, then all **21,710,892** Suite-2 pairs (≈ 0.57 core-h) | ~~T-01~~, ~~T-03~~, **T-27** | 5–10 | **P0** | [approx_ged](approx_ged.md), [gedlib](gedlib.md), [exact_ged](exact_ged.md) §4 |
 | **T-06** | **Full recompute** — all experiments, C++ engine, new cohorts, competitor columns, new statistics | T-02…T-05 | 10–14 | **P0** | [statistics](statistics.md), [data](data.md), [competitors](competitors.md), [labels](labels.md) |
 | **T-07** | **Read [28] and [29]**; inherited/modified/new delta table **plus the sufficiency paragraph**; resolve D19 | — | 1–4 | **P0** | [corrections](corrections.md) §4, [decisions](decisions.md) 9 |

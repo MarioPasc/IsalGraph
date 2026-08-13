@@ -6,6 +6,15 @@
 Related: [tickets](tickets.md) · [statistics](statistics.md) · [demands](demands.md) ·
 [schedule](schedule.md) (what gets cut first)
 
+> ⚠ **Scouted 2026-08-13. The evidence behind this file is now [`competitors/`](competitors/README.md)
+> — one file per competitor, every backend installed and run locally.** Its §4 lists twelve findings
+> with owners. **Four sections of this file are superseded**: §2's AGM effort estimate and its
+> "derive from nauty labelling" premise (both wrong — [agm](competitors/agm.md) §2.3), §2's gSpan
+> vendoring plan (three repositories tested, all three rejected —
+> [gspan-mdfsc](competitors/gspan-mdfsc.md) §1), §4's pre-committed outcome 3 (**inverted** —
+> [sparse6](competitors/sparse6.md) §4), and §2's bliss/Traces counter-case (**expired** —
+> [nauty](competitors/nauty.md) §8). §3, §3.4 and §5 are unaffected and remain authoritative.
+
 > **Modal note that decides the scope.** R1.1's "would compare" is a **suggestion** and cannot carry
 > six backends alone. It does not have to: **AE.4a** — "the choice of benchmark models" (`mail.txt:66`),
 > weighted by the Area Editor's priority statement at `:67` — is **requirement-modal** and is the real

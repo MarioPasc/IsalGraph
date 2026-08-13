@@ -1,0 +1,47 @@
+{
+  "G": {
+    "graph6": "ElCW",
+    "sparse6": ":EaWIzR",
+    "nauty_graph6": "E@ro",
+    "nauty_certificate": "000000000000000c000000000000000c0000000000000014000000000000002400000000000000c000000000000000f0",
+    "adjacency": "101001000100111",
+    "agm_cam": "000001110011110",
+    "agm_search_nodes": 47,
+    "mdfsc": "0-1 1-2 2-0 2-3 3-4 4-5 5-2",
+    "wl_dim": 10,
+    "isalgraph_canonical": "VVVVnvPnnCPpC",
+    "isalgraph_pruned": "VVVVpvPpCNNpC",
+    "n": 6,
+    "m": 7
+  },
+  "G_relabelled": {
+    "graph6": "ElCW",
+    "sparse6": ":EgHeALN",
+    "nauty_graph6": "E@ro",
+    "nauty_certificate": "000000000000000c000000000000000c0000000000000014000000000000002400000000000000c000000000000000f0",
+    "adjacency": "101001000100111",
+    "agm_cam": "000001110011110",
+    "agm_search_nodes": 47,
+    "mdfsc": "0-1 1-2 2-0 2-3 3-4 4-5 5-2",
+    "wl_dim": 10,
+    "isalgraph_canonical": "VVVVnvPnnCPpC",
+    "isalgraph_pruned": "VVVVpvPpCNNpC",
+    "n": 6,
+    "m": 7
+  },
+  "H": {
+    "graph6": "EhCW",
+    "sparse6": ":EaYms",
+    "nauty_graph6": "E@po",
+    "nauty_certificate": "0000000000000008000000000000000c0000000000000014000000000000002400000000000000c00000000000000070",
+    "adjacency": "100001000100111",
+    "agm_cam": "000001011111000",
+    "agm_search_nodes": 45,
+    "mdfsc": "0-1 1-2 2-0 2-3 3-4 4-5",
+    "wl_dim": 13,
+    "isalgraph_canonical": "VVpvnvvPnC",
+    "isalgraph_pruned": "VVpvnvvPnC",
+    "n": 6,
+    "m": 6
+  }
+}

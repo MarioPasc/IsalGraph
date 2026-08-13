@@ -1,0 +1,17 @@
+120 one-edit pairs (unit GED = 1, edited copy randomly relabelled) and 120 random same-n pairs; n in [6, 12]
+
+representation           N  med L  Lev d1  Lev rand    sep  d1 max  Ham def%  Ham d1  Ham rand
+graph6                 120      7     6.0       6.0   1.00      11     100.0     6.0       6.0
+sparse6                120     14    11.0      12.5   0.88      21      30.8      10       6.0
+nauty->graph6          120      7     5.0       6.0   0.83      10     100.0     5.0       6.0
+adjacency              120     36    12.0      13.0   0.92      24     100.0    17.0      18.0
+AGM CAM                120     36     4.5       9.0   0.50      18     100.0     5.0      12.0
+min-DFS (chars)        120     52     6.0      19.0   0.32      23       0.0    None         6
+min-DFS (tuples)       120     13     3.0       8.0   0.38      12       0.0    None         7
+IsalGraph canonical    120     23    10.0      14.5   0.69      23       4.2      14        19
+IsalGraph pruned       120     24    11.0      15.0   0.73      25       8.3    16.5         7
+
+sep = median Levenshtein on one-edit pairs / median on random pairs.
+Lower is better: it is the fraction of the noise floor a single unit edit costs.
+
+wrote stability.json

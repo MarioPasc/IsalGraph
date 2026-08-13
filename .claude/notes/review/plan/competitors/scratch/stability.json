@@ -1,0 +1,173 @@
+{
+  "graph6": {
+    "edit": {
+      "n": 120,
+      "median_len": 7.0,
+      "lev_median": 6.0,
+      "lev_max": 11,
+      "ham_defined_pct": 100.0,
+      "ham_median": 6.0
+    },
+    "random": {
+      "n": 120,
+      "median_len": 8.0,
+      "lev_median": 6.0,
+      "lev_max": 11,
+      "ham_defined_pct": 100.0,
+      "ham_median": 6.0
+    },
+    "separation": 1.0
+  },
+  "sparse6": {
+    "edit": {
+      "n": 120,
+      "median_len": 14.0,
+      "lev_median": 11.0,
+      "lev_max": 21,
+      "ham_defined_pct": 30.8,
+      "ham_median": 10
+    },
+    "random": {
+      "n": 120,
+      "median_len": 14.0,
+      "lev_median": 12.5,
+      "lev_max": 20,
+      "ham_defined_pct": 18.3,
+      "ham_median": 6.0
+    },
+    "separation": 0.88
+  },
+  "nauty->graph6": {
+    "edit": {
+      "n": 120,
+      "median_len": 7.0,
+      "lev_median": 5.0,
+      "lev_max": 10,
+      "ham_defined_pct": 100.0,
+      "ham_median": 5.0
+    },
+    "random": {
+      "n": 120,
+      "median_len": 8.0,
+      "lev_median": 6.0,
+      "lev_max": 10,
+      "ham_defined_pct": 100.0,
+      "ham_median": 6.0
+    },
+    "separation": 0.833
+  },
+  "adjacency": {
+    "edit": {
+      "n": 120,
+      "median_len": 36.0,
+      "lev_median": 12.0,
+      "lev_max": 24,
+      "ham_defined_pct": 100.0,
+      "ham_median": 17.0
+    },
+    "random": {
+      "n": 120,
+      "median_len": 40.5,
+      "lev_median": 13.0,
+      "lev_max": 23,
+      "ham_defined_pct": 100.0,
+      "ham_median": 18.0
+    },
+    "separation": 0.923
+  },
+  "AGM CAM": {
+    "edit": {
+      "n": 120,
+      "median_len": 36.0,
+      "lev_median": 4.5,
+      "lev_max": 18,
+      "ham_defined_pct": 100.0,
+      "ham_median": 5.0
+    },
+    "random": {
+      "n": 120,
+      "median_len": 40.5,
+      "lev_median": 9.0,
+      "lev_max": 19,
+      "ham_defined_pct": 100.0,
+      "ham_median": 12.0
+    },
+    "separation": 0.5
+  },
+  "min-DFS (chars)": {
+    "edit": {
+      "n": 120,
+      "median_len": 52.0,
+      "lev_median": 6.0,
+      "lev_max": 23,
+      "ham_defined_pct": 0.0,
+      "ham_median": null
+    },
+    "random": {
+      "n": 120,
+      "median_len": 55.0,
+      "lev_median": 19.0,
+      "lev_max": 44,
+      "ham_defined_pct": 10.8,
+      "ham_median": 6
+    },
+    "separation": 0.316
+  },
+  "min-DFS (tuples)": {
+    "edit": {
+      "n": 120,
+      "median_len": 13.0,
+      "lev_median": 3.0,
+      "lev_max": 12,
+      "ham_defined_pct": 0.0,
+      "ham_median": null
+    },
+    "random": {
+      "n": 120,
+      "median_len": 14.0,
+      "lev_median": 8.0,
+      "lev_max": 16,
+      "ham_defined_pct": 14.2,
+      "ham_median": 7
+    },
+    "separation": 0.375
+  },
+  "IsalGraph canonical": {
+    "edit": {
+      "n": 120,
+      "median_len": 23.0,
+      "lev_median": 10.0,
+      "lev_max": 23,
+      "ham_defined_pct": 4.2,
+      "ham_median": 14
+    },
+    "random": {
+      "n": 120,
+      "median_len": 23.0,
+      "lev_median": 14.5,
+      "lev_max": 29,
+      "ham_defined_pct": 7.5,
+      "ham_median": 19
+    },
+    "separation": 0.69
+  },
+  "IsalGraph pruned": {
+    "edit": {
+      "n": 120,
+      "median_len": 24.0,
+      "lev_median": 11.0,
+      "lev_max": 25,
+      "ham_defined_pct": 8.3,
+      "ham_median": 16.5
+    },
+    "random": {
+      "n": 120,
+      "median_len": 24.0,
+      "lev_median": 15.0,
+      "lev_max": 34,
+      "ham_defined_pct": 5.8,
+      "ham_median": 7
+    },
+    "separation": 0.733
+  }
+}
