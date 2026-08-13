@@ -79,7 +79,7 @@ Three reasons `BRANCH_FAST` is primary:
 | **Primary** | **`IPFP`** | Bougleux et al., 2017 | proven UB (returns a valid edit path) |
 | Refinement | `REFINE` | Zeng et al. 2009 / GEDLIB | proven UB; local search on the assignment |
 | **Reference point** | **`BIPARTITE`** | Riesen & Bunke, *IVC* 27(7):950–959, 2009 | proven UB; the baseline every reader knows |
-| Alternative | `BP_BEAM` | Neuhaus & Riesen | proven UB |
+| Alternative | `BP_BEAM` | ~~Neuhaus & Riesen~~ → **Riesen, Fischer & Bunke**, ANNPR 2014, LNAI 8774:117–128 (corrected by T-27, §5) | proven UB |
 
 `BIPARTITE` is reported because it is the comparator every reader knows, **not** because it is good:
 our own implementation of it overestimates by **+135 % on LINUX** (measured 2026-08-12, symmetrised;
@@ -126,6 +126,61 @@ not reproduce.
 | **Proven upper bound** | 1 (calibration) + 2 (all) | **`IPFP`** | `get_upper_bound()` |
 | UB — literature reference point | 1 + 2 | `BIPARTITE` | `get_upper_bound()` |
 | UB — refinement arm, if `IPFP` is loose | 2 | `REFINE` | `get_upper_bound()` |
+
+> ## ✅ RESULT 2026-08-13 — T-27 selected both ends by measurement. Decision 26 closes.
+>
+> **60 cells · 46,774,932 bound evaluations · 3,836,827 certified exact anchors · 0 M4 violations.**
+> Full report: `results/reports/T-27-ged-bound-bakeoff/REPORT.md`.
+>
+> ### The production assignment, as selected
+>
+> | Computation | Method **+ options** | Basis |
+> |---|---|---|
+> | **Proven lower bound** | **`BRANCH_FAST`**, `--threads 1` | **wins 5 of 5 datasets.** Both companions agree |
+> | **Proven upper bound** | **`BIPARTITE`**, `--threads 1` | **wins 5 of 5 by elimination** — every tighter method fails the frozen M7 gate |
+>
+> **A method name is no longer a specification — the options string is part of it** (gedlib.md §5).
+>
+> ### The lower end does not rest on the gate at all
+>
+> The survey §5.2.4 proves **`BRANCH` and `BRANCH_FAST` are equivalent for constant edge edit
+> costs**, which D6 has. Measured **identical on all 3,836,827 certified pairs, max |diff| 0.0**, all
+> five datasets. **Decision 11 is upheld on a theorem plus a census-scale verification**, not on 400
+> LINUX pairs. The frozen tie-break resolves a 0 % tie on cost, and `BRANCH_FAST` is cheaper.
+>
+> ### The upper end is a constraint outcome, and it has two measured costs
+>
+> `BIPARTITE` is the **loosest** of seven upper bounds (mean relative error **1.095** vs `IPFP_MS`
+> 0.084 — 13×). It wins only because the frozen gate `< 1 ms/pair at n̄ = 30` excludes the rest.
+> **PI decision 2026-08-13: the frozen gate stands as primary; the tighter methods are a disclosed
+> sensitivity arm.** The two costs, both measured, both of which **T-05 and T-06 must carry**:
+>
+> 1. **D13 fires on 2 of 5 datasets.** `ρ(Lev, UB) − ρ(Lev, exact)` is **−0.219** on Letter LOW
+>    (CI [−0.243, −0.196]) and **−0.177** on Letter MED (CI [−0.201, −0.155]) — CI excludes 0 and
+>    |gap| > 0.05, so the bracket is **uninformative** there by the pre-registered rule, removing
+>    rows from F2. Under `BP_BEAM_DET` **no** dataset fires. `BRANCH_FAST` fires on **none**.
+> 2. **Its error grows ~10× faster in `n`.** On AIDS (n = 4→12) `BIPARTITE` runs 0.00 → **2.19**,
+>    slope **+0.294/node**, against `IPFP_MS` +0.029 and `BRANCH_FAST` +0.036. **The selected upper
+>    bound is the one whose error compounds fastest in exactly the direction AE.1 extrapolates.**
+>
+> ### Certification, now measured — §4's warning is discharged
+>
+> §4 said not to promise a rate before T-05 measured it per dataset. Measured, fraction with
+> `bound == exact`: **`BIPARTITE` 1.2–40.2 %**, `BRANCH_FAST` 20.2–85.8 %, `IPFP_MS` 72.9–97.3 %.
+> The reported bracket certifies at the **low** end of that range.
+>
+> ### `HED` is a fifth lower bound, not an exclusion
+>
+> Usable under `--edge-set-distances OPTIMAL` (gedlib.md §5). Loosest in the grid at **0.899**, which
+> **confirms** the published `BED ≥ HED` dominance over 3.8 M pairs — and it is the
+> ***Pattern Recognition*-venue** citation, so it now carries a number for EiC.b.
+>
+> ### Not settled by this ticket
+>
+> Selection was made at **`n ≤ 12`**, where exact GED exists; the licensed regime runs to `n = 98`.
+> The gap is **narrowed** — from 400 LINUX pairs at n̄ = 8.71 to 3.5 M pairs across five datasets —
+> **not closed**. §3.1 item 3, bracket width `(UB − LB)/UB` versus `n` across Suite 2, remains
+> **T-05's** and is now more urgent given the slope above.
 
 **Cost**: `BRANCH_FAST` / `IPFP` run at ~100 µs/pair at n̄ = 30, so all **21,710,892** Suite-2 pairs cost
 **≈ 0.57 core-hours**. **No pair subsampling is needed anywhere in Suite 2.**
@@ -224,13 +279,27 @@ A disagreement between the two ends is itself an informative and publishable out
 
 ## 5. References to cite
 
-Blumenthal & Gamper, *IEEE TKDE* 30(3):503–516, 2018 (BRANCH / BRANCH-FAST — our LB) ·
+> ## ⚠ CORRECTED 2026-08-13 (T-27) — five defects in the list below, all verified against DOI
+>
+> Full verified table with per-field provenance: `tasks/T-27-literature.md`.
+>
+> | Below | Verified |
+> |---|---|
+> | "Bougleux et al., 2017" — **no venue, volume or pages**, for the named primary UB | Bougleux, Brun, Carletti, Foggia, Gaüzère, Vento, *"Graph edit distance as a quadratic assignment problem"*, ***Pattern Recognition Letters*** **87**:38–46, 2017, `10.1016/j.patrec.2016.10.001`. **A *PR*-family venue** — the EiC.b argument no longer rests on HED alone |
+> | `BP_BEAM` = "Neuhaus & Riesen" | **Riesen, Fischer & Bunke**, *"Combining Bipartite Graph Matching and Beam Search for Graph Edit Distance Approximation"*, ANNPR 2014, LNAI **8774**:117–128, `10.1007/978-3-319-11656-3_11`. Its Crossref container-title is corrupt; the volume was read off the printed footer |
+> | "Zeng et al., *VLDB* 2009" | the journal is **PVLDB 2(1):25–36**, `10.14778/1687627.1687631` |
+> | `REFINE` = "Zeng et al. 2009 / GEDLIB" (ambiguous) | **Zeng's**, the same paper as `STAR`. GEDLIB's own header additionally miscredits K-Refine to Zeng |
+> | — | **The survey is missing entirely**: Blumenthal, Boria, Gamper, Bougleux & Brun, *VLDB Journal*, `10.1007/s00778-019-00544-1`. **Every complexity figure and both dominance claims in this file come from it**, so omitting it leaves the plan's central claims uncited |
+>
+> Bougleux and BP_BEAM were re-verified independently by the orchestrator via Crossref.
+
+~~Blumenthal & Gamper, *IEEE TKDE* 30(3):503–516, 2018 (BRANCH / BRANCH-FAST — our LB) ·
 Bougleux et al., 2017 (IPFP — our UB) ·
 Riesen & Bunke, *Image and Vision Computing* 27(7):950–959, 2009 (BIPARTITE — the reference point) ·
 Fischer et al., ***Pattern Recognition*** 48(2):331–343, 2015 (HED — venue fit for EiC.b) ·
 Zeng et al., *VLDB* 2009 (STAR — **already in our bibliography**, and commenting on it individually
 fixes the `methodology.tex:803` citation group) ·
 Blumenthal et al., GbRPR 2019 (GEDLIB itself) ·
-Jain et al., NeurIPS 2024 (GraphEdX, already cited).
+Jain et al., NeurIPS 2024 (GraphEdX, already cited).~~
 
 Slot accounting in [compliance](compliance.md).

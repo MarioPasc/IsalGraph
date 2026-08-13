@@ -139,6 +139,30 @@ Calling `get_lower_bound()` on an upper-bound method returns **0.00**; `HED` ret
 
 ## 5. Capability matrix — measured on Picasso 2026-08-11
 
+> ## ⚠ TWO CORRECTIONS 2026-08-13 (T-27) — read before using this table
+>
+> **1. `IPFP`'s row is not reproducible, and that is a property of the method, not of the machine.**
+> The local build returns `get_upper_bound() = 3.00` on this same P₄/C₄ instance where the true GED
+> is **1.00** and this table records 1.00. GEDLIB's `LSBasedMethod` — the base class of `IPFP`,
+> `REFINE` and `BP_BEAM` — defaults `--initialization-method` to **`RANDOM`** and `--randomness` to
+> **`REAL`**, i.e. one random start with a non-reproducible seed.
+>
+> Measured over 5 repetitions on seeded 5,000-pair samples, all five datasets:
+>
+> | Configuration | Pairs whose value changes between runs |
+> |---|---|
+> | GEDLIB defaults | **91.5 – 93.6 %**, spreads up to **10 edit operations** |
+> | Pinned `--threads 1 --randomness PSEUDO --initial-solutions 10` | **0.0000, every cell** |
+>
+> **A method name without its options string is not a specification.** Any GED number from
+> `IPFP`, `REFINE` or `BP_BEAM` must carry the options that produced it.
+>
+> **2. The runtime column is Picasso, and it is ~20× slow for this workload.** The workstation
+> measures **10–50 µs** at n = 4 where this table records 0.09–0.89 ms. Size a campaign from a
+> measured rate on the machine that will run it — never from this column. Rates at n̄ = 29.5:
+> `STAR` 104 µs · `BRANCH_FAST` 285 · `BIPARTITE` 345 · `BP_BEAM_DET` 1,161 · `BRANCH_TIGHT` 34,134 ·
+> `IPFP_MS` **808,120**.
+
 Smoke test `scratchpad/gedlib_api.py`, P₄ (path) vs C₄ (cycle), unit costs, true GED = 1:
 
 | Method | `get_lower_bound()` | `get_upper_bound()` | runtime | capability |
@@ -158,10 +182,40 @@ Smoke test `scratchpad/gedlib_api.py`, P₄ (path) vs C₄ (cycle), unit costs, 
 PARTITION, HYBRID, RING, ANCHOR_AWARE_GED, WALKS, IPFP, BIPARTITE, SUBGRAPH, NODE, RING_ML,
 BIPARTITE_ML, REFINE, BP_BEAM, SIMULATED_ANNEALING, HED, STAR.
 
-`HED` was earmarked as a *Pattern Recognition*-venue lower bound (Fischer et al. 2015) for EiC.b.
+> ## ⚠ CORRECTED 2026-08-13 (T-27) — HED is not broken. It is lower-bound-only, and it works.
+>
+> Two separate claims below were wrong, and both were about the *library* rather than about HED.
+>
+> | Asserted | Measured |
+> |---|---|
+> | `get_upper_bound() = inf` is an accessor defect | **By design.** `include/gedlib-master/src/methods/hed.ipp:55` calls only `result.set_lower_bound(hed)`. HED is a **lower-bound-only** method, and the survey's Table 4 lists it `upper bound: no` |
+> | `get_lower_bound() = 0.00` means it is unusable | **Valid but vacuous under D6.** The default `--edge-set-distances HED` scores incident-edge sets by a row/column-min sum, which is identically 0 when edge substitution is free — which is exactly our cost model. It is a correct bound; it is just the trivial one |
+>
+> **`--edge-set-distances OPTIMAL` replaces that with an optimal LSAPE and the bound becomes
+> non-degenerate.** Verified on four hand-built pairs under unit costs:
+>
+> | pair | exact | HED default | **HED OPTIMAL** | BRANCH |
+> |---|---:|---:|---:|---:|
+> | P₄ vs C₄ | 1.0 | 0.00 | **0.50** | 1.00 |
+> | K₁,₄ vs P₅ | 4.0 | 0.00 | **1.25** | 2.00 |
+> | K₄ vs C₄ | 2.0 | 0.00 | **2.00** | 2.00 |
+> | P₆ vs K₁,₅ | 6.0 | 0.00 | **1.75** | 3.00 |
+>
+> Values are quarter-integers because HED charges each edge at both of its endpoints and halves.
+>
+> **What this changes**: HED ran as a full lower-bound cell over the whole Suite-1 census in T-27 and
+> **produces a measurement, not a footnote** — which matters because it is the
+> ***Pattern Recognition*-venue** citation serving EiC.b. It is the **loosest** bound in the grid
+> (mean relative error **0.899** against BRANCH_FAST's 0.166), which **confirms** the published
+> `BED ≥ HED` dominance at census scale. Accepted options, read from `hed.ipp`:
+> `--lsape-model`, `--threads`, `--edge-set-distances`.
+>
+> **What survives**: the instruction to cite it in related work regardless.
+
+~~`HED` was earmarked as a *Pattern Recognition*-venue lower bound (Fischer et al. 2015) for EiC.b.
 It returns `LB = 0, UB = inf` under default options — **unresolved, not usable until diagnosed**,
 most likely it needs explicit method options. **Cite it in related work regardless**
-([compliance](compliance.md)); report numbers from it only if the accessor issue resolves.
+([compliance](compliance.md)); report numbers from it only if the accessor issue resolves.~~
 
 ---
 

@@ -23,9 +23,26 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 > ⚠ **T-02 found that neither bracket end was selected by measurement.** `IPFP` has **never been
 > measured against exact GED** — [approx_ged](approx_ged.md) §2 says so in its own words —
 > and `BRANCH_FAST` rests on **400 LINUX pairs at n̄ = 8.71**, licensing a regime to `n = 98`.
-> **T-27** runs the full proven-method grid against T-03's 3,897,911 certified exact values for
+> ~~**T-27** runs the full proven-method grid against T-03's 3,897,911 certified exact values for
 > ≈ 5 core-hours. **T-27 gates T-05.** Until it closes, both are *defaults*, not selections, and
-> ρ(exact, LB) = 0.859 / ρ(exact, UB) = 0.522 may be quoted **only with "on 400 LINUX pairs"**
+> ρ(exact, LB) = 0.859 / ρ(exact, UB) = 0.522 may be quoted **only with "on 400 LINUX pairs"**~~
+>
+> ## ✅ T-27 CLOSED 2026-08-13 — T-05 is unblocked. Two warnings it must carry.
+>
+> **`BRANCH_FAST` / `BIPARTITE`, selected by measurement.** But the upper end is a *constraint*
+> outcome — `BIPARTITE` is the **loosest** of seven upper bounds and wins only because the frozen
+> M7 gate excludes every tighter one. **PI decision: frozen gate primary, tighter methods as a
+> disclosed sensitivity arm.** Two consequences that are not optional for **T-05 and T-06**:
+>
+> 1. **D13 fires on 2 of 5 Suite-1 datasets under `BIPARTITE`**, removing rows from the F2 family
+>    wherever it fires. `BP_BEAM_DET` would fire on none. Budget for a smaller `N_actual`.
+> 2. **`BIPARTITE`'s relative error grows ~10× faster in `n`** than any alternative. The size-scaling
+>    argument AE.1 attacks is carried by the bound that degrades fastest with size, so
+>    `(UB − LB)/UB` versus `n` (approx_ged §3.1 item 3) is now **T-05's most important measurement**,
+>    not a nice-to-have.
+>
+> **Also**: a method name without its options string is no longer a valid specification —
+> GEDLIB's upper bounds vary on 91–94 % of pairs at library defaults.
 > attached. Inherits: **T-05, T-06, T-20**.
 
 > ⚠ **T-03 invalidated a premise that T-05, T-06 and T-22 all read.** GraphEdX's published GED uses
@@ -104,7 +121,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 | ~~**T-25**~~ | ~~Restore validation gate 2, or retire it on the record~~ → **CLOSED 2026-08-12 by option A.** `ged_bounds.py` written and **tracked in the repo**; gate 2 executable and **passing** (0 violations / 400 LINUX pairs); 35 unit tests. Two findings carried to T-05: the upper bound is **not symmetric**, and **the retired H4 numbers do not reproduce** | — | **done** | — | [exact_ged](exact_ged.md) §4 |
 | **T-26** | **Bibliography-slot and page-budget reconciliation** — the two arithmetics the EiC checks independently and no other ticket owns end to end. **Runs after T-08 and T-19, before T-15** | T-08, T-19 | 0.5 | **P0 — EiC pass/fail** | [compliance](compliance.md) §2, [manuscript](manuscript.md) §2–§3 |
 
-| **T-27** | **GED bound bake-off** — select **both** bracket ends by measurement, not by default. LB ∈ {BRANCH, BRANCH_FAST, BRANCH_TIGHT, STAR}, UB ∈ {IPFP, REFINE, BIPARTITE, BP_BEAM}, per dataset, against T-03's **3,897,911 certified exact** values. Deliver **one plot + one significance table + one literature table per end**. ≈ 5–20 core-h. **Gates T-05** | T-03 | 1–2 | **P0** | [T-27 spec](../tasks/T-27-spec.md), [approx_ged](approx_ged.md) §2 |
+| ~~**T-27**~~ | ~~GED bound bake-off — select both bracket ends by measurement~~ → **DONE 2026-08-13.** **60 cells, 46,774,932 bound evaluations, 0 M4 violations, ≈ 7 core-h.** **LB = `BRANCH_FAST` (5 of 5); UB = `BIPARTITE` (5 of 5, by elimination).** Four findings carry: **`BRANCH` ≡ `BRANCH_FAST` is PROVEN under D6** (survey §5.2.4) and measured identical on all 3,836,827 certified pairs — decision 11 upheld on a theorem, not on 400 LINUX pairs; **GEDLIB's UBs vary on 91–94 % of pairs at defaults** (`RANDOM`/`REAL`), 0 % pinned, so **a method name without options is not a specification**; **`BIPARTITE` trips D13 on 2 of 5 datasets** (Letter LOW −0.219, MED −0.177) where `BP_BEAM_DET` trips none; **its error grows ~10× faster in `n`** (AIDS slope +0.294/node vs `IPFP_MS` +0.029). **`HED` resolved** — LB-only by design, usable with `--edge-set-distances OPTIMAL`, loosest in the grid, confirming `BED ≥ HED` | T-03 | **done** | — | [REPORT](/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/results/reports/T-27-ged-bound-bakeoff/REPORT.md), [article notes](../tasks/T-27-article-notes.md), [approx_ged](approx_ged.md) §2 RESULT |
 
 **Retired**: ~~T-01b~~ (new-dataset audit — **superseded**: its numbers are among the unverified ones,
 see the header warning) · ~~T-10~~ (merged into T-09) ·

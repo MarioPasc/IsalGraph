@@ -53,6 +53,27 @@ the answer to R3.5c.
 
 ### D6 explained — one cost model, for *both* experiments
 
+> ## ➕ ADDED 2026-08-13 (T-27) — D6 carries an unstated precondition that two methods depend on
+>
+> D6 is stated as a choice about comparability. It is also a **validity precondition** for part of
+> the bound machinery, and that was nowhere written down:
+>
+> - **`STAR` is only a proven lower bound under *uniform* edit costs** (Zeng et al., PVLDB
+>   2(1):25–36, Lemma 4.2). We satisfy this **only because our graphs are effectively unlabeled** —
+>   node and edge attributes are constant dummies, and IAM Letter's `labels` array is a graph-level
+>   class label, not a node label. **If a labelled variant is ever run, `STAR`'s validity is not
+>   guaranteed and must be re-derived**, not assumed. This bears directly on [labels](labels.md)
+>   Tier 2: promoting labels changes which GED bounds remain proven.
+> - **`BRANCH` and `BRANCH_FAST` are *equivalent*, not merely ordered, under constant edge edit
+>   costs** (survey §5.2.4) — which D6 has. T-27 measured them identical on all 3,836,827 certified
+>   pairs. So D6 does not merely make the two comparable; it **collapses them into one method**, and
+>   the choice between them is a cost decision, not an empirical one.
+> - **A zero lower bound is legitimate under D6.** Free node *and* edge substitution means any
+>   degree-preserving assignment costs nothing, so two non-isomorphic graphs with identical degree
+>   sequences get `LB = 0`. Verified: C₆ vs two disjoint triangles has exact GED **4.0** and all four
+>   LB methods return **0.00**, all valid. **Do not treat `LB == 0` as evidence of a defect** — it is
+>   ~1 % of certified LINUX pairs and far more on Letter, where n̄ = 4.7 makes degree collisions common.
+
 > ## ⚠ CORRECTED 2026-08-13 — the premise below is wrong; the decision survives
 >
 > This paragraph said LINUX and AIDS charge **zero for node operations**. **They do not.** T-03
