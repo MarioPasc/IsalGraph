@@ -78,7 +78,7 @@ I had not yet reported complete, so I took it.
 | `benchmarks/real_data/eval_setup/approx_ged_crossfill.py` | Joins the three role campaigns into one shared bracket; derives `certified_mask` |
 | `benchmarks/real_data/eval_setup/approx_ged_subsample_merge.py` | Flat `(dataset_key, pair_i, pair_j)` join for the `ubt` role |
 | `tests/unit/test_approx_ged_crossfill.py` | 21 tests |
-| `tests/unit/test_approx_ged_subsample_merge.py` | 18 tests |
+| `tests/unit/test_approx_ged_subsample_merge.py` | 19 tests |
 | `.claude/notes/2026-08-13-t05-bounds/t05-runner.md` | This log |
 
 **Modified**
@@ -105,6 +105,7 @@ I had not yet reported complete, so I took it.
 | `38340ef` | `feat(T-05): cross-fill joins the role campaigns into one bracket` |
 | `20537eb` | `fix(T-05): derive the compute mode instead of storing it on PairResult` |
 | `e69c0f4` | `feat(T-05): flat subsample join for the ubt role` |
+| `492124a` | `feat(T-05): optional per-pair upper-bound orientations` |
 
 **A bookkeeping defect in the commits, stated plainly.** `d611e59` and `38340ef` carry each other's
 subject lines: `approx_ged_crossfill.py` landed in the commit labelled `test(...)` and
@@ -163,10 +164,10 @@ the real LINUX cohort for the values (§6).
 
 ## 5. Test results
 
-**Command:** `$PY -m pytest tests/unit/ -q`
+**Command:** `$PY -m pytest tests/unit/ -q` (final, at `492124a`)
 
 ```
-8 failed, 929 passed, 44 skipped in 16.95s
+8 failed, 955 passed, 44 skipped in 16.85s
 
 FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_low]
 FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_med]
@@ -179,9 +180,9 @@ FAILED tests/unit/test_export_graphs.py::test_real_aids_retains_within_split_str
 ```
 
 Per owned file: `test_ged_backends.py` 78 passed (58 pre-existing, unchanged), `test_ged_exact_runner.py`
-44 passed (30 pre-existing), `test_ged_merge_shards.py` 31 passed (22 pre-existing),
-`test_approx_ged_crossfill.py` 21 passed, `test_approx_ged_subsample_merge.py` 18 passed.
-`test_ged_gates.py` 38 passed, untouched.
+49 passed (30 pre-existing), `test_ged_merge_shards.py` 33 passed (22 pre-existing),
+`test_approx_ged_crossfill.py` 21 passed, `test_approx_ged_subsample_merge.py` 19 passed.
+`test_ged_gates.py` 38 passed, untouched. 68 tests added in total.
 
 `$PY -m ruff check` clean on all ten owned files. (Repo-wide `ruff check benchmarks/` reports one
 pre-existing E501 in `eval_setup/eval_setup.py:579`, which I do not own and did not touch.)
@@ -239,12 +240,57 @@ orientations** and the minimum taken, while `BRANCH_FAST` is computed in one. So
 1.81×) and dropping the lower end removes 1 of 3 (measured 1.28×). **The `ub` and `ubs` campaigns
 should be budgeted at roughly 78 % of a two-sided run, not 50 %.**
 
-**DoD 5 — measured, and smaller than the contract anticipated.** 1.03×–1.13× across the four locally
-exported cohorts. The predicate fires on 35/3000 (linux), 40/3000 (aids), 460/3000 (letter_low) and
-133/3000 (letter_high) pairs under the lazy path — the letter_low figure, 15.3 %, independently
-corroborates the 15.5 % zero-pair rate in the brief. The change is still correct and still strictly
-cheaper, but the ~30-node COIL-DEL / Mutagenicity case that motivates it is **not measurable here**
-because those cohorts are not exported locally, and I make no claim about it.
+**DoD 5 — a negative result. The lazy guard buys nothing measurable, and CONTRACTS §6.1's premise is
+wrong.** First measured on the four Suite-1 cohorts (1.03×–1.13×), then re-measured on the Suite-2
+exports once `wave-t05-export` produced them, which is the ~30-node case §6.1 names:
+
+| Cohort | N | n̄ | n_max | lazy | eager | speed-up | predicate fired (lazy) | predicate alone |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `coil_del` | 3,900 | 21.5 | 77 | 938.4 µs/pair | 936.9 | **0.998×** | 2/3000 (0.07 %) | 0.6 µs (0.1 % of total) |
+| `mutagenicity` | 4,040 | 28.5 | 98 | 864.9 | 868.4 | **1.004×** | 7/3000 (0.23 %) | 4.4 µs (0.5 %) |
+| `aids_iam` | 1,811 | 14.0 | 85 | 280.5 | 281.8 | 1.005× | 21/3000 (0.70 %) | 1.8 µs (0.6 %) |
+| `iam_letter_high` | 2,059 | 4.6 | 9 | 74.2 | 65.6 | 0.884× | 121/3000 (4.03 %) | 2.3 µs (3.5 %) |
+
+**The contract's reasoning does not survive measurement.** §6.1 says the eager guard means "a VF2 call
+on ~30-node graphs, 21.7 M times". It is not. `zero_distance_is_attainable` returns on the
+`n₁ == n₂ and m₁ == m₂` precheck before VF2 is entered, and that precheck rejects almost everything:
+
+| Cohort | 5,000 pairs: VF2 actually entered | isomorphic | whole guard |
+|---|---:|---:|---:|
+| `coil_del` | 25 (**0.50 %**) | 3 | 0.58 µs/pair |
+| `mutagenicity` | 32 (**0.64 %**) | 4 | 1.03 µs/pair |
+| `aids_iam` | 215 (4.30 %) | 8 | 2.54 µs/pair |
+| `iam_letter_low` | 1,194 (23.88 %) | 785 | 6.80 µs/pair |
+
+So the eager guard costs 0.58–1.03 µs/pair on exactly the cohorts it was supposed to be expensive on,
+against a GEDLIB solve of 865–938 µs/pair — **0.1 %**. No arrangement of a predicate that is 0.1 % of
+the work can produce more than a 1.001× speed-up, which is what was measured. Where VF2 *is* entered
+often (letter_low, 23.9 %) the graphs have n ≤ 7 and it is still 6.8 µs/pair. The `iam_letter_high`
+figure of 0.884× is noise at 74 µs/pair, not a real slowdown; it is reported unsmoothed.
+
+**Verdict.** The change is correct, behaviour-identical, and strictly not-more-work, so it stays. It
+is **not** a performance improvement and should not be described as one. If anyone sizes a job on the
+strength of it, they will be disappointed by roughly the whole amount.
+
+**The upper bound's orientation asymmetry (added mid-task, ruling (b) on gap 1).** Measured under
+GEDLIB `BIPARTITE`, which is the production method, and it disagrees with what the manuscript prints:
+
+| Source | Cohort | n̄ | asymmetric | mean gain |
+|---|---|---:|---:|---:|
+| `decisions.md` §6 (our own BP, 400 pairs) | LINUX | 8.71 | **33.2 %** | **1.15** |
+| this measurement (GEDLIB `BIPARTITE`, all pairs) | LINUX, 3,916 | 8.71 | **22.8 %** | 0.737 over all pairs, **3.24** over asymmetric ones (max 12) |
+| this measurement | `mutagenicity`, 4,000 | 28.5 | **11.2 %** | 0.335 over all, **3.00** over asymmetric (max 18) |
+
+The rate **falls** with graph size (22.8 % → 11.2 %) while the magnitude does not, so the manuscript's
+400-pair LINUX figure generalises in neither direction. The reverse orientation was tighter on 12.5 %
+of LINUX pairs against the forward's 10.3 %, i.e. roughly balanced — the argument order carries almost
+no information, which is what an undirected cohort should show.
+
+Flag mechanics verified on real data: with `--record-orientations` **off** the shard holds exactly
+`{pair_index, ged, lb, ub, certified, seconds, meta}` and the meta has no `ub_orientation` key; **on**
+it adds exactly `ub_fwd` and `ub_rev`; `ub` is bit-identical either way; `ub == min(fwd, rev)` on every
+pair; and T-27 `BIPARTITE` parity is unaffected — sha `2528fd19b98accb0`, max abs diff 0.0, with the
+flag on.
 
 **End-to-end detail.** Three real role files were produced through the real CLIs and cross-filled.
 All ten CONTRACTS §4 keys present with dtypes identical to T-03's `linux.npz`
@@ -350,7 +396,9 @@ schema, §7 merge CLI.
 
 | Item | Severity | Detail | Suggested owner |
 |---|---|---|---|
-| §5 wants `value_fwd`/`value_rev`; §6.2's shard cannot carry them | **medium** | Shipped as `NaN` with the reason in metadata. If the analysis needs real per-orientation values, the shard schema must be unfrozen — a decision above my authority | orchestrator |
+| The manuscript's 33.2 % / 1.15 orientation figure is contradicted | **high** | Measured 22.8 % on all LINUX pairs and 11.2 % on mutagenicity, with the rate falling in graph size. `decisions.md` §6 must be rewritten from the subsample, not patched | orchestrator / the analysis wave |
+| CONTRACTS §6.1's rationale for the lazy guard is factually wrong | **medium** | The guard is 0.1 % of per-pair cost, not a VF2 call 21.7 M times. The change is harmless and stays, but §6.1's text should not be quoted in the paper | orchestrator |
+| ~~§5 wants `value_fwd`/`value_rev`; §6.2's shard cannot carry them~~ | resolved | Ruling (b): optional `ub_fwd`/`ub_rev` columns behind `--record-orientations`; dense roles get an aggregate in metadata only | — |
 | `ub`/`ubs` campaigns cost ~78 % of a two-sided run, not 50 % | **medium** | Measured, not estimated (§6). A 50 % assumption under-provisions the SCBI wallclock | orchestrator |
 | Probe not exercised through the multi-worker pool | low | Fatal either way, but the exception type crossing the pool boundary is untested | next wave |
 | Lazy `zero_ok` unmeasured at COIL-DEL / Mutagenicity scale | low | Those cohorts are not exported locally. Worth re-measuring once they are, since that is where the contract expects the gain | next wave |
@@ -365,7 +413,7 @@ schema, §7 merge CLI.
 | 2 | `lb <= exact <= ub` on all 3,870 certified pairs at 1e-9 | **yes** | 0 violations either side; filtered on `certified_mask & isfinite` |
 | 3 | Every existing test passes with assertions unchanged | **yes** | `git diff` on the three test files is insertions only (0 deletions). One existing assertion was displaced by an Edit and restored to its original position before commit; no assertion was altered. `test_ged_gates.py` passes untouched after the §2 rework |
 | 4 | `--compute lb`/`ub` each halve the work; µs/pair recorded | **partial** | Measured and recorded, but **the premise is wrong**: 1.81× and 1.28×, not 2× and 2×, for the structural reason in §6. Reported rather than smoothed over |
-| 5 | Lazy `zero_ok` behaviour-identical, not invoked when bounds non-zero, speed-up measured | **yes** | `test_the_predicate_is_not_called_when_no_read_returns_zero`; 1.03×–1.13× measured, with the unmeasured case named |
+| 5 | Lazy `zero_ok` behaviour-identical, not invoked when bounds non-zero, speed-up measured | **yes, with a negative result** | `test_the_predicate_is_not_called_when_no_read_returns_zero`; measured 0.998×–1.005× on the large Suite-2 cohorts. The guard is 0.1 % of the work and §6.1's "21.7 M VF2 calls" premise is wrong — see §6 |
 | 6 | The accessor probe fires | **yes** | `test_a_method_read_through_the_wrong_accessor_...` and `test_an_infinite_read_fires_the_probe`; also fires at construction via the static table |
 | 7 | Cross-fill: three files, atomic, idempotent, refuses mismatched ids, leaves `ged`/`seconds` alone | **yes** | 21 tests plus the real-data run in §6 |
 | 8 | Merged output loads with the exact loader, ten keys, dtypes; G4 additions fire | **yes** | Real-data dtype comparison against T-03's `linux.npz`; `test_an_all_zero_matrix_fails_the_gate` |
@@ -385,10 +433,13 @@ relaxation in `__post_init__`, because it loosens a Contract B invariant, and al
 so the pre-existing test still passes unchanged, it is the change most likely to have a consequence I
 have not thought of.
 
-What I am *not* confident about: the lazy `zero_ok` change is justified by the contract's reasoning
-rather than by my measurements, which show only 1.03×–1.13× on the cohorts I can reach. It is
-strictly cheaper and definitely correct, but if anyone is counting on a large speed-up from it at
-Suite-2 scale, that number does not exist yet.
+Two results here are negative and both matter more than the code. The lazy `zero_ok` change buys
+**nothing** — 0.998×–1.005× on the very cohorts CONTRACTS §6.1 invokes — because the guard is 0.1 % of
+per-pair cost, and §6.1's stated reason for it is factually wrong. And the orientation measurement
+contradicts the manuscript's published 33.2 % / 1.15 figure in a way that a reviewer could find
+independently: the asymmetry rate falls from 22.8 % at n̄ = 8.7 to 11.2 % at n̄ = 28.5, so the
+400-pair LINUX number is not a cohort property. `decisions.md` §6 needs rewriting from the subsample,
+not adjusting.
 
 ## 12. Prompt as received, verbatim
 
