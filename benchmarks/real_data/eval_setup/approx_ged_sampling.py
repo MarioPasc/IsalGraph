@@ -96,6 +96,20 @@ DEFAULT_OUT_DIR = f"{_SANDISK}/data/source/APPROX_GED/UB_TIGHT"
 PAIR_LIST_SUBDIR = "pair_lists"
 SUBSAMPLE_NAME = "subsample_pairs.npz"
 
+#: The in-job Picasso probe (T-05-design section 5), which fits a per-pair cost curve in ``n``
+#: before the launcher sizes the production jobs. **Not** a cohort estimate: an equal-per-bin draw
+#: is right for a curve fit and wrong for a mean, and the two must not be confused.
+PROBE_TOTAL = 3000
+PROBE_NAME = "probe_pairs.npz"
+PROBE_PAIR_LIST_SUBDIR = "probe_pair_lists"
+
+BIN_TABLE_NAME = "bin_table.json"
+
+#: A bin whose largest contributor exceeds this share is reported as a single-dataset statement.
+#: ``[80, 99)`` is 97.1 % Mutagenicity, so any cost or tightness number quoted at the top of the
+#: size range is very nearly a claim about one dataset and must be labelled as one.
+DOMINANCE_WARN_SHARE = 0.90
+
 #: Explicit width for the ``dataset_key`` column. ``np.full(size, key, dtype=np.str_)`` silently
 #: yields ``<U1`` and truncates every key to its first character, which merged the three Letter
 #: datasets under ``'i'`` and both AIDS cohorts under ``'a'`` with no error raised. Measured on the
@@ -410,6 +424,188 @@ def draw(
     )
 
 
+def pool_pair_index(pool: DatasetPairs) -> np.ndarray:
+    """Return the linear upper-triangle index of every pooled pair.
+
+    ``np.triu_indices`` enumerates row-major, which is the order ``ged_pair_index`` numbers pairs
+    in, so a pair's **position in the pool is its linear index**. Asserted rather than assumed by
+    ``test_pool_position_equals_pair_index``, which checks it against
+    :func:`ged_pair_index.indices_of_pairs` for several graph counts. Relying on it keeps the
+    exclusion mask O(1) in memory instead of materialising an int64 index array per dataset.
+    """
+    return np.arange(pool.pair_i.shape[0], dtype=np.int64)
+
+
+def allocate_evenly(total: int, caps: list[int]) -> list[int]:
+    """Spread ``total`` over slots as equally as their capacities allow.
+
+    Water filling: give every unsaturated slot an equal share, let saturated slots return their
+    excess, repeat. Deterministic -- ties and the final remainder go to the lowest index -- so the
+    allocation is a pure function of ``(total, caps)`` and carries no RNG state.
+
+    Parameters
+    ----------
+    total : int
+        Units to allocate. Allocation stops early if the capacities cannot absorb them.
+    caps : list[int]
+        Per-slot capacity.
+
+    Returns
+    -------
+    list[int]
+        Allocation per slot, summing to ``min(total, sum(caps))``.
+    """
+    n = len(caps)
+    alloc = [0] * n
+    remaining = total
+    while remaining > 0:
+        spare = [i for i in range(n) if alloc[i] < caps[i]]
+        if not spare:
+            break
+        share = remaining // len(spare)
+        if share == 0:
+            for i in spare[:remaining]:
+                alloc[i] += 1
+                remaining -= 1
+            break
+        for i in spare:
+            take = min(share, caps[i] - alloc[i])
+            alloc[i] += take
+            remaining -= take
+    return alloc
+
+
+def draw_probe(
+    pools: list[DatasetPairs],
+    exclude: Subsample | None = None,
+    seed: int = SEED,
+    total: int = PROBE_TOTAL,
+) -> Subsample:
+    """Draw the in-job probe sample: equal per bin, then equal per dataset within a bin.
+
+    **Allocation rule, and why this one.** The probe exists to fit a per-pair cost curve in ``n``,
+    not to estimate a cohort mean. Cost scales roughly as ``max(n1, n2)^3``, so a proportional draw
+    would put most of its 3,000 pairs in the small-``n`` corner -- where the pool is largest and the
+    cost curve is flattest -- and would measure a rate biased **low**, under-sizing every job. The
+    design therefore spans the range instead:
+
+    1. **Equal per bin.** 3,000 over the 14 bins by :func:`allocate_evenly`: 215 to bins 0-3 and 214
+       to the rest, since 3000 = 14 x 214 + 4 and the remainder goes to the lowest indices.
+    2. **Equal per dataset within a bin**, over the datasets actually present in that bin, again by
+       :func:`allocate_evenly`. A dataset with fewer pairs than its share contributes all it has
+       and the shortfall is redistributed to the others, which is what keeps every one of the ten
+       datasets represented even where it is rare -- ``linux`` has only 3 pairs in bin 1.
+
+    Where the two axes conflict the bin axis wins, exactly as instructed: coverage in ``n`` is what
+    the curve fit needs, and dataset spread is the secondary objective served within each bin.
+
+    Parameters
+    ----------
+    pools : list[DatasetPairs]
+        One per dataset, in the frozen dataset order.
+    exclude : Subsample, optional
+        Pairs to remove from the candidate pool before drawing, normally the section 5 subsample.
+        Disjointness is preferred so probe timings and ``IPFP_MS`` measurements never share a pair.
+    seed : int, optional
+        Frozen at :data:`SEED`. An independent stream from :func:`draw`: the pools differ (these are
+        exclusion-masked) and the allocation rule differs, so the two draws cannot coincide.
+    total : int, optional
+        Frozen at :data:`PROBE_TOTAL`.
+
+    Returns
+    -------
+    Subsample
+        Pairs sorted by ``(dataset order, pair_index)``, with realised per-bin counts.
+
+    Raises
+    ------
+    SamplingError
+        If the drawn total exceeds ``total``.
+    """
+    rng = np.random.default_rng(seed)
+
+    excluded: dict[str, np.ndarray] = {}
+    if exclude is not None:
+        for pool in pools:
+            mask = np.zeros(pool.pair_i.shape[0], dtype=bool)
+            taken = exclude.pair_index[exclude.dataset_key == pool.key]
+            if taken.size:
+                mask[taken.astype(np.int64)] = True
+            excluded[pool.key] = mask
+
+    # Bin -> dataset ordinal -> candidate positions, after exclusion.
+    members: dict[int, dict[int, np.ndarray]] = {}
+    population: dict[int, int] = {}
+    for b in range(N_BINS):
+        members[b] = {}
+        for d, pool in enumerate(pools):
+            positions = np.flatnonzero(pool.bin_index == b)
+            if pool.key in excluded and positions.size:
+                positions = positions[~excluded[pool.key][positions]]
+            if positions.size:
+                members[b][d] = positions
+        population[b] = sum(int(v.size) for v in members[b].values())
+
+    per_bin = allocate_evenly(total, [population[b] for b in range(N_BINS)])
+
+    drawn: dict[int, int] = {}
+    by_dataset: dict[str, dict[int, int]] = {pool.key: {} for pool in pools}
+    chosen: dict[int, list[np.ndarray]] = {}
+    for b in range(N_BINS):
+        ordinals = sorted(members[b])
+        if not ordinals or per_bin[b] == 0:
+            drawn[b] = 0
+            continue
+        caps = [int(members[b][d].size) for d in ordinals]
+        share = allocate_evenly(per_bin[b], caps)
+        taken = 0
+        for d, take in zip(ordinals, share, strict=True):
+            by_dataset[pools[d].key][b] = take
+            if take == 0:
+                continue
+            candidates = members[b][d]
+            picks = np.sort(rng.choice(candidates.size, size=take, replace=False))
+            chosen.setdefault(d, []).append(candidates[picks])
+            taken += take
+        drawn[b] = taken
+
+    grand = sum(int(rows.size) for rows_list in chosen.values() for rows in rows_list)
+    if grand > total:
+        raise SamplingError(f"probe drew {grand} pairs, ceiling is {total}")
+
+    keys: list[np.ndarray] = []
+    out_i: list[np.ndarray] = []
+    out_j: list[np.ndarray] = []
+    out_n: list[np.ndarray] = []
+    out_b: list[np.ndarray] = []
+    out_k: list[np.ndarray] = []
+    for d, pool in enumerate(pools):
+        if d not in chosen:
+            continue
+        rows = np.sort(np.concatenate(chosen[d]))
+        keys.append(np.full(rows.size, pool.key, dtype=_KEY_DTYPE))
+        out_i.append(pool.pair_i[rows])
+        out_j.append(pool.pair_j[rows])
+        out_n.append(pool.n_max[rows])
+        out_b.append(pool.bin_index[rows])
+        out_k.append(pool_pair_index(pool)[rows])
+
+    empty_u = np.empty(0, dtype=_KEY_DTYPE)
+    dataset_key = np.concatenate(keys) if keys else empty_u
+    _check_dataset_keys(dataset_key)
+    return Subsample(
+        dataset_key=dataset_key,
+        pair_i=np.concatenate(out_i).astype(np.int32) if out_i else np.empty(0, np.int32),
+        pair_j=np.concatenate(out_j).astype(np.int32) if out_j else np.empty(0, np.int32),
+        n_max=np.concatenate(out_n).astype(np.int32) if out_n else np.empty(0, np.int32),
+        bin_index=np.concatenate(out_b).astype(np.int8) if out_b else np.empty(0, np.int8),
+        pair_index=np.concatenate(out_k).astype(np.int64) if out_k else np.empty(0, np.int64),
+        bin_population=population,
+        bin_drawn=drawn,
+        bin_population_by_dataset=by_dataset,
+    )
+
+
 def content_digest(sample: Subsample) -> str:
     """Return a sha256 over the drawn pair list, independent of zip framing.
 
@@ -501,12 +697,211 @@ def write_subsample(
     return pooled, written
 
 
-def run(
+def build_bin_table(pools: list[DatasetPairs]) -> dict[str, object]:
+    """Build the per-bin pair census the Picasso launcher sizes its jobs from.
+
+    The launcher must sum a measured per-bin rate against these counts rather than multiply one mean
+    rate by 21,710,892. Suite 2 spans ``n_bar = 4.07`` to ``31.68`` with a tail to ``n = 98``, and
+    per-pair cost scales roughly as ``max(n1, n2)^3``, so a single mean rate is wrong by a large
+    factor in both directions.
+
+    ``dominance`` is not decoration. Bin ``[80, 99)`` is 97.1 % Mutagenicity, so a cost or tightness
+    number quoted at the top of the size range is very nearly a statement about one dataset.
+    Recording the dominant share beside every bin means whoever writes the size-scaling figure
+    cannot read a top-of-range value without also reading what it rests on.
+
+    Returns
+    -------
+    dict
+        ``bin_edges`` (15), ``totals`` (14), ``datasets`` (key -> 14 counts), plus ``dominance`` and
+        ``metadata``.
+    """
+    datasets: dict[str, list[int]] = {}
+    for pool in pools:
+        counts = np.bincount(pool.bin_index.astype(np.int64), minlength=N_BINS)
+        datasets[pool.key] = [int(counts[b]) for b in range(N_BINS)]
+
+    totals = [sum(datasets[pool.key][b] for pool in pools) for b in range(N_BINS)]
+
+    dominance: list[dict[str, object]] = []
+    warnings: list[str] = []
+    for b in range(N_BINS):
+        present = {key: counts[b] for key, counts in datasets.items() if counts[b] > 0}
+        if not present:
+            dominance.append(
+                {
+                    "bin": b,
+                    "range": [BIN_EDGES[b], BIN_EDGES[b + 1]],
+                    "total": 0,
+                    "n_datasets_present": 0,
+                    "dominant_dataset": None,
+                    "dominant_count": 0,
+                    "dominant_share": 0.0,
+                    "single_dataset": False,
+                }
+            )
+            continue
+        key = max(present, key=lambda k: (present[k], k))
+        share = present[key] / totals[b]
+        single = share >= DOMINANCE_WARN_SHARE
+        entry: dict[str, object] = {
+            "bin": b,
+            "range": [BIN_EDGES[b], BIN_EDGES[b + 1]],
+            "total": totals[b],
+            "n_datasets_present": len(present),
+            "dominant_dataset": key,
+            "dominant_count": present[key],
+            "dominant_share": round(share, 4),
+            "single_dataset": single,
+        }
+        if single:
+            note = (
+                f"bin {b} [{BIN_EDGES[b]}, {BIN_EDGES[b + 1]}) is {share:.1%} {key}; "
+                f"any number quoted for this bin is very nearly a statement about {key} alone, "
+                f"not a property of graphs of this size"
+            )
+            entry["caveat"] = note
+            warnings.append(note)
+        dominance.append(entry)
+
+    return {
+        "bin_edges": list(BIN_EDGES),
+        "totals": totals,
+        "datasets": datasets,
+        "dominance": dominance,
+        "metadata": {
+            "n_bins": N_BINS,
+            "bin_rule": 'np.searchsorted(bin_edges, max(n1, n2), side="right") - 1',
+            "bins_are_right_open": True,
+            "stratum": "max(n1, n2)",
+            "pool_total_pairs": int(sum(totals)),
+            "datasets_in_order": [pool.key for pool in pools],
+            "dominance_warn_share": DOMINANCE_WARN_SHARE,
+            "single_dataset_bins": warnings,
+            "purpose": (
+                "sum a measured per-bin rate against these counts; do not multiply one mean rate "
+                "by the cohort pair total -- cost scales ~max(n1,n2)^3 and the cohort spans n=2..98"
+            ),
+            "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "code_commit": _git_commit(),
+            "schema_version": SCHEMA_VERSION,
+        },
+    }
+
+
+def write_bin_table(table: dict[str, object], path: str | Path) -> Path:
+    """Write ``bin_table.json`` and return its path."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(table, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    n_datasets = len(table["datasets"])  # type: ignore[arg-type]
+    logger.info("Wrote %s (%d bins x %d datasets)", out, N_BINS, n_datasets)
+    return out
+
+
+def write_probe(
+    sample: Subsample, metadata: dict[str, object], out_dir: str | Path
+) -> tuple[Path, list[Path]]:
+    """Write the probe pair list and one runner-consumable list per dataset.
+
+    Same file conventions as :func:`write_subsample`, so the runner consumes either unchanged.
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    pooled = out / PROBE_NAME
+    np.savez_compressed(
+        pooled,
+        dataset_key=sample.dataset_key,
+        pair_i=sample.pair_i,
+        pair_j=sample.pair_j,
+        n_max=sample.n_max,
+        bin_index=sample.bin_index,
+        pair_index=sample.pair_index,
+        metadata=np.array(json.dumps(metadata, sort_keys=True)),
+    )
+    logger.info("Wrote %s (%d pairs)", pooled, len(sample))
+
+    list_dir = out / PROBE_PAIR_LIST_SUBDIR
+    list_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for key in SUITE2_DATASETS:
+        mask = sample.dataset_key == key
+        if not bool(mask.any()):
+            continue
+        path = list_dir / f"{key}.npz"
+        np.savez_compressed(
+            path,
+            pair_index=np.sort(sample.pair_index[mask]).astype(np.int64),
+            metadata=np.array(json.dumps({"dataset": key, **metadata}, sort_keys=True)),
+        )
+        written.append(path)
+        logger.info("Wrote %s (%d pairs)", path, int(mask.sum()))
+    return pooled, written
+
+
+def build_probe_metadata(
+    sample: Subsample,
     export_dir: str | Path,
-    seed: int = SEED,
-    max_per_bin: int = MAX_PER_BIN,
-) -> Subsample:
-    """Read the exported datasets and draw the subsample.
+    seed: int,
+    total: int,
+    disjoint: bool,
+) -> dict[str, object]:
+    """Assemble the JSON metadata recorded beside the probe pair list."""
+    per_dataset = {key: int((sample.dataset_key == key).sum()) for key in SUITE2_DATASETS}
+    return {
+        "purpose": (
+            "in-job Picasso probe: fit a per-pair cost curve in n before the launcher sizes the "
+            "production jobs"
+        ),
+        "allocation_rule": (
+            "equal per bin, then equal per dataset within a bin, both by water filling with "
+            "redistribution of any shortfall; the bin axis wins where the two conflict"
+        ),
+        "allocation_rationale": (
+            "the probe fits a curve in n, it does not estimate a cohort mean. cost scales "
+            "~max(n1,n2)^3, so a proportional draw would concentrate in the small-n corner and "
+            "measure a rate biased LOW, under-sizing every job"
+        ),
+        "not_a_cohort_estimate": True,
+        "bin_edges": list(BIN_EDGES),
+        "n_bins": N_BINS,
+        "seed": seed,
+        "n_pairs": len(sample),
+        "target_pairs": total,
+        "disjoint_from_subsample": disjoint,
+        "n_per_bin": {str(b): sample.bin_drawn.get(b, 0) for b in range(N_BINS)},
+        "n_per_dataset": per_dataset,
+        "n_per_bin_per_dataset": {
+            key: {str(b): counts.get(b, 0) for b in range(N_BINS)}
+            for key, counts in sample.bin_population_by_dataset.items()
+        },
+        "candidate_population_per_bin": {
+            str(b): sample.bin_population.get(b, 0) for b in range(N_BINS)
+        },
+        "datasets": list(SUITE2_DATASETS),
+        "bin_rule": 'np.searchsorted(bin_edges, max(n1, n2), side="right") - 1',
+        "export_dir": str(export_dir),
+        "content_sha256": content_digest(sample),
+        "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "code_commit": _git_commit(),
+        "schema_version": SCHEMA_VERSION,
+    }
+
+
+def _overlap(first: Subsample, second: Subsample) -> int:
+    """Count pairs present in both samples, keyed on ``(dataset, pair_index)``.
+
+    Disjointness is checked rather than trusted: an overlap would let a probe timing and an
+    ``IPFP_MS`` measurement share a pair, which quietly couples the calibration to the thing it
+    calibrates.
+    """
+    left = {(str(k), int(p)) for k, p in zip(first.dataset_key, first.pair_index, strict=True)}
+    right = {(str(k), int(p)) for k, p in zip(second.dataset_key, second.pair_index, strict=True)}
+    return len(left & right)
+
+
+def build_pools(export_dir: str | Path) -> list[DatasetPairs]:
+    """Read every exported dataset and enumerate its pairs.
 
     Raises
     ------
@@ -526,7 +921,23 @@ def run(
         raise SamplingError(
             f"pool holds {pooled_pairs} pairs, locked cohort is {TOTAL_EXPECTED_PAIRS}"
         )
-    return draw(pools, seed=seed, max_per_bin=max_per_bin)
+    return pools
+
+
+def run(
+    export_dir: str | Path,
+    seed: int = SEED,
+    max_per_bin: int = MAX_PER_BIN,
+) -> Subsample:
+    """Read the exported datasets and draw the subsample.
+
+    Raises
+    ------
+    SamplingError
+        If a dataset is missing, a pair falls outside the frozen bins, or the pooled pair total
+        disagrees with the locked cohort.
+    """
+    return draw(build_pools(export_dir), seed=seed, max_per_bin=max_per_bin)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -551,11 +962,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        sample = run(args.export_dir)
+        pools = build_pools(args.export_dir)
     except SamplingError as exc:
         logger.error("%s", exc)
         return 1
 
+    sample = draw(pools, seed=SEED, max_per_bin=MAX_PER_BIN)
     metadata = build_metadata(sample, args.export_dir, SEED, MAX_PER_BIN)
     logger.info(
         "Drew %d pairs over %d non-empty bins (ceiling %d)",
@@ -573,22 +985,49 @@ def main(argv: list[str] | None = None) -> int:
             sample.bin_drawn.get(b, 0),
         )
 
+    probe = draw_probe(pools, exclude=sample, seed=SEED, total=PROBE_TOTAL)
+    probe_metadata = build_probe_metadata(probe, args.export_dir, SEED, PROBE_TOTAL, disjoint=True)
+    logger.info("Probe: %d pairs, %d datasets represented", len(probe), len(set(probe.dataset_key)))
+    for b in range(N_BINS):
+        logger.info(
+            "  probe bin %2d [%3d, %3d): candidates %9d, drawn %4d",
+            b,
+            BIN_EDGES[b],
+            BIN_EDGES[b + 1],
+            probe.bin_population.get(b, 0),
+            probe.bin_drawn.get(b, 0),
+        )
+
+    table = build_bin_table(pools)
+    for entry in table["dominance"]:  # type: ignore[index]
+        if entry.get("single_dataset"):
+            logger.warning("%s", entry["caveat"])
+
     if args.verify_reproducible:
-        try:
-            again = run(args.export_dir)
-        except SamplingError as exc:
-            logger.error("%s", exc)
-            return 1
+        again = draw(pools, seed=SEED, max_per_bin=MAX_PER_BIN)
+        probe_again = draw_probe(pools, exclude=again, seed=SEED, total=PROBE_TOTAL)
         if content_digest(again) != content_digest(sample):
-            logger.error("the draw is NOT reproducible: two runs disagree")
+            logger.error("the subsample draw is NOT reproducible: two runs disagree")
             return 1
-        logger.info("draw reproduces: content_sha256 %s", content_digest(sample))
+        if content_digest(probe_again) != content_digest(probe):
+            logger.error("the probe draw is NOT reproducible: two runs disagree")
+            return 1
+        logger.info("subsample reproduces: content_sha256 %s", content_digest(sample))
+        logger.info("probe reproduces:     content_sha256 %s", content_digest(probe))
+
+    overlap = _overlap(sample, probe)
+    if overlap:
+        logger.error("probe and subsample share %d pair(s); they must be disjoint", overlap)
+        return 1
+    logger.info("probe and subsample are disjoint (0 shared pairs)")
 
     if args.verify_only:
         logger.info("verify-only: nothing written")
         return 0
 
     write_subsample(sample, metadata, args.out)
+    write_probe(probe, probe_metadata, args.export_dir)
+    write_bin_table(table, Path(args.export_dir) / BIN_TABLE_NAME)
     return 0
 
 
