@@ -1,0 +1,162 @@
+{
+  "iam_letter_low": {
+    "null_n1": 0.8990791903163676,
+    "null_n2": 0.8990791903163676,
+    "n_pairs": 19900,
+    "equal_n_pairs": 4552,
+    "reps": {
+      "adjacency": {
+        "rho_all": 0.8727755473741273,
+        "rho_equal_n": 0.5650357639571418
+      },
+      "graph6": {
+        "rho_all": 0.6913950004112531,
+        "rho_equal_n": 0.538909365074679
+      },
+      "sparse6": {
+        "rho_all": 0.74757266392263,
+        "rho_equal_n": 0.5587708306979985
+      },
+      "nauty->graph6": {
+        "rho_all": 0.6771511376715332,
+        "rho_equal_n": 0.9737003349736094
+      },
+      "min-DFS (tuples)": {
+        "rho_all": 0.971964016675794,
+        "rho_equal_n": 0.9955723627840983
+      },
+      "IsalGraph pruned": {
+        "rho_all": 0.9252960214361131,
+        "rho_equal_n": 0.9805595942304465
+      }
+    }
+  },
+  "iam_letter_med": {
+    "null_n1": 0.9093970150641795,
+    "null_n2": 0.9079920281543313,
+    "n_pairs": 19900,
+    "equal_n_pairs": 4806,
+    "reps": {
+      "adjacency": {
+        "rho_all": 0.8503190019811374,
+        "rho_equal_n": 0.42860448499727605
+      },
+      "graph6": {
+        "rho_all": 0.6808332549869889,
+        "rho_equal_n": 0.4299596877569143
+      },
+      "sparse6": {
+        "rho_all": 0.7032932996795812,
+        "rho_equal_n": 0.42517302758468795
+      },
+      "nauty->graph6": {
+        "rho_all": 0.6627793187164843,
+        "rho_equal_n": 0.9688453501706764
+      },
+      "min-DFS (tuples)": {
+        "rho_all": 0.9654425442821131,
+        "rho_equal_n": 0.9795835785506835
+      },
+      "IsalGraph pruned": {
+        "rho_all": 0.9161422750347565,
+        "rho_equal_n": 0.9607403335899213
+      }
+    }
+  },
+  "iam_letter_high": {
+    "null_n1": 0.9262746092001283,
+    "null_n2": 0.866718497636698,
+    "n_pairs": 19900,
+    "equal_n_pairs": 4546,
+    "reps": {
+      "adjacency": {
+        "rho_all": 0.8392994235571418,
+        "rho_equal_n": 0.4243103424945836
+      },
+      "graph6": {
+        "rho_all": 0.6703622672417693,
+        "rho_equal_n": 0.44648368820035794
+      },
+      "sparse6": {
+        "rho_all": 0.6541059183380488,
+        "rho_equal_n": 0.44820267890726706
+      },
+      "nauty->graph6": {
+        "rho_all": 0.6388566642913814,
+        "rho_equal_n": 0.6814520929376233
+      },
+      "min-DFS (tuples)": {
+        "rho_all": 0.8415969838253824,
+        "rho_equal_n": 0.8055747925888882
+      },
+      "IsalGraph pruned": {
+        "rho_all": 0.6832143722325713,
+        "rho_equal_n": 0.6275594773926622
+      }
+    }
+  },
+  "linux": {
+    "null_n1": 0.7133929803035389,
+    "null_n2": 0.7378669516589502,
+    "n_pairs": 3870,
+    "equal_n_pairs": 987,
+    "reps": {
+      "adjacency": {
+        "rho_all": 0.753965526811864,
+        "rho_equal_n": 0.29951237850996143
+      },
+      "graph6": {
+        "rho_all": 0.506804869393732,
+        "rho_equal_n": 0.2861955571851637
+      },
+      "sparse6": {
+        "rho_all": 0.5586591291877968,
+        "rho_equal_n": 0.25531739700363026
+      },
+      "nauty->graph6": {
+        "rho_all": 0.5377682908900365,
+        "rho_equal_n": 0.2605478956805426
+      },
+      "min-DFS (tuples)": {
+        "rho_all": 0.6529445858778118,
+        "rho_equal_n": 0.5403758426753615
+      },
+      "IsalGraph pruned": {
+        "rho_all": 0.47418760744910005,
+        "rho_equal_n": 0.3971708757801319
+      }
+    }
+  },
+  "aids": {
+    "null_n1": 0.7994165864494173,
+    "null_n2": 0.746244804021298,
+    "n_pairs": 15686,
+    "equal_n_pairs": 4108,
+    "reps": {
+      "adjacency": {
+        "rho_all": 0.7874099894093587,
+        "rho_equal_n": 0.24306707750072654
+      },
+      "graph6": {
+        "rho_all": 0.45562688741578594,
+        "rho_equal_n": 0.17122337039023533
+      },
+      "sparse6": {
+        "rho_all": 0.5153652717145154,
+        "rho_equal_n": 0.1550123965060979
+      },
+      "nauty->graph6": {
+        "rho_all": 0.45981622629554053,
+        "rho_equal_n": 0.18587820286951415
+      },
+      "min-DFS (tuples)": {
+        "rho_all": 0.5513627966999936,
+        "rho_equal_n": 0.44157542302988606
+      },
+      "IsalGraph pruned": {
+        "rho_all": 0.2552454728766193,
+        "rho_equal_n": 0.24981557896454998
+      }
+    }
+  }
+}

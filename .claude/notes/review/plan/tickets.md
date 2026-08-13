@@ -35,29 +35,39 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 > D6's *metric* argument is unaffected. Full record: `.claude/notes/review/tasks/T-03-design.md`
 > amendment 4.
 
-> ⚠ **T-04 was scouted 2026-08-13 and four of its premises are wrong.** Every competitor was
-> installed and run locally; the evidence is **one file per competitor in
-> [`competitors/`](competitors/README.md)**, whose §4 lists twelve findings with owners. The four
+> ⚠ **T-04 was scouted 2026-08-13 on the REAL cohort and several of its premises are wrong.**
+> Every competitor was installed and run against Suite 1's **certified exact GED** (T-03) and
+> Suite 2's IAM GXL. Evidence: **one file per competitor in
+> [`competitors/`](competitors/README.md)**, whose §5 lists fifteen findings with owners. The ones
 > that reach a printed number:
 >
-> 1. **[competitors](competitors.md) §4 outcome 3 is inverted.** IsalGraph beats sparse6 on bits at
->    `m/n ≈ 1` (Mutagenicity 181 vs 222; at `n = 98`, **888 vs 978**) and loses at `m/n ≈ 2`. The
->    pre-commitment must be restated as `m`-scaling versus `n²`-scaling before it is printed.
-> 2. **AGM's canonical code is not computable above `n ≈ 14`** — exact 5/5 to `n = 11`, 3/5 at
->    `n = 14`, **0/5 from `n = 20`**. AGM runs on **Suite 1 only**, and
+> 1. **The size null is unowned and it dominates.** `ρ(|n₁−n₂|, exact GED)` — count the nodes,
+>    subtract, no representation at all — scores **0.899 / 0.909 / 0.926 / 0.713 / 0.799** on the
+>    five Suite-1 datasets. **IsalGraph clears it on two of five, by ≤ 0.03**, and falls 0.24–0.54
+>    below it on the other three. The manuscript's "ρ ≈ 0.93 on sparse IAM" reproduces (0.925) but
+>    sits **0.026 above a baseline that needs no method**. Every printed ρ needs the null beside it,
+>    and the **equal-`n` restriction** should be primary — there the canonical/non-canonical gap is
+>    **0.42** and the claim is defensible. **Inherits: T-02, T-06, T-20.**
+> 2. **gSpan's minimum DFS code beats IsalGraph on ρ on all five Suite-1 datasets**, by +0.047 to
+>    +0.296, in both the all-pairs and equal-`n` views. AGM beats it on 3 of 4; **WL beats it on
+>    LINUX and AIDS**. IsalGraph wins Claim A against min-DFS on 60–100 % of real graphs.
+>    **Both halves must be stated. Inherits: T-17, T-20.**
+> 3. **IsalGraph is shorter than the adjacency matrix on 0.0 % of Letter graphs** and never wins
+>    Claim A on Suite 1. It wins on the **mean** at AIDS-IAM (85.3 vs 135.9 bits) and loses on the
+>    **median** (60.2 vs 55.0). Print both. **Inherits: T-20.**
+> 4. **AGM is not computable on Suite 2** — 100 % exact on Letter and LINUX, 99.6 % on Suite-1 AIDS,
+>    **76 % on GREC**, **82 % on AIDS-IAM**. AGM runs on **Suite 1 only**, and
 >    [preregistration](preregistration.md) §5's reduction rule has **no case** for a representation
 >    computable on one suite and not the other. **Inherits: T-02's `N_max = 182`, T-17.**
-> 3. **`canonical_string` times out from `n ≈ 50` and at COIL-DEL (`n=22, m=54`); Suite 2 must use
->    `pruned_canonical_string`** (0.95 ms at `n = 98`). **Inherits: T-06.**
-> 4. **gSpan's minimum DFS code tracks a unit edit more than twice as tightly as IsalGraph**
->    (separation 0.32–0.38 vs 0.69–0.73 on synthetic `G(n,m)`, `n ≤ 12`). IsalGraph wins Claim A
->    against it on 9 of 10 profiles. **Both must be stated; T-04a settles it on real data.**
->    **Inherits: T-17, T-20.**
+> 5. **`canonical_string` breaks on Suite 2** — 342 ms/graph and 12/400 timeouts on AIDS-IAM against
+>    `pruned`'s 18 ms and zero. **Suite 2 must use `pruned_canonical_string`. Inherits: T-06.**
 >
 > Also: **three min-DFS repositories tested, all three rejected** — including
 > `kaviniitm/DFSCode`, which builds, claims exactly this, and is **not isomorphism-invariant**
 > (46/90). Vendor nothing. **bliss/Traces stay cut** — the `pynauty` from-source build was rehearsed
-> under gcc 12.2.0 and succeeded, so the insurance rationale has expired.
+> under gcc 12.2.0 and succeeded, so the insurance rationale has expired. And **ρ moved 0.07 between
+> two independent 200-graph draws on AIDS**, which is direct support for [statistics](statistics.md)
+> D2.
 
 **Read for every ticket**: [decisions](decisions.md) (do not re-litigate a signed decision) and
 [demands](demands.md) (what the ticket is answering, and to whom).

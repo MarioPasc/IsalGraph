@@ -1,0 +1,13 @@
+dataset             h   pairs   rho(WL, exact GED)  frac d=0  iso pairs (GED=0)
+iam_letter_low      2   19900               0.8953    0.1438             0.1438
+iam_letter_low      3   19900               0.8214    0.1438             0.1438
+iam_letter_med      2   19900               0.8686    0.1530             0.1530
+iam_letter_med      3   19900               0.8096    0.1530             0.1530
+iam_letter_high     2   19900               0.5801    0.0453             0.0453
+iam_letter_high     3   19900               0.4941    0.0453             0.0453
+linux               2    3870               0.5732    0.0003             0.0000
+linux               3    3870               0.5009    0.0000             0.0000
+aids                2   15686               0.4587    0.0004             0.0000
+aids                3   15686               0.4117    0.0001             0.0000
+
+wrote real_wl.json

@@ -2,28 +2,23 @@
 
 **Owner**: T-04 · **Gates**: T-04a, T-06, T-17
 **Parent**: [competitors](../competitors.md) — the *decision* file. This folder is the *evidence*
-behind it. Where the two disagree, §4 below says which wins and who owns the fix.
+behind it. Where the two disagree, §5 says which wins and who owns the fix.
 
-**All numbers on this page were measured on the local workstation on 2026-08-13.** The scripts and
-their raw output are preserved in **[`scratch/`](scratch/)** beside this file — `min_dfs.py`,
-`agm_cam.py`, `backends.py`, `validate_min_dfs.py`, `test_kavin.py`, `probe.py`, `sweep.py`,
-`scale.py`, `ceiling.py`, `isal_ceiling.py`, `stability.py`, plus every `.out` and `.json` these
-tables are read from. **Nothing touches `src/`**; §5 says what must be ported and what must not.
+**Measured on the local workstation, 2026-08-13, on the real cohort.** Suite 1 graphs come from
+`data/exported/<ds>.npz` and their **certified exact GED** from T-03's
+`extended_merged_exact_ged/computed/<ds>.npz` under the D6 unit cost model `[1,1,0,1,1,0]`;
+`graph_ids` alignment between the two is asserted, not assumed. Suite 2 comes from the repo's own
+T-01 `iam_gxl_loader` against `IAM_Database/extracted`, under the locked filter
+(`min_nodes = 2`, `require_connected`, cxl enumeration) — it reproduces T-01's retained counts
+(GREC 650, AIDS-IAM 1,811).
 
-Environment: `networkx` 3.6.1, `pynauty` 2.8.8.1, `grakel` 0.1.8, `numpy` 1.26.4, gcc 12.2.0,
-`isalgraph.engine() == "cpp"`.
+Scripts and raw output: **[`scratch/`](scratch/)**. Environment: `networkx` 3.6.1, `pynauty` 2.8.8.1,
+`grakel` 0.1.8, `rapidfuzz` 3.14.5, `numpy` 1.26.4, gcc 12.2.0, `isalgraph.engine() == "cpp"`.
 
-> **Two samplers, and they are not interchangeable.** The cohort table uses rejection sampling on
-> `G(n, m)` conditioned on connectivity — uniform, but it does not terminate at `m ≈ n` above
-> `n ≈ 30`. The ceiling table uses a random spanning tree plus uniform extra edges, which
-> terminates but over-weights tree-like structure. Rows are labelled with which one produced them.
-
-> ⚠ **The graphs are synthetic.** The IAM corpus is not on this workstation, so every profile is
-> `G(n, m)` at T-01's **measured per-dataset `n̄` and `m̄`** ([data](../data.md) §1.2). Orderings
-> that depend on graph *family* — Letter graphs are near-planar geometric graphs, not random — are
-> **not** settled here. **T-04a on the real 200-graph sample is what settles them.** Everything that
-> is a property rather than a distribution (canonicity, completeness, reversibility, feasibility
-> ceilings, API behaviour) transfers unchanged.
+> **ρ here is descriptive and does not select anything.** [competitors](../competitors.md) §3.4's
+> rule is **F5-blind by construction** — primary distances are chosen on F1–F4 with F6 as the
+> tiebreak — and nothing in this folder changes that. T-04a re-runs the grid under its own
+> pre-declared protocol. What these numbers are for is deciding **what the paper can claim**.
 
 ---
 
@@ -34,13 +29,13 @@ Environment: `networkx` 3.6.1, `pynauty` 2.8.8.1, `grakel` 0.1.8, `numpy` 1.26.4
 | [graph6](graph6.md) | McKay's packed adjacency serialisation | **RUN — negative control** |
 | [sparse6](sparse6.md) | McKay's edge-list serialisation | **RUN** — the compactness rival |
 | [nauty](nauty.md) | canonical labelling → graph6 (+ the bliss/Traces cut) | **RUN** — the fair canonical serialisation |
-| [adjacency-matrix](adjacency-matrix.md) | raw upper triangle | **RUN — reference point** |
-| [agm](agm.md) | AGM canonical adjacency-matrix code (CAM) | **RUN, Suite 1 only** — ceiling at `n ≈ 14` |
-| [gspan-mdfsc](gspan-mdfsc.md) | gSpan minimum DFS code | **RUN** — the real competitor |
+| [adjacency-matrix](adjacency-matrix.md) | raw upper triangle | **RUN — reference point**, and it is not the pushover it looks |
+| [agm](agm.md) | AGM canonical adjacency-matrix code (CAM) | **RUN, Suite 1 only** — 24 % failure at GREC |
+| [gspan-mdfsc](gspan-mdfsc.md) | gSpan minimum DFS code | **RUN** — and it beats IsalGraph on every dataset |
 | [wl-subtree-kernel](wl-subtree-kernel.md) | Weisfeiler–Lehman subtree kernel | **RUN, Claim B only** |
 
-Each file answers the same five questions in the same order: reproducibility, representation,
-distance, Claim A fit, scope alignment — then a summary table and integration notes.
+Each answers the same five questions in the same order: reproducibility, representation, distance,
+Claim A fit, scope alignment — then a summary table and integration notes.
 
 ---
 
@@ -59,130 +54,195 @@ triangle of the adjacency matrix, read column-wise. They differ on exactly two o
 
 Consequences that must reach the paper:
 
-- **All four have the same Claim A bit count**, `n(n−1)/2`, up to header and padding.
-  **Print one `n²` row with a footnote, not four identical columns.**
-- The pool therefore isolates **canonicity as a variable at fixed format**: graph6 vs
-  nauty→graph6 changes only the labelling, and separation moves 1.00 → 0.83 while invariance moves
-  0/40 → 40/40. That subtraction *is* R1.2's uniqueness answer.
+- **All four have the same Claim A bit count**, `n(n−1)/2`, up to header and padding. **Print one
+  `n²` row with a footnote, not four identical columns.**
+- The pool therefore isolates **canonicity as a variable at fixed format**. Measured on Letter LOW,
+  graph6 → nauty→graph6 moves F3 invariance from **4/50 to 50/50** and equal-`n` ρ from **0.539 to
+  0.974** with the format held constant. That subtraction *is* R1.2's uniqueness answer.
 
 **Family II — the mining-literature canonical forms.** Jiang, Coenen & Zito
 (*Knowledge Engineering Review* 28(1):75–105, 2013) classify every frequent-subgraph miner's
 representation into **CAM** (AGM, FSG, FFSM) and **M-DFSC** (gSpan). R1.2 named one of each.
-Covering both with a measured row turns "we cite AGM and gSpan" into "we compared against both
-canonical-representation families in the mining literature".
 
-**Outliers.** [sparse6](sparse6.md) is the only non-canonical format whose length scales with `m`,
-which makes it IsalGraph's compactness rival. [WL](wl-subtree-kernel.md) is not a serialisation at
-all and enters Claim B only.
+**Outliers.** [sparse6](sparse6.md) is the only non-canonical format whose length scales with `m`.
+[WL](wl-subtree-kernel.md) is not a serialisation at all and enters Claim B only.
 
 ---
 
 ## 3. The master table
 
-Separation `= median Levenshtein on one-edit pairs / median on random same-`n` pairs`, 120 + 120
-pairs, `n ∈ [6,12]`. **Lower is better**; 1.00 means a one-edit pair is indistinguishable from an
-unrelated one. F3 = isomorphism invariance, 40 graphs × 25 genuine relabellings.
+F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per dataset.
+ρ = Spearman of Levenshtein against **certified exact GED**, 200-graph sample per dataset.
 
-| Representation | Reproducible? | F3 | Complete invariant | Primary distance | **Sep.** | Claim A bits | Feasibility ceiling |
-|---|---|---|---|---|---:|---|---|
-| [graph6](graph6.md) | **trivial** (`networkx`) | **0/40** | no | *none admissible* | **1.00** | `6(1+⌈n(n−1)/12⌉)` | none |
-| [sparse6](sparse6.md) | **trivial** (`networkx`) | **0/40** | no | *none admissible* | 0.88 | `6·len`, scales with `m` | none |
-| [adjacency](adjacency-matrix.md) | **trivial** (none) | **0/40** | no | *none admissible* | 0.92 | `n(n−1)/2` | none |
-| [nauty→graph6](nauty.md) | `pip install pynauty`, **from-source build verified** | **40/40** | **yes** | padded Hamming | 0.83 | = graph6 | none observed |
-| [AGM CAM](agm.md) | **no package — we wrote it**, validated vs brute force on 327 graphs | **40/40** | **yes** | padded Hamming | **0.50** | = adjacency | **`n ≈ 14`** |
-| [min-DFS code](gspan-mdfsc.md) | **3 repos tested, all 3 rejected — we wrote it**, validated vs exhaustive enumeration | **40/40** | **yes** | Levenshtein (tuple) | **0.32 / 0.38** | `m·2⌈log₂ n⌉` | none to `n = 98` (124 ms, Python) |
-| [WL subtree](wl-subtree-kernel.md) | `grakel` **already installed** | **40/40** | **no** — `d(K₃,₃, prism) = 0` | kernel (**pseudometric**) | — | **none** (not reversible) | none |
-| *IsalGraph canonical* | — | 40/40 | yes | Levenshtein | *0.69* | `L log₂ 9` | **`n ≈ 50`, and COIL-DEL at `n = 22`** |
-| *IsalGraph pruned* | — | 40/40 | yes | Levenshtein | *0.73* | `L log₂ 9` | none to `n = 70` |
-| ~~bliss / Traces~~ | — | — | — | — | — | — | **CUT**, see [nauty](nauty.md) §8 |
-
-### The two orderings that decide the paper
-
-**Message length** — entropy-bound bits, median over Suite-2 profiles:
-
-| Profile | `n` | `m` | adjacency | graph6 | sparse6 | min-DFS | **IsalGraph pruned** |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Letter LOW | 4 | 3 | **6** | 12 | 24 | 12 | 13 |
-| LINUX | 9 | 8 | **36** | 42 | 66 | 64 | 38 |
-| AIDS (IAM) | 14 | 15 | 91 | 102 | 102 | 120 | **82** |
-| COIL-DEL | 22 | 54 | **231** | 240 | 348 | 540 | 418 |
-| Mutagenicity | 29 | 30 | 406 | 414 | 222 | 300 | **181** |
-| Protein | 32 | 61 | 496 | 504 | **396** | 610 | 533 |
-Ceiling sweep to Suite 2's `n_max = 98` (spanning-tree sampler, see §6):
-
-| `n` | `m` | `m/n` | adjacency | graph6 | sparse6 | min-DFS | **IsalGraph pruned** |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 30 | 31 | 1.03 | 435 | 444 | 234 | 310 | **187** |
-| 30 | 60 | 2.00 | 435 | 444 | **384** | 600 | 561 |
-| 50 | 52 | 1.04 | 1225 | 1236 | 426 | 624 | **352** |
-| 50 | 100 | 2.00 | 1225 | 1236 | **744** | 1200 | 1024 |
-| 70 | 73 | 1.04 | 2415 | 2442 | 714 | 1022 | **539** |
-| **98** | **102–103** | **1.04** | 4753 | 4782 | 978 | 1428 | **888** |
-| 98 | 196 | 2.00 | 4753 | 4782 | **1698** | 2744 | — |
-
-> **IsalGraph's bit cost is governed by `m`; adjacency, graph6, nauty→graph6 and AGM are governed
-> by `n²`.** So IsalGraph loses below `n ≈ 14` (where `n(n−1)/2` is simply small) and on dense
-> graphs, and wins on large sparse ones — the regime AE.1 asked us to extend into. At `n = 98,
-> m ≈ n` it needs **888 bits against adjacency's 4,753 and graph6's 4,782**. It beats **min-DFS on
-> 9 of 10 cohort profiles and at every ceiling profile**, and beats **sparse6 whenever `m/n ≲ 1.5`**,
-> losing to it at `m/n ≈ 2`.
-
-Encode time at `n = 98, m = 102`, median of 3: **sparse6 0.31 ms · IsalGraph pruned 0.95 ms ·
-graph6 2.11 ms · nauty→graph6 2.10 ms · min-DFS 124 ms (pure Python) · AGM does not terminate.**
-
-**GED tracking** — separation, best to worst:
-**min-DFS 0.32 · AGM 0.50 · IsalGraph 0.69–0.73 · nauty 0.83 · sparse6 0.88 · adjacency 0.92 ·
-graph6 1.00.**
-
-> **The minimum DFS code tracks a unit edit more than twice as tightly as IsalGraph on this test.**
-> On synthetic `G(n,m)` at `n ≤ 12`, not on IAM. It is a prior, not a verdict — but it is a strong
-> one and T-04a must resolve it before the paper claims either direction.
+| Representation | Reproducible? | F3 (real) | Complete invariant | Primary distance | ρ range, Suite 1 | Claim A bits | Ceiling |
+|---|---|---|---|---|---|---|---|
+| [graph6](graph6.md) | **trivial** (`networkx`) | **0–6 / 50** | no | *none admissible* | 0.46–0.69 | `6(1+⌈n(n−1)/12⌉)` | none |
+| [sparse6](sparse6.md) | **trivial** (`networkx`) | **0–6 / 50** | no | *none admissible* | 0.52–0.75 | `6·len`, scales with `m` | none |
+| [adjacency](adjacency-matrix.md) | **trivial** (none) | **0–6 / 50** | no | *none admissible* | **0.75–0.87** | `n(n−1)/2` | none |
+| [nauty→graph6](nauty.md) | `pip install pynauty`, from-source build verified | **50/50** | **yes** | padded Hamming | 0.46–0.68 | = graph6 | none observed |
+| [AGM CAM](agm.md) | **no package — we wrote it**, validated vs brute force on 327 graphs | **50/50** | **yes** | padded Hamming | **0.80–0.92** | = adjacency | **24 % fail at GREC** |
+| [min-DFS code](gspan-mdfsc.md) | **3 repos tested, 3 rejected — we wrote it** | **50/50** | **yes** | Levenshtein (tuple) | **0.55–0.97** | `m·2⌈log₂ n⌉` | none to `n = 98` |
+| [WL subtree](wl-subtree-kernel.md) | `grakel` **already installed** | **50/50** | **no** | kernel (**pseudometric**) | 0.46–0.90 | **none** | none |
+| *IsalGraph pruned* | — | 50/50 | yes | Levenshtein | *0.26–0.93* | `L log₂ 9` | `canonical` slow, `pruned` fine |
+| ~~bliss / Traces~~ | — | — | — | — | — | — | **CUT**, [nauty](nauty.md) §8 |
 
 ---
 
-## 4. What this folder changes in the plan
+## 4. The three orderings that decide the paper
 
-Each item names the file that must be edited and the ticket that owns it.
+### 4.1 ρ against certified exact GED — per dataset, real
+
+200-graph sample, seed 42, certified-exact pairs only. Levenshtein throughout; WL uses its kernel
+distance. **Bold = best in column.**
+
+| Representation | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **NULL: `\|n₁−n₂\|` alone** | *0.899* | *0.909* | *0.926* | *0.713* | *0.799* |
+| adjacency | 0.873 | 0.850 | 0.839 | **0.754** | 0.787 |
+| graph6 | 0.691 | 0.681 | 0.670 | 0.507 | 0.456 |
+| sparse6 | 0.748 | 0.703 | 0.654 | 0.559 | 0.515 |
+| nauty→graph6 | 0.677 | 0.663 | 0.639 | 0.538 | 0.460 |
+| AGM CAM | 0.911 | 0.920 | **0.892** | 0.798 | *(3/769 fail)* |
+| **min-DFS code** | **0.972** | **0.965** | 0.842 | 0.653 | 0.551 |
+| WL subtree (h = 2) | 0.895 | 0.869 | 0.580 | 0.573 | 0.459 |
+| **IsalGraph pruned** | 0.925 | 0.916 | 0.683 | 0.474 | 0.255 |
+
+> ### ⚠ Two findings here, and both are existential for Claim B as currently written.
+>
+> **(a) The trivial predictor beats IsalGraph on four of five datasets.**
+> `ρ(|n₁ − n₂|, GED)` — count the nodes, subtract, no representation at all — scores **0.71 to
+> 0.93**. IsalGraph clears it on Letter LOW (+0.026) and Letter MED (+0.007) and falls **below** it
+> on Letter HIGH (−0.243), LINUX (−0.239) and AIDS (−0.544).
+>
+> The manuscript's headline "ρ ≈ 0.93 on sparse IAM" reproduces (0.925 on Letter LOW) — but it is
+> 0.026 above a baseline that needs no method. **Any ρ this paper prints must appear beside the
+> size null**, or the first reviewer to compute it has an unanswerable objection. R3.6b already
+> pushed on "strongly correlates"; this is the sharper version of the same push.
+>
+> **(b) gSpan's minimum DFS code beats IsalGraph on all five datasets** — by +0.047, +0.049,
+> +0.159, +0.179 and +0.296. The synthetic prior in the first pass predicted this; the real cohort
+> confirms it with a wider margin. AGM CAM also beats IsalGraph on three of the four where it is
+> computable.
+
+### 4.2 The equal-`n` restriction — where canonicity actually shows up
+
+Restricting to pairs with `n₁ = n₂` (22–26 % of pairs) removes the size channel entirely, so the
+null is constant and every column is pure structure. **This is the comparison the paper should
+lead with.**
+
+| Representation | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| adjacency | 0.565 | 0.429 | 0.424 | 0.300 | 0.243 |
+| graph6 | 0.539 | 0.430 | 0.447 | 0.286 | 0.171 |
+| sparse6 | 0.559 | 0.425 | 0.448 | 0.255 | 0.155 |
+| nauty→graph6 | **0.974** | 0.969 | 0.682 | 0.261 | 0.186 |
+| **min-DFS code** | **0.996** | **0.980** | **0.806** | **0.540** | **0.442** |
+| **IsalGraph pruned** | 0.981 | 0.961 | 0.628 | 0.397 | 0.250 |
+
+> **The canonical/non-canonical split is stark and it vindicates the pool design.** On Letter LOW
+> the canonical representations score 0.97–1.00 and the non-canonical ones 0.54–0.57 — a gap of
+> **0.42** that the all-pairs view hides completely, because the size channel floats everyone.
+> **This is the number that answers R1.2's uniqueness axis**, and it is a far better argument than
+> anything in the current draft.
+>
+> It does not rescue the ordering: **min-DFS still wins every column**, and IsalGraph trails it
+> everywhere.
+
+### 4.3 Claim A — message length, real per-graph bit counts
+
+Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph sample).
+
+| Dataset | `n̄` | `m̄` | adjacency / AGM | graph6 | sparse6 | min-DFS | **IsalGraph pruned** | GED constr. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Letter LOW | 4.07 | 3.07 | **6.0** | 12.0 | 24.0 | 12.0 | 12.7 | — |
+| Letter MED | 4.11 | 3.17 | **6.0** | 12.0 | 24.0 | 12.0 | 12.7 | — |
+| Letter HIGH | 4.58 | 4.56 | **10.0** | 18.0 | 36.0 | 24.0 | 25.4 | — |
+| LINUX | 8.71 | 8.35 | **36.0** | 42.0 | 60.0 | 64.0 | 41.2 | — |
+| AIDS | 10.56 | 10.70 | **55.0** | 66.0 | 72.0 | 88.0 | 57.1 | — |
+| GREC | 11.54 | 12.59 | 55.0 | 66.0 | 78.0 | 96.0 | 72.9 | 118.0 |
+| AIDS-IAM | 13.63 | 14.05 | 55.0 | 66.0 | 72.0 | 88.0 | **60.2** | 109.0 |
+| AIDS-IAM, **mean** | | | 135.9 | 144.4 | 93.8 | 128.2 | **85.3** | 154.9 |
+
+> **The AIDS-IAM row is where the `m`-scaling story finally appears in real data, and it appears in
+> the mean rather than the median.** On the *typical* graph (median) the adjacency matrix still wins,
+> 55.0 to 60.2. On the *mean*, which the `n_max = 85` tail dominates, IsalGraph wins outright:
+> **85.3 bits against adjacency's 135.9 and graph6's 144.4.** Same dataset, opposite ordering,
+> depending on which statistic is printed.
+>
+> **Print both, and say which is which.** [statistics](../statistics.md) §3 already forbids a mean
+> bit count without dispersion; this is the concrete reason. A median-only Claim A table understates
+> IsalGraph on exactly the large sparse graphs AE.1 asked us to reach; a mean-only table overstates
+> it on the typical case.
+
+**Percentage of graphs on which IsalGraph pruned is strictly shorter:**
+
+| Dataset | vs adjacency | vs graph6 | vs sparse6 | vs min-DFS | vs GED constr. |
+|---|---:|---:|---:|---:|---:|
+| Letter LOW | **0.0 %** | 57.4 % | 100 % | 71.5 % | — |
+| Letter HIGH | **0.0 %** | 19.9 % | 99.0 % | 60.0 % | — |
+| LINUX | 15.7 % | 59.6 % | 100 % | 98.9 % | — |
+| AIDS | 29.9 % | 63.2 % | 89.9 % | 99.6 % | — |
+| GREC | 23.0 % | 32.2 % | 89.5 % | 96.2 % | **100 %** |
+| AIDS-IAM | 35.2 % | 65.2 % | 81.2 % | 99.5 % | **100 %** |
+
+> **IsalGraph is never the most compact representation on Suite 1.** The adjacency matrix — and AGM,
+> which has the same bit count — wins every dataset, and on the three Letter sets IsalGraph is
+> shorter on **0.0 %** of graphs. It beats sparse6 (89–100 %) and min-DFS (60–100 %) comfortably,
+> and beats the author-defined `B_GED` construction on **100 %** of GREC.
+>
+> **R3.6a's "narrow the claim accordingly" applies to us harder than the reviewer knew.** The
+> claim that survives: *IsalGraph is shorter than every other **string** serialisation and than the
+> explicit-construction reference model; the raw adjacency matrix is shorter at these sizes, and
+> the crossover is at `n ≈ 14` and low density.*
+
+---
+
+## 5. What this folder changes in the plan
 
 | # | Finding | Edit | Owner |
 |---|---|---|---|
-| **1** | **[competitors](../competitors.md) §4 outcome 3 is inverted.** It pre-commits "sparse6 beats IsalGraph on bits for sparse graphs". Measured, IsalGraph **wins** at `m/n ≈ 1` (Mutagenicity 181 vs 222) and loses at `m/n ≈ 2` (Protein 533 vs 396) | rewrite the pre-commitment as the `m`-versus-`n²` statement in §3 above | T-04 → T-20 |
-| **2** | **AGM's canonical code is not computable above `n ≈ 14`** — exact 5/5 to `n = 11`, 3/5 at `n = 14`, 0/5 at `n ≥ 20` under a 300k-node budget. **AGM runs on Suite 1 only** | [agm](agm.md) §2.2; §2's "1 d, derive from nauty labelling" is wrong on both halves | T-04, T-17 |
-| **3** | **[preregistration](../preregistration.md) §5's reduction rule has no case for a representation computable on one suite and not the other.** AGM keeps 5 B1e rows and loses 10 B1a rows; the rule only has `−15` and `−15−10` | add the case; `N_max = 182` depends on it | **T-02's owner** |
-| **4** | **`canonical_string` times out** at COIL-DEL (`n=22, m=54`) and from `n ≈ 50` upward; `pruned_canonical_string` is 0.15 ms at `n = 70`. **Suite 2 must use the pruned variant.** `timeout_s` *is* honoured — it raises `CanonicalizationTimeoutError` at exactly 5.00 s | record in [data](../data.md) / T-06's plan | T-06 |
-| **5** | **min-DFS separation 0.32 beats IsalGraph's 0.73.** Claim B's framing must concede the axis or T-04a must overturn it on real data | [gspan-mdfsc](gspan-mdfsc.md) §5 | T-04a → T-20 |
-| **6** | **The adjacency matrix beats IsalGraph on 7 of 10 profiles.** The submitted comparison was against `B_GED` only, which everything beats. **R3.6a applies to us harder than the reviewer knew** | [adjacency-matrix](adjacency-matrix.md) §4 | T-20 |
-| **7** | **The four `n²` members share one Claim A number.** Four identical columns read as a copy-paste error | one row + footnote | T-17 |
-| **8** | **The gSpan vendoring plan is superseded. Three repositories tested, three rejected**: `LasseRegin/gSpan` does not run on numpy ≥ 1.24 and its `G2DFS` is not minimal; `betterenvi`'s `_is_min` is private; **`kaviniitm/DFSCode` claims exactly this, builds, and is wrong on 50 % of 6-node graphs and not isomorphism-invariant (46/90)**. **Vendor nothing; cite Yan & Han.** Effort **2–3 d → ~1 d** | [competitors](../competitors.md) §2 risk paragraph | T-04, [schedule](../schedule.md) |
-| **9** | **The competitor runtime figure must be language-matched.** Timing a pure-Python min-DFS against the C++ engine on one axis reproduces R1.1's own complaint inside our answer to it | [gspan-mdfsc](gspan-mdfsc.md) §5 | T-06, Fig. 2 |
-| **10** | **`grakel`'s `n_iter = k` equals our `h = k−1`.** Verified: `grakel(3)` ≡ `ours(2)` = 5.830952 exactly. **E10's existing WL numbers must be re-checked against whichever convention produced them** | [wl-subtree-kernel](wl-subtree-kernel.md) §1 | T-06 |
-| **11** | **`nx.relabel_nodes(copy=True)` preserves insertion order**, so any F3 test built on it is void — order-dependent formats look invariant. Every measurement here rebuilds the copy with a fresh insertion order | method note for T-04a's F3 | T-04a |
-| **12** | **bliss / Traces stay cut, and the counter-case has expired.** The `pynauty` from-source build was rehearsed under gcc 12.2.0 and succeeded | [nauty](nauty.md) §8; decision S-g | — |
+| **1** | **The size null is unowned and it dominates.** `ρ(\|n₁−n₂\|, GED)` = 0.71–0.93; IsalGraph beats it on 2 of 5 datasets by ≤ 0.03. **Every printed ρ needs the null beside it, and the equal-`n` restriction (§4.2) should be the primary comparison** | new row in [statistics](../statistics.md) §4; a null column in Tab. 3 | **T-02's owner**, T-06, T-20 |
+| **2** | **min-DFS beats IsalGraph on ρ on all five Suite-1 datasets**, all-pairs and equal-`n`. AGM beats it on 3 of 4 | Claim B's framing must concede the axis | T-17, T-20 |
+| **3** | **IsalGraph is shorter on 0.0 % of Letter graphs vs the adjacency matrix**, and never wins Claim A on Suite 1 | [adjacency-matrix](adjacency-matrix.md) §4 | T-20 |
+| **4** | **[competitors](../competitors.md) §4 outcome 3 is inverted.** IsalGraph beats sparse6 on **89–100 %** of graphs on every dataset measured, including the dense ones; the synthetic crossover at `m/n ≈ 2` does not appear on real IAM | rewrite the pre-commitment | T-04 → T-20 |
+| **5** | **AGM fails on 24 % of real GREC graphs** (96/400 at a 100k-node budget, 173 ms/graph) and **18 % of AIDS-IAM** (73/400, 269 ms/graph), but only **3/769 on Suite-1 AIDS** (`n ≤ 12`). The ceiling is real and it sits exactly at Suite 1's edge. It is driven by the **tail**, not the mean | [agm](agm.md) §2.2b | T-04, T-17 |
+| **6** | **[preregistration](../preregistration.md) §5's reduction rule has no case for a representation computable on one suite and not the other.** AGM keeps 5 B1e rows, loses 10 B1a | add the case; `N_max = 182` depends on it | **T-02's owner** |
+| **7** | **`canonical_string` is fine on Suite 1 (0 failures, 0.095 ms/graph on AIDS) and breaks on Suite 2**: 13× slower than `pruned` on GREC, then **342 ms/graph and 12/400 timeouts on AIDS-IAM** at a 10 s budget, against `pruned`'s 18 ms and zero failures. **Suite 2 must use `pruned`, and the two are not interchangeable** — they give different strings and different bit counts | T-06's plan | T-06 |
+| **8** | **WL's incompleteness fires on the real cohort**: ~1 LINUX pair and ~6 AIDS pairs get kernel distance 0 at GED > 0. On Letter its zero-set matches the isomorphic set exactly | [wl-subtree-kernel](wl-subtree-kernel.md) §2 | T-17 |
+| **9** | **The four `n²` members share one Claim A number.** Four identical columns read as a copy-paste error | one row + footnote | T-17 |
+| **10** | **The gSpan vendoring plan is superseded. Three repositories tested, three rejected**: `LasseRegin/gSpan` (broken on numpy ≥ 1.24, `G2DFS` not minimal), `betterenvi` (`_is_min` private), **`kaviniitm/DFSCode` (builds, claims exactly this, not isomorphism-invariant — 46/90)**. Vendor nothing. Effort **2–3 d → ~1 d** | [competitors](../competitors.md) §2 | T-04, [schedule](../schedule.md) |
+| **11** | **The competitor runtime figure must be language-matched.** Timing a pure-Python min-DFS against the C++ engine reproduces R1.1's own complaint inside our answer to it | [gspan-mdfsc](gspan-mdfsc.md) §5 | T-06, Fig. 2 |
+| **12** | **`grakel`'s `n_iter = k` equals our `h = k−1`** (verified: `grakel(3)` ≡ `ours(2)` = 5.830952). **E10's existing WL numbers must be re-checked** | [wl-subtree-kernel](wl-subtree-kernel.md) §1 | T-06 |
+| **13** | **`nx.relabel_nodes(copy=True)` preserves insertion order**, so any F3 test built on it is void | method note for T-04a | T-04a |
+| **14** | **ρ moved by up to 0.07 between two independent 200-graph draws on AIDS** (0.329 vs 0.255). Direct support for [statistics](../statistics.md) D2: effective sample size is governed by **graphs**, not pairs | evidence for D2 | T-02 |
+| **15** | **bliss / Traces stay cut** — the `pynauty` from-source build was rehearsed under gcc 12.2.0 and succeeded | decision S-g | — |
 
 ---
 
-## 5. What to port, and what not to
+## 6. What to port, and what not to
 
-**Port**: `min_dfs.py` **with `validate_min_dfs.py`** — the brute-force oracle is the value; and
-`agm_cam.py` with its 327-graph brute-force check. Both become `src/isalgraph/competitors/` backends
-plus `tests/unit/`.
+**Port**: `min_dfs.py` **with `validate_min_dfs.py`**, and `agm_cam.py` with its 327-graph brute-force
+check. The oracles are the value; without them the backends are unverified graph theory.
 
-**Port as a gate, not a backend**: `test_kavin.py`. It is the acceptance test any third-party
-minimum-DFS implementation must pass before adoption — and its **K2 check needs no oracle**, only
-relabellings, so it applies to any candidate canonical backend at all.
+**Port as a gate, not a backend**: `test_kavin.py`. Any third-party canonical backend must clear its
+**K2 (invariance) check before anything else** — K2 needs no oracle and it is where `kaviniitm`
+died.
 
-**Do not port**: `backends.py`'s subprocess bridge to the conda env (a scratchpad hack),
-`sweep.py`/`scale.py`'s synthetic-profile generators (T-04a uses the real 200-graph stratified
-sample), and **none of the three gSpan / DFS-code repositories**.
+**Port as an analysis, not a backend**: `real_size_null.py`. Finding 1 is not a competitor property
+and it will not surface from a competitor harness.
 
-**Add as a fixture**: `K_{3,3}` vs the triangular prism. WL distance is **0.0000**; every canonical
-backend separates them. Two lines, and it catches a broken canonical backend instantly.
+**Do not port**: `backends.py`'s subprocess bridge to the conda env, the synthetic-profile
+generators in `sweep.py`/`scale.py` (superseded by the real cohort), and none of the three
+gSpan / DFS-code repositories.
+
+**Add as fixtures**: `K₃,₃` vs the triangular prism (WL distance 0, every canonical backend
+separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
 
 **Watch for**, in order of how quietly they fail:
 
 1. Counting the adjacency matrix as `len('1010…') * 8` — inflates it 8× and hands us a baseline we
    beat for free ([adjacency-matrix](adjacency-matrix.md) §7).
-2. Inverting `pynauty.canon_label` — produces a deterministic wrong labelling that **passes F3**
+2. Inverting `pynauty.canon_label` — a deterministic wrong labelling that **passes F3**
    ([nauty](nauty.md) §1).
 3. Fitting the WL kernel per batch rather than per dataset — makes the distance matrix depend on
    batching order ([wl-subtree-kernel](wl-subtree-kernel.md) §7).
@@ -190,21 +250,25 @@ backend separates them. Two lines, and it catches a broken canonical backend ins
    ([gspan-mdfsc](gspan-mdfsc.md) §3).
 5. Returning AGM's incumbent instead of raising when the budget runs out — puts a non-canonical code
    in a column headed canonical ([agm](agm.md) §7).
-6. **Accepting a third-party canonical backend on a single example.** `kaviniitm/DFSCode` agrees
-   with the oracle on the running example, on every path and on every cycle, and is wrong on half
-   of all 6-node graphs ([gspan-mdfsc](gspan-mdfsc.md) §1.3). **Run K2 — invariance under
-   relabelling — before anything else; it needs no oracle and it catches this class outright.**
+6. **Accepting a third-party canonical backend on a single example** — `kaviniitm/DFSCode` agrees
+   on the running example and is wrong on half of all 6-node graphs.
+7. **Reporting ρ without the size null.** Every number in §4.1 looks respectable until the null row
+   is added.
 
 ---
 
-## 6. Still open — what only the real cohort can answer
+## 7. Still open
 
-- **F5 for every admissible cell**, on T-04a's 200-graph stratified sample against exact GED. The
-  separation figures here are a prior from synthetic graphs, not the result.
-- **Whether min-DFS's advantage survives on IAM Letter**, where `n̄ ≈ 4` and the graphs are
-  near-planar and geometric rather than `G(n,m)`.
-- **Whether AGM's `n ≈ 14` ceiling moves** under orbit pruning from `pynauty.autgrp`. It will move;
-  it will not reach `n = 32`.
-- **The realised-bytes column** for every method — measured here only for the running example.
-- **`pruned_canonical_string`'s own ceiling** above `n = 70` at high density: 0.15 ms at
-  `n = 70, m = 73`, but the dense profiles are unmeasured.
+- **Suite 2 Claim A is partial.** GREC and AIDS-IAM have landed; **COIL-DEL, Mutagenicity and
+  Protein have not** — `scratch/real_suite2.py` is the script, and the dense COIL-DEL profile is
+  slow because of AGM, not because of anything we need. The AIDS-IAM mean/median inversion is the
+  result those three rows will either confirm or overturn, and it is the one that decides how
+  Claim A is worded.
+- **Suite 2 ρ** does not exist at all — there is no GED reference above `n = 12` until T-05 runs.
+  §4.1 and §4.2 are Suite 1 only.
+- **Graph-level bootstrap CIs** on every ρ in §4.1 (D2). Finding 14 says they will be wide.
+- **Whether IsalGraph clears the size null anywhere in Suite 2.** Larger, sparser graphs are where
+  its `m`-scaling should help; nothing here settles it.
+- **Whether AGM's GREC ceiling moves** under orbit pruning from `pynauty.autgrp`. It will move; it
+  will not reach `n = 98`.
+- **The realised-bytes column** for every method — measured only for the running example.

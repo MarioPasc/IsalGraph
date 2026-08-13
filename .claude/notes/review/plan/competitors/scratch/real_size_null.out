@@ -1,0 +1,57 @@
+
+=== iam_letter_low  19900 certified pairs, 4552 equal-n (22.9%) ===
+  NULL N1  rho(|n1-n2|, GED)            = 0.8991
+  NULL N2  rho(|dn|+|dm|, GED)          = 0.8991
+  representation        rho all pairs  rho equal-n    vs N1
+  adjacency                    0.8728       0.5650  -0.0263
+  graph6                       0.6914       0.5389  -0.2077
+  sparse6                      0.7476       0.5588  -0.1515
+  nauty->graph6                0.6772       0.9737  -0.2219
+  min-DFS (tuples)             0.9720       0.9956   0.0729
+  IsalGraph pruned             0.9253       0.9806   0.0262
+
+=== iam_letter_med  19900 certified pairs, 4806 equal-n (24.2%) ===
+  NULL N1  rho(|n1-n2|, GED)            = 0.9094
+  NULL N2  rho(|dn|+|dm|, GED)          = 0.9080
+  representation        rho all pairs  rho equal-n    vs N1
+  adjacency                    0.8503       0.4286  -0.0591
+  graph6                       0.6808       0.4300  -0.2286
+  sparse6                      0.7033       0.4252  -0.2061
+  nauty->graph6                0.6628       0.9688  -0.2466
+  min-DFS (tuples)             0.9654       0.9796   0.0560
+  IsalGraph pruned             0.9161       0.9607   0.0067
+
+=== iam_letter_high  19900 certified pairs, 4546 equal-n (22.8%) ===
+  NULL N1  rho(|n1-n2|, GED)            = 0.9263
+  NULL N2  rho(|dn|+|dm|, GED)          = 0.8667
+  representation        rho all pairs  rho equal-n    vs N1
+  adjacency                    0.8393       0.4243  -0.0870
+  graph6                       0.6704       0.4465  -0.2559
+  sparse6                      0.6541       0.4482  -0.2722
+  nauty->graph6                0.6389       0.6815  -0.2874
+  min-DFS (tuples)             0.8416       0.8056  -0.0847
+  IsalGraph pruned             0.6832       0.6276  -0.2431
+
+=== linux  3870 certified pairs, 987 equal-n (25.5%) ===
+  NULL N1  rho(|n1-n2|, GED)            = 0.7134
+  NULL N2  rho(|dn|+|dm|, GED)          = 0.7379
+  representation        rho all pairs  rho equal-n    vs N1
+  adjacency                    0.7540       0.2995   0.0406
+  graph6                       0.5068       0.2862  -0.2066
+  sparse6                      0.5587       0.2553  -0.1547
+  nauty->graph6                0.5378       0.2605  -0.1756
+  min-DFS (tuples)             0.6529       0.5404  -0.0604
+  IsalGraph pruned             0.4742       0.3972  -0.2392
+
+=== aids  15686 certified pairs, 4108 equal-n (26.2%) ===
+  NULL N1  rho(|n1-n2|, GED)            = 0.7994
+  NULL N2  rho(|dn|+|dm|, GED)          = 0.7462
+  representation        rho all pairs  rho equal-n    vs N1
+  adjacency                    0.7874       0.2431  -0.0120
+  graph6                       0.4556       0.1712  -0.3438
+  sparse6                      0.5154       0.1550  -0.2841
+  nauty->graph6                0.4598       0.1859  -0.3396
+  min-DFS (tuples)             0.5514       0.4416  -0.2481
+  IsalGraph pruned             0.2552       0.2498  -0.5442
+
+wrote real_size_null.json

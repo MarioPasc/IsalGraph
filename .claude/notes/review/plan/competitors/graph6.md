@@ -55,7 +55,13 @@ offset 63. Length is exactly `1 + ⌈n(n−1)/12⌉` bytes for `n ≤ 62`.
 | Test | Result |
 |---|---|
 | 200 relabellings of the running example (`\|Aut\| = 4`, so ≤ 180 distinct labellings exist) | **122 distinct graph6 strings** |
-| F3 sweep: 40 graphs × 25 genuine relabellings each | **0 / 40 invariant**; up to **26 distinct codes** from 26 copies of one graph |
+| F3 sweep, synthetic: 40 graphs × 25 genuine relabellings each | **0 / 40 invariant**; up to **26 distinct codes** from 26 copies of one graph |
+| **F3 on the real cohort**: 50 graphs × 20 relabellings, per dataset | Letter LOW **4/50** · MED **2/50** · HIGH **6/50** · LINUX **0/50** · AIDS **0/50** |
+
+> The handful of Letter successes are **not** partial invariance — they are tiny graphs (`n̄ ≈ 4`)
+> with large automorphism groups, where 20 draws can miss every distinguishable labelling. Report
+> the LINUX/AIDS rows (0/50) as the representative result and the Letter rows as the reason F3
+> must be run on graphs large enough to have distinguishable labellings.
 
 > A relabelling produced by `nx.relabel_nodes(copy=True)` alone **preserves insertion order** and
 > makes order-dependent formats look invariant. Every measurement here rebuilds the copy with a
@@ -91,7 +97,22 @@ GED = 1, edited copy randomly relabelled) against 120 random same-`n` pairs:
 | graph6 | 6.0 | 6.0 | **1.00** |
 
 A separation of **1.00** means a one-edit pair is indistinguishable from an unrelated pair.
-**graph6 under any string distance carries no GED signal at all.** By §3.4's rule it takes no
+
+**On the real cohort**, ρ of Levenshtein against certified exact GED, and the same ρ after every
+graph is independently relabelled at random:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| graph6, all pairs | 0.691 | 0.681 | 0.670 | 0.507 | 0.456 |
+| graph6, **after random relabelling** | 0.676 | — | 0.676 | **0.377** | **0.387** |
+| graph6, **equal-`n` pairs only** | **0.539** | **0.430** | **0.447** | **0.286** | **0.171** |
+| *(size null `\|n₁−n₂\|`)* | *0.899* | *0.909* | *0.926* | *0.713* | *0.799* |
+
+> graph6 never beats the size null, and on equal-`n` pairs — where the size channel is constant —
+> it drops to **0.17–0.54**. Part of what remains is the corpus's own labelling convention: random
+> relabelling costs a further **0.13 on LINUX** and **0.09 on AIDS**. Nothing left is structure.
+
+**graph6 under any string distance carries no usable GED signal.** By §3.4's rule it takes no
 primary distance and is excluded from the running comparison, entering the AE.3 table on its
 qualitative row.
 

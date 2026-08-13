@@ -109,6 +109,27 @@ profile:
 | **Protein** | 32 | 61 | **0/5** | budget hit | 4.0 s |
 | ceiling sweep, `n ≥ 20` | 20–98 | — | **0/3 at every profile** | budget hit | — |
 
+### 2.2b The real cohort — the ceiling is at Suite 1's edge, and it is dataset-shaped
+
+Synthetic `G(n,m)` was pessimistic in one direction and optimistic in another. Measured on the
+actual graphs:
+
+| Dataset | `n̄` | `n_max` | graphs | budget | **exact** | median ms/graph |
+|---|---:|---:|---:|---:|---:|---:|
+| Letter LOW / MED / HIGH | 4.1–4.6 | 7–9 | 4,492 | 200k | **100 %** | 0.04–0.07 |
+| LINUX | 8.71 | 10 | 89 | 200k | **100 %** | 8.0 |
+| AIDS (Suite 1) | 10.56 | 12 | 769 | 200k | **99.6 %** (3 fail) | 54.4 |
+| **GREC** (Suite 2) | 11.54 | 24 | 400 sampled | 100k | **76 %** (96 fail) | **173** |
+
+> **All of Suite 1 is computable; Suite 2 is not.** AIDS at `n ≤ 12` loses 3 graphs of 769. GREC,
+> whose *mean* is only one node larger but whose tail reaches 24, loses **24 %** — and at 173 ms per
+> graph, raising the budget is not free: 16,370 Suite-2 graphs at even the GREC rate is ~47
+> core-minutes for a column that would still be a quarter empty.
+>
+> The failure is driven by the **tail**, not the mean, which is why `n̄` is the wrong statistic to
+> plan with. It also means the ceiling cannot be stated as a single `n`: it depends on how
+> symmetric the individual graph is.
+
 Raising the budget does not rescue it: search nodes grow ~20× from `n = 11` to `n = 14`, so
 reaching `n = 32` needs something like `10¹⁰` nodes per graph, against 16,370 graphs.
 
@@ -158,11 +179,27 @@ Measured, 120 one-edit pairs (unit GED = 1) vs 120 random same-`n` pairs, `n ∈
 | AGM CAM | 4.5 | 9.0 | **0.50** | 5.0 | 12.0 | 36 |
 
 > **Separation 0.50 — second best in the pool, ahead of IsalGraph's 0.73 and nauty's 0.83.**
-> A one-edit pair costs half what an unrelated pair costs. This is a real result and it cuts
-> against us: the lex-min canonical form tracks GED **better** than IsalGraph's canonical string on
-> this test. It also sharpens [competitors](../competitors.md) §4 outcome 2 — "canonical does not
-> imply stable" is true of *nauty*, and much less true of *AGM*, so the two canonical forms are not
-> interchangeable and the paper should not treat them as one row.
+> A one-edit pair costs half what an unrelated pair costs.
+
+**On the real cohort, against certified exact GED** (200-graph sample, Levenshtein):
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **AGM CAM** | 0.911 | **0.920** | **0.892** | **0.798** | *(3/769 encode failures)* |
+| IsalGraph pruned | **0.925** | 0.916 | 0.683 | 0.474 | — |
+| min-DFS code | **0.972** | **0.965** | 0.842 | 0.653 | — |
+| *(size null)* | *0.899* | *0.909* | *0.926* | *0.713* | *0.799* |
+
+> **AGM beats IsalGraph on Letter HIGH (+0.209) and LINUX (+0.324), ties on Letter MED and loses
+> Letter LOW by 0.014.** The lex-min canonical form tracks GED **better** than IsalGraph's canonical
+> string on three of four datasets where it is computable, and it is the only representation besides
+> min-DFS to come close to the size null on LINUX.
+>
+> This sharpens [competitors](../competitors.md) §4 outcome 2. "Canonical does not imply stable" is
+> true of **nauty** (0.677 / 0.663 / 0.639 / 0.538) and much **less** true of AGM (0.911 / 0.920 /
+> 0.892 / 0.798). The two canonical forms differ by ~0.25 in ρ on the same graphs with the same
+> distance. **They are not interchangeable and the paper must not collapse them into one row** —
+> which is also why §4's outcome 2 should name nauty specifically rather than "canonical forms".
 
 Primary distance by §3.4's rule: **padded Hamming** (cheapest passing F1 at 100 %, F2, F3, F4).
 
@@ -217,11 +254,11 @@ assertion to evidence, and they are worth having even if the empirical row is cu
 | # | Question | Answer |
 |---|---|---|
 | 1 | Reproducible? | **No package exists.** We wrote it (~120 lines) and **validated it against brute force on 327 graphs, 0 mismatches** |
-| 2 | Representation | lex-min adjacency bit string, `n(n−1)/2` bits, **40/40 invariant**, complete invariant, handles disconnected |
-| 3 | Distance | **padded Hamming**, separation **0.50 — second best in the pool, better than IsalGraph** |
-| 4 | Claim A? | **Yes but redundant** — identical to the adjacency row by construction; and **undefined above `n ≈ 14`** |
+| 2 | Representation | lex-min adjacency bit string, `n(n−1)/2` bits, **50/50 invariant on real graphs**, complete invariant, handles disconnected |
+| 3 | Distance | **padded Hamming**. Real ρ **0.80–0.92 — beats IsalGraph on 3 of 4 datasets**, by up to +0.324 |
+| 4 | Claim A? | **Yes but redundant** — identical to the adjacency row by construction; and **not computable on Suite 2** |
 | 5 | Scope | **In, restricted to Suite 1.** R1 named it; the family coverage (CAM vs M-DFSC) needs it |
-| — | IsalGraph advantage | **Tractability only, and it is decisive.** AGM loses on efficiency and scalability, wins on expressiveness and GED tracking |
+| — | IsalGraph advantage | **Tractability only, and it is decisive.** AGM wins expressiveness and GED tracking; it cannot be computed on 24 % of GREC |
 
 ---
 
@@ -229,10 +266,11 @@ assertion to evidence, and they are worth having even if the empirical row is cu
 
 **Recommended policy, and the reason to fix it before T-06 rather than during it:**
 
-1. **AGM runs on Suite 1 only** (`n ≤ 12`, all five datasets, exact, cheap). It is excluded from
-   Suite 2 with the measured reason printed: *"the AGM canonical code is a lex-leader minimisation;
-   our branch and bound closes on 5/5 graphs at `n ≤ 11`, 3/5 at `n = 14` and 0/5 at `n ≥ 20` under
-   a 300,000-node budget."* A stated ceiling is a result; a silent one is a defect.
+1. **AGM runs on Suite 1 only.** Measured on the real cohort: **100 %** exact on all three Letter
+   sets and LINUX, **99.6 %** on AIDS (3 of 769 fail at a 200k-node budget), and **76 %** on GREC
+   (96 of 400 fail at 100k, 173 ms/graph). It is excluded from Suite 2 with that sentence printed.
+   A stated ceiling is a result; a silent one is a defect. **The 3 AIDS failures must also be
+   printed**, not dropped — they are why AGM has no ρ column on AIDS.
 2. **Do not substitute a heuristic labelling above the ceiling.** An incumbent from the greedy
    initialisation is *not* canonical, would fail F3, and would put a non-invariant code into a table
    whose column header says canonical. That is precisely the error graph6 is in the pool to expose.

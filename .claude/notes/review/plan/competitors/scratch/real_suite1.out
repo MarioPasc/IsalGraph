@@ -1,0 +1,117 @@
+
+=== iam_letter_low  N=1180  n_max=7 ===
+method               median bits  mean bits  % Isal shorter  ms/graph  failed
+adjacency                    6.0        6.9             0.0     0.005       0
+graph6                      12.0       15.0            57.4     0.035       0
+sparse6                     24.0       26.0           100.0     0.029       0
+nauty->graph6               12.0       15.0            57.4     0.037       0
+AGM CAM                      6.0        6.9             0.0     0.043       0
+min-DFS (tuples)            12.0       15.4            71.5     0.052       0
+IsalGraph pruned            12.7       12.6             0.0     0.004       0
+IsalGraph canonical         12.7       12.6             0.0     0.003       0
+  AGM budget failures 0/1180 | IsalGraph canonical failures 0/1180 | isal wall-clock 0.1s
+  F3 (50 graphs x 20 relabellings): graph6=4/50  sparse6=4/50  nauty->graph6=50/50  adjacency=4/50  min-DFS (tuples)=50/50
+  rho sample: 200 graphs, 19900 certified pairs (GED 0-10)
+  method                 rho(Lev, exact GED)  frac d=0
+  adjacency                           0.8591    0.0867
+  graph6                              0.6466    0.0867
+  sparse6                             0.7171    0.0867
+  nauty->graph6                       0.6333    0.1553
+  AGM CAM                             0.9105    0.1553
+  min-DFS (tuples)                    0.9760    0.1553
+  IsalGraph pruned                    0.9279    0.1553
+  IsalGraph canonical                 0.9269    0.1553
+
+=== iam_letter_med  N=1253  n_max=8 ===
+method               median bits  mean bits  % Isal shorter  ms/graph  failed
+adjacency                    6.0        7.1             0.0     0.005       0
+graph6                      12.0       15.1            53.6     0.036       0
+sparse6                     24.0       26.4           100.0     0.029       0
+nauty->graph6               12.0       15.1            53.6     0.037       0
+AGM CAM                      6.0        7.1             0.0     0.046       0
+min-DFS (tuples)            12.0       16.0            69.8     0.057       0
+IsalGraph pruned            12.7       13.3             0.0     0.004       0
+IsalGraph canonical         12.7       13.2             0.0     0.004       0
+  AGM budget failures 0/1253 | IsalGraph canonical failures 0/1253 | isal wall-clock 0.1s
+  F3 (50 graphs x 20 relabellings): graph6=2/50  sparse6=2/50  nauty->graph6=50/50  adjacency=2/50  min-DFS (tuples)=50/50
+  rho sample: 200 graphs, 19900 certified pairs (GED 0-10)
+  method                 rho(Lev, exact GED)  frac d=0
+  adjacency                           0.8572    0.0931
+  graph6                              0.6967    0.0931
+  sparse6                             0.7463    0.0931
+  nauty->graph6                       0.6667    0.1570
+  AGM CAM                             0.9200    0.1570
+  min-DFS (tuples)                    0.9690    0.1570
+  IsalGraph pruned                    0.9195    0.1570
+  IsalGraph canonical                 0.9122    0.1570
+
+=== iam_letter_high  N=2059  n_max=9 ===
+method               median bits  mean bits  % Isal shorter  ms/graph  failed
+adjacency                   10.0        9.0             0.0     0.005       0
+graph6                      18.0       17.0            19.9     0.039       0
+sparse6                     36.0       31.8            99.0     0.032       0
+nauty->graph6               18.0       17.0            19.9     0.039       0
+AGM CAM                     10.0        9.0             0.0     0.066       0
+min-DFS (tuples)            24.0       24.3            60.0     0.111       0
+IsalGraph pruned            25.4       22.4             0.0     0.005       0
+IsalGraph canonical         22.2       22.0             0.0     0.007       0
+  AGM budget failures 0/2059 | IsalGraph canonical failures 0/2059 | isal wall-clock 0.1s
+  F3 (50 graphs x 20 relabellings): graph6=6/50  sparse6=6/50  nauty->graph6=50/50  adjacency=6/50  min-DFS (tuples)=50/50
+  rho sample: 200 graphs, 19900 certified pairs (GED 0-13)
+  method                 rho(Lev, exact GED)  frac d=0
+  adjacency                           0.8390    0.0172
+  graph6                              0.6890    0.0172
+  sparse6                             0.6855    0.0172
+  nauty->graph6                       0.6547    0.0433
+  AGM CAM                             0.8916    0.0433
+  min-DFS (tuples)                    0.8461    0.0433
+  IsalGraph pruned                    0.7035    0.0433
+  IsalGraph canonical                 0.7181    0.0433
+
+=== linux  N=89  n_max=10 ===
+method               median bits  mean bits  % Isal shorter  ms/graph  failed
+adjacency                   36.0       34.5            15.7     0.009       0
+graph6                      42.0       42.2            59.6     0.063       0
+sparse6                     60.0       57.9           100.0     0.046       0
+nauty->graph6               42.0       42.2            59.6     0.063       0
+AGM CAM                     36.0       34.5            15.7     8.020       0
+min-DFS (tuples)            64.0       62.5            98.9     0.403       0
+IsalGraph pruned            41.2       41.7             0.0     0.019       0
+IsalGraph canonical         41.2       41.2             0.0     0.093       0
+  AGM budget failures 0/89 | IsalGraph canonical failures 0/89 | isal wall-clock 0.0s
+  F3 (50 graphs x 20 relabellings): graph6=0/50  sparse6=0/50  nauty->graph6=50/50  adjacency=0/50  min-DFS (tuples)=50/50
+  rho sample: 89 graphs, 3870 certified pairs (GED 1-16)
+  method                 rho(Lev, exact GED)  frac d=0
+  adjacency                           0.7540    0.0000
+  graph6                              0.5068    0.0000
+  sparse6                             0.5587    0.0000
+  nauty->graph6                       0.5378    0.0000
+  AGM CAM                             0.7979    0.0000
+  min-DFS (tuples)                    0.6529    0.0000
+  IsalGraph pruned                    0.4742    0.0000
+  IsalGraph canonical                 0.4358    0.0000
+
+=== aids  N=769  n_max=12 ===
+method               median bits  mean bits  % Isal shorter  ms/graph  failed
+adjacency                   55.0       51.6            29.9     0.011       0
+graph6                      66.0       59.9            63.2     0.087       0
+sparse6                     72.0       67.9            89.9     0.055       0
+nauty->graph6               66.0       59.9            63.2     0.080       0
+AGM CAM                     55.0       51.5            29.6    54.404       3
+min-DFS (tuples)            88.0       84.4            99.6     0.758       0
+IsalGraph pruned            57.1       57.3             0.0     0.023       0
+IsalGraph canonical         57.1       55.4             0.0     0.095       0
+  AGM budget failures 3/769 | IsalGraph canonical failures 0/769 | isal wall-clock 0.1s
+  F3 (50 graphs x 20 relabellings): graph6=0/50  sparse6=0/50  nauty->graph6=50/50  adjacency=0/50  min-DFS (tuples)=50/50
+  rho sample: 200 graphs, 16181 certified pairs (GED 1-24)
+  method                 rho(Lev, exact GED)  frac d=0
+  adjacency                           0.8155    0.0000
+  graph6                              0.4848    0.0000
+  sparse6                             0.5403    0.0000
+  nauty->graph6                       0.4822    0.0000
+  AGM CAM                                n/a          
+  min-DFS (tuples)                    0.6131    0.0000
+  IsalGraph pruned                    0.3288    0.0000
+  IsalGraph canonical                 0.3275    0.0000
+
+wrote real_suite1.json

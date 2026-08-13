@@ -1,0 +1,573 @@
+{
+  "iam_letter_low": {
+    "N": 1180,
+    "claim_a": {
+      "adjacency": {
+        "median": 6.0,
+        "mean": 6.91271186440678,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1180,
+        "ms_per_graph": 0.0049441957544639975
+      },
+      "graph6": {
+        "median": 12.0,
+        "mean": 14.974576271186441,
+        "isal_shorter_pct": 57.3728813559322,
+        "n_ok": 1180,
+        "ms_per_graph": 0.035386827959759476
+      },
+      "sparse6": {
+        "median": 24.0,
+        "mean": 25.998305084745763,
+        "isal_shorter_pct": 100.0,
+        "n_ok": 1180,
+        "ms_per_graph": 0.028555588155772273
+      },
+      "nauty->graph6": {
+        "median": 12.0,
+        "mean": 14.974576271186441,
+        "isal_shorter_pct": 57.3728813559322,
+        "n_ok": 1180,
+        "ms_per_graph": 0.03651305256980931
+      },
+      "AGM CAM": {
+        "median": 6.0,
+        "mean": 6.91271186440678,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1180,
+        "ms_per_graph": 0.04349491951963223
+      },
+      "min-DFS (tuples)": {
+        "median": 12.0,
+        "mean": 15.39322033898305,
+        "isal_shorter_pct": 71.52542372881356,
+        "n_ok": 1180,
+        "ms_per_graph": 0.05217780339758758
+      },
+      "IsalGraph pruned": {
+        "median": 12.679700005769249,
+        "mean": 12.585676806573925,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1180,
+        "ms_per_graph": 0.003573931365481566
+      },
+      "IsalGraph canonical": {
+        "median": 12.679700005769249,
+        "mean": 12.585676806573925,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1180,
+        "ms_per_graph": 0.0034242432390120653
+      }
+    },
+    "f3": {
+      "graph6": "4/50",
+      "sparse6": "4/50",
+      "nauty->graph6": "50/50",
+      "adjacency": "4/50",
+      "min-DFS (tuples)": "50/50"
+    },
+    "rho": {
+      "adjacency": {
+        "spearman": 0.859061145529523,
+        "p": 0.0,
+        "zero_frac": 0.08668341708542714
+      },
+      "graph6": {
+        "spearman": 0.6465739364674112,
+        "p": 0.0,
+        "zero_frac": 0.08668341708542714
+      },
+      "sparse6": {
+        "spearman": 0.7171051104910957,
+        "p": 0.0,
+        "zero_frac": 0.08668341708542714
+      },
+      "nauty->graph6": {
+        "spearman": 0.6333305690010276,
+        "p": 0.0,
+        "zero_frac": 0.15527638190954773
+      },
+      "AGM CAM": {
+        "spearman": 0.9105466907441038,
+        "p": 0.0,
+        "zero_frac": 0.15527638190954773
+      },
+      "min-DFS (tuples)": {
+        "spearman": 0.9759609195700096,
+        "p": 0.0,
+        "zero_frac": 0.15527638190954773
+      },
+      "IsalGraph pruned": {
+        "spearman": 0.9279403236793772,
+        "p": 0.0,
+        "zero_frac": 0.15527638190954773
+      },
+      "IsalGraph canonical": {
+        "spearman": 0.9269276490607578,
+        "p": 0.0,
+        "zero_frac": 0.15527638190954773
+      }
+    },
+    "agm_fail": 0,
+    "isal_canonical_fail": 0,
+    "n_pairs_rho": 19900,
+    "n_max": 7,
+    "seconds": 0.5378742249995412
+  },
+  "iam_letter_med": {
+    "N": 1253,
+    "claim_a": {
+      "adjacency": {
+        "median": 6.0,
+        "mean": 7.0822027134876295,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1253,
+        "ms_per_graph": 0.005075260987063068
+      },
+      "graph6": {
+        "median": 12.0,
+        "mean": 15.083798882681565,
+        "isal_shorter_pct": 53.63128491620112,
+        "n_ok": 1253,
+        "ms_per_graph": 0.035627744624465336
+      },
+      "sparse6": {
+        "median": 24.0,
+        "mean": 26.43735035913807,
+        "isal_shorter_pct": 100.0,
+        "n_ok": 1253,
+        "ms_per_graph": 0.02934387308415895
+      },
+      "nauty->graph6": {
+        "median": 12.0,
+        "mean": 15.083798882681565,
+        "isal_shorter_pct": 53.63128491620112,
+        "n_ok": 1253,
+        "ms_per_graph": 0.03660436468214458
+      },
+      "AGM CAM": {
+        "median": 6.0,
+        "mean": 7.0822027134876295,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1253,
+        "ms_per_graph": 0.0460625155781974
+      },
+      "min-DFS (tuples)": {
+        "median": 12.0,
+        "mean": 15.968076616121309,
+        "isal_shorter_pct": 69.83240223463687,
+        "n_ok": 1253,
+        "ms_per_graph": 0.057412652028535016
+      },
+      "IsalGraph pruned": {
+        "median": 12.679700005769249,
+        "mean": 13.253980113771966,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1253,
+        "ms_per_graph": 0.003735383895341216
+      },
+      "IsalGraph canonical": {
+        "median": 12.679700005769249,
+        "mean": 13.223621693965654,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 1253,
+        "ms_per_graph": 0.0036014030036774403
+      }
+    },
+    "f3": {
+      "graph6": "2/50",
+      "sparse6": "2/50",
+      "nauty->graph6": "50/50",
+      "adjacency": "2/50",
+      "min-DFS (tuples)": "50/50"
+    },
+    "rho": {
+      "adjacency": {
+        "spearman": 0.8571764715843369,
+        "p": 0.0,
+        "zero_frac": 0.09311557788944724
+      },
+      "graph6": {
+        "spearman": 0.6967377640098644,
+        "p": 0.0,
+        "zero_frac": 0.09311557788944724
+      },
+      "sparse6": {
+        "spearman": 0.7462909125214248,
+        "p": 0.0,
+        "zero_frac": 0.09311557788944724
+      },
+      "nauty->graph6": {
+        "spearman": 0.6667156198205687,
+        "p": 0.0,
+        "zero_frac": 0.15698492462311558
+      },
+      "AGM CAM": {
+        "spearman": 0.920002767613528,
+        "p": 0.0,
+        "zero_frac": 0.15698492462311558
+      },
+      "min-DFS (tuples)": {
+        "spearman": 0.969033286320925,
+        "p": 0.0,
+        "zero_frac": 0.15698492462311558
+      },
+      "IsalGraph pruned": {
+        "spearman": 0.9194649015834241,
+        "p": 0.0,
+        "zero_frac": 0.15698492462311558
+      },
+      "IsalGraph canonical": {
+        "spearman": 0.9122467040484186,
+        "p": 0.0,
+        "zero_frac": 0.15698492462311558
+      }
+    },
+    "agm_fail": 0,
+    "isal_canonical_fail": 0,
+    "n_pairs_rho": 19900,
+    "n_max": 8,
+    "seconds": 1.4530967360005889
+  },
+  "iam_letter_high": {
+    "N": 2059,
+    "claim_a": {
+      "adjacency": {
+        "median": 10.0,
+        "mean": 8.984944147644487,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 2059,
+        "ms_per_graph": 0.00548985039305403
+      },
+      "graph6": {
+        "median": 18.0,
+        "mean": 16.98300145701797,
+        "isal_shorter_pct": 19.86401165614376,
+        "n_ok": 2059,
+        "ms_per_graph": 0.038852335566579826
+      },
+      "sparse6": {
+        "median": 36.0,
+        "mean": 31.832928606119477,
+        "isal_shorter_pct": 99.02865468674113,
+        "n_ok": 2059,
+        "ms_per_graph": 0.03159690771347808
+      },
+      "nauty->graph6": {
+        "median": 18.0,
+        "mean": 16.98300145701797,
+        "isal_shorter_pct": 19.86401165614376,
+        "n_ok": 2059,
+        "ms_per_graph": 0.03914474257807231
+      },
+      "AGM CAM": {
+        "median": 10.0,
+        "mean": 8.984944147644487,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 2059,
+        "ms_per_graph": 0.06641355316917974
+      },
+      "min-DFS (tuples)": {
+        "median": 24.0,
+        "mean": 24.285575522098107,
+        "isal_shorter_pct": 60.029140359397765,
+        "n_ok": 2059,
+        "ms_per_graph": 0.11120918162557536
+      },
+      "IsalGraph pruned": {
+        "median": 25.359400011538497,
+        "mean": 22.411169619230566,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 2059,
+        "ms_per_graph": 0.005337650300297991
+      },
+      "IsalGraph canonical": {
+        "median": 22.189475010096185,
+        "mean": 22.027822690935697,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 2059,
+        "ms_per_graph": 0.00671634727161384
+      }
+    },
+    "f3": {
+      "graph6": "6/50",
+      "sparse6": "6/50",
+      "nauty->graph6": "50/50",
+      "adjacency": "6/50",
+      "min-DFS (tuples)": "50/50"
+    },
+    "rho": {
+      "adjacency": {
+        "spearman": 0.8389822927191897,
+        "p": 0.0,
+        "zero_frac": 0.017185929648241206
+      },
+      "graph6": {
+        "spearman": 0.6890286515921515,
+        "p": 0.0,
+        "zero_frac": 0.017185929648241206
+      },
+      "sparse6": {
+        "spearman": 0.6855437526672155,
+        "p": 0.0,
+        "zero_frac": 0.017185929648241206
+      },
+      "nauty->graph6": {
+        "spearman": 0.6546921179372178,
+        "p": 0.0,
+        "zero_frac": 0.043266331658291454
+      },
+      "AGM CAM": {
+        "spearman": 0.891580082883944,
+        "p": 0.0,
+        "zero_frac": 0.043266331658291454
+      },
+      "min-DFS (tuples)": {
+        "spearman": 0.8460555773409209,
+        "p": 0.0,
+        "zero_frac": 0.043266331658291454
+      },
+      "IsalGraph pruned": {
+        "spearman": 0.7035285391176009,
+        "p": 0.0,
+        "zero_frac": 0.043266331658291454
+      },
+      "IsalGraph canonical": {
+        "spearman": 0.7181163289408329,
+        "p": 0.0,
+        "zero_frac": 0.043266331658291454
+      }
+    },
+    "agm_fail": 0,
+    "isal_canonical_fail": 0,
+    "n_pairs_rho": 19900,
+    "n_max": 9,
+    "seconds": 1.1189201550005237
+  },
+  "linux": {
+    "N": 89,
+    "claim_a": {
+      "adjacency": {
+        "median": 36.0,
+        "mean": 34.46067415730337,
+        "isal_shorter_pct": 15.730337078651685,
+        "n_ok": 89,
+        "ms_per_graph": 0.008980707779495318
+      },
+      "graph6": {
+        "median": 42.0,
+        "mean": 42.20224719101124,
+        "isal_shorter_pct": 59.550561797752806,
+        "n_ok": 89,
+        "ms_per_graph": 0.06321460677191792
+      },
+      "sparse6": {
+        "median": 60.0,
+        "mean": 57.91011235955056,
+        "isal_shorter_pct": 100.0,
+        "n_ok": 89,
+        "ms_per_graph": 0.046223707981420725
+      },
+      "nauty->graph6": {
+        "median": 42.0,
+        "mean": 42.20224719101124,
+        "isal_shorter_pct": 59.550561797752806,
+        "n_ok": 89,
+        "ms_per_graph": 0.06335408998597047
+      },
+      "AGM CAM": {
+        "median": 36.0,
+        "mean": 34.46067415730337,
+        "isal_shorter_pct": 15.730337078651685,
+        "n_ok": 89,
+        "ms_per_graph": 8.019514056184235
+      },
+      "min-DFS (tuples)": {
+        "median": 64.0,
+        "mean": 62.53932584269663,
+        "isal_shorter_pct": 98.87640449438203,
+        "n_ok": 89,
+        "ms_per_graph": 0.4032625392835726
+      },
+      "IsalGraph pruned": {
+        "median": 41.209025018750054,
+        "mean": 41.70766490661739,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 89,
+        "ms_per_graph": 0.018746820213881406
+      },
+      "IsalGraph canonical": {
+        "median": 41.209025018750054,
+        "mean": 41.244642153597724,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 89,
+        "ms_per_graph": 0.09277795503253453
+      }
+    },
+    "f3": {
+      "graph6": "0/50",
+      "sparse6": "0/50",
+      "nauty->graph6": "50/50",
+      "adjacency": "0/50",
+      "min-DFS (tuples)": "50/50"
+    },
+    "rho": {
+      "adjacency": {
+        "spearman": 0.753965526811864,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "graph6": {
+        "spearman": 0.506804869393732,
+        "p": 1.1576881653807767e-251,
+        "zero_frac": 0.0
+      },
+      "sparse6": {
+        "spearman": 0.5586591291877968,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "nauty->graph6": {
+        "spearman": 0.5377682908900365,
+        "p": 4.602868653797631e-289,
+        "zero_frac": 0.0
+      },
+      "AGM CAM": {
+        "spearman": 0.7978927968123181,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "min-DFS (tuples)": {
+        "spearman": 0.6529445858778118,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "IsalGraph pruned": {
+        "spearman": 0.47418760744910005,
+        "p": 3.159830675269267e-216,
+        "zero_frac": 0.0
+      },
+      "IsalGraph canonical": {
+        "spearman": 0.4358375715324884,
+        "p": 3.3549679732647415e-179,
+        "zero_frac": 0.0
+      }
+    },
+    "agm_fail": 0,
+    "isal_canonical_fail": 0,
+    "n_pairs_rho": 3870,
+    "n_max": 10,
+    "seconds": 1.5098261309994996
+  },
+  "aids": {
+    "N": 769,
+    "claim_a": {
+      "adjacency": {
+        "median": 55.0,
+        "mean": 51.5630689206762,
+        "isal_shorter_pct": 29.90897269180754,
+        "n_ok": 769,
+        "ms_per_graph": 0.010763829649984352
+      },
+      "graph6": {
+        "median": 66.0,
+        "mean": 59.90637191157347,
+        "isal_shorter_pct": 63.198959687906374,
+        "n_ok": 769,
+        "ms_per_graph": 0.08658268660056312
+      },
+      "sparse6": {
+        "median": 72.0,
+        "mean": 67.8959687906372,
+        "isal_shorter_pct": 89.85695708712613,
+        "n_ok": 769,
+        "ms_per_graph": 0.05489262025992181
+      },
+      "nauty->graph6": {
+        "median": 66.0,
+        "mean": 59.90637191157347,
+        "isal_shorter_pct": 63.198959687906374,
+        "n_ok": 769,
+        "ms_per_graph": 0.07965817812885692
+      },
+      "AGM CAM": {
+        "median": 55.0,
+        "mean": 51.5065274151436,
+        "isal_shorter_pct": 29.634464751958223,
+        "n_ok": 766,
+        "ms_per_graph": 54.40356615605535
+      },
+      "min-DFS (tuples)": {
+        "median": 88.0,
+        "mean": 84.38751625487646,
+        "isal_shorter_pct": 99.60988296488947,
+        "n_ok": 769,
+        "ms_per_graph": 0.7577632314265578
+      },
+      "IsalGraph pruned": {
+        "median": 57.05865002596162,
+        "mean": 57.34719976601489,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 769,
+        "ms_per_graph": 0.023385175573219476
+      },
+      "IsalGraph canonical": {
+        "median": 57.05865002596162,
+        "mean": 55.43864934251971,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 769,
+        "ms_per_graph": 0.09540326527298806
+      }
+    },
+    "f3": {
+      "graph6": "0/50",
+      "sparse6": "0/50",
+      "nauty->graph6": "50/50",
+      "adjacency": "0/50",
+      "min-DFS (tuples)": "50/50"
+    },
+    "rho": {
+      "adjacency": {
+        "spearman": 0.8155499905733052,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "graph6": {
+        "spearman": 0.4847793706880771,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "sparse6": {
+        "spearman": 0.540332406468137,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "nauty->graph6": {
+        "spearman": 0.48223713438341714,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "AGM CAM": null,
+      "min-DFS (tuples)": {
+        "spearman": 0.6130781019994905,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "IsalGraph pruned": {
+        "spearman": 0.32877854128024325,
+        "p": 0.0,
+        "zero_frac": 0.0
+      },
+      "IsalGraph canonical": {
+        "spearman": 0.32750689960727897,
+        "p": 0.0,
+        "zero_frac": 0.0
+      }
+    },
+    "agm_fail": 3,
+    "isal_canonical_fail": 0,
+    "n_pairs_rho": 16181,
+    "n_max": 12,
+    "seconds": 43.7577640290001
+  }
+}

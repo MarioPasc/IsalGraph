@@ -1,0 +1,102 @@
+{
+  "iam_letter_low|adjacency": {
+    "shipped": 0.8727755473741273,
+    "relabelled": 0.8263989693743955,
+    "delta": -0.04637657799973183
+  },
+  "iam_letter_low|graph6": {
+    "shipped": 0.6913950004112531,
+    "relabelled": 0.6758732434557435,
+    "delta": -0.015521756955509614
+  },
+  "iam_letter_low|sparse6": {
+    "shipped": 0.74757266392263,
+    "relabelled": 0.6521609686982033,
+    "delta": -0.09541169522442672
+  },
+  "iam_letter_low|nauty->graph6": {
+    "shipped": 0.6771511376715332,
+    "relabelled": 0.6771511376715332,
+    "delta": 0.0
+  },
+  "iam_letter_low|min-DFS (tuples)": {
+    "shipped": 0.971964016675794,
+    "relabelled": 0.971964016675794,
+    "delta": 0.0
+  },
+  "iam_letter_high|adjacency": {
+    "shipped": 0.844321935170442,
+    "relabelled": 0.8106482130027306,
+    "delta": -0.03367372216771136
+  },
+  "iam_letter_high|graph6": {
+    "shipped": 0.6910633946383717,
+    "relabelled": 0.6761384324647587,
+    "delta": -0.014924962173613054
+  },
+  "iam_letter_high|sparse6": {
+    "shipped": 0.6728666875069391,
+    "relabelled": 0.6465159600566162,
+    "delta": -0.026350727450322964
+  },
+  "iam_letter_high|nauty->graph6": {
+    "shipped": 0.6602627437728766,
+    "relabelled": 0.6602627437728766,
+    "delta": 0.0
+  },
+  "iam_letter_high|min-DFS (tuples)": {
+    "shipped": 0.8282437706470805,
+    "relabelled": 0.8282437706470805,
+    "delta": 0.0
+  },
+  "linux|adjacency": {
+    "shipped": 0.753965526811864,
+    "relabelled": 0.7020111849669799,
+    "delta": -0.05195434184488412
+  },
+  "linux|graph6": {
+    "shipped": 0.506804869393732,
+    "relabelled": 0.3767723615393329,
+    "delta": -0.13003250785439913
+  },
+  "linux|sparse6": {
+    "shipped": 0.5586591291877968,
+    "relabelled": 0.3414849885577467,
+    "delta": -0.21717414063005008
+  },
+  "linux|nauty->graph6": {
+    "shipped": 0.5377682908900365,
+    "relabelled": 0.5377682908900365,
+    "delta": 0.0
+  },
+  "linux|min-DFS (tuples)": {
+    "shipped": 0.6529445858778118,
+    "relabelled": 0.6529445858778118,
+    "delta": 0.0
+  },
+  "aids|adjacency": {
+    "shipped": 0.7995614790026201,
+    "relabelled": 0.7704304068680619,
+    "delta": -0.029131072134558234
+  },
+  "aids|graph6": {
+    "shipped": 0.4743339317702047,
+    "relabelled": 0.3865451345057699,
+    "delta": -0.08778879726443484
+  },
+  "aids|sparse6": {
+    "shipped": 0.48645830415511654,
+    "relabelled": 0.23666064747412416,
+    "delta": -0.24979765668099238
+  },
+  "aids|nauty->graph6": {
+    "shipped": 0.48634880211076403,
+    "relabelled": 0.48634880211076403,
+    "delta": 0.0
+  },
+  "aids|min-DFS (tuples)": {
+    "shipped": 0.5667395538270221,
+    "relabelled": 0.5667395538270221,
+    "delta": 0.0
+  }
+}

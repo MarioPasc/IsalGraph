@@ -196,6 +196,36 @@ pairs, `n ∈ [6,12]`:
 > **Both conventions beat every other representation in the pool, by roughly 2×.** The min-DFS code
 > is the most edit-distance-compatible representation we measured — which is exactly the property
 > the manuscript claims as IsalGraph's.
+
+### 3.1 On the real cohort, against certified exact GED — the prior holds, with a wider margin
+
+Spearman ρ of tuple-level Levenshtein against T-03's **certified exact GED** (D6 unit costs),
+200-graph sample per dataset, certified pairs only:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **min-DFS code** | **0.972** | **0.965** | **0.842** | **0.653** | **0.551** |
+| IsalGraph pruned | 0.925 | 0.916 | 0.683 | 0.474 | 0.255 |
+| **margin** | **+0.047** | **+0.049** | **+0.159** | **+0.179** | **+0.296** |
+| *(size null `\|n₁−n₂\|`)* | *0.899* | *0.909* | *0.926* | *0.713* | *0.799* |
+
+Restricted to **equal-`n`** pairs, where the size channel is constant and the comparison is pure
+structure:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **min-DFS code** | **0.996** | **0.980** | **0.806** | **0.540** | **0.442** |
+| IsalGraph pruned | 0.981 | 0.961 | 0.628 | 0.397 | 0.250 |
+| nauty→graph6 | 0.974 | 0.969 | 0.682 | 0.261 | 0.186 |
+| adjacency | 0.565 | 0.429 | 0.424 | 0.300 | 0.243 |
+
+> **The minimum DFS code wins every column of both tables.** The margin widens with graph size —
+> +0.047 at `n̄ = 4.07` to +0.296 at `n̄ = 10.56` — which is the direction that matters, because
+> AE.1 asks the paper to go *up* in size.
+>
+> Note also that **min-DFS is the only representation in the pool that clears the size null**
+> (+0.073 on Letter LOW, +0.056 on Letter MED) — see [README](README.md) §4.1, finding 1. On
+> Letter HIGH, LINUX and AIDS **nothing clears it**, min-DFS included.
 >
 > **Fix the convention before T-06.** Character-level charges 4 edits for one deleted tuple
 > (`' 5-2'`) and is an artefact of ASCII framing; tuple-level charges 1 and is the semantically
@@ -293,15 +323,17 @@ to IsalGraph's problem setting.
 
 **Partly, and the honest answer is narrower than the manuscript's.**
 
-- **Yes on message length** — measured, 9 of 10 profiles, and the margin grows with `n` (390 vs 624
-  bits at `n = 50`; 564 vs an `m`-scaling min-DFS at `n = 70`). Claim A survives against the
-  strongest competitor.
+- **Yes on message length** — on the **real** cohort IsalGraph is strictly shorter than the min-DFS
+  code on **71.5 %** of Letter LOW graphs, **60.0 %** of Letter HIGH, **98.9 %** of LINUX,
+  **99.6 %** of AIDS and **96.2 %** of GREC. Claim A survives against the strongest competitor, and
+  the margin grows with `n`. This is IsalGraph's one clean win over gSpan.
 - **Yes on the alphabet** — a fixed 9-symbol operational alphabet versus an index-pair alphabet that
   grows as `O(n²)`. This is the conceptual difference R1.2 asks for, and it is a property, not a
   measurement, so it costs nothing to state. **Do not extend it into a claim about sequence models**
   — the plan declines that experiment ([demands](../demands.md)), and the argument does not need it.
-- **No on edit-distance compatibility** — the axis the manuscript leads with. The min-DFS code
-  tracks a unit edit more than twice as tightly on this test.
+- **No on edit-distance compatibility** — the axis the manuscript leads with. **On the real cohort,
+  against certified exact GED, the min-DFS code wins all five Suite-1 datasets, by +0.047 to
+  +0.296, in both the all-pairs and the equal-`n` view.** This is no longer a synthetic prior.
 - **Unresolved on efficiency and scalability** until the runtime comparison is made fair.
 
 **The claim that survives**: *IsalGraph encodes a graph in fewer bits than the minimum DFS code over
@@ -310,11 +342,10 @@ tracks unit edits more tightly.* Two representations, two different strengths, b
 reviewer who has read gSpan will find that far more credible than a claim of dominance — and R1,
 who named gSpan unprompted, has read gSpan.
 
-**Caveat on generality, stated because it cuts our way and must not be hidden**: the separation
-figures come from `G(n, m)` random graphs at `n ∈ [6,12]`, not from the IAM cohort. IAM Letter
-graphs are near-planar geometric graphs at `n̄ ≈ 4`, where the paper reports `ρ ≈ 0.93`. The
-ordering may differ there. **T-04a's F5 on the real 200-graph sample is what settles it**, and it
-must be run before the paper states either direction.
+~~**Caveat on generality**: the separation figures come from `G(n, m)` random graphs, not IAM. The
+ordering may differ there.~~ **Resolved 2026-08-13 — it does not.** §3.1 runs the comparison on the
+real cohort against certified exact GED and the ordering is the same, with a larger margin. What
+remains open is Suite 2, which has no GED reference until T-05.
 
 ---
 
@@ -324,10 +355,10 @@ must be run before the paper states either direction.
 |---|---|---|
 | 1 | Reproducible? | **Not from any of the three candidates.** `LasseRegin` is broken on modern numpy and its `G2DFS` is not minimal; `betterenvi`'s `_is_min` is private and needs a miner; **`kaviniitm/DFSCode` builds and claims exactly this but is wrong on 50 % of 6-node graphs and is not isomorphism-invariant.** **We wrote it**, validated against exhaustive brute force + 4,440 relabellings |
 | 2 | Representation | `m` DFS tuples, **deterministic length**, complete invariant (112/112 at `n = 6`), alphabet grows as `O(n²)` |
-| 3 | Distance | **Levenshtein, tuple-level.** Separation **0.32–0.38 — best in the pool** |
-| 4 | Claim A? | **Yes**, `m · 2⌈log₂ n⌉` bits. **IsalGraph beats it on 9 of 10 profiles** |
+| 3 | Distance | **Levenshtein, tuple-level.** **ρ vs certified exact GED = 0.55–0.97, best in the pool on all five Suite-1 datasets** |
+| 4 | Claim A? | **Yes**, `m · 2⌈log₂ n⌉` bits. **IsalGraph is shorter on 60–100 % of real graphs** |
 | 5 | Scope | **In, and it is the closest competitor there is.** Named by R1; M-DFSC family representative |
-| — | IsalGraph advantage | **Bits yes, alphabet yes, GED tracking no, runtime unresolved.** State all four |
+| — | IsalGraph advantage | **Bits yes, alphabet yes, GED tracking no (loses by +0.047 to +0.296 on real data), runtime unresolved.** State all four |
 
 ---
 

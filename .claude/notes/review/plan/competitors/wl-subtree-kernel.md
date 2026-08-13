@@ -69,6 +69,24 @@ K_{3,3}  and  C₃ × K₂ (triangular prism):  both connected, both 3-regular o
 after round 1, so refinement never starts. **No number of rounds fixes it**, which is why `h = 5`
 is in the table.
 
+### 2.2 The incompleteness fires on the real cohort, not just on constructed examples
+
+Measured over the certified-exact pairs of the 200-graph sample, comparing the fraction of pairs at
+**kernel distance 0** against the fraction that are genuinely isomorphic (`GED = 0`):
+
+| Dataset | pairs | frac `d_WL = 0` | frac `GED = 0` | **false zeros** |
+|---|---:|---:|---:|---:|
+| Letter LOW | 19,900 | 0.1438 | 0.1438 | **0** |
+| Letter MED | 19,900 | 0.1530 | 0.1530 | **0** |
+| Letter HIGH | 19,900 | 0.0453 | 0.0453 | **0** |
+| LINUX | 3,870 | 0.00026 | 0.0000 | **≈ 1 pair** |
+| AIDS | 15,686 | 0.00038 | 0.0000 | **≈ 6 pairs** |
+
+> **On the three Letter sets WL's zero-set matches the isomorphic set exactly** — the pseudometric
+> behaves as a metric there, and saying so is the honest framing. On LINUX and AIDS it does not:
+> around one and six pairs respectively receive distance 0 at strictly positive GED. Small, but not
+> zero, and **it is a real-data witness rather than a constructed one**. Report both halves.
+
 > This is the concrete answer to R1.2's *"does the proposed representation provide benefits in terms
 > of uniqueness, expressiveness…"*. `introduction.tex:27` cites the WL test as the expressivity
 > yardstick for MPNNs; this example shows the yardstick failing on a 6-node graph that IsalGraph
@@ -102,8 +120,26 @@ the RKHS distance induced by the linear kernel on the WL feature vectors.
 | **F2** metric axioms | **pseudometric only.** Symmetry and triangle inequality hold (it is a Euclidean distance in feature space); **identity of indiscernibles fails** — `d(K_{3,3}, prism) = 0` with the graphs non-isomorphic. **This must be declared**, per [competitors](../competitors.md) §3.3 F2 |
 | **F3** invariance | **passes**, 40/40 |
 | **F4** non-degenerate | passes on random graphs; **degenerate on regular ones** |
-| **F5** tracks GED | for T-04a / T-06 |
+| **F5** tracks GED | **measured**, see below |
 | **F6** affordable | microseconds |
+
+ρ against certified exact GED, 200-graph sample per dataset:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **WL, `h = 2`** | 0.895 | 0.869 | 0.580 | **0.573** | **0.459** |
+| WL, `h = 3` | 0.821 | 0.810 | 0.494 | 0.501 | 0.412 |
+| IsalGraph pruned | 0.925 | 0.916 | 0.683 | 0.474 | 0.255 |
+| *(size null)* | *0.899* | *0.909* | *0.926* | *0.713* | *0.799* |
+
+> **WL beats IsalGraph on LINUX (+0.099) and AIDS (+0.204)** — the two datasets where the
+> manuscript's ρ is already weakest, and R3.6b already says so. A *non-reversible, incomplete*
+> feature vector tracks GED better than the canonical string on exactly the datasets the paper
+> concedes. That is a result and it goes in the table.
+>
+> **More rounds are worse, uniformly.** `h = 3` is below `h = 2` on all five datasets. Fix `h = 2`,
+> state it, and do not tune it — tuning `h` on ρ would be selecting a baseline on the outcome, the
+> same error [competitors](../competitors.md) §3.4 forbids for our own distances.
 
 > **F2 is the row that matters.** IsalGraph's Levenshtein distance on canonical strings is a **true
 > metric** on isomorphism classes precisely because the canonical string is a complete invariant.
@@ -150,10 +186,10 @@ Marginal cost ≈ 0.
 | Metric | **IsalGraph** | metric vs **pseudometric** |
 
 > The honest framing: WL is the reference point for *how far a cheap, incomplete invariant gets
-> you*. If `ρ(WL distance, GED)` comes out **above** IsalGraph's on some dataset — which is
-> possible, since incompleteness costs little when the corpus contains no near-regular graphs — that
-> is a result we print, and it is bounded by the fact that WL cannot serialise, cannot reverse, and
-> cannot separate `K_{3,3}` from a prism.
+> you*. ~~If `ρ(WL distance, GED)` comes out above IsalGraph's on some dataset…~~ **It does — on
+> LINUX (0.573 vs 0.474) and AIDS (0.459 vs 0.255).** We print it. What bounds it is that WL cannot
+> serialise, cannot reverse, and cannot separate `K_{3,3}` from a prism — so it answers a different
+> question, and the comparison table's job is to make that visible rather than to win the row.
 
 ---
 
@@ -162,8 +198,8 @@ Marginal cost ≈ 0.
 | # | Question | Answer |
 |---|---|---|
 | 1 | Reproducible? | **Yes, twice.** `grakel` 0.1.8 already installed, plus a 40-line reimplementation agreeing exactly. **Watch the `n_iter` vs `h` off-by-one** |
-| 2 | Representation | sparse colour-count vector; invariant (40/40) but **not complete** — `d(K_{3,3}, prism) = 0` |
-| 3 | Distance | RKHS kernel distance only. **F1 100 %, F2 pseudometric — must be declared**, F3 pass |
+| 2 | Representation | sparse colour-count vector; invariant (50/50 on real graphs) but **not complete** — `d(K_{3,3}, prism) = 0`, and ~6 false zeros on real AIDS |
+| 3 | Distance | RKHS kernel distance only. **F1 100 %, F2 pseudometric — must be declared**, F3 pass. Real ρ **0.46–0.90 at `h = 2`; beats IsalGraph on LINUX and AIDS** |
 | 4 | Claim A? | **No.** Not reversible, no bit count. Already excluded by preregistration §4.1 |
 | 5 | Scope | **In, Claim B only.** Enters via AE.4a, not via R1.2's canonicalisation ask |
 | — | IsalGraph advantage | **Yes, foundational**: completeness, reversibility, true metric. WL wins efficiency, scalability, downstream record |

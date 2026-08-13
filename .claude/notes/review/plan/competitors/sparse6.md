@@ -92,6 +92,23 @@ random same-`n` pairs, `n ∈ [6,12]`:
 |---|---:|---:|---:|
 | sparse6 | 11.0 | 12.5 | **0.88** |
 
+**On the real cohort**, ρ against certified exact GED — and sparse6 is where the relabelling control
+bites hardest:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| sparse6, all pairs | 0.748 | 0.703 | 0.654 | 0.559 | 0.515 |
+| sparse6, **after random relabelling** | 0.652 | — | 0.647 | **0.342** | **0.237** |
+| **signal lost to relabelling** | −0.095 | — | −0.026 | **−0.217** | **−0.250** |
+| sparse6, **equal-`n` pairs only** | 0.559 | 0.425 | 0.448 | 0.255 | 0.155 |
+
+> **sparse6 loses more of its apparent signal to relabelling than any other representation** — half
+> of it on LINUX and AIDS. Its cursor-walk encoding reads the vertex *order*, not just the labels,
+> so it is the most sensitive of the three non-canonical formats to the corpus's incidental drawing
+> order. This is a concrete, quantified instance of what F3 is protecting against, and it is worth
+> one line in the paper: *a representation that fails F3 can still show ρ ≈ 0.56, and half of it
+> evaporates when the vertex order is randomised.*
+
 A one-edit pair costs 88 % of what an unrelated pair costs. **No usable GED signal.** By
 [competitors](../competitors.md) §3.4 sparse6 takes no primary distance and is excluded from the
 running Claim B comparison, contributing `k = 1` to the `N_actual` reduction

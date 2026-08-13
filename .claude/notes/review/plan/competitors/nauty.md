@@ -96,11 +96,32 @@ Measured over 120 one-edit pairs (unit GED = 1) against 120 random same-`n` pair
 |---|---:|---:|---:|---:|---:|
 | nauty→graph6 | 5.0 | 6.0 | **0.83** | 10 | 7 |
 
+**On the real cohort, against certified exact GED** (200-graph sample, Levenshtein):
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX | AIDS |
+|---|---:|---:|---:|---:|---:|
+| **nauty→graph6, all pairs** | 0.677 | 0.663 | 0.639 | 0.538 | 0.460 |
+| **nauty→graph6, equal-`n`** | **0.974** | **0.969** | 0.682 | 0.261 | 0.186 |
+| graph6, equal-`n` (same format, no canonicalisation) | 0.539 | 0.430 | 0.447 | 0.286 | 0.171 |
+| AGM CAM, all pairs (the other canonical form) | 0.911 | 0.920 | 0.892 | 0.798 | — |
+
 > **Pre-committed outcome 2 in [competitors](../competitors.md) §4 is CONFIRMED, and it is the most
 > useful negative result in this folder.** A single unit edit moves the canonical graph6 string by a
-> **median of 5 characters out of 7** — 83 % of the distance to a completely unrelated graph.
-> nauty's canonical form is a *unique* representative, not a *stable* one: refinement can hand two
-> graphs that differ by one edge two wholly different orderings.
+> **median of 5 characters out of 7** — 83 % of the distance to a completely unrelated graph — and
+> on real data nauty→graph6 scores **0.46–0.68**, the lowest of the three canonical serialisations,
+> against AGM's 0.80–0.92 on the same graphs with the same distance. nauty's canonical form is a
+> *unique* representative, not a *stable* one: refinement can hand two graphs that differ by one
+> edge two wholly different orderings.
+>
+> **Two refinements the real data forces.**
+> 1. **Name nauty, not "canonical forms".** AGM is also canonical and is ~0.25 better in ρ. The
+>    instability is a property of *nauty's* refinement, not of canonicity.
+> 2. **The equal-`n` row is where canonicalisation pays.** On Letter LOW, holding the format fixed
+>    and changing only the labelling moves equal-`n` ρ from **0.539 to 0.974**. That single
+>    comparison — same bits, same distance, one variable — is the cleanest evidence in the folder
+>    that a representation must be canonical before an edit distance on it means anything, and it
+>    is invisible in the all-pairs view because the size channel floats everything
+>    ([README](README.md) §4.2).
 >
 > This separates the two properties the paper conflates. **Canonical** and
 > **edit-distance-compatible** are independent, and nauty is the existence proof that the first does
@@ -164,7 +185,7 @@ this file measures how much that mattered: separation moves 1.00 → 0.83, and i
 |---|---|---|
 | 1 | Reproducible? | **Yes.** `pip install pynauty`, sdist bundles nauty 2.8.8, **from-source build verified** with gcc 12.2.0 |
 | 2 | Representation | canonical relabelling → graph6. **40/40 invariant**, complete invariant |
-| 3 | Distance | Hamming / padded Hamming / Levenshtein all defined. **Primary: padded Hamming.** Separation **0.83** |
+| 3 | Distance | Hamming / padded Hamming / Levenshtein all defined. **Primary: padded Hamming.** Real ρ **0.46–0.68** all-pairs, **0.19–0.97** equal-`n` — lowest of the three canonical forms |
 | 4 | Claim A? | **Yes**, identical bit count to graph6 by construction — print one row, not two |
 | 5 | Scope | **In, and central.** Isolates canonicity as a variable at fixed format |
 | — | IsalGraph advantage | **Narrow**: only edit-distance compatibility (0.73 vs 0.83) and the operational alphabet. nauty wins efficiency, scalability, expressiveness |

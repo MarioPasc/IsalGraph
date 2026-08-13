@@ -1,0 +1,26 @@
+dataset           representation        rho as shipped  rho relabelled    delta
+iam_letter_low    adjacency                     0.8728          0.8264  -0.0464
+iam_letter_low    graph6                        0.6914          0.6759  -0.0155
+iam_letter_low    sparse6                       0.7476          0.6522  -0.0954
+iam_letter_low    nauty->graph6                 0.6772          0.6772   0.0000
+iam_letter_low    min-DFS (tuples)              0.9720          0.9720   0.0000
+
+iam_letter_high   adjacency                     0.8443          0.8106  -0.0337
+iam_letter_high   graph6                        0.6911          0.6761  -0.0149
+iam_letter_high   sparse6                       0.6729          0.6465  -0.0264
+iam_letter_high   nauty->graph6                 0.6603          0.6603   0.0000
+iam_letter_high   min-DFS (tuples)              0.8282          0.8282   0.0000
+
+linux             adjacency                     0.7540          0.7020  -0.0520
+linux             graph6                        0.5068          0.3768  -0.1300
+linux             sparse6                       0.5587          0.3415  -0.2172
+linux             nauty->graph6                 0.5378          0.5378   0.0000
+linux             min-DFS (tuples)              0.6529          0.6529   0.0000
+
+aids              adjacency                     0.7996          0.7704  -0.0291
+aids              graph6                        0.4743          0.3865  -0.0878
+aids              sparse6                       0.4865          0.2367  -0.2498
+aids              nauty->graph6                 0.4863          0.4863   0.0000
+aids              min-DFS (tuples)              0.5667          0.5667   0.0000
+
+wrote real_relabel_control.json
