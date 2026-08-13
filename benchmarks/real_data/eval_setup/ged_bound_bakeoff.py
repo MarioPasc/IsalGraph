@@ -57,6 +57,7 @@ import importlib
 import json
 import logging
 import math
+import os
 import platform
 import subprocess
 import sys
@@ -2035,10 +2036,13 @@ def main(argv: list[str] | None = None) -> int:
         level=getattr(logging, args.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(message)s",
     )
-    if args.jobs > 4:
-        raise BakeoffError(
-            f"--jobs {args.jobs} exceeds the 4-process ceiling this workstation is shared under"
-        )
+    # The ceiling was 4 while three wave agents shared this workstation. That was a
+    # scheduling constraint on the build, not a property of the measurement, and the
+    # campaign runs alone -- so it is the machine's core count now. Timings never come
+    # from this path: the timing stage is serial by construction.
+    _job_ceiling = os.cpu_count() or 4
+    if args.jobs > _job_ceiling:
+        raise BakeoffError(f"--jobs {args.jobs} exceeds this machine's {_job_ceiling} cores")
 
     datasets = _resolve_datasets(args.datasets)
     cells = _resolve_cells(args.cells)
