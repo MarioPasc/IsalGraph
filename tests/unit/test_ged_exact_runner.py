@@ -43,8 +43,10 @@ from benchmarks.eval_setup.ged_exact_runner import (
     PairOutcome,
     RunnerError,
     ShardData,
+    _backend_options,
     _outcome_from_result,
     _target_pairs,
+    build_parser,
     load_contract_a,
     main,
     make_backend,
@@ -771,3 +773,214 @@ def test_cli_chunks_cover_the_triangle_exactly_once(tmp_path: Path) -> None:
         with np.load(out) as data:
             seen.extend(int(k) for k in data["pair_index"])
     assert sorted(seen) == list(range(n_pairs(12)))
+
+
+# --------------------------------------------------------------------------- #
+# T-05: the runner expresses the per-role method specification
+# --------------------------------------------------------------------------- #
+
+
+def _parsed(argv: list[str]) -> object:
+    """Parse a CLI invocation without running it."""
+    return build_parser().parse_args(argv)
+
+
+_BASE_ARGV = ["--input", "i.npz", "--out", "o.npz", "--backend", "gedlib"]
+_DET_START = (
+    "--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1"
+)
+
+
+class TestMethodSpecificationCli:
+    """CONTRACTS §6: additive flags whose defaults are T-03's behaviour."""
+
+    def test_the_defaults_are_exactly_what_t03_ran(self) -> None:
+        """A closed ticket's 2,081 core-hours depend on these six values."""
+        args = _parsed(_BASE_ARGV)
+        assert args.lb_method == "BRANCH_FAST"
+        assert args.lb_options == "--threads 1"
+        assert args.ub_method == "IPFP"
+        assert args.ub_options == "--threads 1"
+        assert args.compute == "both"
+        assert args.role is None
+
+    def test_the_options_reach_the_backend_verbatim(self) -> None:
+        args = _parsed(
+            [*_BASE_ARGV, "--ub-method", "BP_BEAM", "--ub-options", _DET_START, "--compute", "ub"]
+        )
+        opts = _backend_options(args)
+        assert opts["ub_method"] == "BP_BEAM"
+        assert opts["ub_options"] == _DET_START
+        assert opts["compute"] == "ub"
+
+    def test_a_non_gedlib_backend_takes_no_method_options(self) -> None:
+        """The stub and networkx constructors are untouched by this change."""
+        args = _parsed(["--input", "i.npz", "--out", "o.npz", "--backend", "stub"])
+        assert _backend_options(args) == {}
+
+    def test_an_unknown_compute_mode_is_refused_by_the_parser(self) -> None:
+        with pytest.raises(SystemExit):
+            _parsed([*_BASE_ARGV, "--compute", "upper"])
+
+    def test_the_shard_records_the_role_and_the_options(self, tmp_path: Path) -> None:
+        """A shard whose metadata omits the options string does not say what it computed."""
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(6, seed=3))
+        out = tmp_path / "shard.npz"
+        assert (
+            main(
+                [
+                    "--input",
+                    str(src),
+                    "--out",
+                    str(out),
+                    "--backend",
+                    "stub",
+                    "--backend-factory",
+                    STUB_FACTORY_REF,
+                    "--workers",
+                    "1",
+                    "--role",
+                    "ubs",
+                    "--ub-method",
+                    "BP_BEAM",
+                    "--ub-options",
+                    _DET_START,
+                    "--log-level",
+                    "WARNING",
+                ]
+            )
+            == EXIT_OK
+        )
+        with np.load(out) as data:
+            meta = json.loads(str(data["meta"]))
+        assert meta["role"] == "ubs"
+        assert meta["ub_method"] == "BP_BEAM"
+        assert meta["ub_options"] == _DET_START
+        assert meta["compute"] == "both"
+
+
+class TestOneSidedOutcome:
+    """A single-role campaign writes a one-sided bracket, and says so."""
+
+    def test_a_lb_only_result_is_accepted_with_an_infinite_upper_end(self) -> None:
+        outcome = _outcome_from_result(0, _OneSided(1.0, float("inf"), "lb"), 0.1)
+        assert outcome.lb == 1.0 and outcome.ub == float("inf")
+        assert outcome.ged == float("inf") and outcome.certified is False
+
+    def test_a_ub_only_result_is_accepted_with_a_negative_infinite_lower_end(self) -> None:
+        outcome = _outcome_from_result(0, _OneSided(float("-inf"), 4.0, "ub"), 0.1)
+        assert outcome.lb == float("-inf") and outcome.ub == 4.0
+
+    def test_the_unevaluated_end_must_be_exactly_the_sentinel(self) -> None:
+        """A plausible number in an unevaluated slot is the failure to prevent."""
+        with pytest.raises(RunnerError, match="compute='lb' must leave ub"):
+            _outcome_from_result(0, _OneSided(1.0, 9.0, "lb"), 0.1)
+        with pytest.raises(RunnerError, match="compute='ub' must leave lb"):
+            _outcome_from_result(0, _OneSided(0.0, 9.0, "ub"), 0.1)
+
+    def test_the_two_sided_path_still_rejects_a_non_finite_bracket(self) -> None:
+        """T-03's invariant, unchanged on the default path."""
+        with pytest.raises(RunnerError, match="non-finite upper bound"):
+            _outcome_from_result(0, _OneSided(1.0, float("inf"), "both"), 0.1)
+
+
+@dataclass(frozen=True, slots=True)
+class _OneSided:
+    """A CONTRACT B result carrying a compute mode."""
+
+    lb: float
+    ub: float
+    computed: str
+    exact: float | None = None
+    certified: bool = False
+    seconds: float = 0.5
+    timed_out: bool = False
+    method: str = "role"
+
+
+class TestSubsamplePairList:
+    """CONTRACTS §5: the sampler's pooled list, keyed by graph index."""
+
+    def test_a_pooled_pair_i_pair_j_list_is_read_and_filtered(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(8, seed=2), key="linux")
+        dataset = load_contract_a(src)
+        listed = tmp_path / "subsample_pairs.npz"
+        np.savez_compressed(
+            listed,
+            dataset_key=np.array(["linux", "linux", "aids_iam"], dtype=str),
+            pair_i=np.array([0, 2, 0], dtype=np.int32),
+            pair_j=np.array([1, 5, 1], dtype=np.int32),
+        )
+        pairs, _rng = _target_pairs(dataset, pair_list=str(listed), chunk_index=0, n_chunks=1)
+        assert pairs.tolist() == sorted([index_of_pair(0, 1, 8), index_of_pair(2, 5, 8)])
+
+    def test_a_list_naming_no_row_for_this_dataset_is_refused(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(8, seed=2), key="linux")
+        dataset = load_contract_a(src)
+        listed = tmp_path / "s.npz"
+        np.savez_compressed(
+            listed,
+            dataset_key=np.array(["grec"], dtype=str),
+            pair_i=np.array([0], dtype=np.int32),
+            pair_j=np.array([1], dtype=np.int32),
+        )
+        with pytest.raises(RunnerError, match="no rows for dataset"):
+            _target_pairs(dataset, pair_list=str(listed), chunk_index=0, n_chunks=1)
+
+    def test_a_list_with_neither_schema_is_refused(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(8, seed=2))
+        dataset = load_contract_a(src)
+        listed = tmp_path / "s.npz"
+        np.savez_compressed(listed, something_else=np.array([1]))
+        with pytest.raises(RunnerError, match="neither a 'pair_index'"):
+            _target_pairs(dataset, pair_list=str(listed), chunk_index=0, n_chunks=1)
+
+
+class TestAccessorProbeAtCampaignInit:
+    """A failed probe stops the campaign; it is not swallowed per pair."""
+
+    def test_a_failing_probe_aborts_the_run(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(5, seed=7))
+        dataset = load_contract_a(src)
+
+        class _Probed:
+            name = "probed"
+
+            def probe_accessors(self) -> dict[str, float]:
+                raise ValueError("returned 0.00 on P4 vs C4")
+
+            def pair(self, g1: nx.Graph, g2: nx.Graph) -> object:
+                raise AssertionError("no pair may be computed after a failed probe")
+
+        with pytest.raises(RunnerError, match="accessor probe failed"):
+            run_chunk(
+                dataset=dataset,
+                pairs=np.arange(3, dtype=np.int64),
+                backend_spec=BackendSpec(name="stub"),
+                input_path=str(src),
+                workers=1,
+                checkpoint_path=None,
+                checkpoint_every=100,
+                backend_factory=lambda _spec: _Probed(),
+            )
+
+    def test_a_backend_without_a_probe_is_left_alone(self, tmp_path: Path) -> None:
+        """The stub and networkx backends have no accessors to probe."""
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(5, seed=7))
+        dataset = load_contract_a(src)
+        shard, completed, _stats = run_chunk(
+            dataset=dataset,
+            pairs=np.arange(3, dtype=np.int64),
+            backend_spec=BackendSpec(name="stub", factory_ref=STUB_FACTORY_REF),
+            input_path=str(src),
+            workers=1,
+            checkpoint_path=None,
+            checkpoint_every=100,
+        )
+        assert completed and len(shard) == 3
