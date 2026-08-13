@@ -281,10 +281,14 @@ be measurably wrong (see §7) and were reported to `main` before any code was wr
 | `3df997c` | `feat(T-05): Suite-2 graph exporter with the locked cohort asserted` |
 | `625a84a` | `feat(T-05): frozen seed-42 size-stratified subsample pair list` |
 | `3a7c257` | `test(T-05): cover the Suite-2 export and the frozen subsample` |
-| *(final)* | `docs(notes): t05-export work log` |
+| `172c309` | `docs(notes): t05-export work log` |
+| `33b9209` | `feat(T-05): probe pair list and the per-bin cost table` |
+| *(final)* | `docs(notes): t05-export work log` (second assignment) |
 
 **Data written** (outside the repository, my declared output directory):
-`.../APPROX_GED/exported_suite2/` — 10 `.npz` + `manifest.json`, 552,756 B total.
+`.../APPROX_GED/exported_suite2/` — 10 `.npz` + `manifest.json`, 552,756 B; plus, from the second
+assignment, `probe_pairs.npz` (26,760 B), `probe_pair_lists/{key}.npz` x 10 (30,381 B) and
+`bin_table.json` (7,137 B).
 `.../APPROX_GED/UB_TIGHT/` — `subsample_pairs.npz` (190,147 B) + `pair_lists/{key}.npz` x 10.
 
 ## 4. Tests
@@ -326,6 +330,18 @@ count, both totals, the metadata schema, the CSR round trip, every bin boundary,
 ## 5. Test results
 
 **Command:** `~/.conda/envs/isalgraph-cpp/bin/python -m pytest tests/unit/ -q -p no:randomly`
+
+*After the second assignment* (probe + bin table, commit `33b9209`):
+
+```
+================= 8 failed, 1002 passed, 44 skipped in 36.42s ==================
+```
+
+My own two modules: **138 passed** (was 108; +30 for the probe and the bin table), 0 failed, 20.3 s.
+`ruff check` clean on all four files. The eight failures are the same eight pre-existing ones,
+unchanged in identity and count.
+
+*Before the second assignment*, for comparison:
 
 ```
 ================== 8 failed, 972 passed, 44 skipped in 36.01s ==================
@@ -378,6 +394,16 @@ exporter's path resolution is broken.
    fabricated data would not have caught this: it needs keys that share a first character, which only
    the real registry has. Fixed by deriving the dtype width from the registry, and guarded by
    `_check_dataset_keys`, which rejects any value that is not a Suite-2 key.
+1b. *Two more test assertions corrected during the second assignment, both by the test failing.*
+   I asserted an equal-per-bin probe draw is flat. It is flat only when every bin can absorb its
+   share — true of the real cohort, false of a 97-graph fixture whose bin 0 holds a single pair.
+   Rather than weaken the assertion I split it: `test_probe_spreads_equally_across_bins_not_
+   proportionally` on a fixture that spans every bin, and `test_probe_redistributes_from_a_bin_too_
+   small_to_take_its_share` asserting that a starved bin is drained entirely and the surplus lands
+   elsewhere. The second is the branch the real cohort never exercises. I also asserted a population
+   spread of `> 50x` where the fixture gives 28x; corrected to `> 20x` after measuring rather than
+   adjusting the fixture to fit the claim.
+
 2. *An over-strong test assertion, caught by the test failing.*
    I asserted that `build_pairs` rejects a 1-node graph. It does not, and should not: the stratum is
    `max(n1, n2)`, so `max(1, 5) = 5` is a valid bin and a lone small graph is invisible at pair level.
@@ -518,6 +544,97 @@ All 14 bins have a population above 2,000, so every bin is capped and the draw l
 28,000 ceiling. **The `min(2000, population)` branch therefore never fires on the real cohort** and is
 covered only by fixture tests — recorded so nobody assumes it was exercised in production.
 
+### Table E — the probe pair list (second assignment, 2026-08-13)
+
+`$EXPORT_ROOT/probe_pairs.npz`, 26,760 B, `content_sha256 = 665db5f5a51a18d9…`, plus ten
+`probe_pair_lists/{key}.npz` totalling 30,381 B.
+
+**3,000 pairs · all 10 datasets · all 14 bins · n spans 2 to 98 · disjoint from the §5 subsample.**
+
+Per-bin draw: `[215, 215, 215, 215, 214, 214, 214, 214, 214, 214, 214, 214, 214, 214]` = 3,000.
+
+| dataset | probe pairs | | dataset | probe pairs |
+|---|---:|---|---|---:|
+| `iam_letter_low` | 102 | | `grec` | 212 |
+| `iam_letter_med` | 126 | | `aids_iam` | 560 |
+| `iam_letter_high` | 125 | | `coil_del` | 531 |
+| `linux` | **80** | | `mutagenicity` | 543 |
+| `aids_graphedx` | 206 | | `protein` | 515 |
+
+**The allocation rule, and why this one.** Stated here and in the file metadata, per instruction.
+
+1. **Equal per bin.** 3,000 over 14 bins by water filling: `3000 = 14 × 214 + 4`, so bins 0-3 get
+   215 and the rest 214. Remainders go to the lowest index, so the allocation is a pure function of
+   `(total, capacities)` with no RNG in it.
+2. **Equal per dataset within a bin**, over the datasets present in that bin, by the same routine.
+   A dataset holding fewer pairs than its share contributes all it has and the shortfall is
+   redistributed to the others.
+
+**Where the two axes conflict, the bin axis wins** — as instructed, and for the reason given: the
+probe fits a cost curve in `n`, it does not estimate a cohort mean. With cost scaling as
+`max(n₁,n₂)³`, a proportional draw would put most of its 3,000 pairs in the small-`n` corner, where
+the pool is largest and the curve is flattest, and would measure a rate biased **low** — which is
+exactly the failure mode the orchestrator identified in the contiguous-`grec` fallback, and it would
+under-size every job in the wave.
+
+Rule 2 is what carries dataset representation. `linux` has only **3** candidate pairs in bin 1 and
+none above bin 4, yet still lands 80 pairs, because within each bin it is given an equal share of
+that bin's allocation rather than a share proportional to its size. All ten datasets appear.
+
+**Disjointness: achieved, not merely preferred.** The §5 subsample is excluded from the candidate
+pool before the probe draws, and `_overlap` asserts the result is 0 shared pairs — checked in the
+CLI and in `test_probe_excludes_the_subsample_pairs`. A companion test confirms the disjointness is
+produced by the exclusion rather than by luck: the same draw without `exclude` yields a different
+digest. This matters because a shared pair would let a probe timing and an `IPFP_MS` measurement
+sit on the same work, coupling the calibration to the thing it calibrates. Candidate populations are
+the §5 populations minus 2,000 per bin, visible in the log as e.g. bin 13: 186,085 → 184,085.
+
+### Table F — `bin_table.json` (second assignment, 2026-08-13)
+
+`$EXPORT_ROOT/bin_table.json`, 7,137 B. Schema exactly as specified: `bin_edges` (15 values,
+identical to CONTRACTS §5), `totals` (14), `datasets` (key → 14 counts). `totals` sums to
+**21,710,892**, and each dataset row sums to that dataset's `C(N, 2)` — both asserted by test.
+
+Per-bin dominance, emitted in the file so it reaches the analysis rather than stopping at this log:
+
+| bin | range | total | dominant dataset | share | flagged |
+|---|---|---:|---|---:|---|
+| 0 | [2, 4) | 220,979 | `iam_letter_med` | 0.335 | |
+| 1 | [4, 6) | 2,286,480 | `iam_letter_high` | 0.533 | |
+| 2 | [6, 8) | 1,190,209 | `iam_letter_high` | 0.680 | |
+| 3 | [8, 10) | 356,748 | `coil_del` | 0.609 | |
+| 4 | [10, 12) | 1,055,799 | `aids_iam` | 0.566 | |
+| 5 | [12, 15) | 1,231,263 | `coil_del` | 0.385 | |
+| 6 | [15, 20) | 1,422,063 | `coil_del` | 0.552 | |
+| 7 | [20, 25) | 2,239,837 | `coil_del` | 0.513 | |
+| 8 | [25, 30) | 2,976,992 | `mutagenicity` | 0.487 | |
+| 9 | [30, 40) | 4,975,886 | `mutagenicity` | 0.602 | |
+| 10 | [40, 50) | 1,938,545 | `mutagenicity` | 0.597 | |
+| 11 | [50, 60) | 832,825 | `mutagenicity` | 0.463 | |
+| 12 | [60, 80) | **797,181** | `mutagenicity` | 0.621 | |
+| 13 | [80, 99) | **186,085** | `mutagenicity` | **0.971** | **yes** |
+
+Bin 13 crosses the 0.90 threshold and carries a `caveat` string in the file:
+
+> bin 13 [80, 99) is 97.1 % mutagenicity; any number quoted for this bin is very nearly a statement
+> about mutagenicity alone, not a property of graphs of this size
+
+Bin 12 `[60, 80)` is the other bin the orchestrator asked about: `mutagenicity` at **62.1 %**, with
+`coil_del` at 34.9 %. Dominant but genuinely shared, so it is reported with its share and **not**
+flagged — the flag has to mean something, and applying it at 62 % would make it noise.
+
+Two further observations from the completed table, neither asked for:
+
+- **No bin is single-dataset at the bottom of the range either.** Bin 0's largest contributor is
+  `iam_letter_med` at 33.5 %, and bins 0-2 are a three-way Letter split. So the small-`n` end is a
+  Letter statement in aggregate even though no single dataset dominates it — worth the same
+  care as the top when a figure plots cost against `n` across the whole range.
+- **The distribution is bimodal in provenance, not just in size.** Bins 0-2 are ~90 % Letter and
+  bins 8-13 are ~50-97 % Mutagenicity plus COIL-DEL. A curve fitted across all 14 bins is therefore
+  fitting a dataset transition as well as a size transition, and the two are confounded by
+  construction of the cohort. This is not fixable by sampling — it is a property of which datasets
+  exist at which sizes — but it should be said out loud wherever the size-scaling figure appears.
+
 ### Summary table
 
 | Circumstance | What was run | Evidence | Outcome |
@@ -649,6 +766,13 @@ they would not read as a regression.
    Two follow-ups, both actioned: keep the path-resolution defect and the cohort integrity as
    **separate statements** (§7 defect 3, rewritten), and state the realised populations of bins
    `[60, 80)` and `[80, 99)` explicitly (Table C, note 2: 797,181 and 186,085).
+3. *Track accepted after independent re-verification, plus two further deliverables* — the probe
+   pair list and `bin_table.json`. The probe had no owner in this wave and `wave-t05-slurm`'s
+   fallback was a contiguous first chunk of `grec`, which over a size-ordered export oversamples
+   small `n` and biases the measured rate low. Both delivered; see Tables E and F. The instruction
+   to favour spanning the `n` range over dataset balance where they conflict is implemented as
+   documented, and the rule plus its rationale are written into the file metadata as required, not
+   only into this log.
 
 **Contracts I depend on and confirmed unchanged:** CONTRACTS §1 (ten keys, two roots, counts, filter,
 decision 27), §2 as amended at §2.1, §5 as amended by amendment 3. §9's prohibition on importing
@@ -680,7 +804,9 @@ requires, so `wave-t05-runner` consumes it with no translation step.
 |---|---|---|---|
 | The Suite-1 exporter cannot resolve both roots | **high** | 8 tests red at base; T-01's tracked reproduction of the Suite-1 cohort does not run on today's tree. The cohort is independently fine (element-wise check), but the *script* is not. Needs the two-root split, a design change to a closed ticket | orchestrator / PI |
 | "Letter, 15 classes" and "GREC, 22 classes" are false of the filtered cohort | **high** | Retained are 9 and 17. Any manuscript sentence quoting the raw counts describes a cohort no number is computed on | T-18 / T-06 |
-| Bin `[80, 99)` is 97.1 % Mutagenicity | medium | Any per-bin conclusion at the top of the size range is nearly a statement about one dataset. Must be reported as such, not as a cohort-level property of large graphs | T-05 analysis |
+| Bin `[80, 99)` is 97.1 % Mutagenicity | medium | Any per-bin conclusion at the top of the size range is nearly a statement about one dataset. **Now carried in `bin_table.json` as a `caveat` string and a `single_dataset: true` flag**, so it reaches the analysis rather than stopping here | T-05 analysis |
+| Size and provenance are confounded across the bins | medium | Bins 0-2 are ~90 % Letter, bins 8-13 are ~50-97 % Mutagenicity + COIL-DEL. A cost or tightness curve fitted across all 14 bins fits a **dataset transition** as well as a size transition. Not fixable by sampling — it is a property of which datasets exist at which sizes — but it must be stated wherever the size-scaling figure appears | T-05 analysis |
+| The probe measures cost on a deliberately non-representative sample | low | Equal-per-bin over-weights large `n` roughly 22-fold relative to the cohort. Correct for a curve fit, wrong for any pooled mean. Metadata carries `not_a_cohort_estimate: true`; the launcher must integrate the fitted curve against `bin_table.json`, never multiply the probe's mean rate by 21.7 M | `wave-t05-slurm` |
 | The `min(2000, population)` branch never fires in production | low | All 14 bins exceed 2,000, so the branch is covered by fixtures only. Harmless today; would matter if the cohort shrank | next wave |
 | No synthetic source-tree fixture | low | Every real-data test skips without the Sandisk tree, so CI covers the registry and assertions only | next wave |
 | `content_sha256`, not file bytes | low | `savez_compressed` stamps zip members with local time, so files are never byte-identical across runs. Reproducibility is asserted over array content. Documented in both modules | — |
@@ -696,7 +822,20 @@ requires, so `wave-t05-runner` consumes it with no translation step.
 | 5 | Sampler emits <= 28,000 pairs, reproducible from seed 42, per-bin counts recorded, valid `i < j` | **yes** | Exactly 28,000; digest equal across two independent runs; `n_per_bin` and `bin_population` in metadata; `test_real_draw_indexes_into_the_exported_graph_order`. **Caveat:** reproducible over array content, not file bytes — see §10 |
 | 6 | Tests cover all ten listed behaviours | **yes** | Ten counts; COIL-DEL index-vs-directory; order determinism; label population; `n_max`-free filter; four-dataset census; subsample reproducibility; boundaries at n = 4, 12, 30, 98; a bin under 2,000 (fixture) |
 | 7 | Real-data verification in the log with numbers | **yes** | Tables A-D: raw, kept, pairs, n max, edges, build seconds, file bytes, per-bin realised counts, peak RSS |
-| 8 | All work committed, tree clean, log committed | **yes** | Four commits; `git status` clean at the final commit |
+| 8 | All work committed, tree clean, log committed | **yes** | Six commits; `git status` clean at the final commit |
+
+**Second assignment (2026-08-13), against its own brief:**
+
+| # | Criterion | Met | Evidence |
+|---|---|---|---|
+| A1 | `probe_pairs.npz`: 3,000 pairs, seed 42, same file conventions as `subsample_pairs.npz` | **yes** | Table E; identical key set and dtypes, asserted by `test_write_probe_emits_the_same_conventions_as_the_subsample` |
+| A2 | Per-dataset `pair_lists` so the runner consumes it unchanged | **yes** | Ten `probe_pair_lists/{key}.npz`, ascending `pair_index` int64, 30,381 B |
+| A3 | Stratified on **both** axes; every dataset and every bin represented | **yes** | 10/10 datasets, 14/14 bins, `n` spanning 2-98; `test_real_probe_is_3000_pairs_over_all_ten_datasets_and_all_fourteen_bins` |
+| A4 | Favour spanning `n` where the axes conflict; say which rule and why | **yes** | Equal per bin, then equal per dataset within a bin; recorded in `allocation_rule` / `allocation_rationale` in the file metadata and in Table E |
+| A5 | State whether disjoint from the §5 subsample | **yes** | **Disjoint by construction**, `_overlap == 0` asserted in the CLI and in two tests |
+| B1 | `bin_table.json` with `bin_edges`, `totals`, `datasets` | **yes** | Table F; `bin_edges` byte-identical to CONTRACTS §5, `totals` sums to 21,710,892 |
+| B2 | Per-bin dominant-dataset share in the metadata | **yes** | `dominance` block for all 14 bins with `dominant_dataset`, `dominant_share`, `n_datasets_present`, `single_dataset`; `caveat` string on bin 13 |
+| B3 | Same for `[60, 80)` if one dataset dominates | **yes** | Reported at 62.1 % `mutagenicity` and deliberately **not** flagged — the 0.90 threshold has to mean something |
 
 **Overall.** I am confident in the cohort. All ten counts reproduced on the first attempt before any
 code was written, and the four-dataset element-wise census check is an external, exact confirmation
@@ -714,3 +853,13 @@ Two things I am less confident about, both recorded rather than smoothed over. F
 without the Sandisk tree this work is barely tested — every real-data test skips, and that is most of
 the value. Second, the `min(2000, population)` branch is never exercised in production, so its only
 evidence is a fixture. Neither affects the numbers being shipped today.
+
+**On the second assignment**, the thing to scrutinise is not the probe's mechanics but its
+*interpretation*. The draw is deliberately non-representative: equal-per-bin over-weights large `n`
+by roughly 22-fold against the cohort, which is correct for fitting a cost curve and wrong for every
+pooled statistic. If the launcher takes the probe's mean per-pair rate and multiplies it by
+21,710,892 it will over-size the jobs by a large factor — the mirror image of the bias the
+contiguous-`grec` fallback would have produced. The metadata says `not_a_cohort_estimate: true` and
+`bin_table.json` exists precisely so the rate is integrated per bin instead, but that is a
+convention a consumer has to honour, and no file format can enforce it. Worth one line in
+`wave-t05-slurm`'s review.
