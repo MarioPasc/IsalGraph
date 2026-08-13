@@ -105,15 +105,31 @@ Recompute ~500 **within-split** AIDS pairs under **GraphEdX's own** cost model a
 agreement with the published matrix. If they disagree, our solver or our configuration is wrong and
 everything downstream is invalid.
 
-> **The gate runs under a different cost model from production and the configuration must be written
-> down.** GraphEdX charges **zero for node operations**, so the gate is
-> `edit_cost_constant=[0, 0, 0, 1, 1, 0]` — **not** the D6 production model `[1, 1, 0, 1, 1, 0]`.
-> Running the gate under the production model produces a guaranteed mismatch that looks exactly like
-> a solver bug, at the worst possible point on the critical path.
+> ## ⚠ CORRECTED 2026-08-13 — T-03's retraction had not reached this file
 >
-> Note what the gate does *not* establish: agreement under GraphEdX's pseudometric model does not
-> validate our metric model. **It validates the solver.** The cost-model change is justified
-> separately, by D6.
+> **GraphEdX charges UNIT node costs, the same model as D6.** T-03 measured its published AIDS values
+> against both models: **unit-node 4/4, zero-node 0/4**, the published value exceeding the zero-node
+> value by exactly `|n₁ − n₂|` every time. Commit `041a70c`.
+>
+> **The gate's configuration is therefore `[1, 1, 0, 1, 1, 0]` — the same as production.** Running it
+> under `[0, 0, 0, 1, 1, 0]` is what produced gate 0's 150-below / 58-equal / 0-above result, which
+> was read as evidence that the published matrix is approximate and **was not**: it was the arithmetic
+> of the wrong cost model. Measured like-for-like over the full 131,148-pair overlap, ours never
+> exceeds theirs and the two agree on all but two pairs.
+>
+> **This is the inherited-premise trap in its exact form**: the plan asserted zero node cost, the gate
+> was configured from the assertion, the clean one-sided result was read as a fact about the data, and
+> the "independent verification" shared the same premise. **Anyone configuring a gate from a plan
+> assertion should test the assertion against the data first.**
+>
+> What survives: the gate's *purpose*. Agreement with a published matrix **validates the solver**, not
+> our cost model — that is justified separately, by D6, whose own argument is untouched.
+
+~~**The gate runs under a different cost model from production and the configuration must be written
+down.** GraphEdX charges **zero for node operations**, so the gate is
+`edit_cost_constant=[0, 0, 0, 1, 1, 0]` — **not** the D6 production model `[1, 1, 0, 1, 1, 0]`.
+Running the gate under the production model produces a guaranteed mismatch that looks exactly like
+a solver bug, at the worst possible point on the critical path.~~
 
 ### Gate 1 — bracket validity
 

@@ -1,11 +1,21 @@
 # Data — cohort, filter and measured counts
 
 **Owner**: T-01 · **Serves**: AE.1, AE.4b, R1.3a, R3.5a, E1, F1
-**Status**: LOCKED (decision 12, re-affirmed 2026-08-11 on the corrected ceiling).
+**Status**: **cohort LOCKED** (decision 12, re-affirmed 2026-08-11 on the corrected ceiling);
+**counts PROVISIONAL below the Suite-1 line** — see the correction in §6.
 **Rule**: §1's tables are the **only** source a printed number may be taken from.
 
+> ⚠ **Provenance of §1, split two ways (T-01, 2026-08-13).**
+> **Suite 1** reproduces from tracked code: `export_graphs.py` asserts all five graph counts and pair
+> counts and `tests/unit/test_export_graphs.py` covers it. Those numbers are **verified**.
+> **Suite 2's five new rows** — GREC, AIDS (IAM), COIL-DEL, Mutagenicity, Protein — and **every
+> discarded-side figure in §3 and §5** come from scripts that no longer exist and never entered git.
+> They are **unverified** until T-01's `cohort_audit.py` re-derives them. Do not print them, and do
+> not cost anything against them, before that. The precedent is not hypothetical: T-25 re-derived six
+> figures from a lost script and **none reproduced, all six in the flattering direction**.
+
 Related: [exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [statistics](statistics.md) ·
-[decisions](decisions.md) · [tickets](tickets.md)
+[preregistration](preregistration.md) · [decisions](decisions.md) · [tickets](tickets.md)
 
 ---
 
@@ -167,9 +177,37 @@ one batched pass after the manuscript work, not before it.
 
 ## 6. Reproduction
 
-**13 of the 16 measurement scripts named in the v1.x record no longer exist.** Surviving:
+> ## ⚠ CORRECTED 2026-08-13 (T-01) — four of the five "surviving" scripts do not exist
+>
+> Searched the working tree **and all of git history** (`git log --all --diff-filter=A`).
+>
+> | Script | Status |
+> |---|---|
+> | `export_graphs.py` | **exists** — `benchmarks/real_data/eval_setup/`, with `tests/unit/test_export_graphs.py` (22 KB). Already ported |
+> | `audit_recheck.py` | **absent from the tree and from every commit that ever existed** |
+> | `audit_dropped.py` | **absent** — this is the script that produced the discard ratios in §3 |
+> | `final_counts.py` | **absent** — this is the script that produced §1 |
+> | `gedlib_api.py` | **absent locally**; it was a Picasso-side smoke script, never in this repository |
+>
+> So the loss is **15 of 16, not 13**, and "T-01 ports what survives" reduces to a no-op — the one
+> survivor was ported already. **T-01's real job is re-derivation, not porting.**
+>
+> **The exposure is larger than the script count.** `export_graphs.py` hardcodes **Suite 1 only** —
+> five `DatasetSpec` rows with asserted counts, `FILTER_N_MAX`, `assert_cohort`. Grep finds **zero
+> occurrences of GREC, Mutagenicity, COIL-DEL or Protein anywhere** in `benchmarks/`, `src/` or
+> `tests/`, and there is no IAM-GXL loader. **The entire Suite-2 half of §1** — 19,670 graphs,
+> 40,024,242 pairs, `n_max = 98`, the density span, and every discard ratio in §3 — **has no
+> reproducing code.** That is the revision's headline extension claim (3.7× graphs, 10.3× pairs,
+> 8.2× size).
+>
+> **Resolution, locked 2026-08-13**: re-derive all ten datasets, retained **and** discarded, with a
+> tracked `benchmarks/real_data/eval_setup/cohort_audit.py` plus an IAM-GXL loader and unit tests.
+> Whatever it measures becomes §1; disagreements are findings, not errors to reconcile away. Design:
+> `.claude/notes/review/tasks/T-01-design.md`.
+
+~~**13 of the 16 measurement scripts named in the v1.x record no longer exist.** Surviving:
 `export_graphs.py`, `audit_recheck.py`, `audit_dropped.py`, `final_counts.py`, `gedlib_api.py`.
-T-01 ports what survives into `tests/`; everything else must be re-derived if challenged.
+T-01 ports what survives into `tests/`; everything else must be re-derived if challenged.~~
 
 **`ged_bounds.py` was rewritten 2026-08-12 and is no longer among the missing** — it now lives at
 `benchmarks/real_data/eval_setup/ged_bounds.py` with `validate_ged_bounds.py` and 35 unit tests,

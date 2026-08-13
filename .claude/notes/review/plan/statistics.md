@@ -3,8 +3,11 @@
 **Owner**: T-02 (lock and pre-registration), T-06 (execution) · **Serves**: R3.5a, R3.5b, R3.5c, AE.4c
 **Status**: LOCKED. **These are decisions, not options.** Fixed before T-06 so nothing is computed
 twice. Deviations require a changelog entry.
+**T-02 CLOSED 2026-08-13** — the confirmatory family is enumerated and frozen in
+[preregistration](preregistration.md) (`N_max = 197`). See §12 RESULT.
 
-Related: [exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [data](data.md) ·
+Related: [preregistration](preregistration.md) (**the frozen family — authoritative**) ·
+[exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [data](data.md) ·
 [labels](labels.md) · [corrections](corrections.md)
 
 ---
@@ -183,14 +186,55 @@ computed once on the full matrix cannot be reused.
 | 10⁶ – 5 × 10⁶ | 2,000 | 4,999 | all |
 | > 5 × 10⁶ | **1,000** | **1,999** | **uniform subsample of 2 × 10⁶ induced pairs, seed 42** |
 
+### Frozen tier assignment — T-02, 2026-08-13
+
+Applying the table to the locked pair counts in [data](data.md) §1. **This is the assignment T-06
+runs; it is not recomputed at execution time.**
+
+| Dataset | Suite-2 pairs | Tier | Replicates | Permutations | Within-replicate pairs |
+|---|---:|---|---:|---:|---|
+| LINUX | 3,916 | 1 | 2,000 | 9,999 | all |
+| Protein | 161,596 | 1 | 2,000 | 9,999 | all |
+| GREC | 210,925 | 1 | 2,000 | 9,999 | all |
+| AIDS (GraphEdX) | 334,971 | 1 | 2,000 | 9,999 | all |
+| IAM Letter LOW | 695,610 | 1 | 2,000 | 9,999 | all |
+| IAM Letter MED | 784,378 | 1 | 2,000 | 9,999 | all |
+| AIDS (IAM) | 1,638,955 | 2 | 2,000 | 4,999 | all |
+| IAM Letter HIGH | 2,118,711 | 2 | 2,000 | 4,999 | all |
+| **Mutagenicity** | 8,158,780 | **3** | 1,000 | 1,999 | **2 × 10⁶ (24.51 %)**, seed 42 |
+| **COIL-DEL** | 25,916,400 | **3** | 1,000 | 1,999 | **2 × 10⁶ (7.72 %)**, seed 42 |
+
+In the **exact** regime (Suite 1, `n ≤ 12`) only IAM Letter HIGH reaches tier 2; the other four
+datasets are tier 1. No Suite-1 dataset is subsampled.
+
 Three rules that keep this honest:
 
 1. **The resampling unit is unchanged.** Graphs are always resampled with replacement; subsampling
    applies to the *induced pairs within a replicate*, never to the graph list. D2's answer to R3.5c
    is untouched.
-2. **The subsample is validated, not assumed.** On IAM Letter HIGH (2.1 M pairs) both protocols run
-   and the CIs are compared. If they differ materially the tier is revised; either way the comparison
-   is reported.
+2. **The subsample is validated at the production *ratio*, not the production *count*.**
+
+   > ## ⚠ CORRECTED 2026-08-13 (T-02) — the rule below was near-vacuous as written
+   >
+   > IAM Letter HIGH holds **2,118,711** pairs. Drawing the tier-3 subsample of 2 × 10⁶ from it is a
+   > **94.4 % sample**, so the two protocols agree by construction and the comparison measures
+   > nothing. The ratios the subsample actually runs at in production are **7.72 %** (COIL-DEL) and
+   > **24.51 %** (Mutagenicity) — one and two orders of magnitude away from what was being validated.
+   >
+   > **Replacement rule, frozen:**
+   > - **Ratio-matched arm.** On IAM Letter HIGH, run the all-pairs protocol against the subsampled
+   >   protocol at **163,564 pairs (7.72 %)** and at **519,296 pairs (24.51 %)** — the same fractions
+   >   production uses — and compare the CIs. Both arms, both fractions, reported.
+   > - **Structure-matched arm.** Letter HIGH has `n̄ = 4.58`; COIL-DEL and Mutagenicity have
+   >   `n̄ = 21.5` and `28.5`. A ratio matched on a structurally unlike dataset validates the
+   >   *estimator*, not the *application*. So additionally run **one representative cell on
+   >   Mutagenicity itself** at all pairs versus its 24.51 % subsample, at the tier-3 replicate count.
+   > - **Branch, pre-declared**: if either arm's CI half-width differs by more than **10 % relative**,
+   >   the tier boundary is revised upward and the revision is recorded in
+   >   [preregistration](preregistration.md) §8. Either way the comparison is reported.
+
+   ~~On IAM Letter HIGH (2.1 M pairs) both protocols run and the CIs are compared. If they differ
+   materially the tier is revised; either way the comparison is reported.~~
 3. **Every table states its replicate count, permutation count and subsample size.** A CI from 1,000
    replicates is not silently presented beside one from 2,000.
 
@@ -281,23 +325,51 @@ against stratum density is **descriptive** — labelled as such.
 
 ## 9. Confirmatory / exploratory split
 
-**Confirmatory family** — BH-FDR at q = 0.05 applies to exactly these:
+**Confirmatory family** — **enumerated and FROZEN 2026-08-13 in
+[preregistration](preregistration.md). That file is authoritative; the sketch below is its index.**
 
-| Claim | Comparison | Unit |
-|---|---|---|
-| A | IsalGraph vs **each** competitor serialisation, **per dataset**, on bits per graph | graph |
-| A | Friedman omnibus + Wilcoxon–Holm across datasets | dataset |
-| B | ρ(Lev-on-IsalGraph, GED) vs ρ(competitor distance, GED), **per dataset** | graph pair |
-| B | Friedman omnibus + Wilcoxon–Holm across datasets, exact and approximate regimes **separately** | dataset |
-| B | MRM partial coefficient β₁ (D4) | graph pair |
-| Cal. | ρ(Lev, exact) − ρ(Lev, approx) on shared pairs — the calibration gate | graph pair |
-| L | ρ(Lev, GED_topo) − ρ(Lev, GED_lab) per labeled dataset — [labels](labels.md) Tier 2 only | graph pair |
+`N_max = 197`, in three fixed-sequence families (Dmitrienko, Tamhane & Bretz 2009), BH-FDR at
+q = 0.05 **within** each:
 
-> **The family must be enumerated and counted before any p-value is computed.** With 6 competitor
-> representations, 10 datasets and 2 bracket ends, Claim B alone contributes ~120 comparisons.
-> BH-FDR at q = 0.05 behaves very differently over 20 tests than over 200, and the count is not
-> something to discover afterwards. **Write the explicit list into T-02's pre-registration section,
-> with its cardinality, and freeze it before T-06 runs.**
+| Family | Content | Tests |
+|---|---|---:|
+| **F0** | calibration gate — ρ(Lev, exact) − ρ(Lev, approx), per Suite-1 dataset | 5 |
+| **F1** | bracket gate (**D13, promoted to confirmatory**) — ρ(Lev, LB) − ρ(Lev, UB), per Suite-2 dataset | 10 |
+| **F2** | primary — A1 (60) · A2 (1) · B1e (35) · B1a (70) · B2 (1) · B3e (5) · B3a (10) | 182 |
+
+`N_actual(F2) = 182 − 15k − 8d`, with `k` set by T-04a's F5-blind exclusion rule and `d` by F1. BH is
+computed over `N_actual`; `N_max`, the exclusion list and a BH-over-`N_max` sensitivity column are all
+printed.
+
+> ## ⚠ CORRECTED 2026-08-13 (T-02) — two rows above contradicted §4 and D13
+>
+> **1. The exact regime gets no omnibus.** §4 locks: *"the omnibus and CD diagram are reported for the
+> ten-dataset approximate regime only. The exact regime is reported descriptively"*, because Friedman
+> at `N = 5` separates almost nothing. The struck row below said "exact and approximate regimes
+> **separately**", which would have put an underpowered omnibus into the confirmatory family. §4 wins;
+> **F2 carries one omnibus per claim, on the ten-dataset approximate regime.**
+>
+> **2. The calibration gate and D13 are gates, not family members.** Both decide which downstream
+> tests are admissible. Leaving them inside the family makes its cardinality a function of a test
+> inside it. They are now **F0** and **F1**, prior and separate.
+>
+> **3. The L row is out.** S-d is open until 2026-08-18 and [labels](labels.md) Tier 2 is "logged, not
+> written up". A conditional row makes the cardinality indeterminate today. If Tier 2 is promoted it
+> enters as its **own** pre-declared family — see [preregistration](preregistration.md) §6.
+>
+> **4. ρ(Lev, UB) does not enter F2.** It is a near-duplicate of ρ(Lev, LB) on the same pairs, and BH
+> behaves worst on near-duplicates. **The upper bound is reported in full** under
+> [approx_ged](approx_ged.md) §4; its confirmatory role is F1. Reasoning:
+> [preregistration](preregistration.md) §4.3.
+
+~~| Claim | Comparison | Unit |~~
+~~| A | IsalGraph vs **each** competitor serialisation, **per dataset**, on bits per graph | graph |~~
+~~| A | Friedman omnibus + Wilcoxon–Holm across datasets | dataset |~~
+~~| B | ρ(Lev-on-IsalGraph, GED) vs ρ(competitor distance, GED), **per dataset** | graph pair |~~
+~~| B | Friedman omnibus + Wilcoxon–Holm across datasets, exact and approximate regimes **separately** | dataset |~~
+~~| B | MRM partial coefficient β₁ (D4) | graph pair |~~
+~~| Cal. | ρ(Lev, exact) − ρ(Lev, approx) on shared pairs — the calibration gate | graph pair |~~
+~~| L | ρ(Lev, GED_topo) − ρ(Lev, GED_lab) per labeled dataset — [labels](labels.md) Tier 2 only | graph pair |~~
 
 **Exploratory** — reported with CIs, labelled as such, **excluded** from FDR: all stratified analyses;
 per-stratum timeout and censoring rates; the pruned-vs-exhaustive encoding comparison; encode-time
@@ -332,3 +404,35 @@ Every item below appears in the revision:
 | Hotelling–Williams / Steiger | assume independence |
 | Bonferroni | too conservative at this family size |
 | Significance as a stand-in for effect size (`conclusion.tex:37`) | R3.6b |
+
+---
+
+## 12. RESULT — T-02, closed 2026-08-13
+
+**Deliverable**: [preregistration](preregistration.md), frozen before any p-value exists.
+
+| Outcome | Value |
+|---|---|
+| Confirmatory family, total | **`N_max = 197`** across three fixed-sequence families |
+| F0 calibration gate | 5 tests (one per Suite-1 dataset) |
+| F1 bracket gate — **D13 promoted to confirmatory** | 10 tests (one per Suite-2 dataset) |
+| F2 primary | 182 tests: A1 60 · A2 1 · B1e 35 · B1a 70 · B2 1 · B3e 5 · B3a 10 |
+| Reduction rule | `N_actual(F2) = 182 − 15k − 8d`; BH over `N_actual`, `N_max` sensitivity printed |
+| D15 tiers | assigned per dataset from the locked pair counts, §5 |
+| Comparator sets | Claim A **6** serialisations; Claim B **7** (the six + WL kernel) |
+
+**Pre-declared rules and which branch they take** — none has fired yet; all three determinations
+(`k`, `d`, the primary bound at each end) are pre-declared parameters resolved by pre-declared rules,
+recorded in [preregistration](preregistration.md) §7.
+
+**Four corrections this ticket made**, all propagated in place: the exact-regime omnibus contradiction
+(§9 vs §4), the two gates misfiled inside the family they gate, the conditional labels row, and
+D15's near-vacuous subsample validation (§5 rule 2). Detail:
+`.claude/notes/review/tasks/T-02-design.md`.
+
+**Standing request answered.** §9 required "the explicit list … with its cardinality … frozen before
+T-06 runs" and [decisions](decisions.md) §5 recorded it as the outstanding item under *Confirmatory
+vs exploratory*. Both are now discharged.
+
+**Debt carried, and it is not T-02's.** `k` needs **T-04a**; `d` needs T-06's own F1 run; the primary
+bound at each end needs **T-27**. Article notes: `.claude/notes/review/tasks/T-02-article-notes.md`.

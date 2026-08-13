@@ -4,18 +4,29 @@ Builds ``GED_PRECOMPUTED/extended_merged_exact_ged/`` from the T-03 Contract D m
 and, where one exists, the GraphEdX published matrix, keeping the two **side by side**
 rather than reconciled into one number.
 
-They must not be reconciled, for two independent reasons measured during T-03:
+.. warning::
 
-1. **Different cost models.** GraphEdX charges zero for node operations
-   (``[0,0,0,1,1,0]``); we use the unit model (``[1,1,0,1,1,0]``, decision D6) because a
-   zero node cost makes GED a *pseudo*metric while the IsalGraph distance is a metric.
-2. **The published matrix is not exact.** Over 208 AIDS pairs recomputed under GraphEdX's
-   own cost model, 150 sat above our certified optima, 58 equal, and **none** below. A
-   value below a published one is a proof the published one is not optimal, since GED is
-   a minimum and A* returns an achievable edit path.
+   **Both reasons stated in the original version of this docstring were RETRACTED by commit
+   ``041a70c``, and the retraction is narrated in the report this module emits (see the
+   ``A(...)`` block below). The docstring had not been updated to match.** Corrected
+   2026-08-13.
 
-A single merged column would therefore assert an equivalence that does not hold. The
-output keeps three provenance classes distinct and quantifies their disagreement.
+   1. ``GraphEdX charges zero for node operations ([0,0,0,1,1,0])`` -- **wrong.** It ships
+      **unit** node costs, the same model as D6. Measured against the published AIDS
+      values: unit-node 4/4, zero-node 0/4, the published value exceeding the zero-node
+      value by exactly ``|n1 - n2|`` every time.
+   2. ``The published matrix is not exact -- 150 of 208 above our optima`` -- **an artefact
+      of (1).** Gate 0 ran under ``[0,0,0,1,1,0]`` because the plan said to, so the
+      comparison was arithmetic on the wrong cost model. Like-for-like over the full
+      131,148-pair overlap: **zero** pairs where ours exceeds theirs, agreement on all but
+      **two** (both ours-lower-by-2 and certified). Two in 131,148, not 150 in 208.
+
+The matrices are still kept **side by side** rather than reconciled, on a reason that does
+survive: **coverage**. GraphEdX publishes GED for **within-split pairs only** -- 44.4 % of
+AIDS pairs, 43.0 % of LINUX -- and the values come from a different solver. Merging them
+into one column would silently mix two provenances across an incomplete overlap. The output
+therefore keeps the three provenance classes distinct and quantifies their disagreement,
+which is now measured at essentially zero rather than at 72 %.
 
 Run locally: reading the published matrices needs ``torch``, which is deliberately absent
 from the cluster.

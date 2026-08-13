@@ -38,6 +38,7 @@ ticket, exactly which of these to read.
 | **[approx_ged](approx_ged.md)** | Suite 2 — the `BRANCH_FAST ≤ GED ≤ IPFP` bracket, the calibration ladder, and the **no-interpolation** reporting rule |
 | **[competitors](competitors.md)** | The six representations, the backend architecture, and **T-04a**, which selects each distance by measurement |
 | **[statistics](statistics.md)** | The locked protocol D1–D15, stratification, and the confirmatory family that must be frozen before T-06 |
+| **[preregistration](preregistration.md)** | **The frozen confirmatory family** — `N_max = 197` in three fixed-sequence families, the reduction rule, and what is deliberately excluded. Authoritative over `statistics.md` §9 |
 | **[labels](labels.md)** | R1.3 / AE.4b, tiered, with the PI decision that is still open |
 | **[corrections](corrections.md)** | Claim scoping B1–B6, the formal-statement audit, the twelve manuscript defects, and the [28]/[29] delta |
 | **[manuscript](manuscript.md)** | Section rewrite map, artifact inventory, the **page budget**, the response-letter architecture |

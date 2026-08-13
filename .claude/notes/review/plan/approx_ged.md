@@ -91,6 +91,29 @@ not reproduce.
 > the method minimising **mean relative overestimate against exact GED**, subject to costing under
 > **1 ms/pair at n̄ = 30**.
 
+> ## ⚠ SCOPED OUT 2026-08-13 (T-02) — both ends are now selected by T-27, not by this file
+>
+> Two premises above are weaker than they read, and T-03 removed the reason to tolerate either:
+>
+> | Premise | Evidence behind it |
+> |---|---|
+> | `IPFP` is the primary **upper** bound | **none.** §2 says so itself: *"that is now a prediction to test, not a recorded fact"*. The only measured UB is our own BP at **+135 %** |
+> | `BRANCH_FAST` is the primary **lower** bound | literature dominance (`BED ≥ LED`, `BED ≥ HED`) **plus 400 LINUX pairs at n̄ = 8.71**, licensing a regime that runs to `n = 98` |
+>
+> The LB case is structurally the same generalisation that produced the six retired figures — measured
+> on one dataset, printed as a cohort property — one round after being caught doing it.
+>
+> **T-03 removed the excuse.** The complete Suite-1 exact GED now exists: **3,897,911 pairs, 98.43 %
+> certified exact**, at
+> `…/data/source/GED_PRECOMPUTED/extended_merged_exact_ged/`. GEDLIB runs at ~100 µs/pair, so the
+> **full** proven-method grid against that ground truth costs **≈ 5 core-hours**.
+>
+> **New ticket T-27** runs it: LB ∈ {BRANCH, BRANCH_FAST, BRANCH_TIGHT, STAR}, UB ∈ {IPFP, REFINE,
+> BIPARTITE, BP_BEAM}, per dataset, selecting each end by the rule stated above (and its
+> underestimate mirror for the LB). Spec: `.claude/notes/review/tasks/T-27-spec.md`.
+> **T-27 closes before T-05 computes any production matrix.** Until it does, `BRANCH_FAST` and `IPFP`
+> are *defaults*, not selections, and no draft may justify either by measurement.
+
 ### Production assignment
 
 | Computation | Suite | Method | Accessor |
@@ -158,6 +181,19 @@ Instead, **correlate Levenshtein against the lower and upper bounds separately a
 **D13 — the agreement rule, pre-declared.** Per dataset, bootstrap `ρ(Lev, LB) − ρ(Lev, UB)` on the
 **same** graph-level resamples (D7). The bracket is **uninformative** at that dataset if the 95 % CI
 excludes 0 **and** the point estimate exceeds **0.05** in absolute value.
+
+> **PROMOTED 2026-08-13 (T-02, decision 25).** D13 is now **family F1 of the confirmatory design** —
+> 10 tests, one per Suite-2 dataset, BH-FDR at q = 0.05, prior to and separate from the primary
+> family. The claim it registers is *the conclusion is invariant to where inside the proven bracket
+> the true value lies*, which is the scientific content of reporting a bracket at all and is stronger
+> stated as a pre-registered result than as a footnote. It sits in its own family because its outcome
+> **removes rows from** the primary family (8 per uninformative dataset), and a test cannot set the
+> cardinality of the family containing it. Full structure:
+> [preregistration](../plan/preregistration.md) §3.
+>
+> This is also why `ρ(Lev, UB)` is **not** given its own per-dataset rows in the primary family: it
+> would be a near-duplicate of `ρ(Lev, LB)` on the same pairs. The upper bound keeps every reporting
+> obligation in this section and carries its confirmatory weight through F1.
 
 | Example | ρ(Lev, LB) | ρ(Lev, UB) | difference, 95 % CI | verdict |
 |---|---:|---:|---|---|

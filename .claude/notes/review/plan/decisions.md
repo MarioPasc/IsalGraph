@@ -32,6 +32,11 @@ Related: [tickets](tickets.md) · [schedule](schedule.md) · [demands](demands.m
 | 19 | **T-09 and T-10 merged**; both figures double as the refreshed **graphical abstract**, submitted separately and costing no manuscript pages | [manuscript](manuscript.md) §2 |
 | 20 | **Disclose E1–E12**, but the reviewer's comment is answered first — ordering rule locked | [manuscript](manuscript.md) §4.3 |
 | **21** | **T-03 runs in two stages** — a pre-declared stratified stage 1 is the reported analysis; the census runs unattended behind it and supersedes stage 1 only if it lands before the T-20 freeze | [exact_ged](exact_ged.md) §3 |
+| **22** | **The cohort is re-derived, not ported.** 15 of 16 measurement scripts are gone and the whole Suite-2 half of the cohort table has no reproducing code. T-01 writes a tracked `cohort_audit.py` + IAM-GXL loader + tests and re-measures all ten datasets, **retained and discarded**. What it measures becomes the table | [data](data.md) §6, T-01 |
+| **23** | **The confirmatory family is frozen at `N_max = 197`**, in three fixed-sequence families (F0 calibration gate 5, F1 bracket gate 10, F2 primary 182), BH-FDR at q = 0.05 within each | [preregistration](preregistration.md) — **authoritative** |
+| **24** | **BH is computed over `N_actual`, with `N_max`, the exclusion list and a BH-over-`N_max` sensitivity column all printed.** Legitimate because T-04a's exclusion rule is **F5-blind** — ties break on cost, never on correlation with GED | [preregistration](preregistration.md) §5 |
+| **25** | **D13 is confirmatory** (family F1), and `ρ(Lev, UB)` gets **no** per-dataset rows in the primary family. The upper bound is reported in full; its confirmatory weight is carried by the bracket-invariance claim rather than by 70 near-duplicate tests | [preregistration](preregistration.md) §3–§4.3, [approx_ged](approx_ged.md) §4 |
+| **26** | **Both bracket ends are selected by measurement (T-27), not by default.** `BRANCH_FAST` rests on 400 LINUX pairs at n̄ = 8.71; `IPFP` has **never been measured against exact GED**. T-03's 3.9 M certified exact values make the full proven-method grid cost ≈ 5 core-hours. **T-27 closes before T-05 computes any production matrix** | [approx_ged](approx_ged.md) §2, `tasks/T-27-spec.md` |
 
 ---
 
@@ -152,10 +157,10 @@ removes a gate from the critical path.
 | Cohort / GREC | **Closed.** Add Mutagenicity, Protein, COIL-DEL, AIDS-IAM **and GREC**; drop COIL-RAG, Fingerprint, Web. GREC's 59.1 % retention is misleading — its discard is **size-unbiased**, the cleanest in the cohort |
 | Exact-GED scope | **All-pairs approved**, then **staged** (decision 21). Applies to the five original datasets only |
 | One cost model | **Unit node + unit edge** (D6). Published GraphEdX values will no longer match ours; stated in the text |
-| Primary large-`n` reference | **BRANCH-FAST — confirmed 2026-08-12 on a reproducible artifact**: ρ(exact, LB) = **0.859** vs ρ(exact, UB) = **0.522**, bias **−26 %** vs **+135 %**, on 400 LINUX pairs. ⚠ The earlier 0.966 / 0.840 / −11 % / +78 % **do not reproduce** and must not be quoted — see §6 |
+| Primary large-`n` reference | ⚠ **REOPENED 2026-08-13 by decision 26 — narrowed, not reversed.** The measurement stands (ρ(exact, LB) = **0.859** vs ρ(exact, UB) = **0.522**, bias **−26 %** vs **+135 %**) but its **population is 400 LINUX pairs at n̄ = 8.71**, licensing a regime to `n = 98`, and the UB arm compared *our own BP*, not `IPFP`. **T-27 re-selects both ends per dataset against T-03's 3.9 M certified exact values.** Quote the figure only with "on 400 LINUX pairs" attached |
 | Bounds implementation | **GEDLIB** (decision 11) |
 | Kendall τ-b | Spearman primary, τ-b as a robustness check (D1) |
-| Confirmatory vs exploratory | **Decided** ([statistics](statistics.md) §9). Outstanding: the family must be **enumerated and its cardinality frozen** in T-02 before T-06 runs |
+| Confirmatory vs exploratory | **Decided** ([statistics](statistics.md) §9) and **the family is now enumerated and frozen** — [preregistration](preregistration.md), `N_max = 197`, T-02 closed 2026-08-13. ~~Outstanding: the family must be enumerated and its cardinality frozen in T-02 before T-06 runs~~ |
 | G2S timeout | **Keep at 300 s**, record per-graph time, report the rate per stratum — and D14 fixes what the analysis does with a censored graph |
 | Symmetry stratification | **Adopted** ([statistics](statistics.md) §8) |
 | Exhaustive canonical above n = 12 | Measured — **fails on 55 % of Protein graphs**; report the pruned/exhaustive gap **as a result** |
