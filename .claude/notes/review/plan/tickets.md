@@ -69,6 +69,22 @@ competitors even though it is half a day.
 
 ---
 
+## Closing a ticket
+
+**Use the `review-close` skill.** It is the counterpart to `review-ticket`: that one drives a ticket
+to completion, this one writes it up. It standardises the board entry, the plan-file RESULT section,
+the article notes and the letter fragment — and, most importantly, it enforces the rule that cost
+T-03 real time to learn:
+
+> **A finding that contradicts a plan file must be written INTO that file, not only into the ticket
+> log.** The log is for whoever audits the ticket; the plan files are the instruction set for whoever
+> runs the next one. A correction that lives only in the log is one the next agent will not read.
+
+It also names the **inherited-premise trap** — configuring a check from a plan assertion, getting a
+clean one-sided result, concluding something about the *data*, then "independently verifying" it with
+a second script that shares the same assertion. That is how T-03 briefly concluded GraphEdX's matrix
+was approximate when the premise about its cost model was what was wrong.
+
 ## Response-letter fragments
 
 **Every ticket emits its response fragment when it closes.** T-14 assembles, harmonises the register
