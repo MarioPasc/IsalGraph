@@ -34,6 +34,13 @@ PY="${CONDA_ENV_PREFIX}/bin/python"
 # the wrong thing.
 export PYTHONPATH="${REPO_DIR}:${GEDLIB_DIR}"
 export PYTHONUNBUFFERED=1
+# 🔴 The cluster checkout is populated by rsync of the source trees, NOT by git, so its
+# .git stays pinned at whatever was last pulled there and `git rev-parse` names code that
+# is not running. Measured 2026-08-13: the banner announced d6a9f4b while executing code
+# eleven commits ahead. The submitting side passes the true sha in ISALGRAPH_CODE_COMMIT
+# and the merge prefers it over rev-parse. Provenance naming the wrong commit is worse
+# than none, because it looks checkable.
+export ISALGRAPH_CODE_COMMIT="${ISALGRAPH_CODE_COMMIT:-unknown-rsync-checkout}"
 # Every solver here runs single-threaded per pool worker; the parallelism is the process
 # pool and `--threads 1` inside every GEDLIB options string (CONTRACTS.md §3). Letting
 # BLAS spawn threads inside N pool workers oversubscribes badly.

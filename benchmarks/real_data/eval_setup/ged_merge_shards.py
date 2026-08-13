@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -440,8 +441,21 @@ def _orientation_summary(shards: list[Path]) -> dict[str, Any]:
 
 
 def _repo_commit() -> str | None:
-    """Return the repository HEAD sha, or ``None`` outside a checkout."""
+    """Return the sha of the code that produced this file, or ``None``.
+
+    ``ISALGRAPH_CODE_COMMIT`` takes precedence over ``git rev-parse`` because
+    the cluster checkout is populated by ``rsync`` of the source trees, not by
+    ``git``: its ``.git`` stays pinned at whatever was last pulled there, so
+    ``rev-parse`` reports a commit that is **not** the code being executed.
+    Measured on Picasso 2026-08-13 -- the worker banner announced ``d6a9f4b``
+    while running code from a commit eleven ahead of it. Provenance that names
+    the wrong code is worse than absent provenance, because it looks checkable.
+    """
     import subprocess
+
+    declared = os.environ.get("ISALGRAPH_CODE_COMMIT")
+    if declared:
+        return declared.strip()
 
     try:
         out = subprocess.run(

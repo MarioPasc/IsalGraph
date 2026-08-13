@@ -767,3 +767,20 @@ def test_merged_metadata_carries_every_contracts_section_4_key(
         assert field in meta, f"CONTRACTS section 4 requires {field!r}"
     assert isinstance(meta["seconds_total"], float)
     assert isinstance(meta["splits_merged"], bool)
+
+
+def test_the_declared_commit_beats_git_rev_parse(
+    suite2_shard_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cluster checkout is rsynced, not pulled, so rev-parse lies there.
+
+    Measured on Picasso 2026-08-13: the worker banner announced ``d6a9f4b``
+    while executing code eleven commits ahead of it, because ``.git`` is
+    whatever was last pulled and the source trees are overwritten by rsync.
+    Provenance that names the wrong commit is worse than none.
+    """
+    monkeypatch.setenv("ISALGRAPH_CODE_COMMIT", "0123456789abcdef")
+    out = suite2_shard_dir / "merged.npz"
+    merge_shards(shard_dir=suite2_shard_dir, key="linux", n_graphs=N_GRAPHS, out=out)
+    with np.load(out) as data:
+        assert json.loads(str(data["metadata"]))["code_commit"] == "0123456789abcdef"
