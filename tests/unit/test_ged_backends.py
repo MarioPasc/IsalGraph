@@ -25,10 +25,12 @@ from typing import Any
 import networkx as nx
 import pytest
 
+from benchmarks.eval_setup import ged_backends as ged_backends_module
 from benchmarks.eval_setup.ged_backends import (
     CERT_TOL,
     FORBIDDEN_METHODS,
     RETIRED_METHODS,
+    ROLE_SPECS,
     BackendSpec,
     GedBackend,
     GedBackendError,
@@ -692,3 +694,287 @@ class TestToleranceIsShared:
 
     def test_tolerance_value(self) -> None:
         assert CERT_TOL == 1e-9
+
+
+# --------------------------------------------------------------------------
+# T-05: the options string is part of the method name
+# --------------------------------------------------------------------------
+
+
+_DET_START = (
+    "--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1"
+)
+_MULTI_START = "--threads 1 --randomness PSEUDO --initial-solutions 10"
+
+
+def _roles_behaviour() -> dict[str, Any]:
+    """A fake carrying every method the four CONTRACTS §3 roles name."""
+    return {
+        "values": {
+            "BRANCH_FAST": {"lb": 1.0, "ub": 0.0},
+            "BIPARTITE": {"lb": 0.0, "ub": 1.0},
+            "BP_BEAM": {"lb": 0.0, "ub": 1.0},
+            "IPFP": {"lb": 0.0, "ub": 1.0},
+        }
+    }
+
+
+def _options_used(env: _FakeEnv, method: str) -> set[str]:
+    """Every option string ``set_method`` received for one method."""
+    return {c[1][1] for c in env.calls if c[0] == "set_method" and c[1][0] == method}
+
+
+class TestRoleSpecs:
+    """CONTRACTS §3 is transcribed, not paraphrased."""
+
+    def test_the_four_roles_match_the_contract_verbatim(self) -> None:
+        """A single character wrong here silently changes what the paper reports.
+
+        T-27 measured GEDLIB's upper bounds moving on 91.5-93.6 % of pairs
+        between runs at library defaults, so these strings are the difference
+        between a reproducible number and a random one.
+        """
+        assert ROLE_SPECS["lb"] == ("BRANCH_FAST", "--threads 1", "lb")
+        assert ROLE_SPECS["ub"] == ("BIPARTITE", "--threads 1", "ub")
+        assert ROLE_SPECS["ubs"] == ("BP_BEAM", _DET_START, "ub")
+        assert ROLE_SPECS["ubt"] == ("IPFP", _MULTI_START, "ub")
+
+
+class TestPerEndOptions:
+    """One option string per end, because the roles do not share one."""
+
+    def test_the_two_ends_receive_their_own_strings(self, fake_gedlib: _InstallFake) -> None:
+        """The defect this whole change exists to fix.
+
+        Before, one ``--threads {n}`` string went to both ends. ``BP_BEAM_DET``
+        and ``IPFP_MS`` do not share a string with anything, so the backend
+        could not express the specification the paper prints.
+        """
+        fake_gedlib(_roles_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS,
+            lb_method="BRANCH_FAST",
+            lb_options="--threads 1",
+            ub_method="BP_BEAM",
+            ub_options=_DET_START,
+        )
+        backend.bounds(P4, C4)
+        env = backend.env()
+        assert _options_used(env, "BRANCH_FAST") == {"--threads 1"}
+        assert _options_used(env, "BP_BEAM") == {_DET_START}
+
+    def test_the_default_is_exactly_what_t03_ran(self, fake_gedlib: _InstallFake) -> None:
+        """Regression guard: the closed ticket's numbers depend on this default."""
+        fake_gedlib()
+        backend = GedlibBackend(UNIT_COSTS)
+        backend.bounds(P4, C4)
+        env = backend.env()
+        assert _options_used(env, "BRANCH_FAST") == {"--threads 1"}
+        assert _options_used(env, "IPFP") == {"--threads 1"}
+        assert backend.lb_options == "--threads 1"
+        assert backend.ub_options == "--threads 1"
+
+    def test_threads_still_supplies_both_defaults(self, fake_gedlib: _InstallFake) -> None:
+        fake_gedlib()
+        backend = GedlibBackend(UNIT_COSTS, threads=4)
+        assert backend.lb_options == "--threads 4"
+        assert backend.ub_options == "--threads 4"
+
+    def test_the_specification_records_the_options_verbatim(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """A run whose metadata omits the options string is rejected at the gate."""
+        fake_gedlib(_roles_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, ub_method="IPFP", ub_options=_MULTI_START, compute="ub")
+        spec = backend.specification()
+        assert spec["ub_method"] == "IPFP"
+        assert spec["ub_options"] == _MULTI_START
+        assert spec["ub_accessor"] == "upper"
+        assert "lb_method" not in spec  # not computed, so not claimed
+
+
+class TestComputeMode:
+    """A single-role campaign pays for one end only."""
+
+    def test_compute_lb_makes_no_upper_bound_call(self, fake_gedlib: _InstallFake) -> None:
+        fake_gedlib(_roles_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb")
+        lb, ub = backend.bounds(P4, C4)
+        assert lb == 1.0
+        assert ub == math.inf
+        env = backend.env()
+        assert not [c for c in env.calls if c[0] == "get_upper_bound"]
+        assert {c[1][0] for c in env.calls if c[0] == "set_method"} == {"BRANCH_FAST"}
+
+    def test_compute_ub_makes_no_lower_bound_call(self, fake_gedlib: _InstallFake) -> None:
+        fake_gedlib(_roles_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub")
+        lb, ub = backend.bounds(P4, C4)
+        assert lb == -math.inf
+        assert ub == 1.0
+        env = backend.env()
+        assert not [c for c in env.calls if c[0] == "get_lower_bound"]
+        assert {c[1][0] for c in env.calls if c[0] == "set_method"} == {"BIPARTITE"}
+
+    def test_a_one_sided_result_carries_its_sentinel(self, fake_gedlib: _InstallFake) -> None:
+        fake_gedlib(_roles_behaviour())
+        res = GedlibBackend(UNIT_COSTS, compute="lb", lb_method="BRANCH_FAST").pair(P4, C4)
+        assert res.computed == "lb"
+        assert res.ub == math.inf
+        assert res.certified is False and res.exact is None
+
+    def test_the_inverted_bracket_guard_is_skipped_when_one_sided(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """With one end at infinity there is nothing to cross-check."""
+        fake_gedlib({"values": {"BRANCH_FAST": {"lb": 99.0, "ub": 0.0}}})
+        lb, ub = GedlibBackend(UNIT_COSTS, compute="lb", lb_method="BRANCH_FAST").bounds(P4, C4)
+        assert (lb, ub) == (99.0, math.inf)
+
+    def test_an_unknown_compute_mode_is_refused(self) -> None:
+        with pytest.raises(GedBackendError, match="compute must be one of"):
+            GedlibBackend(UNIT_COSTS, compute="upper")  # type: ignore[arg-type]
+
+
+class TestOneSidedPairResult:
+    """An unevaluated end must be unmistakable, never a plausible number."""
+
+    def test_contract_b_still_has_exactly_seven_fields(self) -> None:
+        """The compute mode is derived, not stored.
+
+        ``ged_gates`` builds its payload by iterating these slots, so adding an
+        eighth would silently change what the gates are required to emit.
+        """
+        assert PairResult.__slots__ == (
+            "lb",
+            "ub",
+            "exact",
+            "certified",
+            "seconds",
+            "timed_out",
+            "method",
+        )
+
+    def test_only_the_vacuous_sentinel_is_admitted_on_each_side(self) -> None:
+        """+inf above and -inf below; every other non-finite value is still refused."""
+        assert PairResult(1.0, math.inf, None, False, 0.1, False, "m").computed == "lb"
+        assert PairResult(-math.inf, 1.0, None, False, 0.1, False, "m").computed == "ub"
+        assert PairResult(1.0, 5.0, None, False, 0.1, False, "m").computed == "both"
+        with pytest.raises(GedBackendError, match="lb must be finite"):
+            PairResult(math.inf, math.inf, None, False, 0.1, False, "m")
+        with pytest.raises(GedBackendError, match="ub must be finite"):
+            PairResult(1.0, -math.inf, None, False, 0.1, False, "m")
+        with pytest.raises(GedBackendError, match="lb must be finite"):
+            PairResult(math.nan, 1.0, None, False, 0.1, False, "m")
+
+    def test_a_result_that_measured_nothing_is_refused(self) -> None:
+        with pytest.raises(GedBackendError, match="measured nothing"):
+            PairResult(-math.inf, math.inf, None, False, 0.1, False, "m")
+
+
+class TestLazyZeroGuard:
+    """CONTRACTS §6.1: identical behaviour, evaluated only when it is needed."""
+
+    def test_the_predicate_is_not_called_when_no_read_returns_zero(
+        self, fake_gedlib: _InstallFake, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The whole point: 21.7 M pairs must not each pay for an isomorphism test."""
+        fake_gedlib(_roles_behaviour())
+        calls: list[int] = []
+        monkeypatch.setattr(
+            ged_backends_module,
+            "zero_distance_is_attainable",
+            lambda *a, **k: calls.append(1) or True,
+        )
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", ub_method="BIPARTITE")
+        lb, ub = backend.bounds(P4, C4)
+        assert (lb, ub) == (1.0, 1.0)
+        assert calls == []
+
+    def test_the_predicate_is_called_once_when_a_read_returns_zero(
+        self, fake_gedlib: _InstallFake, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Both upper-bound orientations read 0.00, and one decision covers both."""
+        fake_gedlib(
+            {
+                "values": {
+                    "BRANCH_FAST": {"lb": 0.0, "ub": 0.0},
+                    "BIPARTITE": {"lb": 0.0, "ub": 0.0},
+                }
+            }
+        )
+        calls: list[int] = []
+        monkeypatch.setattr(
+            ged_backends_module,
+            "zero_distance_is_attainable",
+            lambda *a, **k: calls.append(1) or True,
+        )
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", ub_method="BIPARTITE")
+        assert backend.bounds(P4, P4) == (0.0, 0.0)
+        assert len(calls) == 1
+
+    def test_an_illegal_zero_upper_bound_is_still_rejected(self, fake_gedlib: _InstallFake) -> None:
+        """Deferring the decision must not weaken it."""
+        fake_gedlib(
+            {
+                "values": {
+                    "BRANCH_FAST": {"lb": 0.0, "ub": 0.0},
+                    "BIPARTITE": {"lb": 0.0, "ub": 0.0},
+                }
+            }
+        )
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", ub_method="BIPARTITE")
+        with pytest.raises(GedBackendError, match="wrong accessor"):
+            backend.bounds(P4, C4)  # not isomorphic, so 0.00 is impossible
+
+    def test_the_deferred_value_equals_the_eager_one(self) -> None:
+        """A pure performance change computes the same answer."""
+        for g1, g2 in ((P4, C4), (P4, P4), (nx.star_graph(5), nx.cycle_graph(6))):
+            assert zero_distance_is_attainable(g1, g2, UNIT_COSTS) == (
+                g1.number_of_nodes() == g2.number_of_nodes()
+                and g1.number_of_edges() == g2.number_of_edges()
+                and nx.is_isomorphic(g1, g2)
+            )
+
+
+class TestAccessorProbe:
+    """The check that catches a wrong accessor before 21.7 M pairs of zeros."""
+
+    def test_the_probe_passes_on_a_correctly_configured_backend(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        fake_gedlib(_roles_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", ub_method="BIPARTITE")
+        assert backend.probe_accessors() == {"lb": 1.0, "ub": 1.0}
+
+    def test_a_method_read_through_the_wrong_accessor_returns_zero_and_the_probe_fires(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """GEDLIB's silent failure, reproduced exactly.
+
+        ``get_upper_bound()`` on a lower-bound method returns ``0.00`` and
+        raises nothing. The constructor cannot catch this case because the
+        method table is a *measured* capability, not a static one, so the probe
+        is the check that stands between it and a matrix of zeros.
+        """
+        fake_gedlib({"values": {"BRANCH_FAST": {"lb": 1.0, "ub": 0.0}}})
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", ub_method="BIPARTITE")
+        # Force the misconfiguration past the static table the way a library
+        # change would: the method stays legal, its upper accessor goes dead.
+        object.__setattr__(backend, "_ub_method", "BRANCH_FAST")
+        with pytest.raises(GedBackendError, match="accessor probe failed"):
+            backend.probe_accessors()
+
+    def test_the_static_table_refuses_the_mismatch_at_construction(self) -> None:
+        """The first line of defence, before the probe is even reached."""
+        with pytest.raises(GedBackendError, match="upper bound"):
+            GedlibBackend(UNIT_COSTS, ub_method="BRANCH_FAST")
+
+    def test_an_infinite_read_fires_the_probe(self, fake_gedlib: _InstallFake) -> None:
+        """HED's failure mode: get_upper_bound() returns inf, silently."""
+        fake_gedlib(
+            {"values": {"BRANCH_FAST": {"lb": 1.0, "ub": 0.0}, "BIPARTITE": {"ub": math.inf}}}
+        )
+        backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub")
+        with pytest.raises(GedBackendError, match="accessor probe failed"):
+            backend.probe_accessors()

@@ -428,3 +428,342 @@ def test_cli_leaves_the_shards_alone_when_the_merge_fails(tmp_path: Path) -> Non
     assert code == 1
     assert (tmp_path / "aids_c0000.npz").is_file()
     assert not (tmp_path / "m.npz").exists()
+
+
+# --------------------------------------------------------------------------- #
+# T-05: role files, and the zero-fraction gate
+# --------------------------------------------------------------------------- #
+
+
+def _bound_rows(pairs: np.ndarray, *, value: float, side: str) -> dict[str, np.ndarray]:
+    """Shard arrays as a one-sided role campaign writes them.
+
+    Args:
+        pairs: Linear pair indices.
+        value: The bound this role computed for every pair.
+        side: ``'lb'`` or ``'ub'``.
+
+    Returns:
+        The six CONTRACT C arrays, with the unevaluated end at its sentinel.
+    """
+    m = len(pairs)
+    lb = np.full(m, value if side == "lb" else -np.inf, dtype=np.float64)
+    ub = np.full(m, value if side == "ub" else np.inf, dtype=np.float64)
+    return {
+        "pair_index": np.asarray(pairs, dtype=np.int64),
+        "ged": np.full(m, np.inf, dtype=np.float64),
+        "lb": lb,
+        "ub": ub,
+        "certified": np.zeros(m, dtype=np.bool_),
+        "seconds": np.full(m, 0.25, dtype=np.float32),
+    }
+
+
+def _write_bound_shard(path: Path, pairs: np.ndarray, *, value: float, side: str) -> None:
+    """Write one CONTRACT C shard from a one-sided role campaign.
+
+    Args:
+        path: Destination ``.npz``.
+        pairs: Pair indices.
+        value: The bound for every pair.
+        side: ``'lb'`` or ``'ub'``.
+    """
+    payload: dict[str, np.ndarray | np.generic] = dict(_bound_rows(pairs, value=value, side=side))
+    payload["meta"] = np.array(
+        json.dumps(
+            {
+                "cost_model": "unit",
+                "backend_name": "gedlib",
+                "compute": side,
+                f"{side}_method": "BRANCH_FAST" if side == "lb" else "BIPARTITE",
+                f"{side}_options": "--threads 1",
+            }
+        )
+    )
+    np.savez_compressed(path, **payload)
+
+
+class TestGedFrom:
+    """CONTRACTS section 7: which array becomes ged_matrix."""
+
+    def test_the_default_is_still_exact(self, shard_dir: Path) -> None:
+        """T-03's merge is untouched."""
+        out = shard_dir / "m.npz"
+        merge_shards(shard_dir=shard_dir, key="aids", n_graphs=N_GRAPHS, out=out)
+        with np.load(out) as data:
+            meta = json.loads(str(data["metadata"]))
+        assert meta["ged_from"] == "exact"
+        assert meta["accessor"] == "exact"
+
+    def test_ged_from_lb_reports_the_lower_bound_as_the_value(self, tmp_path: Path) -> None:
+        """A role file's ged_matrix is that role's own number (CONTRACTS section 4)."""
+        _write_cohort(tmp_path / "linux.npz", key="linux")
+        _write_bound_shard(
+            tmp_path / "linux_c0000.npz", np.arange(TOTAL, dtype=np.int64), value=3.0, side="lb"
+        )
+        out = tmp_path / "LB.npz"
+        report, _ = merge_shards(
+            shard_dir=tmp_path,
+            key="linux",
+            n_graphs=N_GRAPHS,
+            out=out,
+            ged_from="lb",
+            role="lb",
+            seconds_role="lb",
+        )
+        assert report.passed
+        with np.load(out) as data:
+            ged = np.asarray(data["ged_matrix"])
+            lb = np.asarray(data["lb_matrix"])
+            meta = json.loads(str(data["metadata"]))
+        off = ~np.eye(N_GRAPHS, dtype=bool)
+        assert np.array_equal(ged[off], lb[off])
+        assert np.all(np.diag(ged) == 0.0)
+        assert meta["role"] == "lb"
+        assert meta["method"] == "BRANCH_FAST"
+        assert meta["options_string"] == "--threads 1"
+        assert meta["accessor"] == "lower"
+        assert meta["compute"] == "lb"
+
+    def test_an_unknown_ged_from_is_refused(self, shard_dir: Path) -> None:
+        with pytest.raises(MergeError, match="--ged-from must be"):
+            merge_shards(
+                shard_dir=shard_dir,
+                key="aids",
+                n_graphs=N_GRAPHS,
+                out=shard_dir / "m.npz",
+                ged_from="upper",
+            )
+
+    def test_shards_mixing_compute_modes_are_refused(self, tmp_path: Path) -> None:
+        """Half a matrix at its sentinel and half measured, with nothing to say which."""
+        _write_cohort(tmp_path / "linux.npz", key="linux")
+        chunks = np.array_split(np.arange(TOTAL, dtype=np.int64), 2)
+        _write_bound_shard(tmp_path / "linux_c0000.npz", chunks[0], value=3.0, side="lb")
+        payload: dict[str, np.ndarray | np.generic] = dict(_rows(chunks[1]))
+        payload["meta"] = np.array(json.dumps({"cost_model": "unit", "compute": "both"}))
+        np.savez_compressed(tmp_path / "linux_c0001.npz", **payload)
+        with pytest.raises(MergeError, match="mix compute modes"):
+            merge_shards(
+                shard_dir=tmp_path,
+                key="linux",
+                n_graphs=N_GRAPHS,
+                out=tmp_path / "m.npz",
+                ged_from="lb",
+            )
+
+
+class TestZeroFractionGate:
+    """The shape of the silent-all-zeros failure a wrong accessor produces."""
+
+    def test_an_all_zero_matrix_fails_the_gate(self) -> None:
+        """get_lower_bound() on an upper-bound method returns 0.00 and raises nothing."""
+        n = 6
+        ged = np.zeros((n, n), dtype=np.float64)
+        lb = np.zeros((n, n), dtype=np.float64)
+        ub = np.zeros((n, n), dtype=np.float64)
+        cert = np.ones((n, n), dtype=np.bool_)
+        rep = gate4(ged, lb, ub, cert, ged_from="lb")
+        assert not rep.passed
+        assert rep.zero_offdiag_fraction == 1.0
+        assert any("wrong accessor" in v for v in rep.violations)
+
+    def test_the_fraction_is_recorded_even_when_the_gate_passes(self) -> None:
+        ged, lb, ub, cert = _clean_matrices()
+        rep = gate4(ged, lb, ub, cert)
+        assert rep.passed
+        assert rep.as_dict()["zero_offdiag_fraction"] == rep.zero_offdiag_fraction
+
+    def test_a_zero_bound_needs_no_certificate(self) -> None:
+        """BRANCH_FAST returns the trivial lower bound 0 on real pairs of distance 2 and 6.
+
+        Under ``ged_from='exact'`` that same matrix is a claim of isomorphism and
+        is refused without a certificate; under ``ged_from='lb'`` it is a valid,
+        merely uninformative bound.
+        """
+        n = 6
+        ged = np.full((n, n), 4.0, dtype=np.float64)
+        np.fill_diagonal(ged, 0.0)
+        ged[0, 1] = ged[1, 0] = 0.0
+        lb = ged.copy()
+        ub = np.full((n, n), 9.0, dtype=np.float64)
+        np.fill_diagonal(ub, 0.0)
+        cert = np.zeros((n, n), dtype=np.bool_)
+        np.fill_diagonal(cert, True)
+        assert gate4(ged, lb, ub, cert, ged_from="lb").passed
+        rep = gate4(ged, lb, ub, cert, ged_from="exact")
+        assert not rep.passed
+        assert any("silently-zero-filled" in v for v in rep.violations)
+
+
+class TestOrientationSummary:
+    """The asymmetry statistic, aggregated and never densified."""
+
+    def test_the_summary_is_absent_when_no_shard_recorded_orientations(
+        self, shard_dir: Path
+    ) -> None:
+        out = shard_dir / "m.npz"
+        merge_shards(shard_dir=shard_dir, key="aids", n_graphs=N_GRAPHS, out=out)
+        with np.load(out) as data:
+            meta = json.loads(str(data["metadata"]))
+        assert meta["ub_orientation"] == {}
+
+    def test_the_summary_is_pooled_across_shards_without_a_new_matrix(self, tmp_path: Path) -> None:
+        """Four numbers in the metadata, not two more (N, N) arrays."""
+        _write_cohort(tmp_path / "linux.npz", key="linux")
+        pairs = np.arange(TOTAL, dtype=np.int64)
+        for t, chunk in enumerate(np.array_split(pairs, 2)):
+            payload: dict[str, np.ndarray | np.generic] = dict(_rows(chunk))
+            # fwd exceeds rev by 2 on every pair, so the reverse is always tighter.
+            payload["ub_fwd"] = payload["ub"] + 2.0
+            payload["ub_rev"] = payload["ub"].copy()
+            payload["meta"] = np.array(json.dumps({"cost_model": "unit"}))
+            np.savez_compressed(tmp_path / f"linux_c{t:04d}.npz", **payload)
+        out = tmp_path / "m.npz"
+        merge_shards(shard_dir=tmp_path, key="linux", n_graphs=N_GRAPHS, out=out)
+        with np.load(out) as data:
+            meta = json.loads(str(data["metadata"]))
+            assert "ub_fwd_matrix" not in data
+            assert "ub_rev_matrix" not in data
+            assert set(data.files) == {
+                "ged_matrix",
+                "lb_matrix",
+                "ub_matrix",
+                "certified_mask",
+                "seconds_matrix",
+                "node_counts",
+                "edge_counts",
+                "graph_ids",
+                "labels",
+                "metadata",
+            }
+        summary = meta["ub_orientation"]
+        assert summary["n_pairs"] == TOTAL
+        assert summary["asymmetry_rate"] == 1.0
+        assert summary["mean_abs_gap"] == 2.0
+        assert summary["max_abs_gap"] == 2.0
+        assert summary["reverse_tighter_rate"] == 1.0
+
+
+class TestOneSidedGate:
+    """A single-role merge leaves the other end at its sentinel."""
+
+    def test_an_infinite_ub_matrix_is_accepted_when_only_lb_was_computed(self) -> None:
+        n = 5
+        lb = np.full((n, n), 2.0, dtype=np.float64)
+        np.fill_diagonal(lb, 0.0)
+        ub = np.full((n, n), np.inf, dtype=np.float64)
+        np.fill_diagonal(ub, 0.0)
+        ged = lb.copy()
+        cert = np.zeros((n, n), dtype=np.bool_)
+        np.fill_diagonal(cert, True)
+        assert gate4(ged, lb, ub, cert, ged_from="lb", computed="lb").passed
+        # The default still demands both ends finite.
+        assert not gate4(ged, lb, ub, cert, ged_from="lb").passed
+
+    def test_an_unknown_computed_mode_is_refused(self) -> None:
+        ged, lb, ub, cert = _clean_matrices()
+        with pytest.raises(MergeError, match="computed must be"):
+            gate4(ged, lb, ub, cert, computed="lower")
+
+
+# --------------------------------------------------------------------------- #
+# Suite-2 metadata — both defects the local smoke found, before Picasso
+# --------------------------------------------------------------------------- #
+
+
+def _write_suite2_cohort(path: Path, n: int = N_GRAPHS, key: str = "linux") -> None:
+    """A CONTRACT A file as the Suite-2 exporter really writes it.
+
+    The only difference from :func:`_write_cohort` that matters is ``n_max``:
+    Suite 2 applies no size cap and records that as JSON ``null`` rather than by
+    omitting the key. Every fixture above hardcodes ``12``, which is why the
+    merge's ``int(...)`` on it survived the unit suite and died on real data.
+    """
+    _write_cohort(path, n=n, key=key)
+    with np.load(path, allow_pickle=False) as data:
+        payload = {name: data[name] for name in data.files}
+    meta = json.loads(str(payload["metadata"]))
+    meta["filter"] = {"min_nodes": 2, "require_connected": True, "n_max": None}
+    meta["splits_merged"] = True
+    payload["metadata"] = np.array(json.dumps(meta))
+    np.savez_compressed(path, **payload)
+
+
+@pytest.fixture()
+def suite2_shard_dir(tmp_path: Path) -> Path:
+    """A Suite-2-shaped cohort plus three complete, disjoint shards."""
+    _write_suite2_cohort(tmp_path / "linux.npz")
+    for t, chunk in enumerate(np.array_split(np.arange(TOTAL, dtype=np.int64), 3)):
+        _write_shard(tmp_path / f"linux_c{t:04d}.npz", chunk, censor={5, 17})
+    return tmp_path
+
+
+def test_a_null_n_max_merges_and_is_not_recorded_as_twelve(suite2_shard_dir: Path) -> None:
+    """Suite 2 has no size cap; ``int(None)`` used to raise TypeError here.
+
+    ``None`` must survive into the metadata rather than defaulting to 12: "no
+    cap" and "capped at 12" are different facts about the cohort, and the
+    metadata is where a reader goes to tell them apart.
+    """
+    out = suite2_shard_dir / "merged.npz"
+    report, _ = merge_shards(
+        shard_dir=suite2_shard_dir, key="linux", n_graphs=N_GRAPHS, out=out
+    )
+    assert report.passed
+    with np.load(out) as data:
+        meta = json.loads(str(data["metadata"]))
+    assert meta["n_max_filter"] is None
+    assert meta["filter"]["n_max"] is None
+
+
+def test_a_missing_n_max_key_still_defaults_to_twelve(shard_dir: Path) -> None:
+    """The Suite-1 fallback is untouched by the Suite-2 fix."""
+    out = shard_dir / "merged.npz"
+    merge_shards(shard_dir=shard_dir, key="aids", n_graphs=N_GRAPHS, out=out)
+    with np.load(out) as data:
+        assert json.loads(str(data["metadata"]))["n_max_filter"] == 12
+
+
+def test_merged_metadata_carries_every_contracts_section_4_key(
+    suite2_shard_dir: Path,
+) -> None:
+    """The independent G4 gate reported seven of these missing on real output.
+
+    They are asserted here rather than only in the gate so that the merge fails
+    in the unit suite, seconds after a change, instead of after a campaign.
+    """
+    out = suite2_shard_dir / "merged.npz"
+    merge_shards(
+        shard_dir=suite2_shard_dir,
+        key="linux",
+        n_graphs=N_GRAPHS,
+        out=out,
+        ged_from="lb",
+        role="lb",
+    )
+    with np.load(out) as data:
+        meta = json.loads(str(data["metadata"]))
+    for field in (
+        "dataset",
+        "role",
+        "method",
+        "options_string",
+        "accessor",
+        "cost_model",
+        "n_graphs",
+        "n_pairs",
+        "n_zero_offdiag",
+        "n_certified",
+        "seconds_total",
+        "mean_seconds_per_pair",
+        "filter",
+        "splits_merged",
+        "gedlib_source",
+        "code_commit",
+        "computed_utc",
+        "schema_version",
+    ):
+        assert field in meta, f"CONTRACTS section 4 requires {field!r}"
+    assert isinstance(meta["seconds_total"], float)
+    assert isinstance(meta["splits_merged"], bool)

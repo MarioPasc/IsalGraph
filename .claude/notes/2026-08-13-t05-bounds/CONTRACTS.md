@@ -53,13 +53,13 @@ Schema **identical** to `export_graphs.py:310 save_exported`. Do not invent a ne
 
 | Key | dtype | shape |
 |---|---|---|
-| `graph_ids` | `<U` | (N,) — `{key}_{split}_{sourceid}` |
+| `graph_ids` | `<U` | (N,) — **the source loader's native id**, byte-identical to what `export_graphs.py` writes for Suite 1 (amendment 1) |
 | `n_nodes` | int32 | (N,) |
 | `n_edges` | int32 | (N,) |
 | `edge_offsets` | int64 | (N+1,) — CSR row pointers |
 | `edges` | int32 | (2, M) — CSR, sorted by `(u, v)`, node ids **local to each graph, 0-based** |
 | `splits` | `<U` | (N,) |
-| `labels` | `<U` | (N,) — **class label where the dataset has one**, `''` otherwise |
+| `labels` | `<U` | (N,) — **the loader's class label where present**, `''` otherwise. No class count is asserted (amendment 2) |
 | `metadata` | `<U` | () — JSON |
 
 `metadata` JSON keys: `dataset, source, n_raw, n_kept, n_dropped_min_nodes, n_dropped_disconnected,
@@ -73,6 +73,39 @@ is `numpy.triu_indices(N, k=1)` over it. It must be deterministic: splits in the
 `train, valid, test`, and within a split the order the `.cxl` index lists.
 
 Output: `$SANDISK/data/source/APPROX_GED/exported_suite2/{key}.npz` + `manifest.json`.
+
+### 2.1 Amendments, 2026-08-13 — both found by `wave-t05-export` and both verified by the orchestrator
+
+**Amendment 1 — `graph_ids` is the loader's native id, not `{key}_{split}_{sourceid}`.** Measured in
+`extended_merged_exact_ged/computed/*.npz`: Letter ids are bare filename stems (`IP1_0000`,
+`AP1_0001`), and only the GraphEdX ids (`linux_train_0000`, `aids_train_0001`) match the pattern
+originally written here, because `graphedx_loader` happens to build them that way. Applying the
+original wording literally would have broken the element-wise reproduction of the three Letter
+`graph_ids` arrays, which is one of this track's acceptance criteria. **The original wording was
+wrong; the exporter matches Suite 1's behaviour exactly.**
+
+**Amendment 2 — no class count is asserted.** The counts previously written here (Letter 15, GREC 22,
+Mutagenicity 2, Protein 6, AIDS 2, COIL-DEL 100) are the **raw** dataset class counts — orchestrator
+re-verified against the `.cxl` indices, all five correct as raw figures. They are not the counts that
+survive `require_connected`. The realised per-dataset class count is a **measured output** recorded in
+each file's `metadata` and in `manifest.json`, never an assertion.
+
+> ⚠ **Carry this to T-18 and T-06.** `wave-t05-export` measured that **Letter LOW retains 9 of its 15
+> classes** and **GREC 17 of its 22** after the connectivity filter, and that **LINUX and
+> AIDS-GraphEdX carry no class label at all** (`graphedx_loader` has no label field; T-01 already
+> measured LINUX as carrying no node or edge attribute either). Any manuscript sentence of the form
+> "Letter, 15 classes" or "GREC, 22 classes" is **false of the filtered cohort**. This is the labels
+> counterpart of the size-biased connectivity discard already recorded in `decisions.md` §7.
+
+**Finding 3 — a frozen artifact cannot load GraphEdX from today's tree.** `export_graphs.py:430` and
+`cohort_audit.py:254` both resolve GraphEdX as `<source>/GED_PRECOMPUTED/<NAME>`. The real path is
+`<source>/GED_PRECOMPUTED/datasets/<NAME>`, and `<source>/GED_PRECOMPUTED/LINUX` does not exist —
+orchestrator verified. Because IAM now lives under `APPROX_GED/datasets/IAM_Database/extracted` and
+GraphEdX under `GED_PRECOMPUTED/datasets`, **no single `--source` value makes either module resolve
+both**, which is why CONTRACTS §1 specifies two roots. Neither file is patched in this wave — both are
+frozen T-01/T-03 artifacts and `cohort_audit.py` is decision 22's reproduction script. **Recorded for
+the T-05 close to propagate**: T-01's tracked reproduction cannot re-derive the LINUX and
+AIDS-GraphEdX rows on the current tree without a path fix.
 
 ---
 
@@ -164,6 +197,11 @@ Flat file, not a matrix:
 | `value_fwd`, `value_rev` | float64 | (P,) |
 | `seconds` | float32 | (P,) |
 | `metadata` | `<U` | () — JSON, plus `bin_edges`, `seed`, `n_per_bin` |
+
+**Two files, not one** (amendment 3, 2026-08-13): the sampler emits the pair list ahead of the run to
+`UB_TIGHT/subsample_pairs.npz` (`dataset_key, pair_i, pair_j, n_max, bin_index, metadata`), and the
+runner writes the result to `UB_TIGHT/subsample.npz` with the value and timing columns added. Keeping
+them separate stops the campaign overwriting its own input.
 
 The pair list is emitted **before** the run by the sampler and is reproducible from seed 42 alone.
 `BRANCH_FAST`, `BIPARTITE` and `BP_BEAM_DET` values for these pairs are **read off the dense

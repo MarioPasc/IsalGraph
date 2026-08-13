@@ -221,7 +221,7 @@ edges (CSR, 2×M int32), splits, labels, metadata`. **10 files + 1 manifest.**
 |---|---|---|---|
 | **G1 — cohort** | exporter reproduces §2 | all 10 counts exact | T-01's numbers are the only source a printed number may come from |
 | **G2 — T-27 reproduction** | on `iam_letter_{low,med,high}` and `linux`, whose Suite-2 cohort is **identical** to Suite 1, the new pipeline's `BRANCH_FAST` and `BIPARTITE` values must equal T-27's `data/cells/{ds}__{CELL}.npz` `value` array | **exact equality on all 3,602,615 pairs**, both cells | the strongest gate available: an independent end-to-end check of loader, cost model, options string, symmetrisation and pair ordering against a census already on record |
-| **G3 — bracket validity** | `lb_matrix ≤ ub_matrix` on every Suite-2 pair; and `lb ≤ exact ≤ ub` against T-03's certified values on the four G2 datasets and on the 769-graph `aids` overlap | **0 violations**, compared at `1e-9` | `LB ≤ GED ≤ UB` is the only thing the large-`n` argument rests on |
+| **G3 — bracket validity** | `lb_matrix ≤ ub_matrix` on every Suite-2 pair; and `lb ≤ exact ≤ ub` against T-03's certified values on the four G2 datasets and on the AIDS overlap **joined on `graph_ids`** (below) | **0 violations**, compared at `1e-9` | `LB ≤ GED ≤ UB` is the only thing the large-`n` argument rests on |
 | **G4 — structural** | every matrix symmetric to machine precision; diagonal zero; every entry finite and `≥ 0`; off-diagonal zero fraction recorded and `< 0.99`; `certified_mask` diagonal `True` | pass or `MergeError` | decision §6.2: an upper-bound matrix filled in one orientation **is not a distance matrix** |
 
 **Symmetrisation.** `BIPARTITE`, `BP_BEAM`, `IPFP` and `REFINE` build an edit path from a *directed*
@@ -229,6 +229,18 @@ assignment and are not symmetric. Every upper bound is computed in **both orient
 minimised** (`ged_backends.py:950-955` already does this), and the result is asserted symmetric
 before it is written. `BRANCH_FAST` is symmetric; symmetry is **asserted** for it on a probe rather
 than assumed.
+
+> **G3's AIDS arm joins on `graph_ids`, never positionally** (amendment 2). Suite-2
+> `aids_graphedx` has **819** graphs and Suite-1 `aids` has **769**; a positional comparison would
+> silently compare unrelated graphs. Measured: the 769 are a **strict subset** of the 819 — overlap
+> exactly 769 — which is structural, since Suite 1 *is* Suite 2 plus `n_max = 12`. So the arm is
+> **not skipped**: the id join recovers the full **295,296-pair** `lb ≤ exact ≤ ub` check, the
+> largest such arm in the cohort outside Letter.
+
+> **Censored pairs are marked with `inf`, not `NaN`** (amendment 2). T-03's `ged_matrix` holds 92
+> non-finite entries on `linux` (2 × 46 censored) and **zero** NaNs. A filter written as
+> `np.isnan(...)` passes all 92 straight through, and `inf <= x` evaluates False while raising
+> nothing. **Select on `certified_mask` first, and filter with `np.isfinite`.**
 
 **Gate 2 of T-03 is not re-run.** T-27 discharged the two-sided `ged_bounds.py` cross-check on the
 archived 400-pair LINUX sample: `BRANCH` 400/400 value-equal, `BIPARTITE` 156/400 value-equal but
@@ -365,6 +377,36 @@ Computable once the matrices exist; no extra cluster time.
    Reported per dataset and pooled, primary arm and sensitivity arm side by side, with the
    separation between *"IsalGraph degrades at scale"* and *"our reference degrades at scale"* stated
    explicitly.
+
+   > ### ⚠ Analysis rule, frozen 2026-08-13 before any production pair — **size and provenance are
+   > confounded, and the pooled curve alone cannot answer AE.1**
+   >
+   > Measured by `wave-t05-export` from the completed bin table: **bins 0–2 are ~90 % Letter and
+   > bins 8–13 are 50–97 % Mutagenicity + COIL-DEL** (bin 13 `[80,99)` is **97.1 % Mutagenicity**
+   > alone). Density moves with provenance across the same range — 0.607 on Letter HIGH against
+   > **0.094** on Mutagenicity. So a single curve fitted across all fourteen bins fits **a dataset
+   > transition and a density transition as faithfully as a size one**, and no sampling design can
+   > remove this: it is a property of which real datasets contain large connected graphs.
+   >
+   > **Therefore the primary measurement is the within-dataset slope, not the pooled curve.**
+   >
+   > - **Primary**: fit `(UB − LB)/UB` on `max(n₁,n₂)` **within each dataset separately**, with the
+   >   D2 graph-level bootstrap. Four datasets span enough `n` to carry an unconfounded slope on
+   >   their own — **Mutagenicity** (n̄ 28.53, to 98), **COIL-DEL** (21.54, to 77), **AIDS-IAM**
+   >   (14.02, to 85) and **Protein** (31.68, to 96). Letter and LINUX cap at n ≤ 10 and constrain
+   >   only the small-`n` end.
+   > - **Secondary**: within (dataset × density stratum) where the cell is populated
+   >   ([statistics](../plan/statistics.md) §8 strata), which separates the size effect from the
+   >   density effect that travels with it.
+   > - **Pooled**: reported as a descriptive overlay only, **carrying the confound in its caption**,
+   >   never as the estimate a conclusion rests on.
+   >
+   > This is the same per-dataset-primary / pooled-demoted structure D5 already imposes for R3.5b,
+   > applied to the size-scaling curve. Freezing it now is what stops the pooled curve being
+   > preferred later because it happens to look cleaner.
+   >
+   > **The 97.1 % figure travels with any bin-13 number.** `bin_table.json` carries the dominance
+   > share per bin precisely so that a top-of-range claim cannot be quoted without it.
 2. **Certification rate per dataset and per size stratum** — approx_ged §4 forbids promising a rate
    before T-05 measures it. T-27 measured 1.2–40.2 % for `BIPARTITE` at `n ≤ 12`; this extends it.
 3. **Bracket width by size and density stratum** (statistics §8 strata).
@@ -396,8 +438,25 @@ Each is checkable by a named command or artifact.
 7. **Analysis.** Deliverables §7.1–§7.5 written to
    `results/reports/T-05-bounded-ged/`.
 8. **Quota.** fscratch file count no higher than 224.3k + 100 after the run.
-9. **Suite.** `pytest tests/ -q` at or above the reference state (726 passed / 271 skipped with the
-   engine).
+9. **Suite.** `pytest tests/unit/ -q` at or above the **measured** pre-wave baseline. CLAUDE.md's
+   "726 passed / 271 skipped" is stale — the suite has grown since. Measured by the orchestrator on
+   a clean main checkout at `885d98d`, before any agent's work was merged:
+
+   > | `PYTHONPATH` | failed | passed | skipped |
+   > |---|---:|---:|---:|
+   > | without GEDLIB | **8** | **864** | **44** |
+   > | **with** `~/opt/build_gedlib/graphkit-learn` | **8** | **907** | **1** |
+
+   **The 43-test gap is GEDLIB availability, not a regression.** Those tests skip when the in-place
+   GEDLIB build is off the path. A branch measured with GEDLIB and compared against a baseline
+   measured without it appears to have gained 43 tests and lost 43 skips out of nowhere; **the
+   comparison must hold `PYTHONPATH` fixed.** This bit once already in this wave — two tracks
+   reported skip counts of 44 and 1 for the same suite.
+
+   **All 8 failures pre-date this wave** and are `tests/unit/test_export_graphs.py`'s real-data
+   tests, red because of the path defect in amendment 1 finding 3. The merge criterion is therefore
+   *no new failure and no lost pass*, not "green" — and any claim that this wave broke the suite must
+   be checked against this table first.
 
 ---
 
@@ -419,4 +478,83 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-13, amendment 3 — two negative results from wave `2026-08-13-t05-bounds`, both
+  correcting something this project had written down. Orchestrator re-measured both.**
+
+  **(a) The lazy `zero_ok` change buys nothing, and CONTRACTS §6.1's stated reason for it — which
+  I wrote — is factually wrong.** §6.1 asserted that the eager guard "reaches `nx.is_isomorphic`
+  whenever `n₁ == n₂ and m₁ == m₂` — … a VF2 call on ~30-node graphs for COIL-DEL and
+  Mutagenicity, 21.7 M times". Measured by `wave-t05-runner`: the `(n, m)` precheck short-circuits
+  **before** VF2 on **99.5 % of COIL-DEL and 99.4 % of Mutagenicity pairs** (25/5,000 and 32/5,000
+  get past it), and where it *is* entered often — Letter LOW at 23.9 % — the graphs are `n ≤ 7`.
+  The whole guard costs 0.58–1.03 µs/pair against a GEDLIB solve of 865–938 µs/pair, **0.1 % of the
+  work**, so no reordering of it can yield more than ~1.001×. Measured speed-ups: COIL-DEL 0.998×,
+  Mutagenicity 1.004×, AIDS-IAM 1.005×.
+
+  > **The change stays** — it is behaviour-identical and strictly not-more-work — but it is **not a
+  > performance improvement**, no job is sized on it, and §6.1's rationale must not be repeated
+  > anywhere. My error was assuming equal `(n, m)` is common at `n ≈ 30`; the joint distribution is
+  > wide there and it is rare. It is common only where the graphs are tiny and VF2 is trivial.
+
+  **(b) The upper bound's orientation asymmetry is not what `decisions.md` §6 records, and the rate
+  falls with graph size.** §6 states "tighter on **33.2 %** of pairs, mean gain **1.15** edit
+  operations", from **our own BP implementation on 400 LINUX pairs at n̄ = 8.71**. Measured with the
+  **production** method (`BIPARTITE`, `--threads 1`), re-verified by the orchestrator:
+
+  | Population | asymmetric | mean \|fwd−rev\| (all pairs) | (asymmetric only) | max |
+  |---|---:|---:|---:|---:|
+  | LINUX, **all 3,916** pairs | **22.8 %** | 0.737 | 3.24 | 12 |
+  | Mutagenicity, 4,000 pairs, `n ≤ 98` | **11.2 %** | 0.335 | 3.00 | 18 |
+
+  **The rate roughly halves from n̄ = 8.71 to n̄ = 28.5 while the per-asymmetric-pair magnitude does
+  not** (3.24 → 3.00). The two figures differ in *implementation* and *population* at once, so
+  neither difference alone explains the gap with §6 — what is solid is the **direction in `n` under
+  one fixed method**, which is new information §6 does not contain. **§6's number must be rewritten
+  from the `ubt` subsample, which spans `n = 2…98` across all ten datasets, not patched.** Retire
+  the 400-pair BP figure from any cohort-level claim.
+
+  Reassuring, and worth keeping: reverse-tighter 12.5 % against forward-tighter 10.2 % on LINUX is
+  near-balanced, which is what an undirected cohort should show. **Pair order carries no
+  information, so the symmetrisation is doing its job and nothing upstream is mis-ordered.**
+
+  **(c) `--compute lb` / `--compute ub` give 1.81× / 1.28×, not 2× each.** `both` is one lower-bound
+  solve plus **two** upper-bound solves (both orientations), so dropping the upper end removes 2 of
+  3 solves and dropping the lower end removes 1 of 3, with fixed per-pair overhead flattening both
+  below their solve-count ideal. Measured on all 3,916 LINUX pairs: `both` 129.6, `lb` 71.5, `ub`
+  101.1 µs/pair. **Budget the `ub`/`ubs` campaigns at ~78 % of a two-sided run.**
+
 - **2026-08-13** — written, before any production job.
+
+- **2026-08-13, amendment 1 — three defects in the wave contracts, found by `wave-t05-export` during
+  recon and verified by the orchestrator before any production pair was computed.** Full text in
+  `.claude/notes/2026-08-13-t05-bounds/CONTRACTS.md` §2.1 and §5.
+
+  1. **`graph_ids` is the loader's native id.** CONTRACTS §2 originally specified
+     `{key}_{split}_{sourceid}`. Measured in `extended_merged_exact_ged/computed/*.npz`: Letter ids
+     are bare filename stems (`IP1_0000`, `AP1_0001`) and only the GraphEdX ids
+     (`linux_train_0000`) match that pattern. Applying it literally would have broken the
+     element-wise reproduction of the three Letter `graph_ids` arrays — which is the check that
+     proves the graph order, and therefore every pair index, is right. **The contract was wrong.**
+  2. **No class count is asserted.** The counts in §2 (Letter 15, GREC 22, Mutagenicity 2,
+     Protein 6, AIDS 2, COIL-DEL 100) are **raw** dataset counts — re-verified correct as raw
+     figures against the `.cxl` indices — not counts that survive `require_connected`. Realised
+     counts and the sorted class list are measured outputs in the manifest.
+  3. **The subsample is two files**, `UB_TIGHT/subsample_pairs.npz` (the sampler's pair list) and
+     `UB_TIGHT/subsample.npz` (the campaign's result), so the run cannot overwrite its own input.
+
+  > ⚠ **Two findings this amendment carries beyond T-05.**
+  >
+  > **Labels do not survive the filter intact.** `Letter LOW retains 9 of its 15 classes` and
+  > `GREC 17 of its 22`; `LINUX` and `AIDS (GraphEdX)` carry **no class label at all**. Any
+  > manuscript sentence of the form "Letter, 15 classes" or "GREC, 22 classes" is **false of the
+  > filtered cohort**. This is the labels counterpart of the size-biased connectivity discard in
+  > `decisions.md` §7 and it belongs to **T-18 and T-06**.
+  >
+  > **A frozen reproduction script cannot load GraphEdX from today's tree.**
+  > `export_graphs.py:430` and `cohort_audit.py:254` both resolve `<source>/GED_PRECOMPUTED/<NAME>`;
+  > the real path is `<source>/GED_PRECOMPUTED/datasets/<NAME>`, and because IAM now sits under
+  > `APPROX_GED/datasets/IAM_Database/extracted`, **no single `--source` makes either module resolve
+  > both roots**. So decision 22's tracked `cohort_audit.py` — the script whose whole purpose is that
+  > "what it measures becomes the table" — **cannot re-derive the LINUX and AIDS-GraphEdX rows on the
+  > current tree without a path fix.** Neither file is patched here; both are frozen T-01/T-03
+  > artifacts. **This must be propagated at close.**
