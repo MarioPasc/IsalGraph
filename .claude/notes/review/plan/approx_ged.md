@@ -54,7 +54,7 @@ that merely performs well.**
 | Tighter | `BRANCH` | same | `O(n²Δ³ + n³)` | proven LB, strictly ≥ BRANCH_FAST |
 | Anytime | `BRANCH_TIGHT` | same | iterative | proven LB at every iteration |
 | Venue-fit alternative | `HED` | Fischer et al., ***Pattern Recognition*** 48(2):331–343, 2015 | `O(n²)` | proven LB — **accessor broken, see [gedlib](gedlib.md) §5** |
-| Legacy reference | `STAR` | Zeng et al., *VLDB* 2009 | `O(n³)` | proven LB |
+| Legacy reference | `STAR` | Zeng et al., ~~*VLDB* 2009~~ → **PVLDB 2(1):25–36**, 2009 (T-27) | `O(n³)` | proven LB — **but only under uniform edit costs** (Lemma 4.2); see [statistics](statistics.md) D6 |
 
 Three reasons `BRANCH_FAST` is primary:
 
