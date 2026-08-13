@@ -16,6 +16,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -128,6 +129,89 @@ def test_midranks_falls_back_for_non_integral_input() -> None:
     """Non-integral data leaves the fast path and still ranks correctly."""
     values = np.array([0.5, 0.25, 0.75, 0.25])
     np.testing.assert_allclose(bakeoff.midranks(values), stats.rankdata(values))
+
+
+# ---------------------------------------------------------------------------
+# factorize -- the precondition removal, exercised on HED's real granularity
+# ---------------------------------------------------------------------------
+
+#: The 8 distinct values HED returns with ``--edge-set-distances OPTIMAL``
+#: over all 3,916 LINUX pairs: it charges each edge at both endpoints and
+#: halves, so the LSAPE optimum lands on quarter-integers in [0, 1.75].
+HED_VALUES = np.array([0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75])
+
+
+def test_factorize_is_a_strictly_monotone_dense_coding() -> None:
+    """Codes must preserve order exactly, or every rank statistic is wrong."""
+    values = np.array([1.75, 0.0, 0.5, 0.5, 0.25])
+    codes = bakeoff.factorize(values)
+    assert codes.tolist() == [3, 0, 2, 2, 1]
+    assert codes.dtype == np.int64
+    assert set(codes.tolist()) == set(range(4))
+    order = np.argsort(values, kind="stable")
+    assert np.all(np.diff(codes[order]) >= 0)
+
+
+def test_factorized_hed_values_take_the_counting_sort_fast_path() -> None:
+    """HED is quarter-integral, so raw values would leave the fast path.
+
+    The fast path is detected by patching out the scipy fallback: if
+    ``midranks`` reaches ``rankdata`` the call raises. Ranking the raw
+    quarter-integers must fall back; ranking their codes must not.
+    """
+    rng = np.random.default_rng(0)
+    values = rng.choice(HED_VALUES, size=5000)
+
+    def _forbidden(*_args: object, **_kwargs: object) -> np.ndarray:
+        raise AssertionError("midranks left the counting-sort fast path")
+
+    codes = bakeoff.factorize(values)
+    with mock.patch.object(bakeoff.stats, "rankdata", _forbidden):
+        fast = bakeoff.midranks(codes)
+    np.testing.assert_allclose(fast, stats.rankdata(values))
+
+    with (
+        mock.patch.object(bakeoff.stats, "rankdata", _forbidden),
+        pytest.raises(AssertionError, match="fast path"),
+    ):
+        bakeoff.midranks(values)
+
+
+def test_spearman_on_hed_granularity_matches_scipy_exactly() -> None:
+    """Correlating codes must equal correlating values, not approximate it."""
+    rng = np.random.default_rng(7)
+    hed = rng.choice(HED_VALUES, size=4000)
+    exact = np.floor(hed * 3) + rng.integers(0, 3, size=4000)
+    via_codes = bakeoff.spearman_from_ranks(
+        bakeoff.midranks(bakeoff.factorize(hed)),
+        bakeoff.midranks(bakeoff.factorize(exact)),
+    )
+    np.testing.assert_allclose(via_codes, stats.spearmanr(hed, exact).statistic, rtol=1e-12)
+
+
+def test_fixture_hed_cell_is_non_integral(bundles: dict[str, bakeoff.DatasetBundle]) -> None:
+    """The fixture must reproduce HED's granularity, not generate integers.
+
+    Had the fixture emitted whole edit operations, the quarter-integer
+    slow path would never have surfaced in testing -- which is exactly
+    how it was missed the first time.
+    """
+    values = bundles["linux"].cells["HED"].value
+    assert not np.array_equal(values, np.floor(values))
+    assert np.array_equal(values * 4, np.floor(values * 4))
+    assert bakeoff.factorize(values).max() < values.size
+
+
+def test_bootstrap_is_unaffected_by_a_non_integral_cell(
+    linux_bundle: bakeoff.DatasetBundle,
+) -> None:
+    """HED must produce a finite rho like every other cell, not nan."""
+    result = bakeoff.bootstrap_dataset(
+        linux_bundle.index, [linux_bundle.cells["HED"]], replicates=32, seed=42
+    )
+    entry = result["statistics"]["rho_bound_exact::HED"]
+    assert math.isfinite(entry["point"])
+    assert entry["ci_low"] <= entry["point"] <= entry["ci_high"]
 
 
 def test_midranks_handles_empty_input() -> None:

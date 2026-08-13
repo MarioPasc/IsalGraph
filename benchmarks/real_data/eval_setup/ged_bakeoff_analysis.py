@@ -256,15 +256,49 @@ class BakeoffAnalysisError(Exception):
 # ---------------------------------------------------------------------------
 
 
+def factorize(values: np.ndarray) -> np.ndarray:
+    """Return a dense integer coding of *values*, order-preserving.
+
+    ``np.unique`` returns the distinct values **sorted**, so the inverse
+    index is a strictly monotone map of the input. Spearman depends only
+    on ranks and ranks are invariant under any strictly monotone map, so
+    correlating the codes is identical to correlating the values --
+    exactly, not approximately.
+
+    This is what removes the integrality precondition from
+    :func:`midranks` rather than widening it. The one-off ``O(p log p)``
+    sort is paid once per cell and amortised over 2,000 bootstrap
+    replicates, each of which then gets the counting-sort path whatever
+    the original dtype was.
+
+    Not hypothetical: ``HED`` with ``--edge-set-distances OPTIMAL``
+    charges each edge at both endpoints and halves, so the LSAPE optimum
+    lands on **quarter-integers** -- 8 distinct values in ``[0, 1.75]``
+    over all 3,916 LINUX pairs. Scaling by 4 would work for HED today and
+    break silently on the next method with a different granularity, which
+    is the failure mode this ticket exists to avoid.
+
+    Args:
+        values: One-dimensional array of observations.
+
+    Returns:
+        ``int64`` codes in ``[0, K)`` for the ``K`` distinct values.
+    """
+    return np.asarray(np.unique(values, return_inverse=True)[1], dtype=np.int64)
+
+
 def midranks(values: np.ndarray) -> np.ndarray:
     """Return average (mid) ranks of *values*, ties averaged.
 
     Uses a counting-sort fast path when the input is integral with a
-    small range, which every quantity here is: GED, its bounds and the
-    Levenshtein distance are all small non-negative integers. That turns
-    the per-replicate cost from ``O(p log p)`` to ``O(p + K)``, which is
-    what makes a 2,000-replicate bootstrap over 2.1 M induced pairs
-    affordable. Falls back to :func:`scipy.stats.rankdata` otherwise.
+    small range, which turns the per-replicate cost from ``O(p log p)``
+    to ``O(p + K)`` and is what makes a 2,000-replicate bootstrap over
+    2.1 M induced pairs affordable. Falls back to
+    :func:`scipy.stats.rankdata` otherwise.
+
+    Callers in the bootstrap loop pass :func:`factorize` codes rather
+    than raw values, so the fast path is taken unconditionally and no
+    assumption is made about a bound's granularity.
 
     Args:
         values: One-dimensional array of observations.
@@ -1082,9 +1116,11 @@ def compute_cell_metrics(
     m3_pos = float(certifies[positive].mean()) if positive.any() else float("nan")
 
     lev_c = index.lev[lev_variant][certified]
-    rank_exact = midranks(exact_c)
-    rank_value = midranks(value_c)
-    rank_lev = midranks(lev_c)
+    # factorize first: HED returns quarter-integers, so ranking the raw
+    # values would leave the counting-sort path for no reason.
+    rank_exact = midranks(factorize(exact_c))
+    rank_value = midranks(factorize(value_c))
+    rank_lev = midranks(factorize(lev_c))
     rho_bound_exact = spearman_from_ranks(rank_value, rank_exact)
     rho_lev_bound = spearman_from_ranks(rank_lev, rank_value)
     rho_lev_exact = spearman_from_ranks(rank_lev, rank_exact)
@@ -1256,6 +1292,46 @@ def replicate_selection(n_graphs: int, seed: int, replicate: int) -> np.ndarray:
 _BOOT_STATE: dict[str, Any] = {}
 
 
+def _bootstrap_state(
+    index: IndexData,
+    cells: Sequence[CellData],
+    lev_variant: str,
+    seed: int,
+) -> dict[str, Any]:
+    """Assemble the bootstrap payload, factorizing every ranked quantity once.
+
+    The ``O(p log p)`` sort behind :func:`factorize` is paid here, once
+    per cell, and amortised over every replicate. Raw values are kept
+    alongside the codes because the error means need the real edit-
+    operation counts, not their ordinal positions.
+
+    Args:
+        index: The dataset index.
+        cells: Every cell of that dataset.
+        lev_variant: Encoder variant behind M6.
+        seed: Master seed carried through to the replicate draws.
+
+    Returns:
+        The payload consumed by :func:`_statistics_on_index`.
+    """
+    lev = index.lev[lev_variant]
+    return {
+        "n_graphs": index.n_graphs,
+        "seed": seed,
+        "certified": index.certified,
+        "exact": index.exact,
+        "exact_codes": factorize(index.exact),
+        "lev_codes": factorize(lev),
+        "values": {c.method: c.value for c in cells},
+        "value_codes": {c.method: factorize(c.value) for c in cells},
+        "ends": {c.method: c.end for c in cells},
+        "rosters": {
+            end: tuple(m for m in cells_for_end(end) if any(c.method == m for c in cells))
+            for end in ENDS
+        },
+    }
+
+
 def _replicate_statistics(state: Mapping[str, Any], replicate: int) -> dict[str, float]:
     """Compute every bootstrap statistic on one graph resample.
 
@@ -1328,19 +1404,7 @@ def bootstrap_dataset(
     Returns:
         Point estimates, percentile CIs and the D7 paired differences.
     """
-    state = {
-        "n_graphs": index.n_graphs,
-        "seed": seed,
-        "certified": index.certified,
-        "exact": index.exact,
-        "lev": index.lev[lev_variant],
-        "values": {c.method: c.value for c in cells},
-        "ends": {c.method: c.end for c in cells},
-        "rosters": {
-            end: tuple(m for m in cells_for_end(end) if any(c.method == m for c in cells))
-            for end in ENDS
-        },
-    }
+    state = _bootstrap_state(index, cells, lev_variant, seed)
 
     started = time.perf_counter()
     n_jobs = max(1, min(int(jobs), MAX_PROCESSES))
@@ -1400,33 +1464,26 @@ def _replicate_point_estimates(
     Returns:
         Mapping from statistic key to observed value.
     """
-    state = {
-        "n_graphs": index.n_graphs,
-        "seed": 0,
-        "certified": index.certified,
-        "exact": index.exact,
-        "lev": index.lev[lev_variant],
-        "values": {c.method: c.value for c in cells},
-        "ends": {c.method: c.end for c in cells},
-        "rosters": {
-            end: tuple(m for m in cells_for_end(end) if any(c.method == m for c in cells))
-            for end in ENDS
-        },
-    }
+    state = _bootstrap_state(index, cells, lev_variant, 0)
     identity = np.arange(index.n_graphs, dtype=np.int64)
     flat = induced_pairs(index.n_graphs, identity)
     return _statistics_on_index(state, flat[index.certified[flat]])
 
 
 def _statistics_on_index(state: Mapping[str, Any], idx: np.ndarray) -> dict[str, float]:
-    """Evaluate the bootstrap statistic set on an explicit pair index set."""
+    """Evaluate the bootstrap statistic set on an explicit pair index set.
+
+    Ranks come from the pre-computed :func:`factorize` codes and the
+    error means from the raw values. Splitting the two is what lets a
+    non-integral bound -- ``HED`` returns quarter-integers -- keep the
+    counting-sort path without any assumption about its granularity.
+    """
     out: dict[str, float] = {}
     if idx.size < 2:
         return out
     exact = state["exact"][idx]
-    lev = state["lev"][idx]
-    rank_exact = midranks(exact)
-    rank_lev = midranks(lev)
+    rank_exact = midranks(state["exact_codes"][idx])
+    rank_lev = midranks(state["lev_codes"][idx])
     rho_lev_exact = spearman_from_ranks(rank_lev, rank_exact)
     out["rho_lev_exact"] = rho_lev_exact
     positive = exact > 0
@@ -1435,7 +1492,7 @@ def _statistics_on_index(state: Mapping[str, Any], idx: np.ndarray) -> dict[str,
     absolute: dict[str, float] = {}
     for method, values in state["values"].items():
         value = values[idx]
-        rank_value = midranks(value)
+        rank_value = midranks(state["value_codes"][method][idx])
         out[f"rho_bound_exact::{method}"] = spearman_from_ranks(rank_value, rank_exact)
         rho_lev_bound = spearman_from_ranks(rank_lev, rank_value)
         out[f"rho_lev_bound::{method}"] = rho_lev_bound
@@ -1973,6 +2030,14 @@ LB_TIGHTNESS: dict[str, float] = {
     # HED must stay below BRANCH on every pair: the dominance is proven.
     "HED": 0.30,
 }
+
+#: HED is quantised to quarter-integers, not to whole edit operations.
+#: With ``--edge-set-distances OPTIMAL`` it charges each edge at both of
+#: its endpoints and halves, and the LSAPE optimum lands on quarters:
+#: measured on all 3,916 LINUX pairs, 8 distinct values in [0, 1.75].
+#: The fixture reproduces that granularity so the bootstrap's fast path
+#: is exercised on a non-integral cell rather than on integers only.
+HED_QUANTUM = 0.25
 UB_SLACK: dict[str, float] = {
     "IPFP_MS": 0.35,
     "REFINE_MS": 0.50,
@@ -2126,8 +2191,11 @@ def build_synthetic_fixture(
             value = np.floor(truth * factor)
             value[zero_lb] = 0.0
             lb_values[method] = np.minimum(value, truth)  # valid by construction
-        # The proven dominance BRANCH >= HED must hold on every pair.
-        lb_values["HED"] = np.minimum(lb_values["HED"], lb_values["BRANCH"])
+        # HED lands on quarter-integers, and the proven dominance
+        # BRANCH >= HED must hold on every pair.
+        hed = np.floor(truth * LB_TIGHTNESS["HED"] / HED_QUANTUM) * HED_QUANTUM
+        hed[zero_lb] = 0.0
+        lb_values["HED"] = np.minimum(hed, lb_values["BRANCH"])
         for method, value in lb_values.items():
             np.savez_compressed(
                 cells_dir / f"{spec.dataset}__{method}.npz",
@@ -2857,6 +2925,7 @@ __all__ = [
     "end_of_method",
     "error_stats",
     "error_vs_n",
+    "factorize",
     "friedman_over_datasets",
     "induced_pairs",
     "load_bundles",
