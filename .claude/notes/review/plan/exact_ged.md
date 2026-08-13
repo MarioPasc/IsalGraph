@@ -268,3 +268,55 @@ longer match ours — expected, and stated in the text.
 > Do not restate the AIDS gain as 1.62×. `295,296 / 131,148 = 2.25×` is the population-matched ratio;
 > 181,909 is a within-split count on the **raw** 911-graph set and is not the comparator. See
 > [data](data.md) §5.
+
+> **131,148 is now confirmed by measurement.** T-03's overlap between our all-pairs matrix and
+> GraphEdX's published within-split entries is **exactly 131,148 pairs (44.4 %)** on the filtered
+> 769-graph set. That closes [data](data.md) §5's instruction to "record 131,148's provenance when
+> T-03 reproduces the run", and confirms **2.25×** rather than 1.62× as the population-matched gain.
+
+---
+
+## 7. RESULT — T-03 closed 2026-08-13
+
+Twelve SLURM jobs, all `COMPLETED`. **≈ 2,081 core-hours, ≈ 6.5 h wall, zero requeues.**
+
+| Dataset | graphs | pairs | certified exact | censored | core-h |
+|---|---:|---:|---:|---:|---:|
+| IAM Letter LOW | 1,180 | 695,610 | 695,610 (100 %) | 0 | 1.2 |
+| IAM Letter MED | 1,253 | 784,378 | 784,378 (100 %) | 0 | 1.5 |
+| IAM Letter HIGH | 2,059 | 2,118,711 | 2,118,711 (100 %) | 0 | 11.5 |
+| LINUX | 89 | 3,916 | 3,870 (98.83 %) | 46 | 5.8 |
+| AIDS | 769 | 295,296 | 234,258 (79.33 %) | 61,038 | 2,060.6 |
+| **Total** | **5,350** | **3,897,911** | **3,836,827 (98.43 %)** | **61,084 (1.57 %)** | **≈ 2,081** |
+
+Every matrix symmetric, diagonal zero, gate 4 passed. **The pair total reproduces §2's cohort
+exactly.** AIDS is 99 % of the cost, as predicted; the total is 26 % above the 1,650 core-h upper
+estimate because the `sr` nodes are ~2× slower per core than the machine §2's per-pair figures came
+from.
+
+**Both stages ran, and they agree.** Stage 2 seeded from stage 1 and the merge asserts no
+conflicting value on any pair index present in more than one shard. It passed — so the pre-declared
+stratified sample and the census agree exactly on their 22,051-pair overlap. Under the §3
+supersession rule the **census is the reported analysis**, since it landed well before the T-20
+freeze; stage 1 is retained as a methodological consistency check and both ρ values are printed.
+
+**Artifacts**: `GED_PRECOMPUTED/extended_merged_exact_ged/` (computed + reference + `PROVENANCE.md`),
+mirrored at `results/exact_ged/` and in `execs/isalgraph/exact_ged` on Picasso.
+
+### Three findings the run produced, all of which change something
+
+1. **The exact solver changed.** `ANCHOR_AWARE_GED` is **non-deterministic and not exact** — 14/15
+   real AIDS pairs gave different answers across fresh environments, 4/18 wrong against brute force,
+   and it reports `LB == UB` on wrong values. **Decision 11's exact half is void**; exact GED comes
+   from `networkx` A* run to completion. GEDLIB keeps the `BRANCH_FAST` / `IPFP` bound roles.
+2. **GraphEdX uses unit node costs, not zero** — see the correction in [gedlib](gedlib.md) §6 and
+   [statistics](statistics.md) D6. This retracts T-03's own earlier "their reference is approximate"
+   finding.
+3. **The censoring rate is hardware-dependent** — §5's `[LB, UB]` interval-censoring is doing real
+   work, and its rate is a property of *(cohort, timeout, machine)*. See the article note below.
+
+### For the manuscript
+
+`.claude/notes/review/tasks/T-03-article-notes.md` collects what belongs in the paper: the censoring
+protocol, the timeout's status as a reported parameter, the `nx.graph_edit_distance` timeout defect
+in the submitted pipeline, and the two provably non-optimal GraphEdX entries.

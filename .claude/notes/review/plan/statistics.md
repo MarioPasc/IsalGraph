@@ -50,9 +50,30 @@ the answer to R3.5c.
 
 ### D6 explained — one cost model, for *both* experiments
 
-The submission uses **two**: IAM Letter charges node ins/del = 1, edge ins/del = 1; LINUX and AIDS
+> ## ⚠ CORRECTED 2026-08-13 — the premise below is wrong; the decision survives
+>
+> This paragraph said LINUX and AIDS charge **zero for node operations**. **They do not.** T-03
+> measured GraphEdX's published AIDS values against both models: **unit-node 4/4, zero-node 0/4**,
+> with the published value exceeding the zero-node value by exactly `|n₁ − n₂|` every time.
+> GraphEdX ships **unit node costs — the same model as D6**.
+>
+> **So the cost-model heterogeneity described below may never have existed**, and the sentence
+> "the same pair of graphs gets different GED values depending on which dataset it came from"
+> **must not be printed until re-verified**. Anyone writing the R3.5b response should check the
+> IAM Letter side too, rather than inherit it from here.
+>
+> **D6 itself stands**, on justification 1, which is an argument about zero node cost *in general*
+> and does not depend on what GraphEdX shipped. Justifications 2–4 also stand. What weakens is
+> only the *rhetorical* framing that the submission mixed two models.
+>
+> The remaining, measured reasons to recompute: GraphEdX publishes GED for **within-split pairs
+> only** (44.4 % of AIDS pairs, 43.0 % of LINUX), and **IAM Letter ships no GED matrix at all**, so
+> a single cost model across the cohort is unobtainable from the distributions as shipped.
+> Record: `.claude/notes/review/tasks/T-03-design.md` amendment 4.
+
+~~The submission uses **two**: IAM Letter charges node ins/del = 1, edge ins/del = 1; LINUX and AIDS
 (from GraphEdX) charge **zero for node operations**. The same pair of graphs gets different GED values
-depending on which dataset it came from, and Table 3 pools both onto one axis. **That is R3.5b.**
+depending on which dataset it came from, and Table 3 pools both onto one axis. **That is R3.5b.**~~
 
 **Decision: unit cost — node insert/delete = 1, edge insert/delete = 1, substitutions free.** Four
 justifications, in the order they should appear in the response letter:
