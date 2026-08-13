@@ -10,9 +10,9 @@
 | Branch | `worktree-agent-aa518b70750701b10` |
 | Worktree | `/home/mpascual/research/code/IsalGraph/.claude/worktrees/agent-aa518b70750701b10` |
 | Base commit | `885d98d8e6b37dfeb98c4df741510fc28d4a8615` |
-| Head commit | `<pending>` |
-| Started / finished | `2026-08-13T00:00:00Z` / `<pending>` |
-| Status | in progress |
+| Head commit | `3a7c257` + this log |
+| Started / finished | `2026-08-13T15:45Z` / `2026-08-13T16:40Z` |
+| Status | complete |
 
 ## 1. Prompt as received
 
@@ -258,15 +258,136 @@ be measurably wrong (see §7) and were reported to `main` before any code was wr
 
 ## 3. Changes made
 
-<!-- filled in as work proceeds -->
+**Created**
+
+| Path | Purpose |
+|---|---|
+| `benchmarks/real_data/eval_setup/export_graphs_suite2.py` | The Suite-2 registry and driver: loads, filters, asserts the locked cohort, writes ten `.npz` + `manifest.json` |
+| `benchmarks/real_data/eval_setup/approx_ged_sampling.py` | Draws and emits the frozen seed-42 size-stratified `IPFP_MS` pair list |
+| `tests/unit/test_export_graphs_suite2.py` | 62 tests over the exporter |
+| `tests/unit/test_approx_ged_sampling.py` | 46 tests over the sampler |
+| `.claude/notes/2026-08-13-t05-bounds/t05-export.md` | This log |
+
+**Modified** — none. Every frozen artifact is byte-identical to the base commit, verified with
+`git show <base>:<f> | diff -` for `export_graphs.py`, `cohort_audit.py`, `iam_gxl_loader.py`,
+`dataset_filter.py`, `graphedx_loader.py` and `tests/unit/test_export_graphs.py`.
+
+**Removed** — none.
+
+**Commits**
+
+| SHA | Message |
+|---|---|
+| `3df997c` | `feat(T-05): Suite-2 graph exporter with the locked cohort asserted` |
+| `625a84a` | `feat(T-05): frozen seed-42 size-stratified subsample pair list` |
+| `3a7c257` | `test(T-05): cover the Suite-2 export and the frozen subsample` |
+| *(final)* | `docs(notes): t05-export work log` |
+
+**Data written** (outside the repository, my declared output directory):
+`.../APPROX_GED/exported_suite2/` — 10 `.npz` + `manifest.json`, 552,756 B total.
+`.../APPROX_GED/UB_TIGHT/` — `subsample_pairs.npz` (190,147 B) + `pair_lists/{key}.npz` x 10.
 
 ## 4. Tests
 
-<!-- filled in as work proceeds -->
+**Tests created**
+
+| Test | File | What it verifies | Why it matters |
+|---|---|---|---|
+| `test_registry_is_t01_certified_enumeration_in_order` | export | registry key tuple `==` `cohort_audit.SUITE2_KEYS` | pair indices are positional; a reordered registry maps every downstream result onto the wrong dataset |
+| `test_locked_graph_and_pair_counts_reproduce[10 keys]` | export | each CONTRACTS §1 row | the primary check; a cohort off by one graph is silently wrong everywhere |
+| `test_graph_ids_reproduce_the_suite1_census[4 keys]` | export | element-wise vs `extended_merged_exact_ged/computed` | catches a **reordering**, which every count in the cohort table would pass |
+| `test_coil_del_split_index_is_balanced_and_the_directory_is_not` | export | 3,900 / 100x39 / all labelled vs 7,200 / 3,300 unlabelled | the retraction guard; nothing else separates the two enumerations |
+| `test_label_classes_are_populated_as_measured` | export | the ten post-filter class counts | GREC 17 and Letter LOW 9 are printed-number risks |
+| `test_no_n_max_keeps_graphs_suite1_would_drop` | export | `aids_graphedx` 819, not 769 | the two AIDS cohorts must never be confused |
+| `test_export_is_deterministic_across_two_runs` | export | `content_sha256` equal across two exports | order is load-bearing and must not depend on run |
+| `test_written_files_load_and_carry_the_contract_schema[10]` | export | `load_exported` + exact metadata key set | peers read these files; a schema drift breaks them, not me |
+| `test_main_exits_non_zero_on_a_corrupted_expectation` | export | corrupted `expected_kept` -> exit 1 | a wrong count must stop the pipeline, not be reconciled |
+| `test_bin_of_at_and_around_every_boundary[16]` | sampling | n = 2,3,4,5,6,11,**12**,14,15,29,**30**,39,40,79,**80**,**98** | a right-open edge read the wrong way moves thousands of pairs between strata |
+| `test_draw_takes_the_whole_bin_when_its_population_is_below_the_cap` | sampling | `min(2000, population)` on a small bin | the under-2,000 branch never fires on real data, so only a fixture reaches it |
+| `test_draw_is_reproducible_from_the_seed_alone` / `test_a_different_seed_gives_a_different_draw` | sampling | same seed same draw, different seed different draw | the second guards against a draw that only *looks* reproducible because it ignores the RNG |
+| `test_pair_index_inverts_to_the_emitted_i_and_j` | sampling | `pair_from_index(k, n) == (i, j)` | `pair_index` is what the runner consumes; it must name the same pair |
+| `test_check_dataset_keys_rejects_a_truncated_column` | sampling | the exact `np.full(..., dtype=np.str_)` `<U1` corruption | this is a measured defect, reproduced as a regression test |
+| `test_real_draw_hits_the_ceiling_and_reproduces` | sampling | 28,000 pairs, all 14 bins > 2,000, digest stable | end-to-end on the real cohort |
+
+**Coverage of the behaviour that matters.** Both loader families, both enumerations, every locked
+count, both totals, the metadata schema, the CSR round trip, every bin boundary, both draw branches
+(capped and whole-bin), and both reproducibility directions.
+
+**Not tested, and why.**
+- No test drives `export_graphs_suite2` end-to-end with a **fabricated** IAM tree. Every real-data
+  test skips on a machine without the Sandisk tree, so on such a machine the exporter is covered only
+  by its registry and assertion tests. Building a synthetic GXL/CXL fixture tree was judged lower
+  value than the element-wise census check, which is a stronger statement on the machine that
+  matters. This is a real gap on CI.
+- `_load_graphedx`'s split-reconstruction failure paths are not induced; they would need a mocked
+  loader returning inconsistent `split_sizes`.
+- Nothing verifies the files against Picasso, by design — I have no cluster access.
 
 ## 5. Test results
 
-<!-- filled in as work proceeds -->
+**Command:** `~/.conda/envs/isalgraph-cpp/bin/python -m pytest tests/unit/ -q -p no:randomly`
+
+```
+================== 8 failed, 972 passed, 44 skipped in 36.01s ==================
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_low]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_med]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[iam_letter_high]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[linux]
+FAILED tests/unit/test_export_graphs.py::test_real_export_reproduces_the_locked_cohort[aids]
+FAILED tests/unit/test_export_graphs.py::test_real_export_all_five_totals
+FAILED tests/unit/test_export_graphs.py::test_real_export_is_deterministic
+FAILED tests/unit/test_real_aids_retains_within_split_structure
+E   FileNotFoundError: GraphEdX dataset not found:
+    .../isalgraph/data/source/GED_PRECOMPUTED/AIDS
+```
+
+**My own two modules:**
+
+```
+~/.conda/envs/isalgraph-cpp/bin/python -m pytest \
+    tests/unit/test_approx_ged_sampling.py tests/unit/test_export_graphs_suite2.py -q -p no:randomly
+============================= 108 passed in 19.40s =============================
+```
+
+**Result:** 108 passed, 0 failed for the code I own. **Duration:** 19.4 s. **Run at:** `3a7c257`.
+
+**Failures and their resolution.** The 8 failures are **pre-existing and not mine**, and I have not
+fixed them because both offending files are frozen and outside my ownership. Evidence:
+
+1. `git diff --name-status 885d98d..HEAD` lists three **added** files and zero modified.
+2. All six relevant frozen files are byte-identical to the base commit.
+3. The failure is a missing directory, on paths my code never constructs:
+   `GED_PRECOMPUTED/AIDS`, `GED_PRECOMPUTED/LINUX` and `data/source/IAM_Database/extracted` are all
+   absent; the real tree is `GED_PRECOMPUTED/datasets/<NAME>` and
+   `APPROX_GED/datasets/IAM_Database/extracted`.
+
+This is defect 3 made concrete: **T-01's tracked reproduction of the Suite-1 cohort is currently red
+on this machine.** Both roots moved, so the Letter tests fail on the IAM path and the LINUX/AIDS
+tests on the GraphEdX path. Reported to `main` with the same evidence. My exporter reproduces all
+four overlapping Suite-1 cohorts element-wise, so the cohort itself is intact; only the Suite-1
+exporter's path resolution is broken.
+
+**Two defects the tests caught during development, both fixed:**
+
+1. *Silent `<U1` truncation, found by running on real data.*
+   `np.full(size, key, dtype=np.str_)` produces a `<U1` array and cuts every dataset key to its first
+   character. The pooled file was written with `dataset_key` entries `'m'`, `'c'`, `'i'`, `'a'`,
+   `'g'`, `'p'`, `'l'` — collapsing the **three Letter datasets into `'i'`** and **both AIDS cohorts
+   into `'a'`**. Nothing raised. The only visible symptom was that the ten per-dataset pair lists
+   were not written, because `dataset_key == "iam_letter_low"` matched nothing. A unit test on
+   fabricated data would not have caught this: it needs keys that share a first character, which only
+   the real registry has. Fixed by deriving the dtype width from the registry, and guarded by
+   `_check_dataset_keys`, which rejects any value that is not a Suite-2 key.
+2. *An over-strong test assertion, caught by the test failing.*
+   I asserted that `build_pairs` rejects a 1-node graph. It does not, and should not: the stratum is
+   `max(n1, n2)`, so `max(1, 5) = 5` is a valid bin and a lone small graph is invisible at pair level.
+   The guard fires only when **both** graphs are below the design. Corrected to assert the true
+   semantics, plus a second test pinning the boundary of what the guard covers so it is not later
+   mistaken for a filter. `filter_graphs(min_nodes=2)` excludes such graphs upstream regardless.
+
+**Lint:** `ruff check` passes on all four files I own. `ruff check benchmarks/ tests/` reports 28
+errors, all pre-existing in files I do not own (`roundtrip_fixed_point.py`,
+`starting_node_sensitivity.py`, `eval_setup.py` and others); I introduced none and fixed none.
 
 ## 6. Verification beyond unit tests
 
@@ -299,7 +420,120 @@ All ten rows reproduce. The four reference `graph_ids` arrays in
 25,916,400 pairs, 3,300 of them carrying no class label. The two enumerations are separated by 3,300
 graphs and 18,313,350 pairs.
 
-<!-- further verification filled in as work proceeds -->
+### Table A — the written export, per dataset
+
+Produced by `python -m benchmarks.real_data.eval_setup.export_graphs_suite2`, read back from
+`manifest.json`. Build time is per dataset, measured separately from a warm page cache.
+
+| key | raw | kept | pairs | n max | edges | bytes | build s | classes kept | classes raw | classes lost |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `iam_letter_low` | 2,250 | 1,180 | 695,610 | 7 | 3,618 | 9,482 | 0.09 | **9** | 15 | A, E, F, H, K, T |
+| `iam_letter_med` | 2,250 | 1,253 | 784,378 | 8 | 3,969 | 10,487 | 0.09 | 15 | 15 | — |
+| `iam_letter_high` | 2,250 | 2,059 | 2,118,711 | 9 | 9,381 | 18,051 | 0.10 | 15 | 15 | — |
+| `linux` | 89 | 89 | 3,916 | 10 | 743 | 3,358 | 0.50 | 0 | 0 | — |
+| `aids_graphedx` | 911 | 819 | 334,971 | 20 | 9,194 | 15,012 | 0.10 | 0 | 0 | — |
+| `grec` | 1,100 | 650 | 210,925 | 24 | 8,077 | 10,072 | 0.13 | **17** | 22 | 5, 6, 9, 15, 21 |
+| `aids_iam` | 2,000 | 1,811 | 1,638,955 | 85 | 26,263 | 35,544 | 0.28 | 2 | 2 | — |
+| `coil_del` | 3,900 | 3,900 | 7,603,050 | 77 | 211,524 | 252,832 | 0.80 | 100 | 100 | — |
+| `mutagenicity` | 4,337 | 4,040 | 8,158,780 | **98** | 119,385 | 138,123 | 0.81 | 2 | 2 | — |
+| `protein` | 600 | 569 | 161,596 | 96 | 34,957 | 50,914 | 0.18 | 6 | 6 | — |
+| **Total** | | **16,370** | **21,710,892** | **98** | **427,111** | **543,875** | **3.08** | | | |
+
+Plus `manifest.json` at 8,881 B. **11 files, 552,756 B**, standing in for 35,604 files and 331 MB.
+That ratio is the entire reason this module exists: Picasso's `fscratch` limit is on file **count**.
+
+### Table B — class survival, per the orchestrator's ruling of 2026-08-13
+
+Two datasets lose whole classes to the connectivity filter. The lost class list is recorded in each
+`.npz` metadata and in `manifest.json` as `label_classes_lost`.
+
+| key | raw classes | retained | lost | which |
+|---|---:|---:|---:|---|
+| `iam_letter_low` | 15 | **9** | 6 | A, E, F, H, K, T |
+| `grec` | 22 | **17** | 5 | 5, 6, 9, 15, 21 |
+| all eight others | — | unchanged | 0 | — |
+
+**This is a printed-number risk and is not to be softened.** Any manuscript sentence of the form
+"IAM Letter, 15 classes" or "GREC, 22 classes" is **false of the filtered cohort** that every Suite-2
+number is computed on. Letter LOW loses 1,069 of 2,250 graphs to disconnection — the LOW distortion
+level draws letters as strokes that frequently do not touch — and six letters vanish entirely. GREC
+loses 450 of 1,100 and five symbol classes. Carried to T-18/T-06 by the orchestrator at close.
+
+### Table C — pair populations, 14 bins x 10 datasets
+
+Requested by the orchestrator to size the Picasso jobs from a measured distribution rather than an
+`n̄`-based projection. Columns are pair counts; rows sum to the pooled population.
+
+| bin | range | let_lo | let_md | let_hi | linux | aids_gx | grec | aids_iam | coil_del | mutag | protein | **pooled** | drawn |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | [2, 4) | 73,920 | 73,920 | 72,390 | 0 | 1 | 0 | 6 | 741 | 0 | 1 | **220,979** | 2,000 |
+| 1 | [4, 6) | 495,858 | 562,836 | 1,218,031 | 3 | 20 | 378 | 184 | 9,129 | 36 | 5 | **2,286,480** | 2,000 |
+| 2 | [6, 8) | 125,832 | 146,370 | 809,804 | 102 | 414 | 4,375 | 3,726 | 98,941 | 630 | 15 | **1,190,209** | 2,000 |
+| 3 | [8, 10) | 0 | 1,252 | 18,486 | 1,665 | 9,718 | 23,927 | 80,339 | 217,217 | 4,087 | 57 | **356,748** | 2,000 |
+| 4 | [10, 12) | 0 | 0 | 0 | 2,146 | 133,227 | 28,950 | 597,273 | 276,225 | 17,825 | 153 | **1,055,799** | 2,000 |
+| 5 | [12, 15) | 0 | 0 | 0 | 0 | 154,226 | 71,148 | 447,225 | 474,525 | 82,992 | 1,147 | **1,231,263** | 2,000 |
+| 6 | [15, 20) | 0 | 0 | 0 | 0 | 22,794 | 63,112 | 48,592 | 784,707 | 498,880 | 3,978 | **1,422,063** | 2,000 |
+| 7 | [20, 25) | 0 | 0 | 0 | 0 | 14,571 | 19,035 | 160,085 | 1,148,346 | 885,951 | 11,849 | **2,239,837** | 2,000 |
+| 8 | [25, 30) | 0 | 0 | 0 | 0 | 0 | 0 | 56,185 | 1,449,760 | 1,451,124 | 19,923 | **2,976,992** | 2,000 |
+| 9 | [30, 40) | 0 | 0 | 0 | 0 | 0 | 0 | 101,970 | 1,832,787 | 2,997,656 | 43,473 | **4,975,886** | 2,000 |
+| 10 | [40, 50) | 0 | 0 | 0 | 0 | 0 | 0 | 59,381 | 665,937 | 1,157,847 | 55,380 | **1,938,545** | 2,000 |
+| 11 | [50, 60) | 0 | 0 | 0 | 0 | 0 | 0 | 62,335 | 366,563 | 385,618 | 18,309 | **832,825** | 2,000 |
+| 12 | [60, 80) | 0 | 0 | 0 | 0 | 0 | 0 | 18,035 | 278,172 | 495,369 | 5,605 | **797,181** | 2,000 |
+| 13 | [80, 99) | 0 | 0 | 0 | 0 | 0 | 0 | 3,619 | 0 | 180,765 | 1,701 | **186,085** | 2,000 |
+| **all** | | 695,610 | 784,378 | 2,118,711 | 3,916 | 334,971 | 210,925 | 1,638,955 | 7,603,050 | 8,158,780 | 161,596 | **21,710,892** | **28,000** |
+
+Three things a job-sizing reader should take from this table.
+
+1. **The spread is 22x.** Bin 9 `[30, 40)` holds 4,975,886 pairs against bin 0 `[2, 4)`'s 220,979.
+   Since per-pair cost scales roughly as `max(n1, n2)^3`, an `n̄`-based projection is wrong by a large
+   factor in both directions across this cohort; the launcher should sum cost over bins.
+2. **The two top bins, stated explicitly as requested.** `[60, 80)` has a realised population of
+   **797,181** pairs and `[80, 99)` **186,085**. At `min(2000, population)` the sampling fractions are
+   **0.251 %** and **1.075 %** respectively — the thickest sampling of any bin, because bin 13 is the
+   smallest pool. It is nevertheless the most expensive 2,000 pairs in the design.
+3. **The top bin rests on three datasets, and effectively on one.** `[80, 99)` draws only from
+   `mutagenicity` (180,765 pairs, 97.1 %), `aids_iam` (3,619) and `protein` (1,701). `coil_del`
+   contributes nothing above n = 77. So any per-bin conclusion at the top of the size range is very
+   nearly a statement about Mutagenicity alone, and should be reported that way.
+
+### Table D — the drawn subsample, per dataset
+
+`subsample_pairs.npz`, 190,147 B, `content_sha256 = 9deed0b553a69215e9adeaa6cee0579a7d48a22afe98c6a4786fe93a60c2ff9d`.
+
+| key | drawn | `pair_lists/{key}.npz` |
+|---|---:|---:|
+| `iam_letter_low` | 1,307 | 5,449 B |
+| `iam_letter_med` | 1,420 | 5,741 B |
+| `iam_letter_high` | 3,218 | 10,349 B |
+| `linux` | 9 | 2,191 B |
+| `aids_graphedx` | 586 | 3,710 B |
+| `grec` | 414 | 3,272 B |
+| `aids_iam` | 2,896 | 9,516 B |
+| `coil_del` | 8,777 | 24,764 B |
+| `mutagenicity` | 9,161 | 25,386 B |
+| `protein` | 212 | 2,759 B |
+| **Total** | **28,000** | |
+
+All 14 bins have a population above 2,000, so every bin is capped and the draw lands exactly on the
+28,000 ceiling. **The `min(2000, population)` branch therefore never fires on the real cohort** and is
+covered only by fixture tests — recorded so nobody assumes it was exercised in production.
+
+### Summary table
+
+| Circumstance | What was run | Evidence | Outcome |
+|---|---|---|---|
+| Real data, export | `export_graphs_suite2` over the 331 MB / 35,604-file IAM tree + GraphEdX | Table A; 10 `.npz` + manifest, 552,756 B, 3.08 s build | pass — all ten counts and both totals |
+| Real data, verify | `--verify-only` | exit 0, `verify()` returns `[]` | pass |
+| Negative control | `expected_kept` for `coil_del` set to 7,200, then `--verify-only` | exit **1** | pass — a corrupted expectation stops the pipeline |
+| External cross-check | `graph_ids` vs `extended_merged_exact_ged/computed` | 1,180 / 1,253 / 2,059 / 89 ids, element-wise equal | pass |
+| Order determinism | two full exports to separate directories | all ten `content_sha256` equal | pass |
+| Real data, sampler | `approx_ged_sampling --verify-reproducible` | 28,000 pairs, digest equal across two runs, 0.46 s | pass |
+| Failure paths | 99-node graph, 1-node pair, truncated `dataset_key`, off-by-one cohort, reordered ids, unbalanced COIL-DEL | each raises the intended exception | pass |
+| Scale / performance | full pool of 21,710,892 pairs materialised | 0.46 s, **peak RSS 811 MB** | pass — fits comfortably; no streaming needed |
+| Environment | Debian 12, `Linux-6.1.0-52-amd64` | Python 3.11.15, numpy 1.26.4, networkx 3.6.1, torch 2.13.0+cpu | — |
+
+`isalgraph` is **not imported** by either module, as CONTRACTS §9 requires; neither touches the
+encoder or the C++ engine.
 
 ## 7. Decisions, assumptions, open questions
 
@@ -349,7 +583,33 @@ and `export_graphs.py:446` hardcodes `[""] * len(graphs)` — so §2's "AIDS 2" 
 only. Reported to `main`. The measured counts are asserted in the registry, so a future label
 regression fails loudly.
 
-### Contract defect 3 — both frozen GraphEdX loaders point at a path that does not exist
+### Contract defect 3 — the Suite-1 exporter's path resolution, which is not a cohort problem
+
+**Two statements, deliberately kept separate.**
+
+*Statement 1 — the path resolution is broken.* `export_graphs.py:430` and `cohort_audit.py:254` both
+resolve GraphEdX as `<source>/GED_PRECOMPUTED/<NAME>`, and `export_graphs.py:411` resolves IAM as
+`<source>/IAM_Database/extracted/Letter`. On this machine neither exists: the trees are
+`GED_PRECOMPUTED/datasets/<NAME>` and `APPROX_GED/datasets/IAM_Database/extracted`. They now live
+under **different parents**, so **no single `--source` resolves both**, and the consequence is
+measurable: `tests/unit/test_export_graphs.py` has 8 real-data tests failing at the base commit,
+confirmed independently by the orchestrator on a clean checkout of `885d98d` (8 failed / 32 passed,
+same eight ids, same `FileNotFoundError`). T-01's *tracked reproduction script* for the Suite-1
+cohort is therefore currently red.
+
+*Statement 2 — the Suite-1 cohort itself is not in doubt.* Independently of the above, this module
+reproduces all four overlapping Suite-1 cohorts **element-wise**: `iam_letter_low` (1,180),
+`iam_letter_med` (1,253), `iam_letter_high` (2,059) and `linux` (89) match the
+`extended_merged_exact_ged/computed` census `graph_ids` exactly, in order. So the cohort is intact and
+independently re-derived; what is broken is only how the Suite-1 exporter *finds its inputs*.
+
+**Not patched**, and the orchestrator confirmed this was correct twice over: beyond ownership, the
+repair is not a corrected constant but the two-root `--iam-root` / `--graphedx-root` split that
+CONTRACTS §1 specifies and this module already implements. That is a design change to a closed
+ticket's deliverable, out of T-05's scope, and the PI's call. Routed by the orchestrator and recorded
+in the T-05 design note changelog.
+
+### The original framing of defect 3, retained for the record
 
 `export_graphs.py:430` and `cohort_audit.py:254` both resolve GraphEdX as
 `<source>/GED_PRECOMPUTED/<NAME>`. On this machine the tree is `GED_PRECOMPUTED/datasets/<NAME>`;
@@ -373,19 +633,84 @@ runner overwrites it. Proceeding with `UB_TIGHT/subsample_pairs.npz` plus one ru
 **Messages sent:** to `main`, before writing any code — the three contract defects above and the
 `subsample.npz` naming question, each with the measurement that establishes it.
 
-**Messages received and how they changed the work:** <pending>
+Second message to `main`: the 8 pre-existing suite failures, with the three-part evidence
+(`git diff --name-status`, byte-identical frozen files, missing directories), flagged before merge so
+they would not read as a regression.
+
+**Messages received and how they changed the work:**
+
+1. *Rulings 1-4.* All three defects adopted; CONTRACTS amended at §2.1 and §5. Ruling 1 adopted my
+   `graph_ids` assumption verbatim. Ruling 2 added two requirements beyond what I proposed: record
+   the **sorted class list**, not only the count, in both the file metadata and `manifest.json`
+   (implemented as `label_classes` / `label_classes_lost`), and put the class-survival table in this
+   log explicitly (Table B). Ruling 4 approved `subsample_pairs.npz` as CONTRACTS §5 amendment 3.
+   Also a new requirement: the 14-bin x 10-dataset pair population table (Table C).
+2. *Confirmation of the 8 failures*, re-run independently on a clean checkout of the base commit.
+   Two follow-ups, both actioned: keep the path-resolution defect and the cohort integrity as
+   **separate statements** (§7 defect 3, rewritten), and state the realised populations of bins
+   `[60, 80)` and `[80, 99)` explicitly (Table C, note 2: 797,181 and 186,085).
 
 **Contracts I depend on and confirmed unchanged:** CONTRACTS §1 (ten keys, two roots, counts, filter,
-decision 27), §2 (output schema, minus the two defects above), §5 (subsample design).
+decision 27), §2 as amended at §2.1, §5 as amended by amendment 3. §9's prohibition on importing
+`isalgraph` is respected — neither module imports it.
+
+**What my peers consume from me, unchanged from the contract:** the ten dataset keys and their order;
+the CONTRACT A array schema, readable by `export_graphs.load_exported`; and
+`UB_TIGHT/pair_lists/{key}.npz` carrying the `pair_index` key that `ged_exact_runner.py:794`
+requires, so `wave-t05-runner` consumes it with no translation step.
 
 ## 9. Deliberately not done
 
-<!-- filled in as work proceeds -->
+- **No GED, bound or distance is computed.** Out of scope; that is the runner's work.
+- **`cohort_audit.py`, `iam_gxl_loader.py`, `dataset_filter.py`, `export_graphs.py` untouched** —
+  verified byte-identical to base. The 8 failing Suite-1 tests are left failing on purpose.
+- **`UB_TIGHT/subsample.npz` is not written.** That is the runner's output file; writing the pair
+  list there would guarantee it is overwritten. CONTRACTS §5 amendment 3.
+- **No fabricated GXL/CXL fixture tree**, so on a machine without the Sandisk source every real-data
+  test skips. Named as a real CI gap in §4 rather than left to be discovered.
+- **Nothing transferred to Picasso**, and no `ssh`/`rsync`/`sbatch` was run. The orchestrator owns
+  every cluster interaction.
+- **COIL-RAG, Fingerprint and Web are absent**, and a test asserts their absence.
+- **`--seed` and `--max-per-bin` are not CLI flags.** They are frozen; exposing them would let the
+  draw be re-rolled after seeing the result, which is the one thing the pre-registration forbids.
 
 ## 10. Risks and follow-ups
 
-<!-- filled in as work proceeds -->
+| Item | Severity | Detail | Suggested owner |
+|---|---|---|---|
+| The Suite-1 exporter cannot resolve both roots | **high** | 8 tests red at base; T-01's tracked reproduction of the Suite-1 cohort does not run on today's tree. The cohort is independently fine (element-wise check), but the *script* is not. Needs the two-root split, a design change to a closed ticket | orchestrator / PI |
+| "Letter, 15 classes" and "GREC, 22 classes" are false of the filtered cohort | **high** | Retained are 9 and 17. Any manuscript sentence quoting the raw counts describes a cohort no number is computed on | T-18 / T-06 |
+| Bin `[80, 99)` is 97.1 % Mutagenicity | medium | Any per-bin conclusion at the top of the size range is nearly a statement about one dataset. Must be reported as such, not as a cohort-level property of large graphs | T-05 analysis |
+| The `min(2000, population)` branch never fires in production | low | All 14 bins exceed 2,000, so the branch is covered by fixtures only. Harmless today; would matter if the cohort shrank | next wave |
+| No synthetic source-tree fixture | low | Every real-data test skips without the Sandisk tree, so CI covers the registry and assertions only | next wave |
+| `content_sha256`, not file bytes | low | `savez_compressed` stamps zip members with local time, so files are never byte-identical across runs. Reproducibility is asserted over array content. Documented in both modules | — |
 
 ## 11. Self-assessment against the definition of done
 
-<!-- filled in as work proceeds -->
+| # | Criterion | Met | Evidence |
+|---|---|---|---|
+| 1 | `--verify-only` reproduces all ten rows, exits 0; corrupted expectation exits non-zero | **yes** | `verify()` returns `[]`; exit 0 measured. Negative control with `coil_del.expected_kept = 7200` exits **1**. `test_main_verify_only_exits_zero`, `test_main_exits_non_zero_on_a_corrupted_expectation` |
+| 2 | Ten `.npz` + `manifest.json`, readable by `load_exported`, keys and dtypes per §2 | **yes** | Table A; `test_written_files_load_and_carry_the_contract_schema` over all ten, asserting the exact metadata key set and `filter.n_max is None` |
+| 3 | `graph_ids` match the census element-wise for the four datasets | **yes** | `test_graph_ids_reproduce_the_suite1_census[4]`; 1,180 / 1,253 / 2,059 / 89 ids equal in order |
+| 4 | `coil_del` is 3,900 and exactly 100 x 39, both asserted | **yes** | `assert_coil_del_balance` runs inside `build_exported`; `test_coil_del_split_index_is_balanced_and_the_directory_is_not` shows both enumerations side by side |
+| 5 | Sampler emits <= 28,000 pairs, reproducible from seed 42, per-bin counts recorded, valid `i < j` | **yes** | Exactly 28,000; digest equal across two independent runs; `n_per_bin` and `bin_population` in metadata; `test_real_draw_indexes_into_the_exported_graph_order`. **Caveat:** reproducible over array content, not file bytes — see §10 |
+| 6 | Tests cover all ten listed behaviours | **yes** | Ten counts; COIL-DEL index-vs-directory; order determinism; label population; `n_max`-free filter; four-dataset census; subsample reproducibility; boundaries at n = 4, 12, 30, 98; a bin under 2,000 (fixture) |
+| 7 | Real-data verification in the log with numbers | **yes** | Tables A-D: raw, kept, pairs, n max, edges, build seconds, file bytes, per-bin realised counts, peak RSS |
+| 8 | All work committed, tree clean, log committed | **yes** | Four commits; `git status` clean at the final commit |
+
+**Overall.** I am confident in the cohort. All ten counts reproduced on the first attempt before any
+code was written, and the four-dataset element-wise census check is an external, exact confirmation
+of both the loader and the export order against a record that predates this ticket — that is the
+strongest evidence available here and it passes.
+
+What the orchestrator should scrutinise first is the `<U1` truncation, not because it is unfixed but
+because of what it says about the class of defect in play. It was invisible to reasoning, invisible
+to a fabricated fixture, and produced a well-formed file that named datasets `'i'` and `'a'`. It
+surfaced only because I ran on the real registry, where three keys share a first letter. **The same
+category of silent, well-formed corruption is exactly what the ten asserted counts exist to catch**,
+and it is worth assuming one more instance is still hiding somewhere in this wave.
+
+Two things I am less confident about, both recorded rather than smoothed over. First, on a machine
+without the Sandisk tree this work is barely tested — every real-data test skips, and that is most of
+the value. Second, the `min(2000, population)` branch is never exercised in production, so its only
+evidence is a fixture. Neither affects the numbers being shipped today.
