@@ -249,9 +249,10 @@ def audit(
 
 def _load_graphedx(source_dir: Path, name: str) -> tuple[list[nx.Graph], list[str]]:
     """Load one GraphEdX dataset, splits merged. Needs ``torch``."""
+    from data_roots import resolve_graphedx_root
     from graphedx_loader import load_graphedx_dataset
 
-    dataset = load_graphedx_dataset(name, str(source_dir / "GED_PRECOMPUTED"))
+    dataset = load_graphedx_dataset(name, str(resolve_graphedx_root(source_dir)))
     return dataset.graphs, dataset.graph_ids
 
 
@@ -274,8 +275,9 @@ def load_dataset(
         graphs, ids = _load_graphedx(source_dir, "AIDS")
         return graphs, ids, {"source": "graphedx"}
     if key in IAM_DATASETS:
-        iam_root = source_dir / "IAM_Database" / "extracted"
-        dataset = load_iam_gxl(str(iam_root), key, enumeration=enumeration)
+        from data_roots import resolve_iam_root
+
+        dataset = load_iam_gxl(str(resolve_iam_root(source_dir)), key, enumeration=enumeration)
         return (
             dataset.graphs,
             dataset.graph_ids,

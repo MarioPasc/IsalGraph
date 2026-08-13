@@ -406,9 +406,10 @@ def _load_iam_letter_level(
     source_dir: Path, level: str
 ) -> tuple[list[Any], list[str], list[str], list[str]]:
     """Load one IAM Letter distortion level, splits merged."""
+    from data_roots import resolve_iam_root
     from iam_letter_loader import load_iam_letter
 
-    base = source_dir / "IAM_Database" / "extracted" / "Letter"
+    base = resolve_iam_root(source_dir) / "Letter"
     dataset = load_iam_letter(str(base), level)
     return dataset.graphs, dataset.graph_ids, dataset.splits, dataset.labels
 
@@ -425,9 +426,10 @@ def _load_graphedx(
     reordering inside the loader fails here instead of silently mislabelling
     gate 0's within-split AIDS pairs.
     """
+    from data_roots import resolve_graphedx_root
     from graphedx_loader import load_graphedx_dataset
 
-    base = source_dir / "GED_PRECOMPUTED"
+    base = resolve_graphedx_root(source_dir)
     dataset = load_graphedx_dataset(name, str(base))
 
     splits: list[str] = []
