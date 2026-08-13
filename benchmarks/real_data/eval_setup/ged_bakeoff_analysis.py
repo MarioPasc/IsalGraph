@@ -199,6 +199,12 @@ CORPUS_OF: dict[str, str] = {
 #: spec §5: ties within 2 % relative break on M7 cost, then on M6.
 TIE_TOLERANCE = 0.02
 
+#: Numerical tolerance for bound comparisons, matching ``ged_bound_bakeoff.TOL``.
+#: Every method in the grid is integer-combinatorial except ``BRANCH_TIGHT``, which
+#: is iterative and accumulates float error; comparing exactly turns rounding into
+#: a reported violation of a proven bound.
+BOUND_TOL = 1e-9
+
 #: spec §5 cost gate, in microseconds per pair, evaluated on the design
 #: §3.4 probe at n-bar ~ 30 -- never on the bake-off corpus, which is
 #: n <= 12 by construction and cannot evaluate it.
@@ -693,7 +699,13 @@ def load_cell(path: Path, index: IndexData) -> CellData:
         )
 
     stem = path.stem
-    method = str(meta.get("method") or (stem.split("__", 1)[1] if "__" in stem else stem))
+    # CONTRACTS section 4: "cell" is the column (IPFP_MS), "method" is the bare GEDLIB
+    # name (IPFP). Two cells share one method, so keying on "method" collapses the _MS
+    # and _DET arms onto an unknown name. Read "cell" first; "method" is only a fallback
+    # for pre-amendment files, which carry no _MS/_DET split anyway.
+    method = str(
+        meta.get("cell") or meta.get("method") or (stem.split("__", 1)[1] if "__" in stem else stem)
+    )
     end = str(meta.get("end") or end_of_method(method))
     if end != end_of_method(method):
         raise BakeoffAnalysisError(f"{path.name}: meta end {end!r} disagrees with the roster")
@@ -874,12 +886,18 @@ def compute_validity(cell: CellData, index: IndexData, *, max_examples: int = 10
     """
     certified = index.certified
     censored = ~certified
+    # M4 is compared at BOUND_TOL, matching the harness. Without it BRANCH_TIGHT --
+    # the one iterative, non-integer-combinatorial method in the grid -- reports
+    # ~10,623 "violations" whose largest excess is 3.55e-15, i.e. it returns
+    # 5.000000000000001 where the exact value is 5. Recording that as a violated
+    # *proven* bound would be a false and serious claim; BRANCH_TIGHT's real
+    # disqualification is the M7 cost gate, which it misses by 33x.
     if cell.end == "lower":
-        bad_two = certified & (cell.value > index.exact)
-        bad_one = censored & (cell.value > index.exact_ub)
+        bad_two = certified & (cell.value > index.exact + BOUND_TOL)
+        bad_one = censored & (cell.value > index.exact_ub + BOUND_TOL)
     else:
-        bad_two = certified & (cell.value < index.exact)
-        bad_one = censored & (cell.value < index.exact_lb)
+        bad_two = certified & (cell.value < index.exact - BOUND_TOL)
+        bad_one = censored & (cell.value < index.exact_lb - BOUND_TOL)
     bad = bad_two | bad_one
 
     pair_i, pair_j = np.triu_indices(index.n_graphs, k=1)
