@@ -216,5 +216,9 @@ __marimo__/
 # Pipeline run outputs
 runs/
 
+# Computed GED matrices and other large result binaries. The canonical copies live on
+# the Sandisk research volume and on Picasso; a 37 MB matrix does not belong in git.
+results/
+
 # Claude Code subagent worktrees
 .claude/worktrees/

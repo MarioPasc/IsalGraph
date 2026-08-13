@@ -4,7 +4,15 @@
 agent must read before starting it. The *content* lives in those files — do not duplicate it here.
 
 **Board: 92.1 days upper / 53.9 lower. Critical path: 27.0 days serial against 19.**
-See [schedule](schedule.md). **T-25 closed and T-23 rescoped 2026-08-12 — T-03 is unblocked.**
+See [schedule](schedule.md). **T-25 closed and T-23 rescoped 2026-08-12. T-03 CLOSED 2026-08-13 —
+the long pole is off the critical path and T-05 is unblocked.**
+
+> ⚠ **T-03 invalidated a premise that T-05, T-06 and T-22 all read.** GraphEdX's published GED uses
+> **unit node costs**, not the zero node cost asserted in [gedlib](gedlib.md) §6 and
+> [statistics](statistics.md) D6. Measured 4/4 unit, 0/4 zero. Anything derived from "the submission
+> mixes IAM unit costs with GraphEdX topology-only costs" needs re-checking before it is printed.
+> D6's *metric* argument is unaffected. Full record: `.claude/notes/review/tasks/T-03-design.md`
+> amendment 4.
 
 **Read for every ticket**: [decisions](decisions.md) (do not re-litigate a signed decision) and
 [demands](demands.md) (what the ticket is answering, and to whom).
@@ -17,7 +25,7 @@ See [schedule](schedule.md). **T-25 closed and T-23 rescoped 2026-08-12 — T-03
 |---|---|---|---|---|---|
 | **T-01** | **Data lock** — size/density/connectivity audit tables (retained **and** discarded); `n_max = 12` retained for Suite 1, dropped for Suite 2; merge splits; define cohorts; port surviving scripts into `tests/` | — | 1–2 | **P0** | [data](data.md) |
 | **T-02** | **Statistics lock** — graph-level bootstrap, Mantel, pair-accounting ladder, **and the frozen confirmatory family with its cardinality** | T-01 | 2–4 | **P0** | [statistics](statistics.md), [data](data.md) |
-| **T-03** | **Exact GED on Picasso** — Suite 1, **two stages**: stratified stage 1 is the reported analysis, census unattended behind it. **UNBLOCKED 2026-08-12** | T-01 | 3–8 | **P0 — long pole** | [exact_ged](exact_ged.md), [gedlib](gedlib.md), [statistics](statistics.md) D6/D11 |
+| ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
 | **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS** | — | 3–8 | **P0** | [competitors](competitors.md) |
 | **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix** | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3 |
 | **T-05** | **Bounded GED via GEDLIB** — wire `BRANCH_FAST` + `IPFP`, pass the validation gates, run the **calibration ladder**, then all 40 M Suite-2 pairs | T-01, T-03 | 5–10 | **P0** | [approx_ged](approx_ged.md), [gedlib](gedlib.md), [exact_ged](exact_ged.md) §4 |

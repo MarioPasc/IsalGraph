@@ -179,10 +179,32 @@ Those are available as a **sensitivity analysis** but must never be primary: per
 reintroduce exactly the heterogeneity R3.5b objects to. They are cut candidate #2 in
 [schedule](schedule.md) — cheap to run, expensive in pages.
 
-> **One exception, and it must be written down.** The GraphEdX agreement gate runs under GraphEdX's
-> own model — `[0, 0, 0, 1, 1, 0]`, zero node cost — **not** the production model. Running it under
-> `[1,1,0,1,1,0]` produces a guaranteed mismatch that looks exactly like a solver bug. See
-> [exact_ged](exact_ged.md) §4.
+> ## ⚠ CORRECTED 2026-08-13 — GraphEdX uses UNIT node costs. There is no exception.
+>
+> This section previously said the GraphEdX agreement gate must run under `[0, 0, 0, 1, 1, 0]`
+> because GraphEdX charges zero for node operations. **That is wrong**, and T-03 measured it by
+> recomputing AIDS pairs under both models and comparing to the published file:
+>
+> | pair | Δn | published | zero-node | unit-node |
+> |---|---:|---:|---:|---:|
+> | 241, 475 | 1 | 8.0 | 7.0 | **8.0** |
+> | 207, 377 | 3 | 8.0 | 5.0 | **8.0** |
+> | 135, 339 | 1 | 2.0 | 1.0 | **2.0** |
+> | 211, 67 | 4 | 9.0 | 5.0 | **9.0** |
+>
+> **Unit-node 4/4, zero-node 0/4**, with the published value exceeding the zero-node value by
+> exactly `|n₁ − n₂|` every time. GraphEdX's AIDS matrix uses **the same model as D6**, so the gate
+> runs under `[1, 1, 0, 1, 1, 0]` like everything else.
+>
+> **What the old text cost.** T-03 configured gate 0 from this paragraph, measured "150 below, 58
+> equal, 0 above", and concluded GraphEdX's matrix was an approximate upper bound. It was the
+> arithmetic of the wrong cost model — each value low by exactly `Δn`. **That conclusion is
+> retracted.** Measured like-for-like over the full 131,148-pair AIDS overlap: **0 pairs where ours
+> exceeds theirs**, agreement on all but 2. See `.claude/notes/review/tasks/T-03-design.md`
+> amendment 4.
+>
+> D6's own justification is untouched: it argues that *zero node cost in general* makes GED a
+> pseudometric, not that GraphEdX shipped one.
 
 ---
 
