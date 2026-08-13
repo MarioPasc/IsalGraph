@@ -264,13 +264,6 @@ class PairResult:
         The solver's budget expired before it proved optimality.
     method : str
         Solver identification, e.g. ``'networkx_astar+BRANCH_FAST+IPFP'``.
-    computed : {'both', 'lb', 'ub'}, optional
-        Which ends were actually evaluated. Defaults to ``'both'``, which is
-        T-03's behaviour and enforces the original finiteness invariant
-        unchanged. Under ``'lb'`` the upper end is ``+inf`` and under ``'ub'``
-        the lower end is ``-inf``, and each is *required* to be that sentinel:
-        an unevaluated end must be unmistakable, never a plausible number.
-
     Notes
     -----
     Wave 1 required ``certified == (ub - lb <= CERT_TOL)``, because the only
@@ -304,32 +297,25 @@ class PairResult:
     seconds: float
     timed_out: bool
     method: str
-    computed: str = "both"
 
     def __post_init__(self) -> None:
         """Enforce the internal consistency of the result."""
-        if self.computed not in COMPUTE_MODES:
+        # An end a single-role campaign never evaluated is recorded as its
+        # *vacuous* bound: -inf below, +inf above. Both are valid but carry no
+        # information, so nothing that treats the pair as a bracket is misled,
+        # and neither can be mistaken for a measurement. Any other non-finite
+        # value is refused exactly as before. Note that this admits -inf only
+        # below and +inf only above: `PairResult(inf, inf, ...)` still raises.
+        lb_unevaluated = self.lb == -_INF
+        ub_unevaluated = self.ub == _INF
+        if lb_unevaluated and ub_unevaluated:
             raise GedBackendError(
-                f"computed must be one of {sorted(COMPUTE_MODES)}, got {self.computed!r}"
+                "both ends are unevaluated sentinels; a result that measured nothing is "
+                "not a result"
             )
-        if self.computed == "ub":
-            # The lower end was never evaluated. -inf is the honest sentinel: it
-            # is a valid but vacuous lower bound, so nothing downstream that
-            # treats lb as a bound can be misled by it.
-            if self.lb != -_INF:
-                raise GedBackendError(
-                    f"computed='ub' leaves the lower end unevaluated, which is recorded as "
-                    f"-inf; got lb={self.lb!r}"
-                )
-        elif not math.isfinite(self.lb) or self.lb < 0.0:
+        if not lb_unevaluated and (not math.isfinite(self.lb) or self.lb < 0.0):
             raise GedBackendError(f"lb must be finite and non-negative, got {self.lb!r}")
-        if self.computed == "lb":
-            if self.ub != _INF:
-                raise GedBackendError(
-                    f"computed='lb' leaves the upper end unevaluated, which is recorded as "
-                    f"+inf; got ub={self.ub!r}"
-                )
-        elif not math.isfinite(self.ub) or self.ub < 0.0:
+        if not ub_unevaluated and (not math.isfinite(self.ub) or self.ub < 0.0):
             raise GedBackendError(f"ub must be finite and non-negative, got {self.ub!r}")
         if self.lb > self.ub + CERT_TOL:
             raise GedBackendError(f"lb {self.lb} exceeds ub {self.ub}")
@@ -349,6 +335,26 @@ class PairResult:
             )
         if self.seconds < 0.0:
             raise GedBackendError(f"seconds must be non-negative, got {self.seconds!r}")
+
+    @property
+    def computed(self) -> str:
+        """Which ends this result actually measured.
+
+        Derived from the sentinels rather than stored, so that Contract B keeps
+        its seven fields and every consumer of ``PairResult.__slots__`` sees the
+        same set it always saw.
+
+        Returns
+        -------
+        {'both', 'lb', 'ub'}
+            ``'lb'`` when the upper end is ``+inf``, ``'ub'`` when the lower end
+            is ``-inf``, ``'both'`` otherwise.
+        """
+        if self.ub == _INF:
+            return "lb"
+        if self.lb == -_INF:
+            return "ub"
+        return "both"
 
     @property
     def bracket_closed(self) -> bool:
@@ -1174,7 +1180,6 @@ class GedlibBackend:
             seconds=seconds,
             timed_out=bool(seconds > self._timeout_s),
             method=self.method,
-            computed=self._compute,
         )
         self.stats.record_result(result)
         return result

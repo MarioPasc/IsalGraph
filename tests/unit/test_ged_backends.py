@@ -719,7 +719,7 @@ def _roles_behaviour() -> dict[str, Any]:
     }
 
 
-def _options_used(env: Any, method: str) -> set[str]:
+def _options_used(env: _FakeEnv, method: str) -> set[str]:
     """Every option string ``set_method`` received for one method."""
     return {c[1][1] for c in env.calls if c[0] == "set_method" and c[1][0] == method}
 
@@ -839,20 +839,37 @@ class TestComputeMode:
 class TestOneSidedPairResult:
     """An unevaluated end must be unmistakable, never a plausible number."""
 
-    def test_default_still_rejects_a_non_finite_bracket(self) -> None:
-        """The original invariant, unchanged on the default path."""
-        with pytest.raises(GedBackendError, match="ub must be finite"):
-            PairResult(1.0, math.inf, None, False, 0.1, False, "m")
-        with pytest.raises(GedBackendError, match="lb must be finite"):
-            PairResult(-math.inf, 1.0, None, False, 0.1, False, "m")
+    def test_contract_b_still_has_exactly_seven_fields(self) -> None:
+        """The compute mode is derived, not stored.
 
-    def test_a_one_sided_result_must_use_the_sentinel(self) -> None:
-        PairResult(1.0, math.inf, None, False, 0.1, False, "m", "lb")
-        PairResult(-math.inf, 1.0, None, False, 0.1, False, "m", "ub")
-        with pytest.raises(GedBackendError, match="computed='lb'"):
-            PairResult(1.0, 5.0, None, False, 0.1, False, "m", "lb")
-        with pytest.raises(GedBackendError, match="computed='ub'"):
-            PairResult(0.0, 5.0, None, False, 0.1, False, "m", "ub")
+        ``ged_gates`` builds its payload by iterating these slots, so adding an
+        eighth would silently change what the gates are required to emit.
+        """
+        assert PairResult.__slots__ == (
+            "lb",
+            "ub",
+            "exact",
+            "certified",
+            "seconds",
+            "timed_out",
+            "method",
+        )
+
+    def test_only_the_vacuous_sentinel_is_admitted_on_each_side(self) -> None:
+        """+inf above and -inf below; every other non-finite value is still refused."""
+        assert PairResult(1.0, math.inf, None, False, 0.1, False, "m").computed == "lb"
+        assert PairResult(-math.inf, 1.0, None, False, 0.1, False, "m").computed == "ub"
+        assert PairResult(1.0, 5.0, None, False, 0.1, False, "m").computed == "both"
+        with pytest.raises(GedBackendError, match="lb must be finite"):
+            PairResult(math.inf, math.inf, None, False, 0.1, False, "m")
+        with pytest.raises(GedBackendError, match="ub must be finite"):
+            PairResult(1.0, -math.inf, None, False, 0.1, False, "m")
+        with pytest.raises(GedBackendError, match="lb must be finite"):
+            PairResult(math.nan, 1.0, None, False, 0.1, False, "m")
+
+    def test_a_result_that_measured_nothing_is_refused(self) -> None:
+        with pytest.raises(GedBackendError, match="measured nothing"):
+            PairResult(-math.inf, math.inf, None, False, 0.1, False, "m")
 
 
 class TestLazyZeroGuard:

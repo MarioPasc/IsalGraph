@@ -515,7 +515,9 @@ class PairOutcome:
     failed: bool = False
 
 
-def _outcome_from_result(k: int, res: Any, measured_s: float) -> PairOutcome:
+def _outcome_from_result(
+    k: int, res: Any, measured_s: float, computed: str | None = None
+) -> PairOutcome:
     """Convert a CONTRACT B ``PairResult`` into a shard row, enforcing D11.
 
     An uncertified value is never promoted to ``ged``: that is precisely the defect
@@ -527,6 +529,10 @@ def _outcome_from_result(k: int, res: Any, measured_s: float) -> PairOutcome:
         res: The backend's result object.
         measured_s: Wall time the runner itself observed, used only if the backend
             reports an unusable value.
+        computed: The compute mode the *campaign* declares. When given it is the
+            authority and the result's own encoding is cross-checked against it,
+            so a backend that quietly returned a one-sided bracket in a two-sided
+            run is caught rather than merged. Defaults to trusting the result.
 
     Returns:
         The :class:`PairOutcome`.
@@ -542,9 +548,16 @@ def _outcome_from_result(k: int, res: Any, measured_s: float) -> PairOutcome:
     # lower one. Only the end that was actually evaluated is required to be a
     # number; the sentinel must be exactly the sentinel, so that an unevaluated
     # end can never be mistaken for a measurement.
-    computed = str(getattr(res, "computed", "both"))
-    if computed not in ("both", "lb", "ub"):
-        raise RunnerError(f"pair {k}: backend reported an unknown compute mode {computed!r}")
+    declared = str(computed if computed is not None else getattr(res, "computed", "both"))
+    if declared not in ("both", "lb", "ub"):
+        raise RunnerError(f"pair {k}: unknown compute mode {declared!r}")
+    observed = str(getattr(res, "computed", declared))
+    if observed != declared:
+        raise RunnerError(
+            f"pair {k}: the campaign computes {declared!r} but the result encodes {observed!r}; "
+            "the bracket does not match the run it came from"
+        )
+    computed = declared
     if computed != "ub" and not np.isfinite(lb):
         raise RunnerError(f"pair {k}: backend returned a non-finite lower bound {lb}")
     if computed == "ub" and lb != -np.inf:
@@ -787,7 +800,9 @@ def _compute_one(k: int, graphs: list[nx.Graph], backend: GedBackend, n: int) ->
     t0 = time.perf_counter()
     try:
         res = backend.pair(graphs[i], graphs[j])
-        return _outcome_from_result(k, res, time.perf_counter() - t0)
+        return _outcome_from_result(
+            k, res, time.perf_counter() - t0, getattr(backend, "compute", None)
+        )
     except Exception:  # noqa: BLE001 - one bad pair must not kill a 100-hour shard
         logger.exception("backend failed on pair k=%d (i=%d, j=%d)", k, i, j)
         return PairOutcome(
