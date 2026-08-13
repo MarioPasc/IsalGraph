@@ -1,0 +1,14 @@
+
+=== coil_del  retained=3900  sampled=400  n_mean=21.30 n_max=68 m_mean=53.48 ===
+method               median bits  mean bits  % Isal shorter   ms/graph  failed
+adjacency                  153.0      306.4             5.2      0.029       0
+graph6                     162.0      314.7             5.2      0.244       0
+sparse6                    282.0      345.2             5.8      0.134       0
+nauty->graph6              162.0      314.7             5.2      0.295       0
+min-DFS (tuples)           450.0      556.1            94.0     68.180       0
+IsalGraph pruned           332.8      423.0             0.0      0.612       0
+GED construction           512.0      629.9            99.5      0.000       0
+  AGM CAM: 23/50 budget failures (46 %), 736 ms/graph [50-graph subsample, 100k-node budget]
+  IsalGraph canonical: 207/400 timeouts at 2.0s, 1117 ms/graph  |  pruned failures 0  |  512s total
+
+=== mutagenicity  retained=4040  sampled=400  n_mean=28.46 n_max=92 m_mean=29.50 ===

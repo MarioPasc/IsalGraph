@@ -1,0 +1,26 @@
+
+=== mutagenicity  retained=4040  sampled=400  n_mean=27.91 n_max=97 m_mean=28.87 ===
+method               median bits  mean bits  % Isal shorter   ms/graph  failed
+adjacency                  300.0      486.6            96.8      0.053       0
+graph6                     306.0      495.5           100.0      0.449       0
+sparse6                    168.0      201.0            69.9      0.149       0
+nauty->graph6              306.0      495.5           100.0      0.484       0
+min-DFS (tuples)           250.0      279.5           100.0   1181.786      24
+IsalGraph pruned           147.4      165.6             0.0    149.346      24
+GED construction           310.0      372.3           100.0      0.000       0
+  AGM CAM: 49/50 budget failures (98 %), 1106 ms/graph [50-graph subsample, 100k-node budget]
+  IsalGraph canonical: 118/400 timeouts at 2.0s, 721 ms/graph  |  pruned failures 24  |  878s total
+
+=== protein  retained=569  sampled=400  n_mean=31.88 n_max=96 m_mean=61.81 ===
+method               median bits  mean bits  % Isal shorter   ms/graph  failed
+adjacency                  465.0      582.3            45.7      0.045       0
+graph6                     474.0      590.8            48.5      0.370       0
+sparse6                    390.0      439.2             2.8      0.158       0
+nauty->graph6              474.0      590.8            48.5      0.406       0
+min-DFS (tuples)           615.0      694.4            98.5     59.991       0
+IsalGraph pruned           467.6      505.4             0.0     66.132       4
+GED construction           705.5      787.1            99.7      0.000       0
+  AGM CAM: 45/50 budget failures (90 %), 2743 ms/graph [50-graph subsample, 100k-node budget]
+  IsalGraph canonical: 300/400 timeouts at 2.0s, 1581 ms/graph  |  pruned failures 4  |  820s total
+
+wrote real_suite2b.json

@@ -30,7 +30,7 @@ Scripts and raw output: **[`scratch/`](scratch/)**. Environment: `networkx` 3.6.
 | [sparse6](sparse6.md) | McKay's edge-list serialisation | **RUN** — the compactness rival |
 | [nauty](nauty.md) | canonical labelling → graph6 (+ the bliss/Traces cut) | **RUN** — the fair canonical serialisation |
 | [adjacency-matrix](adjacency-matrix.md) | raw upper triangle | **RUN — reference point**, and it is not the pushover it looks |
-| [agm](agm.md) | AGM canonical adjacency-matrix code (CAM) | **RUN, Suite 1 only** — 24 % failure at GREC |
+| [agm](agm.md) | AGM canonical adjacency-matrix code (CAM) | **RUN, Suite 1 only** — up to 98 % failure on Suite 2 |
 | [gspan-mdfsc](gspan-mdfsc.md) | gSpan minimum DFS code | **RUN** — and it beats IsalGraph on every dataset |
 | [wl-subtree-kernel](wl-subtree-kernel.md) | Weisfeiler–Lehman subtree kernel | **RUN, Claim B only** |
 
@@ -81,9 +81,9 @@ F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per data
 | [adjacency](adjacency-matrix.md) | **trivial** (none) | **0–6 / 50** | no | *none admissible* | **0.75–0.87** | `n(n−1)/2` | none |
 | [nauty→graph6](nauty.md) | `pip install pynauty`, from-source build verified | **50/50** | **yes** | padded Hamming | 0.46–0.68 | = graph6 | none observed |
 | [AGM CAM](agm.md) | **no package — we wrote it**, validated vs brute force on 327 graphs | **50/50** | **yes** | padded Hamming | **0.80–0.92** | = adjacency | **24 % fail at GREC** |
-| [min-DFS code](gspan-mdfsc.md) | **3 repos tested, 3 rejected — we wrote it** | **50/50** | **yes** | Levenshtein (tuple) | **0.55–0.97** | `m·2⌈log₂ n⌉` | none to `n = 98` |
+| [min-DFS code](gspan-mdfsc.md) | **3 repos tested, 3 rejected — we wrote it** | **50/50** | **yes** | Levenshtein (tuple) | **0.55–0.97** | `m·2⌈log₂ n⌉` | **24/400 Mutagenicity**; needs a *memory* cap |
 | [WL subtree](wl-subtree-kernel.md) | `grakel` **already installed** | **50/50** | **no** | kernel (**pseudometric**) | 0.46–0.90 | **none** | none |
-| *IsalGraph pruned* | — | 50/50 | yes | Levenshtein | *0.26–0.93* | `L log₂ 9` | `canonical` slow, `pruned` fine |
+| *IsalGraph pruned* | — | 50/50 | yes | Levenshtein | *0.26–0.93* | `L log₂ 9` | `canonical` unusable on Suite 2; **`pruned` 24/400 Mutagenicity, 4/400 Protein** |
 | ~~bliss / Traces~~ | — | — | — | — | — | — | **CUT**, [nauty](nauty.md) §8 |
 
 ---
@@ -162,6 +162,9 @@ Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph s
 | GREC | 11.54 | 12.59 | 55.0 | 66.0 | 78.0 | 96.0 | 72.9 | 118.0 |
 | AIDS-IAM | 13.63 | 14.05 | 55.0 | 66.0 | 72.0 | 88.0 | **60.2** | 109.0 |
 | AIDS-IAM, **mean** | | | 135.9 | 144.4 | 93.8 | 128.2 | **85.3** | 154.9 |
+| COIL-DEL | 21.30 | 53.48 | **153.0** | 162.0 | 282.0 | 450.0 | 332.8 | 512.0 |
+| **Mutagenicity** | 27.91 | 28.87 | 300.0 | 306.0 | 168.0 | 250.0 | **147.4** | 310.0 |
+| Protein | 31.88 | 61.81 | 465.0 | 474.0 | **390.0** | 615.0 | 467.6 | 705.5 |
 
 > **The AIDS-IAM row is where the `m`-scaling story finally appears in real data, and it appears in
 > the mean rather than the median.** On the *typical* graph (median) the adjacency matrix still wins,
@@ -184,6 +187,28 @@ Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph s
 | AIDS | 29.9 % | 63.2 % | 89.9 % | 99.6 % | — |
 | GREC | 23.0 % | 32.2 % | 89.5 % | 96.2 % | **100 %** |
 | AIDS-IAM | 35.2 % | 65.2 % | 81.2 % | 99.5 % | **100 %** |
+| COIL-DEL | 5.2 % | 5.2 % | **5.8 %** | 94.0 % | 99.5 % |
+| **Mutagenicity** | **96.8 %** | **100 %** | **69.9 %** | **100 %** | **100 %** |
+| Protein | 45.7 % | 48.5 % | **2.8 %** | 98.5 % | 99.7 % |
+
+> ### Claim A resolved: it is governed by `m/n`, and the crossover is inside Suite 2
+>
+> | Dataset | `m/n` | IsalGraph vs the `n²` formats | IsalGraph vs sparse6 |
+> |---|---:|---|---|
+> | Letter LOW–HIGH | 0.75–1.00 | **loses** (0.0 %) | wins (99–100 %) |
+> | LINUX, AIDS, GREC, AIDS-IAM | 0.89–1.09 | loses (16–35 %) | wins (81–100 %) |
+> | **Mutagenicity** | **1.03** | **wins (96.8 %)** | **wins (69.9 %)** |
+> | Protein | 1.94 | ties (45.7 %) | **loses (2.8 %)** |
+> | COIL-DEL | 2.51 | **loses (5.2 %)** | **loses (5.8 %)** |
+>
+> **Mutagenicity is the dataset where IsalGraph wins outright** — 147.4 bits against adjacency's
+> 300.0, graph6's 306.0, sparse6's 168.0, min-DFS's 250.0 and `B_GED`'s 310.0. It is large
+> (`n̄ = 27.9`, `n_max = 97`) *and* sparse (`m/n = 1.03`), which is exactly the regime the
+> `m`-scaling argument predicts and exactly the regime AE.1 asked the paper to reach.
+>
+> **Size alone is not enough.** Protein (`n̄ = 31.9`) is larger than Mutagenicity and IsalGraph only
+> ties there; COIL-DEL (`n̄ = 21.3`) is smaller and IsalGraph loses badly. **`m/n`, not `n`, is the
+> variable.** The paper should say so and give this table.
 
 > **IsalGraph is never the most compact representation on Suite 1.** The adjacency matrix — and AGM,
 > which has the same bit count — wins every dataset, and on the three Letter sets IsalGraph is
@@ -204,10 +229,12 @@ Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph s
 | **1** | **The size null is unowned and it dominates.** `ρ(\|n₁−n₂\|, GED)` = 0.71–0.93; IsalGraph beats it on 2 of 5 datasets by ≤ 0.03. **Every printed ρ needs the null beside it, and the equal-`n` restriction (§4.2) should be the primary comparison** | new row in [statistics](../statistics.md) §4; a null column in Tab. 3 | **T-02's owner**, T-06, T-20 |
 | **2** | **min-DFS beats IsalGraph on ρ on all five Suite-1 datasets**, all-pairs and equal-`n`. AGM beats it on 3 of 4 | Claim B's framing must concede the axis | T-17, T-20 |
 | **3** | **IsalGraph is shorter on 0.0 % of Letter graphs vs the adjacency matrix**, and never wins Claim A on Suite 1 | [adjacency-matrix](adjacency-matrix.md) §4 | T-20 |
-| **4** | **[competitors](../competitors.md) §4 outcome 3 is inverted.** IsalGraph beats sparse6 on **89–100 %** of graphs on every dataset measured, including the dense ones; the synthetic crossover at `m/n ≈ 2` does not appear on real IAM | rewrite the pre-commitment | T-04 → T-20 |
-| **5** | **AGM fails on 24 % of real GREC graphs** (96/400 at a 100k-node budget, 173 ms/graph) and **18 % of AIDS-IAM** (73/400, 269 ms/graph), but only **3/769 on Suite-1 AIDS** (`n ≤ 12`). The ceiling is real and it sits exactly at Suite 1's edge. It is driven by the **tail**, not the mean | [agm](agm.md) §2.2b | T-04, T-17 |
+| **4** | **[competitors](../competitors.md) §4 outcome 3 is inverted — and Claim A resolves on `m/n`.** §4 predicts sparse6 beating IsalGraph *on sparse graphs*; measured, IsalGraph beats sparse6 on **69.9 %** of the sparsest large dataset (Mutagenicity, `m/n = 1.03`) and loses on the dense ones (Protein **2.8 %**, COIL-DEL **5.8 %**). **Mutagenicity is where IsalGraph wins everything** — 147.4 bits vs adjacency 300.0, sparse6 168.0, min-DFS 250.0. Restate the pre-commitment in terms of `m/n`, not size | rewrite the pre-commitment | T-04 → T-20 |
+| **5** | **AGM collapses across Suite 2**: 3/769 fail on Suite-1 AIDS (`n ≤ 12`), then **24 % GREC · 18 % AIDS-IAM · 46 % COIL-DEL · 90 % Protein · 98 % Mutagenicity**, at 173 → 2,743 ms/graph. The ceiling sits exactly at Suite 1's edge and is driven by the **tail**, not the mean | [agm](agm.md) §2.2b | T-04, T-17 |
 | **6** | **[preregistration](../preregistration.md) §5's reduction rule has no case for a representation computable on one suite and not the other.** AGM keeps 5 B1e rows, loses 10 B1a | add the case; `N_max = 182` depends on it | **T-02's owner** |
-| **7** | **`canonical_string` is fine on Suite 1 (0 failures, 0.095 ms/graph on AIDS) and breaks on Suite 2**: 13× slower than `pruned` on GREC, then **342 ms/graph and 12/400 timeouts on AIDS-IAM** at a 10 s budget, against `pruned`'s 18 ms and zero failures. **Suite 2 must use `pruned`, and the two are not interchangeable** — they give different strings and different bit counts | T-06's plan | T-06 |
+| **7** | **`canonical_string` is fine on Suite 1 (0 failures) and unusable on Suite 2** — at a 2 s budget it times out on **207/400 COIL-DEL**, **118/400 Mutagenicity**, **300/400 Protein**. **Suite 2 must use `pruned`, and the two are not interchangeable** (different strings, different bit counts) | T-06's plan | T-06 |
+| **7b** | ⚠ **`pruned_canonical_string` has a ceiling too, and this correction matters**: 0 failures through AIDS-IAM, then **24/400 on Mutagenicity** (149 ms/graph) and **4/400 on Protein** (66 ms/graph) at a 2 s budget. **An earlier note in this folder said `pruned` was fine to `n = 98`; on real graphs it is not.** T-06 needs a per-graph budget and a recorded-failure path, not an assumption of success | [gspan-mdfsc](gspan-mdfsc.md) §7, T-06 | **T-06** |
+| **7c** | **The min-DFS backend needs a MEMORY budget, not just a time budget.** The first Suite-2 run was **OOM-killed** (exit 137) on Mutagenicity: the construction holds every embedding realising the current minimal prefix, and at `n = 92` that set grows without bound. A `max_projections` cap now raises `MinDfsBudgetExceeded`; at 50,000 it costs **24/400 Mutagenicity** failures and 0 elsewhere. Validation re-run after the change: still exhaustively correct | [gspan-mdfsc](gspan-mdfsc.md) §7 | T-04 |
 | **8** | **WL's incompleteness fires on the real cohort**: ~1 LINUX pair and ~6 AIDS pairs get kernel distance 0 at GED > 0. On Letter its zero-set matches the isomorphic set exactly | [wl-subtree-kernel](wl-subtree-kernel.md) §2 | T-17 |
 | **9** | **The four `n²` members share one Claim A number.** Four identical columns read as a copy-paste error | one row + footnote | T-17 |
 | **10** | **The gSpan vendoring plan is superseded. Three repositories tested, three rejected**: `LasseRegin/gSpan` (broken on numpy ≥ 1.24, `G2DFS` not minimal), `betterenvi` (`_is_min` private), **`kaviniitm/DFSCode` (builds, claims exactly this, not isomorphism-invariant — 46/90)**. Vendor nothing. Effort **2–3 d → ~1 d** | [competitors](../competitors.md) §2 | T-04, [schedule](../schedule.md) |
@@ -259,13 +286,15 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
 
 ## 7. Still open
 
-- **Suite 2 Claim A is partial.** GREC and AIDS-IAM have landed; **COIL-DEL, Mutagenicity and
-  Protein have not** — `scratch/real_suite2.py` is the script, and the dense COIL-DEL profile is
-  slow because of AGM, not because of anything we need. The AIDS-IAM mean/median inversion is the
-  result those three rows will either confirm or overturn, and it is the one that decides how
-  Claim A is worded.
+- ~~Suite 2 Claim A is partial.~~ **Complete, all ten datasets** — see §4.3. The last three rows
+  (COIL-DEL, Mutagenicity, Protein) were measured with two deliberate trims, both documented in
+  `scratch/real_suite2b.py`: AGM on a 50-graph subsample (failure rate only, no bit row) and
+  `canonical_string` at a 2 s budget (failure rate only, no bit row — its bit counts would be
+  conditioned on the graphs fast enough to finish, which is a biased sample). Every other
+  representation ran on the full 400-graph sample.
 - **Suite 2 ρ** does not exist at all — there is no GED reference above `n = 12` until T-05 runs.
-  §4.1 and §4.2 are Suite 1 only.
+  §4.1 and §4.2 are Suite 1 only. **Mutagenicity is the row to watch**: it is the one dataset where
+  IsalGraph wins Claim A outright, and whether it also clears the size null on ρ is unknown.
 - **Graph-level bootstrap CIs** on every ρ in §4.1 (D2). Finding 14 says they will be wide.
 - **Whether IsalGraph clears the size null anywhere in Suite 2.** Larger, sparser graphs are where
   its `m`-scaling should help; nothing here settles it.

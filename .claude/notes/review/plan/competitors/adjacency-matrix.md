@@ -152,6 +152,10 @@ Measured on the **real cohort**, median entropy-bound bits over all retained gra
 | LINUX | 8.71 | **36.0** | 42.0 | 60.0 | 64.0 | 41.2 | 15.7 % |
 | AIDS | 10.56 | **55.0** | 66.0 | 72.0 | 88.0 | 57.1 | 29.9 % |
 | GREC | 11.54 | 55.0 | 66.0 | 78.0 | 96.0 | 72.9 | 23.0 % |
+| AIDS-IAM | 13.63 | 55.0 | 66.0 | 72.0 | 88.0 | 60.2 | 35.2 % |
+| COIL-DEL | 21.30 | **153.0** | 162.0 | 282.0 | 450.0 | 332.8 | 5.2 % |
+| **Mutagenicity** | 27.91 | 300.0 | 306.0 | 168.0 | 250.0 | **147.4** | **96.8 %** |
+| Protein | 31.88 | 465.0 | 474.0 | **390.0** | 615.0 | 467.6 | 45.7 % |
 
 > **The adjacency matrix beats IsalGraph on every Suite-1 dataset, and on the three Letter sets
 > IsalGraph is shorter on 0.0 % of graphs — not one graph out of 4,492.** This is the single most
@@ -163,11 +167,18 @@ Measured on the **real cohort**, median entropy-bound bits over all retained gra
 > matrix also beats everywhere. **R3.6a's "narrow the claim accordingly" applies to us at least as
 > much as the reviewer knew.**
 >
+> **The crossover is reached, and it is at Mutagenicity.** On the one dataset that is both large
+> (`n̄ = 27.9`, `n_max = 97`) and sparse (`m/n = 1.03`), IsalGraph is shorter than the adjacency
+> matrix on **96.8 %** of graphs — 147.4 median bits against 300.0 — and shorter than every other
+> representation in the pool as well. That is the row Claim A should be built on.
+>
+> **But it is `m/n`, not `n`.** Protein is *larger* (`n̄ = 31.9`) and IsalGraph only ties there
+> (45.7 %); COIL-DEL is *smaller* (`n̄ = 21.3`) and IsalGraph loses badly (5.2 %). Both are denser.
+>
 > The claim that survives measurement: *IsalGraph is shorter than every other **string**
-> serialisation — graph6, sparse6, the minimum DFS code — and than the explicit-construction
-> reference model; the raw adjacency matrix is shorter at Suite-1 sizes, and IsalGraph's `m`-scaling
-> overtakes its `n²` growth only for large sparse graphs.* Whether that crossover is reached inside
-> Suite 2 is open until the AIDS-IAM / COIL-DEL / Mutagenicity / Protein rows land.
+> serialisation and than the explicit-construction reference model across the whole cohort; against
+> the raw adjacency matrix its `m`-scaling overtakes `n²` growth when the graph is large **and**
+> sparse — which happens on Mutagenicity and nowhere else in this cohort.*
 
 ---
 

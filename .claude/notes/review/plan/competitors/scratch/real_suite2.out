@@ -1,0 +1,28 @@
+
+=== grec  retained=650  sampled=400  n_mean=11.54 n_max=24 m_mean=12.59 ===
+method               median bits  mean bits  % Isal shorter   ms/graph  failed
+adjacency                   55.0       69.8            23.0      0.012       0
+graph6                      66.0       77.5            32.2      0.101       0
+sparse6                     78.0       86.6            89.5      0.057       0
+nauty->graph6               66.0       77.5            32.2      0.090       0
+AGM CAM                     45.0       45.0             7.9    173.113      96
+min-DFS (tuples)            96.0      102.5            96.2      1.029       0
+IsalGraph pruned            72.9       76.4             0.0      0.036       0
+IsalGraph canonical         66.6       71.4             0.0      0.465       0
+GED construction           118.0      125.7           100.0      0.000       0
+  AGM budget failures 96/400 | min-DFS failures 0/400 | IsalGraph pruned 0 canonical 0 | 70s
+
+=== aids_iam  retained=1811  sampled=400  n_mean=13.63 n_max=85 m_mean=14.05 ===
+method               median bits  mean bits  % Isal shorter   ms/graph  failed
+adjacency                   55.0      135.9            35.2      0.017       0
+graph6                      66.0      144.4            65.2      0.126       0
+sparse6                     72.0       93.8            81.2      0.061       0
+nauty->graph6               66.0      144.4            65.2      0.120       0
+AGM CAM                     45.0       47.7            21.1    269.046      73
+min-DFS (tuples)            88.0      128.2            99.5      3.234       0
+IsalGraph pruned            60.2       85.3             0.0     18.276       0
+IsalGraph canonical         57.1       69.0             0.0    342.745      12
+GED construction           109.0      154.9           100.0      0.000       0
+  AGM budget failures 73/400 | min-DFS failures 0/400 | IsalGraph pruned 0 canonical 12 | 254s
+
+=== coil_del  retained=3900  sampled=400  n_mean=21.76 n_max=68 m_mean=54.90 ===

@@ -377,10 +377,18 @@ remains open is Suite 2, which has no GED reference until T-05.
 - **Fix the serialisation convention in the backend, not in the analysis.** `encode()` returns the
   tuple-level symbol string; expose the character rendering as a separate method for figures.
   Mixing them produced a 2× difference in measured Levenshtein above.
-- The construction is worst-case exponential in the number of tied embeddings. **Carry a budget and
-  raise**, as [agm](agm.md) does — do not return a partial code. Measured: 1.8 ms at `n = 20`,
-  6.4 ms at `n = 50, m = 52`, 24.9 ms at `n = 50, m = 100`. It is the slowest tractable backend and
-  a C++ port would be premature — profile first.
+- ⚠ **The budget must be on MEMORY, not just time.** The construction holds every embedding that
+  realises the current minimal prefix, and that set is worst-case exponential in the number of ties.
+  The first Suite-2 run was **OOM-killed (exit 137)** partway through Mutagenicity (`n_max = 97`) —
+  not slow, *killed*. `min_dfs_code` now takes `max_projections` and raises
+  `MinDfsBudgetExceeded`; the validation suite was re-run after the change and still passes
+  exhaustively. At a 50,000-embedding cap the cost is **24/400 Mutagenicity graphs** and zero
+  elsewhere in the cohort.
+- Timing, real cohort: 0.05 ms (Letter) · 0.76 ms (AIDS) · 1.0 ms (GREC) · 3.2 ms (AIDS-IAM) ·
+  **60 ms (Protein)** · **68 ms (COIL-DEL)** · **1,182 ms (Mutagenicity)** per graph, pure Python.
+  It is by far the slowest backend at Suite-2 scale, and the Mutagenicity figure is dominated by the
+  24 graphs that run to the cap before failing. **Profile before porting to C++** — the cost is tie
+  branching, which a port does not remove.
 - Disconnected graphs raise `ValueError` by construction. Suite 1 and Suite 2 are both
   `require_connected = True` ([data](../data.md) §1), so **this never fires on the cohort** — but it
   must still be a documented row in the AE.3 table, because AGM, graph6 and sparse6 handle it and

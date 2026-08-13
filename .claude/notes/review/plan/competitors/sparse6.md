@@ -152,6 +152,31 @@ graphs per Suite-2 profile, `n` and `m` set to T-01's measured per-dataset means
 > `n²` serialisations once `m ≪ n²/2`, and against sparse6 only near `m ≈ n`.* Stated that way it
 > survives whichever direction the real cohort falls, and it is a sharper claim than "compact".
 
+### 4.1 Confirmed on the real cohort — and the crossover is sharp
+
+Percentage of graphs on which IsalGraph pruned is strictly shorter than sparse6, all ten datasets:
+
+| Dataset | `m/n` | **% IsalGraph shorter than sparse6** |
+|---|---:|---:|
+| Letter LOW / MED | 0.75–0.77 | **100 %** |
+| Letter HIGH | 1.00 | 99.0 % |
+| LINUX | 0.96 | 100 % |
+| AIDS (Suite 1) | 1.01 | 89.9 % |
+| GREC | 1.09 | 89.5 % |
+| AIDS-IAM | 1.03 | 81.2 % |
+| **Mutagenicity** | **1.03** | **69.9 %** |
+| Protein | 1.94 | **2.8 %** |
+| COIL-DEL | 2.51 | **5.8 %** |
+
+> **The pre-commitment was inverted and the real cohort says so cleanly.** sparse6 beats IsalGraph
+> on the **dense** datasets (Protein 97.2 % of graphs, COIL-DEL 94.2 %) and loses on every sparse
+> one. The crossover sits between `m/n = 1.09` and `m/n = 1.94` and it is abrupt — 89.5 % to 2.8 %
+> with nothing in between, because no cohort dataset lands in the gap.
+>
+> Note that the margin **narrows monotonically with size** among the sparse datasets (100 % → 89.9 %
+> → 81.2 % → 69.9 %), so sparse6 is closing even where it loses. **Do not project the ordering past
+> `n̄ = 28`** — the cohort has no evidence there, and the trend does not favour us.
+
 **Conventions.** Entropy bound `6 · len(sparse6)`; realised `8 · len(sparse6)`. The `':'` prefix is
 one byte of framing, not payload — **count it in the realised figure and exclude it from the
 entropy bound**, and say which you did.

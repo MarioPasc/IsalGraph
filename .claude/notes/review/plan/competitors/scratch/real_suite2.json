@@ -1,0 +1,154 @@
+{
+  "grec": {
+    "retained": 650,
+    "sampled": 400,
+    "n_mean": 11.545,
+    "n_max": 24,
+    "m_mean": 12.5925,
+    "claim_a": {
+      "adjacency": {
+        "median": 55.0,
+        "mean": 69.77,
+        "isal_shorter_pct": 23.0,
+        "n_ok": 400,
+        "ms_per_graph": 0.012426234998201835
+      },
+      "graph6": {
+        "median": 66.0,
+        "mean": 77.52,
+        "isal_shorter_pct": 32.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.10066032245958922
+      },
+      "sparse6": {
+        "median": 78.0,
+        "mean": 86.64,
+        "isal_shorter_pct": 89.5,
+        "n_ok": 400,
+        "ms_per_graph": 0.056902992555478704
+      },
+      "nauty->graph6": {
+        "median": 66.0,
+        "mean": 77.52,
+        "isal_shorter_pct": 32.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.09013116252390319
+      },
+      "AGM CAM": {
+        "median": 45.0,
+        "mean": 45.01973684210526,
+        "isal_shorter_pct": 7.894736842105263,
+        "n_ok": 304,
+        "ms_per_graph": 173.1130910124375
+      },
+      "min-DFS (tuples)": {
+        "median": 96.0,
+        "mean": 102.54,
+        "isal_shorter_pct": 96.25,
+        "n_ok": 400,
+        "ms_per_graph": 1.0288824374811156
+      },
+      "IsalGraph pruned": {
+        "median": 72.90827503317318,
+        "mean": 76.3714180972489,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 400,
+        "ms_per_graph": 0.036071484942112875
+      },
+      "IsalGraph canonical": {
+        "median": 66.56842503028855,
+        "mean": 71.4263350949989,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 400,
+        "ms_per_graph": 0.4645513000241408
+      },
+      "GED construction": {
+        "median": 118.0,
+        "mean": 125.6775,
+        "isal_shorter_pct": 100.0,
+        "n_ok": 400,
+        "ms_per_graph": 0.0
+      }
+    },
+    "agm_fail": 96,
+    "mdfsc_fail": 0,
+    "isal_pruned_fail": 0,
+    "isal_canonical_fail": 0
+  },
+  "aids_iam": {
+    "retained": 1811,
+    "sampled": 400,
+    "n_mean": 13.6275,
+    "n_max": 85,
+    "m_mean": 14.055,
+    "claim_a": {
+      "adjacency": {
+        "median": 55.0,
+        "mean": 135.95,
+        "isal_shorter_pct": 35.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.016701330023352057
+      },
+      "graph6": {
+        "median": 66.0,
+        "mean": 144.45,
+        "isal_shorter_pct": 65.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.12611507501333108
+      },
+      "sparse6": {
+        "median": 72.0,
+        "mean": 93.75,
+        "isal_shorter_pct": 81.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.0605323050149309
+      },
+      "nauty->graph6": {
+        "median": 66.0,
+        "mean": 144.45,
+        "isal_shorter_pct": 65.25,
+        "n_ok": 400,
+        "ms_per_graph": 0.11975975247878523
+      },
+      "AGM CAM": {
+        "median": 45.0,
+        "mean": 47.70948012232416,
+        "isal_shorter_pct": 21.10091743119266,
+        "n_ok": 327,
+        "ms_per_graph": 269.04622326505887
+      },
+      "min-DFS (tuples)": {
+        "median": 88.0,
+        "mean": 128.22,
+        "isal_shorter_pct": 99.5,
+        "n_ok": 400,
+        "ms_per_graph": 3.2338515974288384
+      },
+      "IsalGraph pruned": {
+        "median": 60.228575027403934,
+        "mean": 85.34230585133065,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 400,
+        "ms_per_graph": 18.276409549948767
+      },
+      "IsalGraph canonical": {
+        "median": 57.05865002596162,
+        "mean": 68.95403869116782,
+        "isal_shorter_pct": 0.0,
+        "n_ok": 388,
+        "ms_per_graph": 342.7448545000789
+      },
+      "GED construction": {
+        "median": 109.0,
+        "mean": 154.9025,
+        "isal_shorter_pct": 100.0,
+        "n_ok": 400,
+        "ms_per_graph": 0.0
+      }
+    },
+    "agm_fail": 73,
+    "mdfsc_fail": 0,
+    "isal_pruned_fail": 0,
+    "isal_canonical_fail": 12
+  }
+}

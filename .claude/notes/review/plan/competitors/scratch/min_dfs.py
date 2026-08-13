@@ -38,6 +38,16 @@ def _rightmost_path(code: list[Tuple5]) -> list[int]:
     return list(reversed(path))
 
 
+class MinDfsBudgetExceeded(RuntimeError):
+    """The live embedding set outgrew `max_projections` before the code was complete."""
+
+    def __init__(self, live: int, step: int, m: int):
+        super().__init__(f"{live} live embeddings at edge {step}/{m}")
+        self.live = live
+        self.step = step
+        self.m = m
+
+
 class _Proj:
     """One partial embedding: DFS index -> graph vertex, plus the edges consumed."""
 
@@ -53,14 +63,26 @@ def min_dfs_code(
     G: nx.Graph,
     vlabel: dict[int, int] | None = None,
     elabel: dict[frozenset[int], int] | None = None,
+    max_projections: int | None = None,
 ) -> list[Tuple5]:
     """Minimum DFS code of a connected graph with at least one edge.
+
+    Parameters
+    ----------
+    max_projections
+        Cap on the number of simultaneously live embeddings.  The construction keeps
+        every embedding that realises the current minimal prefix, and on a large
+        symmetric graph that set can grow until the process is killed by the OOM
+        reaper -- measured on IAM Mutagenicity (``n_max = 92``).  Raising instead of
+        dying is the difference between a recorded failure and a lost run.
 
     Raises
     ------
     ValueError
         If the graph is disconnected, or has no edge.  The DFS code is undefined
         in both cases; the caller must supply a convention.
+    MinDfsBudgetExceeded
+        If *max_projections* is set and the live embedding set exceeds it.
     """
     if G.number_of_edges() == 0:
         raise ValueError("DFS code undefined: no edges (isolated vertices carry no tuple)")
@@ -93,6 +115,9 @@ def min_dfs_code(
         rmpath = _rightmost_path(code)
         rm_idx = rmpath[-1]  # rightmost vertex, DFS index
         cands: dict[Tuple5, list[_Proj]] = {}
+
+        if max_projections is not None and len(projs) > max_projections:
+            raise MinDfsBudgetExceeded(len(projs), len(code), m)
 
         for p in projs:
             rm_v = p.v_of[rm_idx]

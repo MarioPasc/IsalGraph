@@ -120,15 +120,24 @@ actual graphs:
 | LINUX | 8.71 | 10 | 89 | 200k | **100 %** | 8.0 |
 | AIDS (Suite 1) | 10.56 | 12 | 769 | 200k | **99.6 %** (3 fail) | 54.4 |
 | **GREC** (Suite 2) | 11.54 | 24 | 400 sampled | 100k | **76 %** (96 fail) | **173** |
+| **AIDS-IAM** | 13.63 | 85 | 400 sampled | 100k | **82 %** (73 fail) | **269** |
+| **COIL-DEL** | 21.30 | 68 | 50 sampled | 100k | **54 %** (23 fail) | **736** |
+| **Protein** | 31.88 | 96 | 50 sampled | 100k | **10 %** (45 fail) | **2,743** |
+| **Mutagenicity** | 27.91 | 97 | 50 sampled | 100k | **2 %** (49 fail) | **1,106** |
 
-> **All of Suite 1 is computable; Suite 2 is not.** AIDS at `n ≤ 12` loses 3 graphs of 769. GREC,
-> whose *mean* is only one node larger but whose tail reaches 24, loses **24 %** — and at 173 ms per
-> graph, raising the budget is not free: 16,370 Suite-2 graphs at even the GREC rate is ~47
-> core-minutes for a column that would still be a quarter empty.
+> **All of Suite 1 is computable; none of Suite 2 is.** AIDS at `n ≤ 12` loses 3 graphs of 769.
+> GREC, whose *mean* is only one node larger but whose tail reaches 24, loses **24 %**. From there
+> it collapses monotonically: 18 % → 46 % → **90 %** → **98 %**, while the per-graph cost rises
+> from 173 ms to 2.7 s. **On Mutagenicity, 49 of 50 graphs have no computable AGM canonical code.**
 >
-> The failure is driven by the **tail**, not the mean, which is why `n̄` is the wrong statistic to
-> plan with. It also means the ceiling cannot be stated as a single `n`: it depends on how
-> symmetric the individual graph is.
+> Raising the budget does not rescue this. At the Protein rate, 16,370 Suite-2 graphs would cost
+> ~12 core-hours to produce a column that is 90 % empty.
+>
+> The failure is driven by the **tail**, not the mean — Protein (`n̄ = 31.9`) fails less often than
+> Mutagenicity (`n̄ = 27.9`) — which is why `n̄` is the wrong statistic to plan with, and why the
+> ceiling cannot be stated as a single `n`: it depends on how symmetric the individual graph is.
+> Sparse graphs are the worse case, because near-empty prefixes tie constantly and prefix pruning
+> never bites.
 
 Raising the budget does not rescue it: search nodes grow ~20× from `n = 11` to `n = 14`, so
 reaching `n = 32` needs something like `10¹⁰` nodes per graph, against 16,370 graphs.
@@ -267,8 +276,9 @@ assertion to evidence, and they are worth having even if the empirical row is cu
 **Recommended policy, and the reason to fix it before T-06 rather than during it:**
 
 1. **AGM runs on Suite 1 only.** Measured on the real cohort: **100 %** exact on all three Letter
-   sets and LINUX, **99.6 %** on AIDS (3 of 769 fail at a 200k-node budget), and **76 %** on GREC
-   (96 of 400 fail at 100k, 173 ms/graph). It is excluded from Suite 2 with that sentence printed.
+   sets and LINUX, **99.6 %** on AIDS (3 of 769 fail at a 200k-node budget), then **76 % GREC ·
+   82 % AIDS-IAM · 54 % COIL-DEL · 10 % Protein · 2 % Mutagenicity**. It is excluded from Suite 2
+   with that sentence printed.
    A stated ceiling is a result; a silent one is a defect. **The 3 AIDS failures must also be
    printed**, not dropped — they are why AGM has no ρ column on AIDS.
 2. **Do not substitute a heuristic labelling above the ceiling.** An incumbent from the greedy
