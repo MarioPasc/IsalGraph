@@ -24,16 +24,20 @@ import numpy as np
 import pytest
 
 from benchmarks.eval_setup.ged_bound_bakeoff import (
-    BAKEOFF_METHODS,
+    BAKEOFF_CELLS,
+    CELLS,
     COST_MODEL,
-    METHODS,
+    DOMINATED_BY_BIPARTITE,
     BakeoffError,
+    CellSpec,
     Corpus,
-    MethodSpec,
     all_zero_guard,
     assert_aligned,
     build_graphs,
     capability_probe,
+    check_branch_equivalence,
+    check_dominance,
+    is_deterministic,
     label_graph,
     load_corpus,
     probe_pairs,
@@ -193,30 +197,69 @@ class TestRegistry:
     def test_cost_model_is_d6(self) -> None:
         assert list(COST_MODEL) == [1.0, 1.0, 0.0, 1.0, 1.0, 0.0]
 
-    def test_eight_bakeoff_methods_split_four_four(self) -> None:
-        lower = [m for m in BAKEOFF_METHODS if METHODS[m].end == "lower"]
-        upper = [m for m in BAKEOFF_METHODS if METHODS[m].end == "upper"]
-        assert len(lower) == 4
-        assert len(upper) == 4
-        assert set(lower) == {"BRANCH", "BRANCH_FAST", "BRANCH_TIGHT", "STAR"}
-        assert set(upper) == {"BIPARTITE", "IPFP", "REFINE", "BP_BEAM"}
+    def test_twelve_cells_split_five_lower_seven_upper(self) -> None:
+        lower = [c for c in BAKEOFF_CELLS if CELLS[c].end == "lower"]
+        upper = [c for c in BAKEOFF_CELLS if CELLS[c].end == "upper"]
+        assert len(BAKEOFF_CELLS) == 12
+        assert set(lower) == {"BRANCH", "BRANCH_FAST", "BRANCH_TIGHT", "STAR", "HED"}
+        assert set(upper) == {
+            "BIPARTITE",
+            "IPFP_MS",
+            "REFINE_MS",
+            "BP_BEAM_MS",
+            "IPFP_DET",
+            "REFINE_DET",
+            "BP_BEAM_DET",
+        }
+
+    def test_a_cell_is_not_a_method(self) -> None:
+        """Six cells share three GEDLIB methods under two configurations each."""
+        assert CELLS["IPFP_MS"].method == CELLS["IPFP_DET"].method == "IPFP"
+        assert CELLS["IPFP_MS"].options != CELLS["IPFP_DET"].options
+        assert len({CELLS[c].method for c in BAKEOFF_CELLS}) == 9
+
+    def test_every_cell_key_matches_its_own_name(self) -> None:
+        for name, spec in CELLS.items():
+            assert spec.cell == name
 
     def test_hed_is_a_lower_bound_with_optimal_edge_set_distances(self) -> None:
         """HED's default is identically zero under D6; OPTIMAL is what makes it useful."""
-        spec = METHODS["HED"]
+        spec = CELLS["HED"]
         assert spec.end == "lower"
-        assert "--edge-set-distances OPTIMAL" in spec.default_options
+        assert "--edge-set-distances OPTIMAL" in spec.options
 
-    def test_no_pinned_option_string_carries_a_seed(self) -> None:
+    def test_no_campaign_option_string_carries_a_seed(self) -> None:
         """GEDLIB exposes no --seed; passing one raises Invalid option "seed"."""
-        for spec in METHODS.values():
-            assert "--seed" not in spec.pinned_options
+        for spec in CELLS.values():
+            assert "--seed" not in spec.options
+            assert "--seed" not in spec.defaults
 
-    def test_local_search_methods_are_flagged_randomised(self) -> None:
-        for name in ("IPFP", "REFINE", "BP_BEAM"):
-            assert METHODS[name].randomised is True
+    def test_every_campaign_option_string_is_single_threaded(self) -> None:
+        for spec in CELLS.values():
+            assert "--threads 1" in spec.options
+
+    def test_local_search_cells_are_flagged_randomised_at_defaults(self) -> None:
+        for name in ("IPFP_MS", "REFINE_MS", "BP_BEAM_MS", "IPFP_DET", "REFINE_DET", "BP_BEAM_DET"):
+            assert CELLS[name].randomised is True
         for name in ("BRANCH", "BRANCH_FAST", "BRANCH_TIGHT", "STAR", "BIPARTITE", "HED"):
-            assert METHODS[name].randomised is False
+            assert CELLS[name].randomised is False
+
+    def test_multi_start_cells_ask_for_several_initial_solutions(self) -> None:
+        for name in ("IPFP_MS", "REFINE_MS", "BP_BEAM_MS"):
+            assert "--initial-solutions 10" in CELLS[name].options
+            assert "--randomness PSEUDO" in CELLS[name].options
+
+    def test_det_cells_start_from_the_bipartite_map(self) -> None:
+        """This is what makes them provably dominated by the BIPARTITE cell."""
+        for name in DOMINATED_BY_BIPARTITE:
+            assert "--initialization-method BIPARTITE" in CELLS[name].options
+            assert "--initial-solutions 1" in CELLS[name].options
+
+    def test_a_pinned_cell_is_reported_deterministic_but_its_defaults_are_not(self) -> None:
+        spec = CELLS["IPFP_MS"]
+        assert is_deterministic(spec, spec.options) is True
+        assert is_deterministic(spec, spec.defaults) is False
+        assert is_deterministic(CELLS["BRANCH"], CELLS["BRANCH"].defaults) is True
 
 
 # --------------------------------------------------------------------------
@@ -368,7 +411,7 @@ class TestIndexFile:
         assert meta["dataset"] == "toy"
         assert meta["n_pairs"] == 6
         assert meta["cost_model"] == [1.0, 1.0, 0.0, 1.0, 1.0, 0.0]
-        for key in ("method", "end", "options", "deterministic"):
+        for key in ("cell", "method", "end", "options", "deterministic"):
             assert meta[key] is None, key
 
     def test_n_max_is_the_larger_node_count(self, toy_root: Path, tmp_path: Path) -> None:
@@ -571,7 +614,7 @@ class TestSummary:
             pair_j=np.array([1, 2, 2]),
         )
         values = np.array([0.0, 1.0, 2.0])
-        summary = summarise_cell(values, corpus, METHODS["BRANCH"], np.zeros(3, dtype=bool))
+        summary = summarise_cell(values, corpus, CELLS["BRANCH"], np.zeros(3, dtype=bool))
         assert summary["n_m1_eligible"] == 2
         assert summary["mean_relative_error"] == pytest.approx(0.5)
         assert summary["n_zero_with_positive_exact"] == 0
@@ -591,7 +634,7 @@ class TestSummary:
             pair_j=np.array([1, 2]),
         )
         summary = summarise_cell(
-            np.array([0.0, 2.0]), corpus, METHODS["BRANCH"], np.zeros(2, dtype=bool)
+            np.array([0.0, 2.0]), corpus, CELLS["BRANCH"], np.zeros(2, dtype=bool)
         )
         assert summary["n_zero_with_positive_exact"] == 1
         assert summary["n_refuted"] == 0
@@ -601,12 +644,13 @@ class TestFailureReport:
     """A failed cell writes JSON and never a partial .npz."""
 
     def test_failure_json_carries_the_contracted_keys(self, tmp_path: Path) -> None:
-        path = write_failure(tmp_path, "toy", "IPFP", BakeoffError("boom"), "--threads 1")
+        path = write_failure(tmp_path, "toy", "IPFP_MS", BakeoffError("boom"), "--threads 1")
         payload = json.loads(path.read_text())
-        assert set(payload) == {"dataset", "method", "reason", "traceback", "options"}
+        assert set(payload) == {"dataset", "cell", "method", "reason", "traceback", "options"}
+        assert payload["cell"] == "IPFP_MS"
         assert payload["method"] == "IPFP"
         assert "boom" in payload["reason"]
-        assert not (tmp_path / "data" / "cells" / "toy__IPFP.npz").exists()
+        assert not (tmp_path / "data" / "cells" / "toy__IPFP_MS.npz").exists()
 
 
 # --------------------------------------------------------------------------
@@ -639,41 +683,41 @@ class TestCapabilityProbe:
             d2 = sorted(d for _, d in g2.degree())
             assert d1 != d2, name
 
-    @pytest.mark.parametrize("method", sorted(METHODS))
-    def test_every_configured_method_passes_its_probe(self, method: str) -> None:
-        values = capability_probe(METHODS[method])
+    @pytest.mark.parametrize("cell", sorted(CELLS))
+    def test_every_configured_cell_passes_its_probe(self, cell: str) -> None:
+        values = capability_probe(CELLS[cell])
         assert set(values) == {name for name, _, _, _ in probe_pairs()}
         assert all(v > 0.0 for v in values.values())
 
     def test_reading_an_upper_bound_method_as_a_lower_bound_raises(self) -> None:
         """The trap: get_lower_bound() on BIPARTITE returns 0.00 and does not raise."""
-        wrong = MethodSpec("BIPARTITE", "lower")
+        wrong = CellSpec("WRONG", "BIPARTITE", "lower", "--threads 1")
         with pytest.raises(BakeoffError, match="wrong-accessor signature"):
             capability_probe(wrong)
 
     @pytest.mark.parametrize("method", ["IPFP", "REFINE", "BP_BEAM"])
     def test_reading_a_local_search_method_as_a_lower_bound_raises(self, method: str) -> None:
         with pytest.raises(BakeoffError, match="wrong-accessor signature"):
-            capability_probe(MethodSpec(method, "lower"))
+            capability_probe(CellSpec("WRONG", method, "lower", "--threads 1"))
 
     def test_reading_hed_as_an_upper_bound_raises_on_infinity(self) -> None:
         """hed.ipp sets only the lower bound, so the upper accessor returns inf."""
         with pytest.raises(BakeoffError, match="infinite"):
-            capability_probe(MethodSpec("HED", "upper", "--edge-set-distances OPTIMAL"))
+            capability_probe(CellSpec("WRONG", "HED", "upper", "--edge-set-distances OPTIMAL"))
 
     def test_hed_default_options_are_vacuous_under_d6(self) -> None:
         """Free edge substitution makes the default edge-set distance identically zero."""
         with pytest.raises(BakeoffError, match="wrong-accessor signature"):
-            capability_probe(MethodSpec("HED", "lower", ""))
+            capability_probe(CellSpec("WRONG", "HED", "lower", ""))
 
     def test_gedlib_rejects_an_unknown_option_rather_than_dropping_it(self) -> None:
         with pytest.raises(Exception, match="Invalid option"):
-            capability_probe(MethodSpec("BRANCH", "lower", "--nonsense 1"))
+            capability_probe(CellSpec("WRONG", "BRANCH", "lower", "--nonsense 1"))
 
     def test_gedlib_rejects_the_seed_option(self) -> None:
         """The design note's example pinned string named --seed, which does not exist."""
         with pytest.raises(Exception, match='Invalid option "seed"'):
-            capability_probe(MethodSpec("IPFP", "upper", "--seed 42"))
+            capability_probe(CellSpec("WRONG", "IPFP", "upper", "--seed 42"))
 
 
 @requires_gedlib
@@ -681,7 +725,7 @@ class TestKnownValues:
     """Reproduce the recorded smoke test, and the zero that must not raise."""
 
     def test_p4_versus_c4_reproduces_the_recorded_bounds(self) -> None:
-        values = capability_probe(METHODS["BRANCH_FAST"])
+        values = capability_probe(CELLS["BRANCH_FAST"])
         assert values["P4_vs_C4"] == pytest.approx(1.0)
 
     def test_a_degree_preserving_non_isomorphic_pair_gives_a_zero_lower_bound(self) -> None:
@@ -750,23 +794,41 @@ class TestCellEvaluation:
             payload["value"], np.minimum(payload["value_fwd"], payload["value_rev"])
         )
 
-    def test_cell_meta_records_method_end_and_options(self, toy_root: Path, tmp_path: Path) -> None:
+    def test_cell_meta_records_cell_method_end_and_options(
+        self, toy_root: Path, tmp_path: Path
+    ) -> None:
         from benchmarks.eval_setup.ged_bound_bakeoff import evaluate_cell
 
         summary = evaluate_cell(toy_root, tmp_path / "out", "toy", "HED")
         meta = json.loads(str(np.load(summary["path"], allow_pickle=True)["meta"]))
+        assert meta["cell"] == "HED"
         assert meta["method"] == "HED"
         assert meta["end"] == "lower"
         assert "--edge-set-distances OPTIMAL" in meta["options"]
         assert meta["cost_model"] == [1.0, 1.0, 0.0, 1.0, 1.0, 0.0]
 
-    @pytest.mark.parametrize("method", sorted(METHODS))
-    def test_every_method_holds_its_bound_on_the_toy_dataset(
-        self, toy_root: Path, tmp_path: Path, method: str
+    def test_two_cells_of_one_method_are_distinguished_by_cell_not_method(
+        self, toy_root: Path, tmp_path: Path
     ) -> None:
         from benchmarks.eval_setup.ged_bound_bakeoff import evaluate_cell
 
-        summary = evaluate_cell(toy_root, tmp_path / "out", "toy", method)
+        out = tmp_path / "out"
+        ms = evaluate_cell(toy_root, out, "toy", "IPFP_MS")
+        det = evaluate_cell(toy_root, out, "toy", "IPFP_DET")
+        assert ms["path"] != det["path"]
+        for summary, cell in ((ms, "IPFP_MS"), (det, "IPFP_DET")):
+            meta = json.loads(str(np.load(summary["path"], allow_pickle=True)["meta"]))
+            assert meta["cell"] == cell
+            assert meta["method"] == "IPFP"
+            assert meta["deterministic"] is True
+
+    @pytest.mark.parametrize("cell", sorted(CELLS))
+    def test_every_cell_holds_its_bound_on_the_toy_dataset(
+        self, toy_root: Path, tmp_path: Path, cell: str
+    ) -> None:
+        from benchmarks.eval_setup.ged_bound_bakeoff import evaluate_cell
+
+        summary = evaluate_cell(toy_root, tmp_path / "out", "toy", cell)
         assert summary["n_violations"] == 0
         assert summary["n_refuted_certified"] == 0
         assert summary["n_refuted_censored"] == 0
@@ -781,3 +843,76 @@ class TestCellEvaluation:
         left = np.load(serial["path"], allow_pickle=True)["value"]
         right = np.load(parallel["path"], allow_pickle=True)["value"]
         assert np.array_equal(left, right)
+
+
+@requires_gedlib
+class TestGates:
+    """Two predictions the harness checks against itself, for free."""
+
+    def test_branch_equals_branch_fast_end_to_end(self, toy_root: Path, tmp_path: Path) -> None:
+        """Constant edge edit costs make the two provably equivalent."""
+        from benchmarks.eval_setup.ged_bound_bakeoff import evaluate_cell, run_gates
+
+        out = tmp_path / "out"
+        for cell in ("BRANCH", "BRANCH_FAST"):
+            evaluate_cell(toy_root, out, "toy", cell)
+        report = run_gates(out, "toy")
+        gate = report["p1_branch_equivalence"]
+        assert gate["passes"] is True
+        assert gate["n_equal"] == gate["n_pairs"]
+        assert gate["max_abs_diff"] == 0.0
+
+    def test_local_searches_never_exceed_their_bipartite_initialiser(
+        self, toy_root: Path, tmp_path: Path
+    ) -> None:
+        from benchmarks.eval_setup.ged_bound_bakeoff import evaluate_cell, run_gates
+
+        out = tmp_path / "out"
+        for cell in ("BIPARTITE", *DOMINATED_BY_BIPARTITE):
+            evaluate_cell(toy_root, out, "toy", cell)
+        report = run_gates(out, "toy")
+        for cell in DOMINATED_BY_BIPARTITE:
+            assert report["dominance_vs_bipartite"][cell]["passes"] is True
+            assert report["dominance_vs_bipartite"][cell]["n_violations"] == 0
+
+    def test_gates_skip_rather_than_crash_when_a_cell_is_absent(self, tmp_path: Path) -> None:
+        from benchmarks.eval_setup.ged_bound_bakeoff import run_gates
+
+        report = run_gates(tmp_path / "empty", "toy")
+        assert report["p1_branch_equivalence"].startswith("skipped")
+
+
+class TestGateLogic:
+    """The gate predicates, without GEDLIB."""
+
+    def test_branch_equivalence_passes_on_identical_arrays(self) -> None:
+        values = np.array([0.0, 1.0, 4.5])
+        assert check_branch_equivalence(values, values.copy(), dataset="toy") is None
+
+    def test_branch_equivalence_raises_at_zero_tolerance(self) -> None:
+        """These are sums of integers under a unit cost model; no slack is allowed."""
+        with pytest.raises(BakeoffError, match="P1 gate failed"):
+            check_branch_equivalence(
+                np.array([1.0, 2.0]), np.array([1.0, 2.0 + 1e-12]), dataset="toy"
+            )
+
+    def test_branch_equivalence_raises_on_a_length_mismatch(self) -> None:
+        with pytest.raises(BakeoffError, match="different lengths"):
+            check_branch_equivalence(np.zeros(3), np.zeros(2), dataset="toy")
+
+    def test_dominance_passes_when_the_local_search_only_improves(self) -> None:
+        assert (
+            check_dominance(
+                np.array([3.0, 5.0, 5.0]),
+                np.array([4.0, 5.0, 9.0]),
+                dataset="toy",
+                cell="REFINE_DET",
+            )
+            is None
+        )
+
+    def test_dominance_raises_when_the_local_search_is_worse(self) -> None:
+        with pytest.raises(BakeoffError, match="dominance gate failed"):
+            check_dominance(
+                np.array([3.0, 6.0]), np.array([4.0, 5.0]), dataset="toy", cell="REFINE_DET"
+            )

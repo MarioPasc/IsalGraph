@@ -114,80 +114,99 @@ class BakeoffError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class MethodSpec:
-    """One GEDLIB method as this bake-off configures it.
+class CellSpec:
+    """One measured column: a GEDLIB method under one fixed option string.
+
+    A *cell* is not a method. Three GEDLIB methods are measured in two
+    configurations each, because the configuration changes both what the number
+    means and what it can be compared against, and a single column would hide
+    that. ``IPFP_MS`` and ``IPFP_DET`` are the same solver and different
+    measurements.
 
     Attributes
     ----------
-    name : str
-        GEDLIB method name, verbatim and upper case.
+    cell : str
+        Column name. This is the token in ``{ds}__{CELL}.npz`` and it is what
+        the analysis keys on.
+    method : str
+        Bare GEDLIB method name, verbatim and upper case. Several cells share
+        one.
     end : {'lower', 'upper'}
-        Which accessor carries this method's bound. ``'lower'`` reads
+        Which accessor carries this cell's bound. ``'lower'`` reads
         ``get_lower_bound()``; ``'upper'`` reads ``get_upper_bound()``. Never
         both -- reading the other end returns garbage without raising.
-    default_options : str
-        Option string used for the primary campaign and the defaults arm of the
-        determinism probe.
-    pinned_options : str
-        Option string for the pinned arm of the determinism probe. Empty when
-        the method exposes nothing to pin.
+    options : str
+        The campaign option string. Fixed, deterministic, and recorded in every
+        ``meta`` blob: method identity in the paper is method plus options.
+    defaults : str
+        GEDLIB's own defaults for this method, used as the defaults arm of the
+        determinism probe. Never used for a reported number.
     randomised : bool
-        Whether the method performs randomised local search, and is therefore
-        expected to vary across repetitions at defaults.
+        Whether the method is randomised *at GEDLIB defaults*. All campaign
+        option strings are pinned to zero variation; this records what had to
+        be pinned.
     """
 
-    name: str
+    cell: str
+    method: str
     end: End
-    default_options: str = ""
-    pinned_options: str = ""
+    options: str = ""
+    defaults: str = ""
     randomised: bool = False
 
 
-#: The eight bake-off methods plus ``HED``.
+#: Multi-start: several random initial solutions, the configuration under which
+#: the published tightness comparisons were measured. ``--randomness PSEUDO`` is
+#: what makes it reproducible; GEDLIB exposes no ``--seed``.
 #:
-#: ``HED`` carries ``--edge-set-distances OPTIMAL`` because its default,
-#: ``HED``, scores incident-edge sets by a row/column-minimum sum that is
-#: identically zero when edge substitution is free, as it is under D6. The
-#: default therefore yields a valid but vacuous bound of 0.0 on every pair.
-#: ``OPTIMAL`` replaces that with an optimal LSAPE and the bound becomes
-#: non-degenerate. ``HED`` sets only ``result.set_lower_bound`` in
-#: ``hed.ipp``, so ``get_upper_bound() = inf`` is by design, not a defect.
-#:
-#: The pinned option strings carry no ``--seed``: GEDLIB exposes no seed
-#: option, and passing one raises ``Invalid option "seed"``. Determinism for the
-#: local-search methods is pinned through single-threading, pseudo-randomness,
-#: a single initial solution and no randpost loops.
-_LS_PINNED = "--threads 1 --randomness PSEUDO --initial-solutions 1 --num-randpost-loops 0"
+#: ``k = 10`` rather than 40. Measured on the LINUX census, mean relative error
+#: is 0.0894 at ``k = 10`` against 0.0801 at ``k = 40`` -- 10 % tighter for 4x
+#: the cost (9.7 ms against 39.1 ms per evaluation). At census scale that is the
+#: difference between roughly 21 and 85 core-hours for one cell, and the design
+#: note's compute ceiling is 40.
+_MULTI_START = "--threads 1 --randomness PSEUDO --initial-solutions 10"
 
-METHODS: dict[str, MethodSpec] = {
-    "BRANCH": MethodSpec("BRANCH", "lower", "", "--threads 1"),
-    "BRANCH_FAST": MethodSpec("BRANCH_FAST", "lower", "", "--threads 1"),
-    "BRANCH_TIGHT": MethodSpec("BRANCH_TIGHT", "lower", "", "--threads 1"),
-    "STAR": MethodSpec("STAR", "lower", "", "--threads 1"),
-    "BIPARTITE": MethodSpec("BIPARTITE", "upper", "", "--threads 1"),
-    "IPFP": MethodSpec("IPFP", "upper", "", _LS_PINNED, randomised=True),
-    "REFINE": MethodSpec("REFINE", "upper", "", _LS_PINNED, randomised=True),
-    "BP_BEAM": MethodSpec("BP_BEAM", "upper", "", _LS_PINNED, randomised=True),
-    "HED": MethodSpec(
-        "HED",
-        "lower",
-        "--edge-set-distances OPTIMAL",
-        "--edge-set-distances OPTIMAL --threads 1",
-    ),
+#: Single deterministic start from the BIPARTITE assignment. A monotone local
+#: search that starts from an initialiser's node map and accepts only strict
+#: improvements can never return a worse value than that initialiser, so this
+#: configuration makes ``REFINE_DET`` and ``BP_BEAM_DET`` provably dominated by
+#: ``BIPARTITE`` -- a free self-check on every pair. See :func:`check_dominance`.
+_DET_START = (
+    "--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1"
+)
+
+#: GEDLIB's own local-search defaults, for the determinism probe only:
+#: ``initialization-method`` is a random node map and ``randomness`` is ``REAL``,
+#: which is why IPFP returns 3.00 on P4/C4 where the true distance is 1.00 and
+#: why it varies on 91 % of LINUX pairs run to run.
+_LS_DEFAULTS = "--threads 1"
+
+CELLS: dict[str, CellSpec] = {
+    "BRANCH": CellSpec("BRANCH", "BRANCH", "lower", "--threads 1", ""),
+    "BRANCH_FAST": CellSpec("BRANCH_FAST", "BRANCH_FAST", "lower", "--threads 1", ""),
+    "BRANCH_TIGHT": CellSpec("BRANCH_TIGHT", "BRANCH_TIGHT", "lower", "--threads 1", ""),
+    "STAR": CellSpec("STAR", "STAR", "lower", "--threads 1", ""),
+    # HED's default --edge-set-distances HED scores incident-edge sets by a
+    # row/column-minimum sum that is identically zero when edge substitution is
+    # free, as it is under D6, so the default is a valid but vacuous 0.0 on
+    # every pair. OPTIMAL replaces it with an optimal LSAPE. hed.ipp calls only
+    # result.set_lower_bound, so get_upper_bound() = inf is by design.
+    "HED": CellSpec("HED", "HED", "lower", "--edge-set-distances OPTIMAL --threads 1", ""),
+    "BIPARTITE": CellSpec("BIPARTITE", "BIPARTITE", "upper", "--threads 1", ""),
+    "IPFP_MS": CellSpec("IPFP_MS", "IPFP", "upper", _MULTI_START, _LS_DEFAULTS, True),
+    "REFINE_MS": CellSpec("REFINE_MS", "REFINE", "upper", _MULTI_START, _LS_DEFAULTS, True),
+    "BP_BEAM_MS": CellSpec("BP_BEAM_MS", "BP_BEAM", "upper", _MULTI_START, _LS_DEFAULTS, True),
+    "IPFP_DET": CellSpec("IPFP_DET", "IPFP", "upper", _DET_START, _LS_DEFAULTS, True),
+    "REFINE_DET": CellSpec("REFINE_DET", "REFINE", "upper", _DET_START, _LS_DEFAULTS, True),
+    "BP_BEAM_DET": CellSpec("BP_BEAM_DET", "BP_BEAM", "upper", _DET_START, _LS_DEFAULTS, True),
 }
 
-#: The eight methods the frozen selection rule ranks. ``HED`` is a ninth cell,
-#: reported but outside the four-versus-four comparison.
-BAKEOFF_METHODS: tuple[str, ...] = (
-    "BRANCH",
-    "BRANCH_FAST",
-    "BRANCH_TIGHT",
-    "STAR",
-    "BIPARTITE",
-    "IPFP",
-    "REFINE",
-    "BP_BEAM",
-)
+#: The twelve cells of the campaign: five lower, seven upper.
+BAKEOFF_CELLS: tuple[str, ...] = tuple(CELLS)
+
+#: Cells whose reported value must not exceed the ``BIPARTITE`` cell's, because
+#: they are monotone local searches started from the ``BIPARTITE`` node map.
+DOMINATED_BY_BIPARTITE: tuple[str, ...] = ("IPFP_DET", "REFINE_DET", "BP_BEAM_DET")
 
 
 # --------------------------------------------------------------------------
@@ -531,14 +550,23 @@ def build_meta(
     deterministic: bool | None,
     wall_seconds: float,
     code_root: Path,
+    cell: str | None = None,
 ) -> str:
     """Build the ``meta`` JSON string shared by index and cell files.
 
     Returns
     -------
     str
-        JSON, matching CONTRACTS section 4. Index files pass ``None`` for
-        ``method``, ``end``, ``options`` and ``deterministic``.
+        JSON, matching CONTRACTS section 4 plus ``cell``. Index files pass
+        ``None`` for ``cell``, ``method``, ``end``, ``options`` and
+        ``deterministic``.
+
+    Notes
+    -----
+    ``cell`` and ``method`` are different keys on purpose. ``method`` is the
+    bare GEDLIB name, so ``IPFP_MS`` and ``IPFP_DET`` both carry ``"IPFP"``;
+    ``cell`` is the column, which is what the file is named after and what the
+    analysis keys on.
     """
     payload = {
         "schema_version": SCHEMA_VERSION,
@@ -546,6 +574,7 @@ def build_meta(
         "dataset": dataset,
         "n_graphs": n_graphs,
         "n_pairs": n_pairs,
+        "cell": cell,
         "method": method,
         "end": end,
         "options": options,
@@ -731,7 +760,7 @@ def label_graph(graph: nx.Graph) -> nx.Graph:
     return labelled
 
 
-def capability_probe(spec: MethodSpec, options: str | None = None) -> dict[str, float]:
+def capability_probe(spec: CellSpec, options: str | None = None) -> dict[str, float]:
     """Prove a method's configured accessor is live before measuring with it.
 
     Runs the method on :func:`probe_pairs`, whose exact distances are known and
@@ -740,10 +769,10 @@ def capability_probe(spec: MethodSpec, options: str | None = None) -> dict[str, 
 
     Parameters
     ----------
-    spec : MethodSpec
+    spec : CellSpec
         The method.
     options : str, optional
-        Option string. Defaults to ``spec.default_options``.
+        Option string. Defaults to ``spec.options``.
 
     Returns
     -------
@@ -760,7 +789,7 @@ def capability_probe(spec: MethodSpec, options: str | None = None) -> dict[str, 
         degree sequence and in node count respectively.
     """
     module = load_gedlib()
-    opts = spec.default_options if options is None else options
+    opts = spec.options if options is None else options
     values: dict[str, float] = {}
     for name, g1, g2, exact in probe_pairs():
         env = module.GEDEnvGXL()
@@ -768,24 +797,24 @@ def capability_probe(spec: MethodSpec, options: str | None = None) -> dict[str, 
         b = env.add_nx_graph(label_graph(g2), "")
         env.set_edit_cost("CONSTANT", edit_cost_constant=list(COST_MODEL))
         env.init(init_option=INIT_OPTION)
-        env.set_method(spec.name, opts)
+        env.set_method(spec.method, opts)
         env.init_method()
         env.run_method(a, b)
-        value = read_bound(env, a, b, spec.end, context=f"probe {name} / {spec.name}")
+        value = read_bound(env, a, b, spec.end, context=f"probe {name} / {spec.method}")
         if value <= 0.0:
             raise BakeoffError(
-                f"capability probe {name} failed for {spec.name} [{opts!r}]: the "
+                f"capability probe {name} failed for {spec.method} [{opts!r}]: the "
                 f"{spec.end} accessor returned {value} where the exact distance is "
                 f"{exact}. This is the wrong-accessor signature, not a loose bound."
             )
         if spec.end == "lower" and value > exact + TOL:
             raise BakeoffError(
-                f"capability probe {name}: {spec.name} lower bound {value} exceeds the "
+                f"capability probe {name}: {spec.method} lower bound {value} exceeds the "
                 f"exact distance {exact}"
             )
         if spec.end == "upper" and value < exact - TOL:
             raise BakeoffError(
-                f"capability probe {name}: {spec.name} upper bound {value} falls below "
+                f"capability probe {name}: {spec.method} upper bound {value} falls below "
                 f"the exact distance {exact}"
             )
         values[name] = value
@@ -816,6 +845,109 @@ def all_zero_guard(values: np.ndarray, exact: np.ndarray, *, context: str) -> No
         raise BakeoffError(
             f"{context}: every value is 0.0 while {int(positive.sum())} pairs have a "
             "positive exact distance; the accessor is wrong"
+        )
+
+
+def is_deterministic(spec: CellSpec, options: str) -> bool:
+    """Report whether a cell's option string was measured free of variation.
+
+    Parameters
+    ----------
+    spec : CellSpec
+        The cell.
+    options : str
+        The option string actually used.
+
+    Returns
+    -------
+    bool
+        ``True`` for a method that is not randomised at all, and for a
+        randomised method running under its pinned campaign options, which the
+        determinism probe measured at zero variation over five repetitions.
+        ``False`` for a randomised method running under GEDLIB's defaults.
+    """
+    if not spec.randomised:
+        return True
+    return options == spec.options
+
+
+def check_branch_equivalence(branch: np.ndarray, branch_fast: np.ndarray, *, dataset: str) -> None:
+    """Assert ``BRANCH == BRANCH_FAST`` elementwise, at zero tolerance.
+
+    Blumenthal, Boria, Gamper, Bougleux and Brun (*VLDB Journal* survey,
+    section 5.2.4) state that BRANCH and BRANCH-FAST are **equivalent for
+    constant edge edit costs**. D6 has constant edge edit costs, so the general
+    ``BRANCH >= BRANCH_FAST`` collapses to exact equality here.
+
+    That makes this the cheapest whole-harness validation available: it
+    exercises the lower-bound accessor on two independent cells, the graph
+    reconstruction, the pair ordering and the cost model at once, and it has a
+    predicted value rather than a plausible range. A failure is upstream of any
+    tightness question and nothing downstream is trustworthy.
+
+    Parameters
+    ----------
+    branch, branch_fast : numpy.ndarray
+        The two cells' reported values, in canonical pair order.
+    dataset : str
+        Dataset key, for the message.
+
+    Raises
+    ------
+    BakeoffError
+        On any elementwise difference. **Zero tolerance** -- these are sums of
+        integers under a unit cost model and there is no floating-point slack
+        to allow for.
+    """
+    if branch.shape != branch_fast.shape:
+        raise BakeoffError(
+            f"{dataset}: BRANCH and BRANCH_FAST have different lengths, "
+            f"{branch.shape} against {branch_fast.shape}"
+        )
+    differing = branch != branch_fast
+    if differing.any():
+        first = int(np.argmax(differing))
+        raise BakeoffError(
+            f"{dataset}: P1 gate failed -- BRANCH != BRANCH_FAST on "
+            f"{int(differing.sum())} of {branch.size} pairs, max |diff| "
+            f"{float(np.abs(branch - branch_fast).max())}; first at pair index {first} "
+            f"({branch[first]} against {branch_fast[first]}). Under constant edge edit "
+            "costs these are provably equivalent, so the harness itself is wrong."
+        )
+
+
+def check_dominance(
+    dominated: np.ndarray, initialiser: np.ndarray, *, dataset: str, cell: str
+) -> None:
+    """Assert a local search never returns worse than the map it started from.
+
+    ``IPFP_DET``, ``REFINE_DET`` and ``BP_BEAM_DET`` start from the
+    ``BIPARTITE`` node map and accept only strict improvements, so their value
+    can never exceed ``BIPARTITE``'s on any pair. Like the P1 gate, this is a
+    prediction rather than a plausible range, and it is free.
+
+    Parameters
+    ----------
+    dominated : numpy.ndarray
+        The local search's reported values.
+    initialiser : numpy.ndarray
+        The ``BIPARTITE`` cell's reported values.
+    dataset, cell : str
+        For the message.
+
+    Raises
+    ------
+    BakeoffError
+        If the local search ever exceeds its own initialiser.
+    """
+    worse = dominated > initialiser + TOL
+    if worse.any():
+        first = int(np.argmax(worse))
+        raise BakeoffError(
+            f"{dataset}: dominance gate failed -- {cell} exceeds BIPARTITE on "
+            f"{int(worse.sum())} of {dominated.size} pairs; first at pair index {first} "
+            f"({dominated[first]} against {initialiser[first]}). A monotone local search "
+            "started from the BIPARTITE map cannot return a worse value."
         )
 
 
@@ -890,14 +1022,14 @@ def build_environment(corpus: Corpus) -> Environment:
     return Environment(env=env, ids=ids, dataset=corpus.dataset)
 
 
-def configure(environment: Environment, spec: MethodSpec, options: str) -> None:
+def configure(environment: Environment, spec: CellSpec, options: str) -> None:
     """Configure a method on an environment.
 
     Parameters
     ----------
     environment : Environment
         The environment.
-    spec : MethodSpec
+    spec : CellSpec
         The method.
     options : str
         Option string.
@@ -909,17 +1041,17 @@ def configure(environment: Environment, spec: MethodSpec, options: str) -> None:
         option rather than dropping it, so a rejection is always reported.
     """
     try:
-        environment.env.set_method(spec.name, options)
+        environment.env.set_method(spec.method, options)
         environment.env.init_method()
     except Exception as exc:
-        raise BakeoffError(f"{spec.name}: GEDLIB rejected options {options!r} -- {exc}") from exc
-    environment.method = spec.name
+        raise BakeoffError(f"{spec.method}: GEDLIB rejected options {options!r} -- {exc}") from exc
+    environment.method = spec.method
     environment.options = options
 
 
 def run_range(
     environment: Environment,
-    spec: MethodSpec,
+    spec: CellSpec,
     pair_i: np.ndarray,
     pair_j: np.ndarray,
     *,
@@ -933,7 +1065,7 @@ def run_range(
     ----------
     environment : Environment
         A configured environment.
-    spec : MethodSpec
+    spec : CellSpec
         The method.
     pair_i, pair_j : numpy.ndarray
         Canonical pair order.
@@ -959,7 +1091,7 @@ def run_range(
         i = int(pair_i[lo + k])
         j = int(pair_j[lo + k])
         gi, gj = ids[i], ids[j]
-        context = f"{environment.dataset}/{spec.name} pair ({i},{j})"
+        context = f"{environment.dataset}/{spec.method} pair ({i},{j})"
         env.run_method(gi, gj)
         forward[k] = read_bound(env, gi, gj, end, context=f"{context} fwd")
         if reverse is not None:
@@ -971,14 +1103,14 @@ def run_range(
 _WORKER: dict[str, Any] = {}
 
 
-def _worker_init(data_root: str, dataset: str, method: str, options: str) -> None:
+def _worker_init(data_root: str, dataset: str, cell: str, options: str) -> None:
     """Build one persistent environment per worker process.
 
     The environment survives across pair ranges, so ``init`` is paid once per
     worker rather than once per range.
     """
     corpus = load_corpus(Path(data_root), dataset)
-    spec = METHODS[method]
+    spec = CELLS[cell]
     environment = build_environment(corpus)
     configure(environment, spec, options)
     _WORKER["corpus"] = corpus
@@ -1006,14 +1138,14 @@ def evaluate_cell(
     data_root: Path,
     out_root: Path,
     dataset: str,
-    method: str,
+    cell: str,
     *,
     corpus: Corpus | None = None,
     jobs: int = 1,
     chunk: int = 20_000,
     options: str | None = None,
 ) -> dict[str, Any]:
-    """Run one ``(dataset, method)`` cell and write its ``.npz``.
+    """Run one ``(dataset, cell)`` column and write its ``.npz``.
 
     Parameters
     ----------
@@ -1023,8 +1155,9 @@ def evaluate_cell(
         The report directory.
     dataset : str
         Dataset key.
-    method : str
-        GEDLIB method name.
+    cell : str
+        Cell name, a key of :data:`CELLS`. Several cells share one GEDLIB
+        method under different option strings.
     corpus : Corpus, optional
         A corpus already loaded.
     jobs : int
@@ -1046,8 +1179,8 @@ def evaluate_cell(
         Propagated from any guard. The caller writes ``.failed.json`` and no
         ``.npz``; a partial cell is never left on disk.
     """
-    spec = METHODS[method]
-    opts = spec.default_options if options is None else options
+    spec = CELLS[cell]
+    opts = spec.options if options is None else options
     started = time.time()
 
     if corpus is None:
@@ -1079,7 +1212,7 @@ def evaluate_cell(
         with context.Pool(
             processes=jobs,
             initializer=_worker_init,
-            initargs=(str(data_root), dataset, method, opts),
+            initargs=(str(data_root), dataset, cell, opts),
         ) as pool:
             for lo, hi, part_f, part_r in pool.imap_unordered(_worker_run, tasks):
                 forward[lo:hi] = part_f
@@ -1087,7 +1220,7 @@ def evaluate_cell(
                     reverse[lo:hi] = part_r
 
     values = forward if reverse is None else np.minimum(forward, reverse)
-    context = f"{dataset}/{method}"
+    context = f"{dataset}/{cell}"
     all_zero_guard(values, corpus.exact, context=context)
 
     refuted = validity_refuted(values, corpus.exact_lb, corpus.exact_ub, spec.end)
@@ -1102,10 +1235,11 @@ def evaluate_cell(
                 dataset=dataset,
                 n_graphs=corpus.n_graphs,
                 n_pairs=n_pairs,
-                method=method,
+                cell=cell,
+                method=spec.method,
                 end=spec.end,
                 options=opts,
-                deterministic=not spec.randomised,
+                deterministic=is_deterministic(spec, opts),
                 wall_seconds=wall,
                 code_root=repo_root(),
             )
@@ -1114,7 +1248,7 @@ def evaluate_cell(
     if reverse is not None:
         payload["value_rev"] = reverse
 
-    destination = out_root / "data" / "cells" / f"{dataset}__{method}.npz"
+    destination = out_root / "data" / "cells" / f"{dataset}__{cell}.npz"
     destination.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(destination, **payload)
 
@@ -1122,7 +1256,8 @@ def evaluate_cell(
     summary.update(
         {
             "dataset": dataset,
-            "method": method,
+            "cell": cell,
+            "method": spec.method,
             "end": spec.end,
             "options": opts,
             "probes": probes,
@@ -1146,7 +1281,7 @@ def evaluate_cell(
 
 
 def summarise_cell(
-    values: np.ndarray, corpus: Corpus, spec: MethodSpec, refuted: np.ndarray
+    values: np.ndarray, corpus: Corpus, spec: CellSpec, refuted: np.ndarray
 ) -> dict[str, Any]:
     """Summarise a cell for the work log.
 
@@ -1177,19 +1312,20 @@ def summarise_cell(
 
 
 def write_failure(
-    out_root: Path, dataset: str, method: str, exc: BaseException, options: str
+    out_root: Path, dataset: str, cell: str, exc: BaseException, options: str
 ) -> Path:
-    """Write ``{ds}__{METHOD}.failed.json`` and no ``.npz``.
+    """Write ``{ds}__{CELL}.failed.json`` and no ``.npz``.
 
     A failed cell is reported, never omitted and never left as a partial array.
     """
-    destination = out_root / "data" / "cells" / f"{dataset}__{method}.failed.json"
+    destination = out_root / "data" / "cells" / f"{dataset}__{cell}.failed.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(
             {
                 "dataset": dataset,
-                "method": method,
+                "cell": cell,
+                "method": CELLS[cell].method if cell in CELLS else cell,
                 "reason": f"{type(exc).__name__}: {exc}",
                 "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
                 "options": options,
@@ -1197,7 +1333,7 @@ def write_failure(
             indent=2,
         )
     )
-    logger.error("%s/%s failed: %s", dataset, method, exc)
+    logger.error("%s/%s failed: %s", dataset, cell, exc)
     return destination
 
 
@@ -1225,7 +1361,7 @@ def sample_pairs(n_pairs: int, size: int, seed: int) -> np.ndarray:
 
 def determinism_arm(
     corpus: Corpus,
-    spec: MethodSpec,
+    spec: CellSpec,
     options: str,
     *,
     sample: np.ndarray,
@@ -1237,7 +1373,7 @@ def determinism_arm(
     ----------
     corpus : Corpus
         The dataset.
-    spec : MethodSpec
+    spec : CellSpec
         The method.
     options : str
         Option string for this arm.
@@ -1291,7 +1427,7 @@ def run_determinism(
     data_root: Path,
     out_root: Path,
     dataset: str,
-    method: str,
+    cell: str,
     *,
     corpus: Corpus | None = None,
     n_pairs: int = 5_000,
@@ -1300,26 +1436,28 @@ def run_determinism(
 ) -> dict[str, Any]:
     """Run the determinism probe for one cell and write its JSON.
 
+    The ``defaults`` arm is GEDLIB's own configuration, which for the
+    local-search methods means a random initial node map under real randomness.
+    The ``pinned`` arm is the cell's campaign option string, which must show
+    zero variation -- that is the condition for reporting any number from it.
+
     Returns
     -------
     dict
-        The written payload, matching CONTRACTS section 6.
+        The written payload, matching CONTRACTS section 6 plus ``cell``.
     """
-    spec = METHODS[method]
+    spec = CELLS[cell]
     if corpus is None:
         corpus = load_corpus(data_root, dataset)
     sample = sample_pairs(corpus.n_pairs, n_pairs, seed)
 
-    defaults = determinism_arm(
-        corpus, spec, spec.default_options, sample=sample, repetitions=repetitions
-    )
-    pinned = determinism_arm(
-        corpus, spec, spec.pinned_options, sample=sample, repetitions=repetitions
-    )
+    defaults = determinism_arm(corpus, spec, spec.defaults, sample=sample, repetitions=repetitions)
+    pinned = determinism_arm(corpus, spec, spec.options, sample=sample, repetitions=repetitions)
 
     payload = {
         "dataset": dataset,
-        "method": method,
+        "cell": cell,
+        "method": spec.method,
         "end": spec.end,
         "n_pairs": int(sample.size),
         "seed": seed,
@@ -1328,13 +1466,13 @@ def run_determinism(
         "pinned": pinned,
         "deterministic_under_pinned": pinned["frac_varying"] == 0.0,
     }
-    destination = out_root / "data" / "determinism" / f"{dataset}__{method}.json"
+    destination = out_root / "data" / "determinism" / f"{dataset}__{cell}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, indent=2))
     logger.info(
         "determinism %s/%s: defaults frac_varying=%s pinned frac_varying=%s",
         dataset,
-        method,
+        cell,
         defaults["frac_varying"],
         pinned["frac_varying"],
     )
@@ -1348,7 +1486,7 @@ def run_determinism(
 
 def time_method(
     environment: Environment,
-    spec: MethodSpec,
+    spec: CellSpec,
     pair_i: np.ndarray,
     pair_j: np.ndarray,
 ) -> np.ndarray:
@@ -1377,12 +1515,20 @@ def time_method(
 
 
 def _timing_payload(
-    seconds: np.ndarray, *, dataset: str, method: str, options: str, seed: int, n_bar: float
+    seconds: np.ndarray,
+    *,
+    dataset: str,
+    cell: str,
+    method: str,
+    options: str,
+    seed: int,
+    n_bar: float,
 ) -> dict[str, Any]:
     """Build the timing JSON payload from a per-pair seconds array."""
     micros = seconds * 1e6
     return {
         "dataset": dataset,
+        "cell": cell,
         "method": method,
         "options": options,
         "n_pairs_timed": int(micros.size),
@@ -1400,11 +1546,12 @@ def run_timing(
     data_root: Path,
     out_root: Path,
     dataset: str,
-    method: str,
+    cell: str,
     *,
     corpus: Corpus | None = None,
     n_pairs: int = 2_000,
     seed: int = 42,
+    options: str | None = None,
 ) -> dict[str, Any]:
     """Run the serial timing pass for one cell and write its JSON.
 
@@ -1414,33 +1561,35 @@ def run_timing(
         From the capability probe, so that a timing is never recorded for a
         method whose accessor is misconfigured.
     """
-    spec = METHODS[method]
+    spec = CELLS[cell]
+    opts = spec.options if options is None else options
     if corpus is None:
         corpus = load_corpus(data_root, dataset)
-    capability_probe(spec)
+    capability_probe(spec, opts)
 
     sample = sample_pairs(corpus.n_pairs, n_pairs, seed)
     pair_i, pair_j = corpus.pair_i[sample], corpus.pair_j[sample]
     environment = build_environment(corpus)
-    configure(environment, spec, spec.default_options)
+    configure(environment, spec, opts)
     seconds = time_method(environment, spec, pair_i, pair_j)
 
     n_bar = float(np.mean(np.concatenate([corpus.node_counts[pair_i], corpus.node_counts[pair_j]])))
     payload = _timing_payload(
         seconds,
         dataset=dataset,
-        method=method,
-        options=spec.default_options,
+        cell=cell,
+        method=spec.method,
+        options=opts,
         seed=seed,
         n_bar=n_bar,
     )
-    destination = out_root / "data" / "timing" / f"{dataset}__{method}.json"
+    destination = out_root / "data" / "timing" / f"{dataset}__{cell}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, indent=2))
     logger.info(
         "timing %s/%s: %.1f us/pair mean at n_bar %.2f",
         dataset,
-        method,
+        cell,
         payload["us_per_pair_mean"],
         n_bar,
     )
@@ -1507,13 +1656,14 @@ def load_n30_graphs(
 def run_n30_probe(
     iam_root: Path,
     out_root: Path,
-    method: str,
+    cell: str,
     *,
     n_pairs: int = 2_000,
     seed: int = 42,
     graphs: list[nx.Graph] | None = None,
+    options: str | None = None,
 ) -> dict[str, Any]:
-    """Time one method at ``n_bar ~ 30`` and write ``probe_n30__{METHOD}.json``.
+    """Time one cell at ``n_bar ~ 30`` and write ``probe_n30__{CELL}.json``.
 
     Returns
     -------
@@ -1521,8 +1671,9 @@ def run_n30_probe(
         The written payload, matching CONTRACTS section 5 plus ``source`` and
         ``n_range``.
     """
-    spec = METHODS[method]
-    capability_probe(spec)
+    spec = CELLS[cell]
+    opts = spec.options if options is None else options
+    capability_probe(spec, opts)
     if graphs is None:
         graphs, _ = load_n30_graphs(iam_root)
 
@@ -1532,7 +1683,7 @@ def run_n30_probe(
     env.set_edit_cost("CONSTANT", edit_cost_constant=list(COST_MODEL))
     env.init(init_option=INIT_OPTION)
     environment = Environment(env=env, ids=ids, dataset="iam_gxl_n30")
-    configure(environment, spec, spec.default_options)
+    configure(environment, spec, opts)
 
     n = len(graphs)
     rng = np.random.default_rng(seed)
@@ -1549,8 +1700,9 @@ def run_n30_probe(
     payload = _timing_payload(
         seconds,
         dataset="iam_gxl_n30",
-        method=method,
-        options=spec.default_options,
+        cell=cell,
+        method=spec.method,
+        options=opts,
         seed=seed,
         n_bar=n_bar,
     )
@@ -1558,12 +1710,12 @@ def run_n30_probe(
     payload["n_range"] = [25, 35]
     payload["n_graphs"] = n
 
-    destination = out_root / "data" / "timing" / f"probe_n30__{method}.json"
+    destination = out_root / "data" / "timing" / f"probe_n30__{cell}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, indent=2))
     logger.info(
         "n=30 probe %s: %.1f us/pair mean at n_bar %.2f",
-        method,
+        cell,
         payload["us_per_pair_mean"],
         n_bar,
     )
@@ -1647,8 +1799,8 @@ def run_cross_check(
         ("BIPARTITE", "upper", ged_bounds.bipartite_upper_bound, {"symmetrise": False}),
     )
     for method, end, reference, kwargs in plans:
-        spec = METHODS[method]
-        env.set_method(method, spec.default_options)
+        spec = CELLS[method]
+        env.set_method(spec.method, spec.options)
         env.init_method()
         agree = 0
         same_optimum = 0
@@ -1724,16 +1876,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _resolve_methods(raw: str | None) -> list[str]:
-    """Resolve a comma-separated method list, defaulting to the eight."""
-    if not raw or raw == "bakeoff":
-        return list(BAKEOFF_METHODS)
-    if raw == "all":
-        return list(METHODS)
+def _resolve_cells(raw: str | None) -> list[str]:
+    """Resolve a comma-separated cell list, defaulting to all twelve."""
+    if not raw or raw in ("bakeoff", "all"):
+        return list(BAKEOFF_CELLS)
     names = [n.strip().upper() for n in raw.split(",") if n.strip()]
-    unknown = [n for n in names if n not in METHODS]
+    unknown = [n for n in names if n not in CELLS]
     if unknown:
-        raise BakeoffError(f"unknown methods: {unknown}; known: {sorted(METHODS)}")
+        raise BakeoffError(f"unknown cells: {unknown}; known: {sorted(CELLS)}")
     return names
 
 
@@ -1745,12 +1895,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         required=True,
-        choices=("index", "cells", "timing", "determinism", "probe-n30", "cross-check"),
+        choices=(
+            "index",
+            "cells",
+            "timing",
+            "determinism",
+            "probe-n30",
+            "cross-check",
+            "gates",
+        ),
     )
     parser.add_argument("--data", required=True, type=Path, help="the data directory")
     parser.add_argument("--out", required=True, type=Path, help="the report directory")
     parser.add_argument("--datasets", default="linux", help="comma-separated, or 'all'")
-    parser.add_argument("--methods", default="bakeoff", help="comma-separated, 'bakeoff' or 'all'")
+    parser.add_argument("--cells", default="all", help="comma-separated cell names, or 'all'")
     parser.add_argument(
         "--jobs", type=int, default=1, help="worker processes; never used for timing"
     )
@@ -1762,6 +1920,75 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--summary", type=Path, default=None, help="write a JSON run summary here")
     parser.add_argument("--log-level", default="INFO")
     return parser
+
+
+def run_gates(out_root: Path, dataset: str) -> dict[str, Any]:
+    """Run the two prediction gates over a dataset's written cells.
+
+    Both gates compare cells that are already on disk, so they cost nothing
+    beyond reading the ``.npz`` files, and both have a *predicted* value rather
+    than a plausible range:
+
+    - **P1**: ``BRANCH == BRANCH_FAST`` elementwise at zero tolerance, because
+      the two are equivalent under constant edge edit costs.
+    - **Dominance**: each ``*_DET`` cell is at most its ``BIPARTITE``
+      initialiser, because a monotone local search accepts only improvements.
+
+    Parameters
+    ----------
+    out_root : pathlib.Path
+        The report directory holding ``data/cells/``.
+    dataset : str
+        Dataset key.
+
+    Returns
+    -------
+    dict
+        Per gate: whether it ran and whether it passed.
+
+    Raises
+    ------
+    BakeoffError
+        On a gate failure. Nothing downstream of a failed gate is trustworthy.
+    """
+
+    def _load(cell: str) -> np.ndarray | None:
+        path = out_root / "data" / "cells" / f"{dataset}__{cell}.npz"
+        if not path.exists():
+            return None
+        return np.asarray(np.load(path, allow_pickle=True)["value"], dtype=np.float64)
+
+    report: dict[str, Any] = {"dataset": dataset}
+    branch, branch_fast = _load("BRANCH"), _load("BRANCH_FAST")
+    if branch is None or branch_fast is None:
+        report["p1_branch_equivalence"] = "skipped: both cells must exist"
+    else:
+        check_branch_equivalence(branch, branch_fast, dataset=dataset)
+        report["p1_branch_equivalence"] = {
+            "n_pairs": int(branch.size),
+            "n_equal": int((branch == branch_fast).sum()),
+            "max_abs_diff": float(np.abs(branch - branch_fast).max()),
+            "mean_lower_bound": round(float(branch.mean()), 4),
+            "passes": True,
+        }
+
+    bipartite = _load("BIPARTITE")
+    dominance: dict[str, Any] = {}
+    for cell in DOMINATED_BY_BIPARTITE:
+        values = _load(cell)
+        if values is None or bipartite is None:
+            dominance[cell] = "skipped: BIPARTITE and the cell must both exist"
+            continue
+        check_dominance(values, bipartite, dataset=dataset, cell=cell)
+        dominance[cell] = {
+            "n_pairs": int(values.size),
+            "n_strictly_better": int((values < bipartite - TOL).sum()),
+            "n_violations": 0,
+            "passes": True,
+        }
+    report["dominance_vs_bipartite"] = dominance
+    logger.info("gates %s: P1 and dominance both pass", dataset)
+    return report
 
 
 def _resolve_datasets(raw: str) -> list[str]:
@@ -1796,19 +2023,19 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     datasets = _resolve_datasets(args.datasets)
-    methods = _resolve_methods(args.methods)
+    cells = _resolve_cells(args.cells)
     results: list[dict[str, Any]] = []
     failed = False
 
     if args.stage == "probe-n30":
         iam_root = args.iam_root or (args.data / "source" / "IAM_Database" / "extracted")
         graphs, _ = load_n30_graphs(iam_root)
-        for method in methods:
+        for cell in cells:
             results.append(
                 run_n30_probe(
                     iam_root,
                     args.out,
-                    method,
+                    cell,
                     n_pairs=args.sample or 2_000,
                     seed=args.seed,
                     graphs=graphs,
@@ -1816,6 +2043,9 @@ def main(argv: list[str] | None = None) -> int:
             )
     else:
         for dataset in datasets:
+            if args.stage == "gates":
+                results.append(run_gates(args.out, dataset))
+                continue
             corpus = load_corpus(args.data, dataset)
             if args.stage == "index":
                 write_index(args.data, args.out, dataset, corpus=corpus)
@@ -1831,7 +2061,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
                 continue
-            for method in methods:
+            for cell in cells:
                 try:
                     if args.stage == "cells":
                         results.append(
@@ -1839,7 +2069,7 @@ def main(argv: list[str] | None = None) -> int:
                                 args.data,
                                 args.out,
                                 dataset,
-                                method,
+                                cell,
                                 corpus=corpus,
                                 jobs=args.jobs,
                                 chunk=args.chunk,
@@ -1851,7 +2081,7 @@ def main(argv: list[str] | None = None) -> int:
                                 args.data,
                                 args.out,
                                 dataset,
-                                method,
+                                cell,
                                 corpus=corpus,
                                 n_pairs=args.sample or 2_000,
                                 seed=args.seed,
@@ -1863,7 +2093,7 @@ def main(argv: list[str] | None = None) -> int:
                                 args.data,
                                 args.out,
                                 dataset,
-                                method,
+                                cell,
                                 corpus=corpus,
                                 n_pairs=args.sample or 5_000,
                                 seed=args.seed,
@@ -1872,7 +2102,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 except Exception as exc:  # noqa: BLE001 -- a failed cell is data
                     failed = True
-                    write_failure(args.out, dataset, method, exc, METHODS[method].default_options)
+                    write_failure(args.out, dataset, cell, exc, CELLS[cell].options)
 
     if args.summary:
         args.summary.parent.mkdir(parents=True, exist_ok=True)
