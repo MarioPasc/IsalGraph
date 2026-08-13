@@ -1,384 +1,266 @@
 ---
 name: review-ticket
 description: |
-  Drive one TPAMI revision ticket from `.claude/notes/review/tasks/` to completion.
-  You are the orchestrator: you hold the plan, verify every result, run local smoke
-  tests, submit and monitor Picasso jobs, and write the ticket's work log and
-  proposed answer. Investigation and coding are delegated to at most two Opus
-  subagents at a time, each given a pre-digested context brief so it never has to
-  rediscover what you already know. Triggers on "work ticket T0x", "run T0x",
-  "complete T0x", "drive the revision ticket", "review-ticket", "work the TPAMI
-  ticket", "close T0x".
+  Drive one IsalGraph revision ticket from the board in `.claude/notes/review/plan/tickets.md`
+  to completion. You are the orchestrator: you hold the whole plan, write and agree the
+  ticket's design note with the user before any work starts, decompose it into independent
+  tracks, spawn them with `parallel-agents` in isolated worktrees, own every Picasso
+  submission yourself, verify each agent's log against the real diff, merge the branches,
+  and hand off to `review-close` for the documentation. Triggers on "work ticket T-0x",
+  "run T-0x", "drive T-0x", "start the next ticket", "review-ticket", "pick up T-0x",
+  "work the revision ticket".
 ---
 
-# review-ticket — drive one revision ticket to completion
+# review-ticket — drive one IsalGraph revision ticket
 
-You own one ticket at a time. The subagents hold the *work*; you hold the
-*judgment*: whether a result is true, whether a job is safe to submit, whether a
-decision belongs to a human. That split is the whole point — your context stays
-clean enough to still be making good decisions on hour six.
+You own one ticket. The subagents hold the *work*; you hold the *judgment* — whether a
+number is true, whether a job is safe to submit, whether a decision belongs to a human.
+That split is the point: your context stays clean enough to still be deciding well on hour
+six, and no subagent ever has enough scope to do account-wide damage.
 
-**Everything in `.claude/notes/review/tasks/` is under an external deadline
-(2026-09-24) and will be read by three reviewers who checked every number in the
-last round. Correctness beats speed, and an honest negative result beats a
-convenient one.**
+**This manuscript is under revision at *Pattern Recognition* (PR-D-26-03293), due
+2026-08-31, and will be read by reviewers who checked every number last round. Correctness
+beats speed. An honest negative result beats a convenient one.**
 
 ---
 
 ## Non-negotiables
 
-- **At most 2 subagents running at once.** No exceptions.
-- **Never trust a subagent's closing claim.** Re-run its check yourself, in the
-  main tree, before you believe a number.
-- **Never let a subagent submit to Picasso, edit the ticket file, or decide scope.**
-  Those three are yours.
-- **Never submit to Picasso without a green local smoke run first** (§5).
-- **Never write or edit a SLURM script without invoking the `picasso-sbatch`
-  skill first** (§5.0). It is the authority on partitions, constraints and
-  wallclock limits, and the values recorded elsewhere in this repo have gone stale
-  before.
-- **Never close a ticket owned by Ezequiel or Karl** (§2). Prepare the material,
-  then stop and hand over.
-- **Never poll in a loop.** Background agents and background Bash notify you on
-  completion. To wait on an external condition, background a single `until` loop.
-- **Never mark an acceptance criterion met without the evidence in hand.** "Tests
-  pass" is not evidence that a canonical string is byte-identical.
+- **No subagent touches Picasso.** They may load `picasso-sbatch` and *write* SLURM
+  scripts; you submit, monitor, and cancel. §6.
+- **No subagent decides scope, edits the board, or edits a plan file.** Those are yours.
+- **Nothing is submitted to the cluster without a green local smoke on real data first.**
+- **Never re-litigate anything signed in `decisions.md`.** If the ticket needs to, stop and
+  ask the human — that is the escalation, not a judgement call.
+- **Never trust a work log.** Verify it against `git diff` and re-run its tests yourself.
+- **Freeze before you run.** Any rule that selects between outcomes — a sampling design, a
+  supersession rule, a threshold — is written down and committed *before* the run that
+  produces those outcomes. Otherwise the choice becomes outcome-dependent and indefensible.
+- **Never poll in a foreground loop.** Background agents and `Monitor` notify you.
 
 ---
 
 ## 1. Load the ticket
 
 ```bash
-ls .claude/notes/review/tasks/
+sed -n '/| \*\*T-0x\*\*/,+1p' .claude/notes/review/plan/tickets.md
 ```
 
-Read, in this order and nothing else yet:
+The board row is an *index*, not a specification — it names the files to read. Read, in
+order: `.claude/notes/review/plan/README.md`, the plan files the row names,
+`decisions.md`, and `demands.md` (what the ticket answers, and to whom). Read the
+relevant `.claude/notes/review/source/` inputs only if you will change a number the
+manuscript reports.
 
-1. `.claude/notes/review/tasks/README.md` — roles, dependency spine, decisions
-   already taken.
-2. The ticket itself, in full.
-3. Only the files in the ticket's **Mandatory reading** section that you personally
-   need to plan. The rest you will hand to subagents as *pointers*, not read yourself.
+Check the row's `Depends` against the board. A dependency that is not struck through gates
+you: say what gates it and stop.
 
-Then check the ticket's `Depends on` field against the other tickets' `Status`.
-A dependency that is not `COMPLETE` gates you. If the ticket is gated, say what
-gates it and stop — do not start work that will be invalidated.
-
----
-
-## 2. Ownership gate — check before planning
-
-| Ticket | Owner | What you may do |
-|---|---|---|
-| T01, T02, T04, T05, T06, T08, T09, T10 | Mario (+ you) | Drive to completion. |
-| T03 | Ezequiel (design) + Mario (impl) | Phase 1 design doc needs Ezequiel's sign-off **before** Phase 2. Do Phases 2–5; stop at the gate. |
-| T07 | Ezequiel | **Do not write the proofs.** Prepare the empirical half (§5.4 tests, counterexamples), then hand over. |
-| T11 | Karl + Ezequiel | Run the cross-reference walk and produce the checklist; leave the preprint decision and the prose to them. |
-| T12, T13 | Karl | Produce the page ledger inputs and the automated checks; leave the editorial judgement to Karl. |
-| T14 | Mario | Assembly only; every input must already be complete. |
-
-When you hit a hand-over gate: write what you produced into the ticket's Work log,
-state plainly what remains and who owns it, and stop. Do not fill someone else's
-§Proposed answer.
+**Also read the board header.** A closed ticket may have left a warning there that
+invalidates a premise your ticket is about to rely on.
 
 ---
 
-## 3. Plan — decompose into atomic subtasks
+## 2. Write the ticket, and agree it with the user — the gate
 
-Write the plan into the ticket's Work log **before** spawning anything. It is the
-first entry and it is what you will be judged against.
+The board gives you one line. **You write the specification**, because nothing downstream
+is verifiable without it.
 
-A subtask is atomic when it satisfies all four:
+Write `.claude/notes/review/tasks/T-0x-design.md` containing:
 
-- **One deliverable.** A file, a number, a table, a passing test — not "investigate X".
-- **Verifiable without re-reading the ticket.** You can state the check in one sentence.
-- **Bounded file lane.** You can name every file it may write, and there are ≤ 3.
-- **No decisions.** If completing it requires choosing what "correct" means, it is
-  yours, not a subagent's.
+1. **State measured now, not assumed** — cluster quota and queue, node families, what is
+   installed where, whether the data is where the plan says. Record every value that
+   differs from what the plan predicted; in T-03, seven did, and two of them changed the
+   design.
+2. **The approach, and why** — with the rejected alternatives and the reason each lost.
+3. **Everything that must be frozen before running**: sampling design, analysis rule,
+   supersession rule, cost model, timeouts, thresholds. Each with its rationale.
+4. **Acceptance criteria** — numbered, checkable, each naming the command or artifact that
+   proves it. This is mandatory; a ticket without them cannot be closed.
+5. **Stop-and-ask conditions** — the specific outcomes on which you will halt rather than
+   proceed.
 
-Classify each subtask:
+**Then iterate it with the user before spawning anything.** Use `AskUserQuestion` for the
+choices that would change the work: an approach with real trade-offs, anything that touches
+a signed decision, any compute above ~5,000 core-hours. Do not present a menu of things you
+could decide yourself — bring the questions whose answers change what gets built.
 
-| Kind | Agent | Isolation |
-|---|---|---|
-| Read code / logs / results, return a compact finding | `revision-investigator` | none (read-only) |
-| Write code, tests, configs, analysis scripts | `revision-implementer` | see §4.3 |
-| Submit, monitor, verify, decide, escalate, write the ticket | **you** | — |
+**Commit the design note before the first agent starts.** That commit is what makes the
+frozen rules credible.
 
-Order by dependency, then fill at most 2 slots. **Prefer one reader + one writer
-concurrently** — they cannot collide.
+---
+
+## 3. Decompose
+
+A track is well-formed when all four hold:
+
+- **One deliverable** — a module, a table, a passing gate. Not "investigate X".
+- **Disjoint file ownership** — you can name every file it may write, and no two tracks
+  intersect. If two could edit one file, the decomposition is wrong: merge or serialise.
+- **Self-contained** — completable without waiting on another agent's output.
+- **Verifiable by you afterwards** — you can state the check in one sentence.
+
+### Freeze the contracts
+
+If tracks share an interface — a file format, a function signature, a CLI — **you** write it
+into `.claude/notes/<wave-id>/CONTRACTS.md` and commit it, and every prompt points there.
+Agents code against the contract, not against each other. In T-03 this held across three
+concurrent agents with zero merge conflicts, and the two contract defects the agents found
+were *mine*, surfaced early and cheaply.
+
+### Isolation — read this before choosing worktrees
+
+Default to `parallel-agents` with worktrees, up to 3 concurrent.
+
+> 🔴 **A worktree cannot see the built C++ extension.** `isalgraph.core._native` installs
+> into site-packages and is path-pinned to the checkout it was installed from. Any subtask
+> that imports `isalgraph`, touches `src/isalgraph/core/native/`, or **reports a timing**
+> must run **in place, alone, with no concurrent writer** — otherwise its benchmarks and
+> parity results are fiction and nothing will error.
+>
+> Do not "fix" this with `PYTHONPATH=<worktree>/src`: a src-first path shadows the
+> installed package and silently falls back to pure Python, which is the same class of
+> silent-wrong-number trap in the other direction.
+
+Most revision tickets do not touch the engine — T-03's exact-GED work never imported
+`isalgraph` at all — so worktrees are usually safe. Check, do not assume.
 
 ---
 
 ## 4. Delegate
 
-### 4.1 The context brief — this is the token lever
+Invoke `parallel-agents` and follow it. Spawn a wave in **one turn**, ≤ 3 agents.
 
-Subagents are expensive. The single biggest cost driver is a subagent
-re-deriving context you already hold. **Pre-digest it.** Give a self-contained
-brief, not a reading list, and explicitly forbid the expensive reads.
+**The orchestrator holds broad context; each subagent gets only what its job needs.** Do not
+hand an agent the plan directory and let it rediscover what you already know — that is the
+single largest token cost in this workflow. Pre-digest.
 
-Use this template verbatim:
+Every prompt carries, at minimum:
 
-```
-## Goal (one deliverable)
-<what must exist when you are done, in one sentence>
+- **Mission and why it exists** — one paragraph of rationale, so the agent can tell when the
+  brief is wrong.
+- **Base commit**, verbatim.
+- **Ownership** — the files it may create or edit, and the statement that everything else is
+  read-only. Name specific things it must report but not fix.
+- **Acceptance criteria** — numbered, each with the exact command and expected result.
+  **Mandatory.** An agent without them optimises for looking finished.
+- **Environment, verbatim** — `PY=~/.conda/envs/isalgraph-cpp/bin/python`, the test command,
+  the lint command.
+- **Prohibitions** — no SSH, no cluster, no `sbatch`, no editing plan files or the board,
+  nothing in `scratchpad/` (that is what lost thirteen measurement scripts from this
+  project), and any import it must not add.
+- **Work-log path and required sections**, committed on its own branch.
+- **Peer roster** with each peer's ownership, and the instruction to message *you* rather
+  than negotiate a contract directly.
+- **Commit incrementally, not at the end.** Sessions die; in T-03 two wave-2 agents hit an
+  account limit mid-task and one had finished a substantial module that survived only
+  because its worktree persisted. Uncommitted work is work you cannot merge.
 
-## Acceptance check
-<the exact command or observation that proves it, and its expected result>
+### If the track needs SLURM
 
-## What is already established — do not re-derive
-<3–10 bullets of digested fact: file:line pointers, measured numbers, decisions
-already taken, invariants that apply. This is the part that saves tokens.>
-
-## Files you may READ (do not read others without saying why)
-<≤5 paths, each with one line on what to look for>
-
-## Files you may WRITE
-<≤3 paths>
-
-## Constraints
-- Conda env: ~/.conda/envs/isalsr/bin/python
-- Do NOT read: the ticket file, .claude/notes/review/source/*, docs/md_files/**
-  unless listed above. I have already read them and digested what you need.
-- Do NOT run anything longer than 10 minutes. If a check needs more, stop and
-  return BLOCKED with the command you would have run.
-- Do NOT submit to SLURM, rsync to picasso, git commit, or git push.
-- Do NOT edit any .claude/notes/review/tasks/*.md file.
-- Applicable Critical Invariants from CLAUDE.md: <list only the numbers that apply>
-
-## Return protocol
-End your final message with exactly one of:
-  STATUS: DONE — <what you produced, ≤5 lines, with the numbers>
-  STATUS: QUESTION — <the single blocking question>
-  STATUS: PREMISE-FALSE — <what in the brief is contradicted, with evidence>
-  STATUS: BLOCKED — <what stopped you>
-Return data, not prose. No summaries of what you read.
-```
-
-`STATUS: PREMISE-FALSE` is a **successful** outcome. A subagent that discovers the
-brief is wrong has saved the revision from a wrong answer; treat it that way.
-
-### 4.2 Spawning
-
-```
-Agent(
-  subagent_type: "revision-investigator" | "revision-implementer",
-  model: "opus",
-  run_in_background: true,        # the default; keeps them visible in the agents view
-  description: "<3-5 words>",
-  prompt: "<the filled brief above>"
-)
-```
-
-Both agent definitions pin `model: opus` and `effort: high` in their frontmatter;
-passing `model: "opus"` here is belt-and-braces against an inherited override.
-
-Report **one line per launch**, then go quiet.
-
-### 4.3 Isolation rule
-
-Default: **work in place, one writer at a time.** This session is configured to
-edit the working directory directly, and `isalsr` is an editable install, so a
-second writer in a worktree is a trap unless you handle the import path.
-
-Use `isolation: "worktree"` **only** when you genuinely need two writers at once,
-and only when:
-
-- neither touches `src/isalsr/core/_native/` (a worktree cannot see the built
-  extension without a rebuild, so its test results would be fiction); and
-- you tell each agent to run with `PYTHONPATH=<its worktree>/src` prepended, because
-  `pip install -e` resolves to the **main** checkout and its tests will otherwise
-  silently exercise main's code.
-
-If either condition fails, serialize. A wrong number costs more than an hour.
+Tell the agent to invoke `picasso-sbatch` and write the launcher/worker pair, run `bash -n`
+and paste a `--dry-run`. **State explicitly that it must not submit, rsync, or ssh.** You
+review the scripts and run them. §6.
 
 ---
 
-## 5. The Picasso loop — yours alone
+## 5. Verify, then merge
 
-Compute tickets are T02, T03 (Phase 4), T04, T05. Read
-`.claude/notes/review/tasks/EXECUTION-PLAN.md` first — it is authoritative on which
-wave you are launching, and its §2 certification gate (G1–G8) must pass before any
-array goes out. **Nothing launches unless you are 100% sure the code is correct.**
-A failing array is caught in minutes; a subtly wrong one is caught during analysis
-in September, and that costs the deadline.
-
-The sequence below is not optional and not reorderable.
-
-### 5.0 Gate: invoke `picasso-sbatch` first
-
-Before creating or editing **any** launcher or worker script:
-
-```
-Skill(skill: "picasso-sbatch")
-```
-
-It is the source of truth for partitions, `--constraint`, GPU/CPU selection flags
-and wallclock limits. IsalSR runs are **CPU-only** — never request a `--gres`.
-Follow its launcher/worker split and its defensive conda activation; the existing
-`slurm/*_launch.sh` files in this repo are the shape to match, but the skill wins
-on any conflict.
-
-### 5.1 Local smoke — hard gate, ≤ 10 minutes
-
-Nothing goes to the cluster until a real run completes locally.
+On each return, before believing anything:
 
 ```bash
-~/.conda/envs/isalsr/bin/python -m experiments.models.orchestrator \
-    --config experiments/configs/<cfg>.yaml --seeds 1 --problems Nguyen-1
+git -C <worktree> log --oneline $BASE..HEAD
+git -C <worktree> diff --stat $BASE..HEAD     # compare to the log's claimed file list
+git -C <worktree> status --porcelain          # must be empty
 ```
 
-Override `max_time` to ~120 s for the smoke. It must:
+Then **re-run its acceptance checks yourself** in that tree. A number that does not
+reproduce is the agent's result, not yours; send the exact diff back with `SendMessage` —
+a resumed agent keeps its context and is far cheaper than a respawn. **Two rounds maximum**,
+then escalate.
 
-- exit 0,
-- write a `run_log.json` that **parses and contains the fields the analyzer reads**
-  (not merely exists — a truncated log is the exact failure mode the orchestrator's
-  resume logic was hardened against), and
-- for IsalSR variants, show a non-zero dedup count.
+An agent reporting that your brief is wrong is a **success**. Read the evidence yourself; if
+it holds, it changes the plan. Relay contract changes to peers yourself.
 
-A smoke that only proves "it started" has proved nothing. If it exceeds 10 minutes,
-shrink the problem, not the check.
-
-### 5.2 Sync
+Merge from a clean main checkout, one branch at a time, running the fast suite after each so
+a failure is attributable:
 
 ```bash
-rsync -avz --delete \
-  --exclude '.git' --exclude '__pycache__' --exclude '*.egg-info' \
-  --exclude 'results' --exclude '.hypothesis' --exclude 'build' \
-  ./ picasso:/mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalSR/
+git switch -c integration/<wave-id> $BASE_SHA
+git merge --no-ff <branch> -m "merge(<track>): <summary>"
 ```
 
-Then verify remotely that the code actually landed and imports:
+**Expect one or two integration failures and do not read them as defects.** A test asserting
+that a peer's module is *absent* was true on that branch and false after the merge. That is
+the cost of the disjointness rule, and it is cheap. Fix them yourself in a separate
+`fix(integration):` commit.
 
-```bash
-ssh picasso 'cd /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalSR && \
-  git rev-parse HEAD 2>/dev/null; ls slurm/workers/'
-```
-
-### 5.3 Dry-run, then one task, then the array
-
-Three stages. Do not skip the middle one — it is what catches the errors that only
-appear on a compute node.
-
-```bash
-ssh picasso 'sbatch --test-only <worker>.sh'        # 1. validates without queueing
-ssh picasso 'sbatch --array=1-1 <worker>.sh'        # 2. ONE real task, cluster smoke
-# ... wait for it, read its logs, only then:
-ssh picasso 'sbatch --array=1-<N> <worker>.sh'      # 3. the campaign
-```
-
-Most launchers here already expose `--dry-run` and `--experiment <group>`; use them.
-
-### 5.4 Monitor for early errors
-
-The first minutes decide whether a 12-hour campaign is worth waiting for. Check for
-import errors, missing files, OOM kills, and immediate exits — not for results.
-
-```bash
-ssh picasso 'squeue -u mpascual -o "%.10i %.9P %.20j %.2t %.10M %R"'
-ssh picasso 'tail -n 40 ~/execs/isalsr/logs/*_%j.err'
-```
-
-Run this as a **backgrounded** `until` loop or via `Monitor`; never a polling loop
-in the foreground. Escalate immediately on: `ModuleNotFoundError`, `FileNotFoundError`,
-`oom-kill`, `CANCELLED`, or any task that exits in under a minute.
-
-**Kill early and fix.** A 300-task array failing identically is 300 wasted
-allocations and a day of queue time.
-
-Detailed commands, log paths and failure signatures: `references/picasso-loop.md`.
+Then run the full suite, lint, and type check. Ask before merging into the user's branch.
 
 ---
 
-## 6. Verify — the part that cannot be delegated
+## 6. Picasso — yours alone
 
-On every subagent return, in order:
+Full command reference and failure signatures: `references/picasso-loop.md`.
 
-1. **Non-DONE first.**
-   - `QUESTION` → relay to the human with `AskUserQuestion`, then `SendMessage` the
-     answer back to that agent id; its context is intact and re-spawning wastes it.
-   - `PREMISE-FALSE` → read the evidence yourself. If it holds, this changes the
-     plan. Record it in the Work log, surface it, and re-plan. Never push an agent
-     to implement something you now know is wrong.
-   - `BLOCKED` → decide whether you unblock it or the human does.
-
-2. **Re-run the acceptance check yourself**, in the main tree:
-   ```bash
-   ~/.conda/envs/isalsr/bin/python -m pytest tests/ -q
-   ~/.conda/envs/isalsr/bin/python -m ruff check src/ tests/
-   ~/.conda/envs/isalsr/bin/python -m mypy src/isalsr/
-   ```
-   Compare every number to what the agent claimed. A mismatch is the agent's
-   result, not yours — send it back with the exact diff.
-
-3. **Judge against the ticket's own acceptance criteria**, clause by clause. Ask:
-   was a new test shown to fail against the pre-fix code? Was out-of-scope work
-   filed rather than absorbed? Was a premise checked or assumed?
-
-4. **Write the Work log entry.** `### YYYY-MM-DD — <topic>`: what was decided, what
-   broke, what surprised you. AC-0 on every ticket makes this mandatory, and it is
-   the entry you will want in round 2.
-
-### Iteration budget
-
-Send specific, reproducible defects back with `SendMessage`. **Two rounds maximum.**
-After a second unsuccessful round, stop and ask the human. An agent grinding on a
-brief whose premise is wrong will never converge, and telling it to try harder is
-how you lose a day.
+1. **Invoke `picasso-sbatch`** before creating or editing any SLURM script. It is the
+   authority on partitions, constraints, node families and wallclock; values written
+   elsewhere go stale.
+2. **Local smoke on real data**, not synthetic, and not just "it started". A complete small
+   dataset end to end — load → compute → merge → structural gate.
+3. **Read the live state** — `quota`, queue, node families — and size from a *measured*
+   per-pair or per-unit rate, never from the plan's estimate. Cluster cores are typically
+   ~2× slower than the workstation the plan's figures came from.
+4. **`sbatch --test-only`**, then one real task, then the campaign. The middle stage catches
+   what only appears on a compute node.
+5. **Respect the 2-hour floor.** SCBI asked this account directly, in writing, after a
+   12,600-task campaign of minute-long jobs. Group short units; refuse to submit a short
+   task.
+6. **Monitor with `Monitor`**, filtered to success *and* failure signatures — a filter that
+   greps only for progress is silent through a crashloop, and silence looks like health.
+7. **Verify the results** — counts, shapes, symmetry — before declaring anything done, and
+   mirror them to their canonical locations.
 
 ---
 
-## 7. Escalate to the human
+## 7. Escalate
 
-Use `AskUserQuestion` — do not decide these yourself:
+`AskUserQuestion`, and do not decide these yourself:
 
-- Anything the ticket or `EXECUTION-PLAN.md` marks as a decision — currently T03's
-  insertion point, the open baseline question (`EXECUTION-PLAN.md` §5), T03's
-  2026-08-31 go/no-go, and T13's page trades.
-- **Any array submission.** Report the certification-gate evidence (G1–G8) and get a
-  go before `sbatch` on more than one task. Early stopping is abandoned and the
-  arXiv v3 is settled — do not reopen either.
-- A `PREMISE-FALSE` that invalidates a ticket's stated basis.
-- A result that would change what the paper claims — especially a **negative** one.
-  Tickets T03 §5 Phase 5, T04 AC-8 and T10 §4 all have honest-negative branches;
-  surface them, never soften them.
-- Any compute request above ~5,000 core-hours that is not already in the ticket.
-- A second failed iteration round.
+- Anything requiring a change to a signed decision in `decisions.md`.
+- A locked cohort count or reproduction target that does not reproduce.
+- A validation gate that fails, once you have diagnosed *why*.
+- A result that changes what the paper can claim — **especially a negative one**.
+- Compute above ~5,000 core-hours not already in the ticket.
+- A second failed iteration round with an agent.
+
+Bring a **diagnosed** problem with costed options, not a raw failure. When you escalate,
+state what you have already ruled out.
 
 ---
 
 ## 8. Close
 
-A ticket is complete only when **all** of these hold:
+When the acceptance criteria are met with evidence you personally re-ran:
 
-- Every acceptance criterion is met, with evidence you personally re-ran.
-- AC-0's Work log is filled — decisions, dead ends, surprises, disagreements.
-- §Proposed answer is filled: the before/after table has real numbers in both
-  columns, the manuscript-change table names files and lines, and the LaTeX draft
-  is written in `response_to_reviewers.tex` register with every claim backed by a
-  number the ticket produced.
-- The Residual-risk subsection names what a round-2 reviewer could still object to.
-- The ticket's `Status` line is updated, and any ticket it **Blocks** is notified in
-  your final message.
+```
+Skill(skill: "review-close")
+```
 
-Then report, and stop. Do not roll on to the next ticket without being asked.
+It owns the board strike, the plan-file propagation, the article notes and the letter
+fragment. **Do not hand-write those** — its whole purpose is that findings reach the files
+the *next* ticket reads, and its §3 is the step everyone skips.
+
+Report, then stop. Do not roll on to the next ticket unasked.
 
 ---
 
 ## 9. Verbosity
 
-Emit only:
+One line per agent launch. Any blocking question or refuted premise, in full, immediately.
+One short block per return: verdict, what you re-ran, ≤3 lines of substance. One line per
+Picasso stage with the job id. Anything red, in full. The close report.
 
-- one line per launch — `▶ T04/investigate-dedup-streams launched (opus)`
-- any `QUESTION` or `PREMISE-FALSE`, in full, immediately
-- one short block per return: verdict, the checks you re-ran, ≤ 3 lines of
-  substance, what you did with it
-- every Picasso stage transition, one line, with the job id
-- anything red, in full
-- the close report
-
-Say nothing else. Do not narrate waiting, polling, or your own scheduling
-arithmetic.
+Say nothing else. Do not narrate waiting, polling, or your own scheduling arithmetic.
 
 ---
 
@@ -386,8 +268,9 @@ arithmetic.
 
 | Skill | When |
 |---|---|
-| `picasso-sbatch` | **Mandatory** before creating or editing any SLURM script (§5.0). |
-| `research-rigor` | Before proposing a new metric, ablation, statistical test, or eval protocol inside a ticket. T04's three-arm correction and T05's pre-registration both warrant it. |
-| `humanizer` | Any §Proposed answer draft over ~200 words, and any manuscript prose. Scientific mode. |
-| `test-and-verify` | The full pytest + ruff + mypy + hypothesis-alignment pass after a code-bearing ticket. |
-| `server3` | Only if a ticket needs the GPU workstation. No current ticket does — IsalSR is CPU-only. |
+| `parallel-agents` | **Mandatory** for any multi-track wave (§4). |
+| `picasso-sbatch` | **Mandatory** before any SLURM script is written, by you or an agent (§6). |
+| `review-close` | **Mandatory** at close (§8). |
+| `research-rigor` | Before proposing a new metric, ablation, statistical test or eval protocol inside a ticket. |
+| `humanizer` | Any prose over ~200 words destined for the manuscript or letter. |
+| `review-answer` | Later, and not by you — turns accumulated fragments into the response `.tex`. |
