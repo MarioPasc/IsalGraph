@@ -69,6 +69,7 @@ if __package__:
     from .ged_pair_index import (
         ChunkRange,
         GedPairIndexError,
+        indices_of_pairs,
         n_pairs,
         pair_from_index,
         split_chunk,
@@ -79,6 +80,7 @@ else:  # pragma: no cover - only when run as a bare script from eval_setup/
     from ged_pair_index import (  # noqa: E402
         ChunkRange,
         GedPairIndexError,
+        indices_of_pairs,
         n_pairs,
         pair_from_index,
         split_chunk,
@@ -270,12 +272,23 @@ class BackendSpec:
         timeout_s: Per-pair solver budget in seconds.
         factory_ref: Optional ``module:callable`` override, used by the smoke and
             by any harness that has to run without ``ged_backends`` present.
+        options: Extra keyword arguments forwarded verbatim to the backend
+            constructor. Empty by default, which reproduces T-03's construction
+            exactly. This is how the per-role method and options strings of
+            CONTRACTS §3 reach the backend without a new positional argument on
+            every function between here and it.
+        probe_accessors: Run the backend's accessor probe once per worker before
+            any pair. Defaults to ``True``: a wrong accessor returns ``0.00``
+            from GEDLIB without raising, and the alternative to probing is
+            discovering it from a finished matrix of zeros.
     """
 
     name: str
     cost_model: str = "unit"
     timeout_s: float = 300.0
     factory_ref: str | None = None
+    options: dict[str, Any] = field(default_factory=dict)
+    probe_accessors: bool = True
 
 
 def _edit_costs(cost_model: str) -> Any:
@@ -377,7 +390,12 @@ def make_backend(spec: BackendSpec) -> GedBackend:
     cls = getattr(mod, classes[spec.name], None)
     if cls is None:
         raise RunnerError(f"ged_backends has no {classes[spec.name]}")
-    return cls(costs, timeout_s=spec.timeout_s)  # type: ignore[no-any-return]
+    try:
+        return cls(costs, timeout_s=spec.timeout_s, **dict(spec.options))  # type: ignore[no-any-return]
+    except TypeError as exc:
+        raise RunnerError(
+            f"{classes[spec.name]} rejected the backend options {dict(spec.options)!r}: {exc}"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -519,8 +537,22 @@ def _outcome_from_result(k: int, res: Any, measured_s: float) -> PairOutcome:
     """
     lb = float(res.lb)
     ub = float(res.ub)
-    if not np.isfinite(lb) or not np.isfinite(ub):
-        raise RunnerError(f"pair {k}: backend returned a non-finite bracket [{lb}, {ub}]")
+    # A one-sided campaign (CONTRACTS §6) leaves the end it did not compute at
+    # its vacuous sentinel: +inf for an absent upper bound, -inf for an absent
+    # lower one. Only the end that was actually evaluated is required to be a
+    # number; the sentinel must be exactly the sentinel, so that an unevaluated
+    # end can never be mistaken for a measurement.
+    computed = str(getattr(res, "computed", "both"))
+    if computed not in ("both", "lb", "ub"):
+        raise RunnerError(f"pair {k}: backend reported an unknown compute mode {computed!r}")
+    if computed != "ub" and not np.isfinite(lb):
+        raise RunnerError(f"pair {k}: backend returned a non-finite lower bound {lb}")
+    if computed == "ub" and lb != -np.inf:
+        raise RunnerError(f"pair {k}: compute='ub' must leave lb at -inf, got {lb}")
+    if computed != "lb" and not np.isfinite(ub):
+        raise RunnerError(f"pair {k}: backend returned a non-finite upper bound {ub}")
+    if computed == "lb" and ub != np.inf:
+        raise RunnerError(f"pair {k}: compute='lb' must leave ub at +inf, got {ub}")
     if lb > ub + 1e-9:
         raise RunnerError(f"pair {k}: backend returned lb {lb} > ub {ub}")
     seconds = float(getattr(res, "seconds", 0.0))
@@ -665,6 +697,36 @@ _WORKER_BACKEND: GedBackend | None = None
 _WORKER_N: int = 0
 
 
+def _probe_backend(backend: Any, spec: BackendSpec) -> None:
+    """Verify the backend's accessors before it computes a single pair.
+
+    Campaign init, once per worker process. A backend that exposes no
+    ``probe_accessors`` is left alone, so the stub and the networkx backend are
+    unaffected.
+
+    Args:
+        backend: The freshly constructed backend.
+        spec: The spec it was built from.
+
+    Raises:
+        RunnerError: If the probe fails. This is deliberately fatal and
+            deliberately *not* caught per pair: reading a bound through the
+            wrong accessor returns ``0.00`` from GEDLIB without an exception, so
+            a campaign that survives a failed probe writes a matrix of zeros
+            that no downstream assertion is looking for.
+    """
+    if not spec.probe_accessors:
+        return
+    probe = getattr(backend, "probe_accessors", None)
+    if probe is None:
+        return
+    try:
+        values = probe()
+    except Exception as exc:
+        raise RunnerError(f"accessor probe failed for backend {spec.name!r}: {exc}") from exc
+    logger.info("accessor probe passed: %s", values)
+
+
 def _init_worker(spec: _WorkerSpec) -> None:
     """Build one backend and one copy of the graphs per worker process.
 
@@ -683,6 +745,7 @@ def _init_worker(spec: _WorkerSpec) -> None:
     _WORKER_GRAPHS = dataset.graphs
     _WORKER_N = dataset.n_graphs
     _WORKER_BACKEND = make_backend(spec.backend)
+    _probe_backend(_WORKER_BACKEND, spec.backend)
 
 
 def _compute_batch(batch: tuple[int, ...]) -> list[PairOutcome]:
@@ -774,7 +837,10 @@ def _target_pairs(
 
     Args:
         dataset: The loaded cohort.
-        pair_list: Optional path to a ``pair_list.npz`` with key ``pair_index``.
+        pair_list: Optional path to a ``.npz`` holding either a ``pair_index``
+            array of linear indices, or the ``dataset_key``/``pair_i``/``pair_j``
+            columns the §5 subsample sampler writes. ``pair_index`` wins where
+            both are present.
         chunk_index: This task's index.
         n_chunks: Total task count.
 
@@ -791,9 +857,37 @@ def _target_pairs(
         return np.arange(rng.start, rng.stop, dtype=np.int64), rng
 
     with np.load(pair_list, allow_pickle=False) as data:
-        if "pair_index" not in data:
-            raise RunnerError(f"{pair_list} has no 'pair_index' key")
-        listed = np.unique(np.asarray(data["pair_index"], dtype=np.int64))
+        if "pair_index" in data:
+            listed = np.unique(np.asarray(data["pair_index"], dtype=np.int64))
+        elif "pair_i" in data and "pair_j" in data:
+            # The §5 subsample list is pooled across all ten datasets and keyed
+            # by (dataset_key, pair_i, pair_j) rather than by a linear index,
+            # because a linear index is only meaningful against one cohort's
+            # graph count. Select this dataset's rows, then map forward.
+            pi = np.asarray(data["pair_i"], dtype=np.int64)
+            pj = np.asarray(data["pair_j"], dtype=np.int64)
+            if "dataset_key" in data:
+                keys = np.asarray(data["dataset_key"]).astype(str)
+                sel = keys == dataset.key
+                if not bool(sel.any()):
+                    raise RunnerError(
+                        f"{pair_list} holds no rows for dataset {dataset.key!r}; "
+                        f"it names {sorted(set(keys.tolist()))[:8]}"
+                    )
+                pi, pj = pi[sel], pj[sel]
+            if pi.size and (int(min(pi.min(), pj.min())) < 0 or int(max(pi.max(), pj.max())) >= n):
+                raise RunnerError(
+                    f"{pair_list} holds a graph index outside [0, {n}) for {dataset.key!r}"
+                )
+            if bool(np.any(pi == pj)):
+                raise RunnerError(f"{pair_list} holds a self-pair for {dataset.key!r}")
+            lo = np.minimum(pi, pj)
+            hi = np.maximum(pi, pj)
+            listed = np.unique(indices_of_pairs(lo, hi, n))
+        else:
+            raise RunnerError(
+                f"{pair_list} has neither a 'pair_index' key nor a 'pair_i'/'pair_j' pair"
+            )
     if listed.size and (int(listed.min()) < 0 or int(listed.max()) >= total):
         raise RunnerError(f"{pair_list} holds an index outside [0, C({n}, 2) = {total})")
     rng = split_range(int(listed.size), n_chunks, chunk_index)
@@ -976,6 +1070,7 @@ def run_chunk(
             if backend_factory is not None
             else make_backend(backend_spec)
         )
+        _probe_backend(backend, backend_spec)
         for batch in batches:
             if _TERMINATE:
                 completed = False
@@ -1105,8 +1200,59 @@ def build_parser() -> argparse.ArgumentParser:
             "drive this runner where ged_backends is absent. Requires --backend stub."
         ),
     )
+    # CONTRACTS §6. Every default below is T-03's behaviour, unchanged: the
+    # methods it ran, the option string it built from --threads 1, and both
+    # ends. A campaign that passes none of these computes exactly what the
+    # exact-GED census computed.
+    p.add_argument("--lb-method", default="BRANCH_FAST", help="GEDLIB lower-bound method")
+    p.add_argument(
+        "--lb-options",
+        default="--threads 1",
+        help="verbatim GEDLIB option string for the lower-bound method",
+    )
+    p.add_argument("--ub-method", default="IPFP", help="GEDLIB upper-bound method")
+    p.add_argument(
+        "--ub-options",
+        default="--threads 1",
+        help="verbatim GEDLIB option string for the upper-bound method",
+    )
+    p.add_argument(
+        "--compute",
+        default="both",
+        choices=("lb", "ub", "both"),
+        help="which ends of the bracket to evaluate (default both, T-03's behaviour)",
+    )
+    p.add_argument("--role", default=None, help="role label recorded in the shard metadata")
+    p.add_argument(
+        "--no-accessor-probe",
+        action="store_true",
+        help="skip the P4/C4 accessor probe; only for a backend that has no accessors",
+    )
     p.add_argument("--log-level", default="INFO")
     return p
+
+
+def _backend_options(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect the backend constructor options the CLI describes.
+
+    Only GEDLIB takes a method specification, so the options are empty for
+    every other backend and its construction is bit-identical to before.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Keyword arguments for the backend constructor.
+    """
+    if args.backend != "gedlib":
+        return {}
+    return {
+        "lb_method": str(args.lb_method),
+        "lb_options": str(args.lb_options),
+        "ub_method": str(args.ub_method),
+        "ub_options": str(args.ub_options),
+        "compute": str(args.compute),
+    }
 
 
 def _shard_meta(
@@ -1141,6 +1287,15 @@ def _shard_meta(
             "backend_name": backend_name,
             "backend_factory": args.backend_factory,
             "cost_model": args.cost_model,
+            # CONTRACTS §3: the options string is part of the method name, so a
+            # shard that does not record it verbatim does not identify what it
+            # computed and is rejected at the gate.
+            "role": getattr(args, "role", None),
+            "compute": str(getattr(args, "compute", "both")),
+            "lb_method": str(getattr(args, "lb_method", "BRANCH_FAST")),
+            "lb_options": str(getattr(args, "lb_options", "--threads 1")),
+            "ub_method": str(getattr(args, "ub_method", "IPFP")),
+            "ub_options": str(getattr(args, "ub_options", "--threads 1")),
             "chunk_index": int(args.chunk_index),
             "n_chunks": int(args.n_chunks),
             "pair_list": args.pair_list,
@@ -1209,6 +1364,8 @@ def main(argv: list[str] | None = None) -> int:
             cost_model=args.cost_model,
             timeout_s=float(args.timeout_per_pair),
             factory_ref=args.backend_factory,
+            options=_backend_options(args),
+            probe_accessors=not bool(args.no_accessor_probe),
         )
         shard, completed, stats = run_chunk(
             dataset=dataset,
