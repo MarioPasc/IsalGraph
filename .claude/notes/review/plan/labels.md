@@ -102,6 +102,18 @@ directly and fixes **E6** in the same stroke: `conclusion.tex:70` and `:81` clai
 in all five benchmark datasets", which is **false for LINUX**. Any response quoting that sentence
 quotes a false one.
 
+> ✅ **MEASURED 2026-08-13 (T-01) — this deliverable's data already exists.**
+> `cohort_audit.py` records the node and edge attribute names present in each source file before the
+> topology-only loader discards them; the table is [data](data.md) §1.5, machine-readable in
+> `results/cohort_audit/suite2.json`. **LINUX has neither node nor edge attributes**, confirmed by
+> parsing rather than by reading the dataset documentation. Protein carries three node and five edge
+> attributes, AIDS (IAM) five and one, GREC three and three.
+>
+> **C3 is now a transcription job, not a measurement.** T-18 maps the measured attribute names onto
+> the four-way `none / categorical / continuous / both` vocabulary and prints the column. Note that
+> **AIDS (GraphEdX)** enters already stripped upstream, so its row states the release, not the
+> underlying chemistry.
+
 ### C4 — Future work, with substance
 
 R1's closing ask is **already satisfied** at `conclusion.tex:70–71` and `:81`. The work is not to add

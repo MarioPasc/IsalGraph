@@ -42,11 +42,11 @@ Detail in [compliance](compliance.md).
 
 | ID | Demand | Decision / experiment | Ticket | Artifact | |
 |---|---|---|---|---|---|
-| AE.1 | **Graph size impact must be clear** (`:59–60`) | Suite 1 (`n ≤ 12`, exact) / Suite 2 (`n ≤ 98`, proven bracket); **the ceiling is attributed to the reference, not to IsalGraph**; relative bracket width vs `n` | T-01, T-05, T-06 | §3.1, §4 | ✓ |
+| AE.1 | **Graph size impact must be clear** (`:59–60`) | Suite 1 (`n ≤ 12`, exact) / Suite 2 (`n ≤ 98`, proven bracket); **the ceiling is attributed to the reference, not to IsalGraph**; relative bracket width vs `n`. **T-01 closed 2026-08-13** — cohort re-derived and released as code; fragment drafted: `tasks/T-01-letter-AE1.md` | ~~T-01~~, T-05, T-06 | §3.1, §4 | ✓ |
 | AE.2 | Related-work framing + references (`:62`) | new §1.x: canonicalisation literature | T-08 | **§1.x (new)** | ✓ |
 | AE.3 | **Side-by-side comparison of existing representations** — properties, strengths, limitations of each (`:63–64`) | comparison table as a **paper artifact**, axes from R1.2. **The Area Editor endorsed this in their own voice — non-negotiable** | **T-17** | comparison table (new) | ✓ |
 | AE.4a | **Choice of benchmark models** (`:66`) | six competitor representations enter three experiments; **each distance selected by measurement** (T-04a). **Requirement-modal via `:67` — this, not R1.1, is what the competitors answer to** | T-04, **T-04a**, T-06 | Tabs. 2–3, Figs. 1–2 | ✓ |
-| AE.4b | **Fully labeled vs partially labeled** (`:66`) | a **label-content column** in the dataset table (Tier 0) | **T-18** | §3.1 table | ✓ |
+| AE.4b | **Fully labeled vs partially labeled** (`:66`) | a **label-content column** in the dataset table (Tier 0). **T-01 measured it** — per-dataset node and edge attribute names, and **LINUX carries none**, which settles E6 by measurement rather than by reading prose ([data](data.md) §1.5) | **T-18** (data supplied by T-01) | §3.1 table | ✓ |
 | AE.4c | Associated analysis of results (`:66`) | the whole [statistics](statistics.md) protocol, D1–D15, **plus the frozen confirmatory family** ([preregistration](preregistration.md), `N_max = 197`). **T-02 closed 2026-08-13** | ~~T-02~~, T-06 | §3.2, §4 | ✓ |
 | AE.5 | "**Additional comments … should also be addressed**" (`:69`) | Catch-all, requirement modal. Largely subsumed; the one unowned clause is **"rationale"** from R3's preamble (`:83`), which lands in R3.1a(ii)'s paragraph at **no marginal cost**. Plus one verification pass over `:73–116` inside T-14 | **T-14** + T-07 | response letter, §2.x | **NEW** |
 
@@ -101,7 +101,7 @@ Disclosed in response-letter Part 5, **after** every reviewer comment is answere
 | E3 | Fits declared `n = 3–20`, greedy data to 50 | T-06, T-20 |
 | E4 | A fourth node range (`n = 3–11`) | T-20 |
 | E5 | Abstract self-contradiction (`:106` vs `:114`) | T-12 |
-| E6 | "Labels present in all five datasets" — **false for LINUX**, two sites | **T-12** |
+| E6 | "Labels present in all five datasets" — **false for LINUX**, two sites. **Confirmed by measurement 2026-08-13** (T-01): LINUX has no node and no edge attribute; [data](data.md) §1.5 gives the full per-dataset column | **T-12**, T-18 |
 | E7 | Algorithms float to pp. 33–35, after the references | **T-11, before T-15** |
 | E8 | Draft self-correction printed in Example 2.3 | T-11 |
 | E9 | 13 dead bibliography entries | T-08 |

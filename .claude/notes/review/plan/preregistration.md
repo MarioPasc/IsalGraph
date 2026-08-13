@@ -83,9 +83,14 @@ pre-registered claim rather than a footnote.
 |---|---|---:|---|---|---:|
 | F1.1 | IAM Letter LOW | 695,610 | F1.6 | GREC | 210,925 |
 | F1.2 | IAM Letter MED | 784,378 | F1.7 | AIDS (IAM) | 1,638,955 |
-| F1.3 | IAM Letter HIGH | 2,118,711 | F1.8 | COIL-DEL | 25,916,400 |
+| F1.3 | IAM Letter HIGH | 2,118,711 | F1.8 | COIL-DEL | **7,603,050** |
 | F1.4 | LINUX | 3,916 | F1.9 | Mutagenicity | 8,158,780 |
 | F1.5 | AIDS (GraphEdX), no `n_max` | 334,971 | F1.10 | Protein | 161,596 |
+
+**Suite-2 total: 21,710,892 pairs over 16,370 graphs**, re-derived by T-01 on 2026-08-13. COIL-DEL was
+recorded as 25,916,400; that figure enumerated 7,200 files where the split index defines 3,900
+([data](data.md) §1.3). **The family cardinality is unaffected** — F1 has one test per dataset and the
+dataset count did not change.
 
 **Pre-declared branch**: a dataset's bracket is **uninformative** if its BH-adjusted CI excludes 0
 **and** `|point estimate| > 0.05`. Its ρ is then reported as an interval, descriptively, and its

@@ -201,8 +201,14 @@ runs; it is not recomputed at execution time.**
 | IAM Letter MED | 784,378 | 1 | 2,000 | 9,999 | all |
 | AIDS (IAM) | 1,638,955 | 2 | 2,000 | 4,999 | all |
 | IAM Letter HIGH | 2,118,711 | 2 | 2,000 | 4,999 | all |
+| **COIL-DEL** | **7,603,050** | **3** | 1,000 | 1,999 | **2 × 10⁶ (26.31 %)**, seed 42 |
 | **Mutagenicity** | 8,158,780 | **3** | 1,000 | 1,999 | **2 × 10⁶ (24.51 %)**, seed 42 |
-| **COIL-DEL** | 25,916,400 | **3** | 1,000 | 1,999 | **2 × 10⁶ (7.72 %)**, seed 42 |
+
+> **Updated 2026-08-13 (T-01).** COIL-DEL is **7,603,050** pairs, not 25,916,400 — the previous
+> figure enumerated 7,200 files where the split index defines 3,900 ([data](data.md) §1.3). It stays
+> in tier 3, and its subsample ratio rises from 7.72 % to **26.31 %**, so **both tier-3 datasets now
+> sit in a narrow 24–27 % band** and one matched ratio validates both.
+> ~~COIL-DEL 25,916,400 pairs, subsample 7.72 %~~
 
 In the **exact** regime (Suite 1, `n ≤ 12`) only IAM Letter HIGH reaches tier 2; the other four
 datasets are tier 1. No Suite-1 dataset is subsampled.
@@ -218,13 +224,13 @@ Three rules that keep this honest:
    >
    > IAM Letter HIGH holds **2,118,711** pairs. Drawing the tier-3 subsample of 2 × 10⁶ from it is a
    > **94.4 % sample**, so the two protocols agree by construction and the comparison measures
-   > nothing. The ratios the subsample actually runs at in production are **7.72 %** (COIL-DEL) and
-   > **24.51 %** (Mutagenicity) — one and two orders of magnitude away from what was being validated.
+   > nothing. The ratios the subsample actually runs at in production are **26.31 %** (COIL-DEL) and
+   > **24.51 %** (Mutagenicity) — nowhere near what was being validated.
    >
    > **Replacement rule, frozen:**
    > - **Ratio-matched arm.** On IAM Letter HIGH, run the all-pairs protocol against the subsampled
-   >   protocol at **163,564 pairs (7.72 %)** and at **519,296 pairs (24.51 %)** — the same fractions
-   >   production uses — and compare the CIs. Both arms, both fractions, reported.
+   >   protocol at **519,296 pairs (24.51 %)** — the more aggressive of the two production fractions,
+   >   which bounds the other — and compare the CIs. Reported either way.
    > - **Structure-matched arm.** Letter HIGH has `n̄ = 4.58`; COIL-DEL and Mutagenicity have
    >   `n̄ = 21.5` and `28.5`. A ratio matched on a structurally unlike dataset validates the
    >   *estimator*, not the *application*. So additionally run **one representative cell on

@@ -7,14 +7,18 @@ agent must read before starting it. The *content* lives in those files — do no
 See [schedule](schedule.md). **T-25 closed and T-23 rescoped 2026-08-12. T-03 CLOSED 2026-08-13 —
 the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 
-> ⚠ **T-01 found that the Suite-2 cohort has no reproducing code.** 15 of 16 measurement scripts are
-> gone — four that [data](data.md) §6 listed as *surviving* are absent from the tree **and from every
-> commit that ever existed** — and there is no loader for GREC, AIDS-IAM, COIL-DEL, Mutagenicity or
-> Protein anywhere in `benchmarks/`, `src/` or `tests/`. **The whole Suite-2 half of [data](data.md)
-> §1 and every discard ratio in §3 and §5 are unverified**: 19,670 graphs, 40,024,242 pairs,
-> `n_max = 98`, and the headline 3.7× / 10.3× / 8.2× extension. **Print none of them until T-01
-> re-derives them.** Suite 1 *is* verified — `export_graphs.py` asserts it and is tested. Inherits:
-> **T-05, T-06, T-13, T-20**. Record: `.claude/notes/review/tasks/T-01-design.md`.
+> ⚠ **T-01 changed the cohort size. The pair count is 21,710,892, not 40,024,242.**
+> COIL-DEL contributes **3,900** graphs — the IAM split index's own definition, 100 classes × 39 —
+> not the 7,200 `.gxl` files that ship beside it, of which 3,300 carry no class label
+> (decision 27). Suite 2 is **16,370 graphs / 21,710,892 pairs**, so the extension is **3.1× graphs
+> and 5.6× pairs**, not 3.7× and 10.3×. **`n_max = 98`, `n̄ = 31.68` and the density span 0.094–0.607
+> are unchanged, so AE.1's evidence is untouched.** Nine of ten rows and all three discard ratios
+> reproduced exactly, and Suite 1 reproduces `export_graphs.py` to the pair.
+> Inherits: **T-05, T-06, T-13, T-18, T-20**. Record: [data](data.md) §1.3 and §7.
+>
+> Two further findings: **the size-biased discard is cohort-wide** — Letter discards at 1.23–1.32×
+> and is 84 % of Suite 1 — and **LINUX carries no node or edge attribute at all**, which settles E6
+> by measurement and hands T-18 its Tier-0 label column.
 
 > ⚠ **T-02 found that neither bracket end was selected by measurement.** `IPFP` has **never been
 > measured against exact GED** — [approx_ged](approx_ged.md) §2 says so in its own words —
@@ -40,7 +44,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 
 | ID | Ticket | Depends | Days | Pri | **Read first** |
 |---|---|---|---|---|---|
-| **T-01** | **Data lock** — **design LOCKED 2026-08-13, execution outstanding.** ~~port surviving scripts~~ → **re-derive**: 15 of 16 scripts are gone and Suite 2 has no loader. Write `iam_gxl_loader.py` + `cohort_audit.py` + tests; re-measure all ten datasets **retained and discarded**, per discard reason; what it measures becomes [data](data.md) §1. **Suite 1 must reproduce `export_graphs.py` exactly** (1,180/1,253/2,059/89/769; 3,897,911 pairs) or the new script is wrong | — | 0.5–1 | **P0** | [T-01 design](../tasks/T-01-design.md), [data](data.md) |
+| ~~**T-01**~~ | ~~Data lock — audit tables, cohorts, merge splits, port surviving scripts into `tests/`~~ → **DONE 2026-08-13.** Re-derived, not ported: 15 of 16 scripts were gone and Suite 2 had no loader. `iam_gxl_loader.py` + `cohort_audit.py` + **34 tests**. **Suite 1 reproduces `export_graphs.py` exactly** (3,897,911 pairs). **Suite 2 = 16,370 graphs / 21,710,892 pairs / `n_max` 98** — COIL-DEL corrected 7,200 → **3,900** (decision 27). Nine of ten rows and all three discard ratios reproduced exactly. Four findings: the **size-biased discard is cohort-wide** (Letter 1.23–1.32×); **LINUX is unlabelled**, settling E6; the **density convention** matters (up to 27 %); **I-05 closed** at 1.19× | — | **done** | — | [data](data.md) §1, §7, [T-01 design](../tasks/T-01-design.md) |
 | ~~**T-02**~~ | ~~Statistics lock — graph-level bootstrap, Mantel, pair-accounting ladder, and the frozen confirmatory family with its cardinality~~ → **DONE 2026-08-13.** Family enumerated and frozen at **`N_max = 197`** in three fixed-sequence families — F0 calibration gate 5, F1 bracket gate 10, F2 primary 182 — BH-FDR q = 0.05 within each; `N_actual = 182 − 15k − 8d`. **Four defects fixed in the locked protocol**: §9's exact-regime omnibus contradicted §4; two gates sat inside the family they gate; the labels row made the cardinality indeterminate; **D15 validated a 7.72 % subsample by drawing 94.4 % of a smaller dataset**. **D13 promoted to confirmatory**; ρ(Lev, UB) gets no primary rows. Raised **T-27** | T-01 | **done** | — | [preregistration](preregistration.md), [T-02 design](../tasks/T-02-design.md), [statistics](statistics.md) §12 |
 | ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
 | **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS** | — | 3–8 | **P0** | [competitors](competitors.md) |
@@ -76,11 +80,9 @@ see the header warning) · ~~T-10~~ (merged into T-09) ·
 
 ## Dependency structure
 
-**Critical path** — **T-01 → T-05 → T-06 → T-20 → T-15 → T-24**, with T-14 accruing throughout.
-**T-03 is done and off the path.** **T-27 is now on it**, in parallel with T-01: both must close
-before T-05 computes a production matrix — T-01 because T-05 needs the Suite-2 cohort, T-27 because
-T-05 needs to know which bound to compute. Neither is long (0.5–1 d and 1–2 d) and they are
-independent, so they run concurrently.
+**Critical path** — **T-27 → T-05 → T-06 → T-20 → T-15 → T-24**, with T-14 accruing throughout.
+**T-01, T-02, T-03 are all done and off the path.** **T-27 is the only remaining gate on T-05**: it
+decides which bound T-05 computes. It is 1–2 days and can start immediately.
 
 **T-02 is closed and no longer gates T-06** — but three of its parameters are still open and each has
 a named owner: `k` (T-04a), `d` (T-06's own F1 run), and the primary bound at each end (T-27). See
