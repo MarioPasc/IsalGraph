@@ -63,8 +63,21 @@ filter — masks select, they do not compact. `len == n*(n-1)//2`, which is 3,91
 
 ## 3. `$OUT/data/cells/{ds}__{METHOD}.npz` — one per cell, **Track A** writes, **Track B** reads
 
-`{METHOD}` is the GEDLIB name verbatim, upper case: `BRANCH`, `BRANCH_FAST`, `BRANCH_TIGHT`,
-`STAR`, `IPFP`, `REFINE`, `BIPARTITE`, `BP_BEAM`, and `HED` if it yields a finite bound.
+`{CELL}` is the column name. **Amended 2026-08-13 mid-wave: 12 cells per dataset, 60 total** — not
+the 8 first written here. `meta` carries `"cell"` (the column) beside `"method"` (the bare GEDLIB
+name), so `IPFP_MS` and `IPFP_DET` both record `"method": "IPFP"`.
+
+| End | Cells | Note |
+|---|---|---|
+| **Lower** (5) | `BRANCH`, `BRANCH_FAST`, `BRANCH_TIGHT`, `STAR`, `HED` | `HED` runs with `--edge-set-distances OPTIMAL`; its default is vacuous under D6 because edge substitution is free, and `hed.ipp` sets only a lower bound, so `UB = inf` is by design |
+| **Upper** (7) | `BIPARTITE`, `IPFP_MS`, `REFINE_MS`, `BP_BEAM_MS`, `IPFP_DET`, `REFINE_DET`, `BP_BEAM_DET` | GEDLIB's `LSBasedMethod` defaults to one random start under `REAL` randomness, which is why IPFP returned 3.00 on P₄/C₄ |
+
+**`_MS` is the arm that enters the §5 selection** — multi-start is the configuration the published
+tightness claim was measured under and what a production matrix would use, so Holm within the upper
+end stays C(4,2) = 6 over `BIPARTITE` + the three `_MS`. **`_DET` is a companion**: it quantifies how
+much of IPFP's advantage is contingent on multi-start, and it is self-checking, since a monotone
+local search started from BIPARTITE can never exceed BIPARTITE. Frozen before any tightness result
+was visible.
 
 | Key | dtype | Shape | Meaning |
 |---|---|---|---|
@@ -75,9 +88,30 @@ filter — masks select, they do not compact. `len == n*(n-1)//2`, which is 3,91
 
 **Rules that are not negotiable.**
 
-- **Assert `0 <= value < inf` on every read from GEDLIB, per pair, per orientation.** `0` is legal
-  only when `exact == 0`. A value of exactly `0.0` where `exact > 0` means the wrong accessor was
-  called and **must raise**, not warn. This is the trap that silently fills a matrix with zeros.
+- **Assert `0 <= value < inf` on every read from GEDLIB, per pair, per orientation** — raises.
+
+  > ### ⚠ AMENDED 2026-08-13, mid-wave — the original rule was FALSE and would have halted the run
+  >
+  > This section first said *"a value of exactly `0.0` where `exact > 0` means the wrong accessor
+  > was called and must raise"*. **That is wrong.** A valid lower bound legitimately returns 0.0
+  > whenever two non-isomorphic graphs share a degree sequence: under cost model D6 both node *and*
+  > edge substitution are free, so a degree-preserving assignment costs nothing.
+  >
+  > Verified: C₆ versus two disjoint triangles has `networkx` exact GED **4.0**, and BRANCH,
+  > BRANCH_FAST, BRANCH_TIGHT and STAR all return **0.00** — all valid. Measured at **1.0 %** of
+  > certified LINUX pairs, and far higher on Letter, where n̄ = 4.7 makes degree collisions common.
+  >
+  > **The replacement, which catches the real failure without false positives:**
+  > - **capability probe per cell**, before the pair loop, on a fixed synthetic pair with *differing*
+  >   degree sequences — star K₁,₄ vs P₅, exact = 4.0 (BRANCH gives 2.00, HED-OPTIMAL 1.25). Require
+  >   `0 < lb <= 4.0` for a lower-bound cell, `ub >= 4.0` for an upper-bound cell — raises;
+  > - **all-zero guard**: if any `exact > 0` in the cell and the entire `value` vector is 0.0 — raises;
+  > - **M4 per pair**, two-sided on certified and one-sided on censored, reported not clipped. A UB
+  >   method read through `get_lower_bound()` returns 0 everywhere and is refuted by M4 on
+  >   essentially every pair, which is the real backstop.
+  >
+  > Design §3.3 says "every valid lower bound returns 0 on an exact-GED-0 pair". That stays true;
+  > **the converse it appears to imply is false.**
 - `end == "lower"` reads `get_lower_bound()`. `end == "upper"` reads `get_upper_bound()`. Never both.
 - Import order: `importlib.import_module("gklearn.gedlib.libraries_import")` **before**
   `gklearn.gedlib.gedlibpy_gxl`. Use `importlib.import_module`, never a plain `from … import` —
@@ -128,13 +162,21 @@ Plus `$OUT/data/timing/probe_n30__{METHOD}.json`, same schema, `"source": "iam_g
 ```json
 {"dataset": "...", "method": "...", "n_pairs": 5000, "seed": 42, "repetitions": 5,
  "defaults":  {"options": "", "frac_varying": 0.31, "max_spread": 4.0},
- "pinned":    {"options": "--threads 1 --randomness PSEUDO --seed 42 --initial-solutions 1",
+ "pinned":    {"options": "--threads 1 --randomness PSEUDO --initial-solutions 10",
                "frac_varying": 0.0, "max_spread": 0.0},
  "deterministic_under_pinned": true}
 ```
 
 The exact option keys GEDLIB accepts per method are **discovered and reported**, not assumed. If a
 method rejects an option, record the rejection rather than dropping the option silently.
+
+> **Amended 2026-08-13**: the example above originally read `--randomness PSEUDO --seed 42`.
+> **There is no `--seed` option** — GEDLIB raises `RuntimeError: Invalid option "seed"` rather than
+> ignoring it. The pinned strings established empirically are
+> `--threads 1 --randomness PSEUDO --initial-solutions 10` for the `_MS` arm and
+> `--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1` for
+> `_DET`. Both measured fully deterministic — 0.0000 varying, 0.0 spread — against **91–94 %** of
+> pairs varying at GEDLIB defaults, with spreads up to 10 edit operations.
 
 ## 7. `$OUT/data/analysis/…` — **Track B** writes, orchestrator reads
 

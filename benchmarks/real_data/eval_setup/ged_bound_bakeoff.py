@@ -539,6 +539,24 @@ def gedlib_checkout() -> Path:
     return Path(module.__file__).resolve().parents[3]
 
 
+def _gedlib_head() -> str:
+    """Return the GEDLIB checkout's commit, or ``"unavailable"`` if unimportable.
+
+    Notes
+    -----
+    Provenance must never be the thing that makes an artifact impossible to
+    write. The index file carries ground truth and Levenshtein only -- no value
+    GEDLIB computed -- so requiring the bindings just to stamp a commit hash
+    made ``write_index`` fail on a machine without them. Cell files still need
+    GEDLIB, and still fail loudly without it, because their *values* come from
+    it.
+    """
+    try:
+        return _git_head(gedlib_checkout())
+    except BakeoffError:
+        return "unavailable"
+
+
 def build_meta(
     *,
     dataset: str,
@@ -580,7 +598,7 @@ def build_meta(
         "options": options,
         "deterministic": deterministic,
         "cost_model": list(COST_MODEL),
-        "gedlib_commit": _git_head(gedlib_checkout()),
+        "gedlib_commit": _gedlib_head(),
         "code_commit": _git_head(code_root),
         "host": platform.node(),
         "wall_seconds": round(wall_seconds, 3),

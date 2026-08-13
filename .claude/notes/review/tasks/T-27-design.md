@@ -229,8 +229,14 @@ timing, or touches `src/isalgraph/core/`. Track B imports `isalgraph.viz` only, 
 
 Each is checked by the orchestrator, by re-running the named command in a clean main checkout.
 
-1. **All 40 cells attempted**, plus HED as a 41st; every failure reported with its reason.
-   *Check*: `data/cells/` holds 40 `.npz` files; `REPORT.md` §grid has 41 rows.
+1. **All 60 cells attempted**; every failure reported with its reason.
+   *Check*: `data/cells/` holds 60 `.npz` files; `REPORT.md` §grid has 60 rows.
+
+   > **Amended 2026-08-13 mid-wave.** This read "40 cells, plus HED as a 41st", wrong on both
+   > counts: HED across five datasets is five cells, not one, and the local-search upper bounds
+   > gained a second pinned configuration each. The grid is **12 cells × 5 datasets = 60**:
+   > lower `BRANCH`, `BRANCH_FAST`, `BRANCH_TIGHT`, `STAR`, `HED`; upper `BIPARTITE`, `IPFP_MS`,
+   > `REFINE_MS`, `BP_BEAM_MS`, `IPFP_DET`, `REFINE_DET`, `BP_BEAM_DET`.
 2. **M4 = 0 across every cell**, two-sided on certified pairs and one-sided on censored ones (§3.5).
    *Check*: `data/validity.json` reports `violations == 0` for 41 cells over 3,897,911 pairs.
    **Any violation halts the ticket.**
