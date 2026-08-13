@@ -65,6 +65,13 @@ __all__ = ["Gate4Report", "MergeError", "collect_shards", "gate4", "main", "merg
 
 SHARD_KEYS = ("pair_index", "ged", "lb", "ub", "certified", "seconds")
 
+#: Off-diagonal exact-zero fraction at or above which gate 4 refuses the merge
+#: (CONTRACTS §7). Set just under 1.0 rather than at some tuned threshold: the
+#: failure this catches fills essentially the *whole* matrix with zeros, and a
+#: real dataset that genuinely reached 99 % isomorphic pairs would deserve the
+#: same look.
+_ZERO_FRACTION_LIMIT = 0.99
+
 #: Legacy vocabulary, so downstream metadata readers see a familiar string.
 _COST_FUNCTION_NAMES = {
     "unit": "uniform_topology_only",
@@ -87,6 +94,11 @@ class Gate4Report:
         n_censored: Off-diagonal upper-triangle pairs that are interval-censored.
         n_zero_offdiag: Certified off-diagonal zeros, i.e. proven isomorphic pairs.
         max_asymmetry: Largest ``|M - M.T|`` over the finite part of ``ged_matrix``.
+        zero_offdiag_fraction: Off-diagonal entries of ``ged_matrix`` that are
+            exactly zero, as a fraction of the off-diagonal upper triangle.
+            Recorded whatever the source, because a matrix that is almost all
+            zeros is the shape the wrong accessor produces, and GEDLIB reports
+            that failure no other way.
     """
 
     passed: bool
@@ -95,6 +107,7 @@ class Gate4Report:
     n_censored: int = 0
     n_zero_offdiag: int = 0
     max_asymmetry: float = 0.0
+    zero_offdiag_fraction: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-ready view of the report."""
@@ -105,6 +118,7 @@ class Gate4Report:
             "n_censored": self.n_censored,
             "n_zero_offdiag_certified": self.n_zero_offdiag,
             "max_asymmetry": self.max_asymmetry,
+            "zero_offdiag_fraction": self.zero_offdiag_fraction,
         }
 
 
@@ -250,6 +264,8 @@ def gate4(
     certified: np.ndarray,
     *,
     strict_nonzero: bool = False,
+    ged_from: str = "exact",
+    computed: str = "both",
 ) -> Gate4Report:
     """Run the structural gate on the assembled matrices.
 
@@ -260,10 +276,27 @@ def gate4(
         certified: ``(N, N)`` optimality certificate mask.
         strict_nonzero: Enforce the literal CONTRACTS §7 text, under which a zero
             off-diagonal entry fails even when it is a certified isomorphism.
+        ged_from: Which quantity ``ged`` holds. ``'exact'`` is T-03's census and
+            the default, and keeps every check exactly as it was. Under ``'lb'``
+            or ``'ub'`` the matrix holds a *bound*, not a distance, and a zero
+            entry no longer implies an isomorphism: ``BRANCH_FAST`` returns the
+            trivial bound 0 on real pairs whose true distance is 2 or 6, so
+            demanding a certificate for every zero would reject correct data.
+        computed: Which ends the campaign evaluated. ``'both'`` is the default
+            and requires both bound matrices finite. A single-role campaign
+            leaves the other end at its sentinel, and only the end it computed
+            is checked.
 
     Returns:
         The :class:`Gate4Report`.
+
+    Raises:
+        MergeError: If ``ged_from`` or ``computed`` is not a recognised value.
     """
+    if ged_from not in ("exact", "lb", "ub"):
+        raise MergeError(f"ged_from must be exact, lb or ub; got {ged_from!r}")
+    if computed not in ("both", "lb", "ub"):
+        raise MergeError(f"computed must be both, lb or ub; got {computed!r}")
     rep = Gate4Report(passed=True)
     n = ged.shape[0]
     off = ~np.eye(n, dtype=bool)
@@ -289,8 +322,10 @@ def gate4(
 
     if not np.all(np.diag(ged) == 0.0):
         rep.violations.append("ged_matrix diagonal is not exactly zero")
-    if not (np.isfinite(lb).all() and np.isfinite(ub).all()):
-        rep.violations.append("lb_matrix or ub_matrix holds a non-finite entry")
+    if computed != "ub" and not np.isfinite(lb).all():
+        rep.violations.append("lb_matrix holds a non-finite entry")
+    if computed != "lb" and not np.isfinite(ub).all():
+        rep.violations.append("ub_matrix holds a non-finite entry")
     if bool(np.any(lb[off] > ub[off] + 1e-9)):
         rep.violations.append("some off-diagonal lb exceeds its ub")
 
@@ -305,7 +340,28 @@ def gate4(
         rep.violations.append("a negative distance is present")
     zeros = finite_off & (ged == 0.0)
     rep.n_zero_offdiag = int(np.count_nonzero(zeros & triu))
-    if rep.n_zero_offdiag:
+    n_offdiag = int(np.count_nonzero(triu))
+    rep.zero_offdiag_fraction = (rep.n_zero_offdiag / n_offdiag) if n_offdiag else 0.0
+
+    # CONTRACTS §7 addition. The failure a wrong accessor produces is not one
+    # bad number, it is a matrix that is almost entirely zero, and it raises
+    # nothing on the way there: get_lower_bound() on an upper-bound method
+    # returns 0.00 silently. This is the shape check for that, and it applies to
+    # every source -- an exact census that came out 99 % zeros would be just as
+    # wrong, just as quietly.
+    if rep.zero_offdiag_fraction >= _ZERO_FRACTION_LIMIT:
+        rep.violations.append(
+            f"{rep.zero_offdiag_fraction:.4f} of off-diagonal pairs are exactly zero, at or "
+            f"above the {_ZERO_FRACTION_LIMIT} limit -- this is the shape of a matrix filled "
+            "through the wrong accessor, which GEDLIB does not report as an error"
+        )
+
+    if rep.n_zero_offdiag and ged_from == "exact":
+        # A zero *distance* is a claim of isomorphism and needs the certificate
+        # that proves it. A zero *bound* claims nothing: BRANCH_FAST's trivial
+        # lower bound is 0 on real pairs whose exact distance is 2 and 6
+        # (measured on Picasso 2026-08-12), so this check would reject correct
+        # data if it were applied to a bound matrix.
         uncertified_zero = zeros & ~certified
         if bool(uncertified_zero.any()):
             rep.violations.append(
@@ -330,6 +386,56 @@ def gate4(
 
     rep.passed = not rep.violations
     return rep
+
+
+def _agreed(shard_meta: list[dict[str, Any]], field_name: str) -> str | None:
+    """Return the single value the shards carry for one metadata field.
+
+    Args:
+        shard_meta: Parsed ``meta`` dicts, one per shard.
+        field_name: The key to read.
+
+    Returns:
+        The agreed value, ``None`` when no shard carries the key, or a
+        ``'MIXED: ...'`` marker when they disagree. Disagreement is recorded
+        rather than raised here because ``gate4`` owns the refusals; a mixed
+        options string is caught by the campaign gate, which is where CONTRACTS
+        §3 puts it.
+    """
+    values = {
+        str(m[field_name]) for m in shard_meta if field_name in m and m[field_name] is not None
+    }
+    if not values:
+        return None
+    if len(values) > 1:
+        return "MIXED: " + "|".join(sorted(values))
+    return values.pop()
+
+
+def _computed_mode(shard_meta: list[dict[str, Any]]) -> str:
+    """Return the compute mode the shards agree on.
+
+    Args:
+        shard_meta: Parsed ``meta`` dicts, one per shard.
+
+    Returns:
+        ``'both'``, ``'lb'`` or ``'ub'``. Shards written before the flag existed
+        carry no ``compute`` key and mean ``'both'``.
+
+    Raises:
+        MergeError: If the shards disagree. Two halves of one matrix computed
+            under different modes would leave part of a bound matrix at its
+            sentinel and part measured, with nothing in the file to say which.
+    """
+    modes = {str(m.get("compute", "both")) for m in shard_meta}
+    if not modes:
+        return "both"
+    if len(modes) > 1:
+        raise MergeError(f"shards mix compute modes {sorted(modes)}; refusing to merge")
+    mode = modes.pop()
+    if mode not in ("both", "lb", "ub"):
+        raise MergeError(f"shards declare an unknown compute mode {mode!r}")
+    return mode
 
 
 def _load_cohort(path: Path) -> dict[str, Any]:
@@ -414,6 +520,9 @@ def merge_shards(
     out: Path,
     cohort_path: str | None = None,
     strict_nonzero: bool = False,
+    ged_from: str = "exact",
+    role: str | None = None,
+    seconds_role: str | None = None,
 ) -> tuple[Gate4Report, list[Path]]:
     """Merge every shard for one dataset and write the CONTRACT D file.
 
@@ -424,6 +533,14 @@ def merge_shards(
         out: Output path.
         cohort_path: Optional explicit CONTRACT A path.
         strict_nonzero: Pass through to :func:`gate4`.
+        ged_from: Which shard array becomes ``ged_matrix``. ``'exact'`` is
+            T-03's behaviour and the default. ``'lb'`` and ``'ub'`` exist for
+            the T-05 role campaigns, whose reported value *is* a bound
+            (CONTRACTS §4).
+        role: Role label written into the metadata, e.g. ``'lb'`` or ``'ubs'``.
+        seconds_role: Provenance label for ``seconds_matrix``. The wall time in
+            a role file is that role's own method's, and pooling it with
+            another role's would be meaningless, so it is named.
 
     Returns:
         ``(gate4_report, shard_paths)``.
@@ -431,6 +548,8 @@ def merge_shards(
     Raises:
         MergeError: On any coverage, consistency or gate-4 failure.
     """
+    if ged_from not in ("exact", "lb", "ub"):
+        raise MergeError(f"--ged-from must be exact, lb or ub; got {ged_from!r}")
     cohort = _load_cohort(_find_cohort(shard_dir, key, cohort_path))
     n = int(np.asarray(cohort["graph_ids"]).size)
     if n != n_graphs:
@@ -473,7 +592,23 @@ def merge_shards(
         mat[j, i] = vals
     np.fill_diagonal(cert_m, True)
 
-    report = gate4(ged_m, lb_m, ub_m, cert_m, strict_nonzero=strict_nonzero)
+    if ged_from != "exact":
+        # The role's own bound becomes the reported value. The diagonal is set
+        # explicitly: a bound of a graph against itself is 0 by construction and
+        # the solver is never asked for it.
+        ged_m = (lb_m if ged_from == "lb" else ub_m).copy()
+        np.fill_diagonal(ged_m, 0.0)
+
+    computed = _computed_mode(acc.shard_meta)
+    report = gate4(
+        ged_m,
+        lb_m,
+        ub_m,
+        cert_m,
+        strict_nonzero=strict_nonzero,
+        ged_from=ged_from,
+        computed=computed,
+    )
     if not report.passed:
         raise MergeError("gate 4 failed: " + "; ".join(report.violations))
 
@@ -497,6 +632,19 @@ def merge_shards(
             ),
             # Additions.
             "cost_model": cost_model,
+            "role": role,
+            "ged_from": ged_from,
+            "compute": computed,
+            "seconds_role": seconds_role if seconds_role is not None else role,
+            # CONTRACTS §3: the options string is part of the method name, so it
+            # is carried from the shards into the merged file verbatim.
+            "method": _agreed(acc.shard_meta, "lb_method" if ged_from == "lb" else "ub_method"),
+            "options_string": _agreed(
+                acc.shard_meta, "lb_options" if ged_from == "lb" else "ub_options"
+            ),
+            "accessor": {"exact": "exact", "lb": "lower", "ub": "upper"}[ged_from],
+            "n_zero_offdiag": report.n_zero_offdiag,
+            "zero_offdiag_fraction": report.zero_offdiag_fraction,
             "n_pairs": total,
             "n_certified": report.n_certified,
             "n_censored": report.n_censored,
@@ -560,6 +708,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="reject certified off-diagonal zeros (literal CONTRACTS section 7)",
     )
+    p.add_argument(
+        "--ged-from",
+        default="exact",
+        choices=("exact", "lb", "ub"),
+        help="which shard array becomes ged_matrix (default exact, T-03's behaviour)",
+    )
+    p.add_argument("--role", default=None, help="role label written into the metadata")
+    p.add_argument("--seconds-role", default=None, help="provenance label for seconds_matrix")
     p.add_argument("--log-level", default="INFO")
     return p
 
@@ -587,6 +743,9 @@ def main(argv: list[str] | None = None) -> int:
             out=out,
             cohort_path=args.input,
             strict_nonzero=bool(args.strict_nonzero),
+            ged_from=str(args.ged_from),
+            role=args.role,
+            seconds_role=args.seconds_role,
         )
     except (MergeError, GedPairIndexError, OSError) as exc:
         logger.error("merge failed: %s", exc)
