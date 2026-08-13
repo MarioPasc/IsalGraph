@@ -233,8 +233,17 @@ dependency list de-duplicates them. The roles list crosses `--export` **colon**-
 - **`conda` is not on `PATH` on compute nodes.** The interpreter is invoked by absolute
   prefix path. No `module load` anywhere.
 - **Shards are deleted by the merge, after its own structural gate passes** (CONTRACTS
-  §6.2, §7). The workers pass `--delete-shards` and add no `rm` of their own; a gate
-  failure raises `MergeError`, `set -e` aborts, and the shards survive for diagnosis.
+  §6.2, §7). `worker_bounds.sh` passes `--delete-shards` and adds no `rm` of its own; a
+  gate failure raises `MergeError`, `set -e` aborts, and the shards survive for
+  diagnosis. `worker_subsample.sh` passes no such flag because its merger has none — its
+  shards live on `$LOCALSCRATCH`, outside the mirrored `out/` tree, so SLURM wipes them
+  when the job ends and they never touch the fscratch file quota.
+- **The `ubt` role uses a different merger**, `approx_ged_subsample_merge.py`, not
+  `ged_merge_shards.py`. CONTRACTS §7's merge writes a dense `(N, N)` matrix and cannot
+  express `UB_TIGHT/subsample.npz`: the subsample is pooled across all ten datasets
+  (CONTRACTS §5), so `--n-graphs` is meaningless and no key names one cohort. Widening the
+  dense merger for a 28,000-row special case would put T-03's closed, load-bearing dense
+  path at risk. Its CLI is `--shards --pair-list --out --role --method --options`.
 - **`UB_TIGHT/subsample_pairs.npz` and `UB_TIGHT/subsample.npz` are two different files.**
   The first is the sampler's pair list, written ahead of the run and reproducible from seed
   42; the second is this campaign's result. `worker_subsample.sh` asserts they do not

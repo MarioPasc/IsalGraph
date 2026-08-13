@@ -66,14 +66,26 @@ run_py benchmarks.real_data.eval_setup.ged_exact_runner \
     --checkpoint-every "${CHECKPOINT_EVERY:-2000}" \
     --checkpoint "${SHARDS}/${ROLE}.ckpt.npz"
 
-# --delete-shards is honoured only after the merge's structural gate passes (CONTRACTS
-# §6.2, §7). A gate failure raises MergeError, set -e aborts, and the shards survive.
-run_py benchmarks.real_data.eval_setup.ged_merge_shards \
-    --shards "${SHARDS}" --key "${ROLE}" \
+# A SEPARATE merger, not ged_merge_shards. CONTRACTS §7's merge writes a dense (N,N)
+# matrix and cannot express this output: the subsample is pooled across all ten datasets
+# (CONTRACTS §5), so --n-graphs is meaningless and no key names one cohort. Widening the
+# dense merger for a 28,000-row special case would put T-03's closed, load-bearing dense
+# path at risk. Orchestrator ruling, wave 2026-08-13-t05-bounds.
+#
+# It joins shard pair_index against the pair list rows and writes the CONTRACTS §5 flat
+# schema: dataset_key, pair_i, pair_j, n_max, bin_index, value, value_fwd, value_rev,
+# seconds, metadata.
+run_py benchmarks.real_data.eval_setup.approx_ged_subsample_merge \
+    --shards "${SHARDS}" \
     --pair-list "${PAIR_LIST}" \
     --out "${RESULT}" \
-    --ged-from ub --role "${ROLE}" --seconds-role "${ROLE}" \
-    --delete-shards
+    --role "${ROLE}" --method "${METHOD}" --options "${OPTIONS}"
+
+# No --delete-shards here, and that is not an omission: this merger's CLI has no such
+# flag. The shards live on $LOCALSCRATCH, which SLURM wipes when the job ends, so they
+# never reach durable storage and never count against the fscratch file quota. The
+# whole-tree mirror in _env.sh copies back ${MYLOCAL}/out only, and the shards are
+# deliberately outside it.
 
 mkdir -p "${OUT_DIR}/${OUTDIR}"
 cp -a "${RESULT}" "${OUT_DIR}/${OUTDIR}/subsample.npz.part.$$" && \

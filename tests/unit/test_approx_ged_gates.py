@@ -460,8 +460,64 @@ def test_g3_catches_an_upper_bound_below_exact(tmp_path: Path) -> None:
 
 
 @needs_reference
-def test_g3_refuses_to_compare_a_different_cohort_positionally(tmp_path: Path) -> None:
-    """aids_graphedx (819) must never be compared by index to aids (769)."""
+def test_g3_joins_a_superset_cohort_on_graph_ids(tmp_path: Path) -> None:
+    """A campaign cohort that strictly contains the reference is joined, not skipped.
+
+    Suite-1 ``aids`` (769) is a strict subset of Suite-2 ``aids_graphedx`` (819) --
+    Suite 1 is Suite 2 plus ``n_max = 12``, so the containment is structural. The
+    exact arm must run on the induced submatrix rather than being thrown away: it
+    is the largest ``lb <= exact <= ub`` validation available above Letter.
+
+    Simulated here by widening LINUX's campaign cohort with graphs T-03 does not
+    have, which is the same topology at a size the test can afford.
+    """
+    root = _campaign(tmp_path, ("linux",))
+    with np.load(root / "LB" / "linux.npz", allow_pickle=False) as handle:
+        arrays = {k: handle[k] for k in handle.files}
+    n = int(arrays["ged_matrix"].shape[0])
+    extra = 7
+    m = n + extra
+
+    def _grow(matrix: np.ndarray, fill: float) -> np.ndarray:
+        out = np.full((m, m), fill, dtype=matrix.dtype)
+        out[:n, :n] = matrix
+        np.fill_diagonal(out, 0)
+        return out
+
+    ids = np.array(list(arrays["graph_ids"].astype(str)) + [f"zz_extra_{k}" for k in range(extra)])
+    grown = {
+        "ged_matrix": _grow(arrays["ged_matrix"], 1.0),
+        "lb_matrix": _grow(arrays["lb_matrix"], 1.0),
+        "ub_matrix": _grow(arrays["ub_matrix"], 9.0),
+        "certified_mask": np.zeros((m, m), dtype=bool),
+        "seconds_matrix": np.zeros((m, m), dtype=np.float32),
+        "node_counts": np.concatenate([arrays["node_counts"], np.full(extra, 5, np.int32)]),
+        "edge_counts": np.concatenate([arrays["edge_counts"], np.full(extra, 5, np.int32)]),
+        "graph_ids": ids,
+        "labels": np.array([""] * m),
+        "metadata": arrays["metadata"],
+    }
+    np.fill_diagonal(grown["certified_mask"], True)
+    for role in ("LB", "UB"):
+        payload = dict(grown)
+        payload["ged_matrix"] = grown["lb_matrix" if role == "LB" else "ub_matrix"]
+        np.savez_compressed(root / role / "linux.npz", **payload)
+
+    rc, record = _run(tmp_path / "r", "G3", root, datasets="linux", exact_dir=EXACT_DIR)
+    assert rc == 0, record["notes"]
+    detail = record["per_dataset"]["linux"]["exact"]
+    assert detail["n_ours"] == m and detail["n_reference"] == n
+    assert detail["n_common_graphs"] == n
+    assert detail["join"].startswith("graph_id join")
+    # The induced submatrix, not the full one: C(89, 2) = 3,916 pairs, 3,870 certified.
+    assert detail["n_pairs_in_submatrix"] == 3916
+    assert detail["n_certified"] == 3870
+    assert detail["n_lb_above_exact"] == 0 and detail["n_ub_below_exact"] == 0
+
+
+@needs_reference
+def test_g3_skips_only_when_there_is_no_overlap(tmp_path: Path) -> None:
+    """With no graph in common the arm is skipped, and says so."""
     root = _campaign(tmp_path, ("linux",))
     with np.load(root / "LB" / "linux.npz", allow_pickle=False) as handle:
         ids = handle["graph_ids"].copy()
@@ -471,7 +527,65 @@ def test_g3_refuses_to_compare_a_different_cohort_positionally(tmp_path: Path) -
     rc, record = _run(tmp_path / "r", "G3", root, datasets="linux", exact_dir=EXACT_DIR)
     # The bracket arm still runs and passes; only the exact arm is skipped.
     assert rc == 0
-    assert record["per_dataset"]["linux"]["exact"].startswith("SKIPPED")
+    assert record["per_dataset"]["linux"]["exact"]["n_common_graphs"] == 0
+    assert "fewer than two graphs in common" in record["per_dataset"]["linux"]["exact"]["skipped"]
+
+
+@needs_reference
+def test_g3_selects_on_isfinite_not_isnan(tmp_path: Path) -> None:
+    """T-03's censored pairs are +inf, not NaN, and an isnan guard would miss them.
+
+    Measured on the real census: ``linux`` carries 92 non-finite entries in
+    ``ged_matrix``, all ``+inf``, ``n_nan = 0``; ``aids`` carries 122,076, all
+    ``+inf``. ``inf <= x`` is False and raises nothing, so a guard written as
+    ``~np.isnan(...)`` would pass every censored pair through and report a
+    censoring as a bracket violation.
+    """
+    with np.load(EXACT_DIR / "linux.npz", allow_pickle=False) as handle:
+        exact = handle["ged_matrix"]
+        certified = handle["certified_mask"]
+    assert int(np.isinf(exact).sum()) == 92
+    assert int(np.isnan(exact).sum()) == 0
+    # Every censored (non-finite) pair is outside certified_mask, so selecting on
+    # certified alone already excludes them -- and isfinite is the belt to that brace.
+    rows, cols = np.triu_indices(exact.shape[0], k=1)
+    assert not certified[rows, cols][~np.isfinite(exact[rows, cols])].any()
+
+    root = _campaign(tmp_path, ("linux",))
+    rc, record = _run(tmp_path / "r", "G3", root, datasets="linux", exact_dir=EXACT_DIR)
+    assert rc == 0
+    detail = record["per_dataset"]["linux"]["exact"]
+    assert detail["n_certified"] == 3870
+    assert detail["n_certified_but_nonfinite"] == 0
+
+
+@needs_reference
+def test_g3_reports_an_inf_bearing_reference_as_censored_not_violated(
+    tmp_path: Path,
+) -> None:
+    """An inf that IS inside certified_mask is excluded rather than compared.
+
+    Guards against a future census that marks a censored pair certified: the pair
+    must drop out of the comparison and be counted, not enter it as ``inf`` and
+    produce a spurious ``ub < exact`` violation.
+    """
+    root = _campaign(tmp_path, ("linux",))
+    reference = tmp_path / "exact_inf"
+    reference.mkdir()
+    with np.load(EXACT_DIR / "linux.npz", allow_pickle=False) as handle:
+        arrays = {k: handle[k] for k in handle.files}
+    exact = arrays["ged_matrix"].copy()
+    mask = arrays["certified_mask"].copy()
+    exact[2, 5] = exact[5, 2] = np.inf  # certified AND infinite: contradictory
+    mask[2, 5] = mask[5, 2] = True
+    arrays["ged_matrix"], arrays["certified_mask"] = exact, mask
+    np.savez_compressed(reference / "linux.npz", **arrays)
+
+    rc, record = _run(tmp_path / "r", "G3", root, datasets="linux", exact_dir=reference)
+    assert rc == 0, record["notes"]
+    detail = record["per_dataset"]["linux"]["exact"]
+    assert detail["n_certified_but_nonfinite"] == 1
+    assert detail["n_ub_below_exact"] == 0  # NOT reported as a violation
 
 
 @needs_reference

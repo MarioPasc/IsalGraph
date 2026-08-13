@@ -616,36 +616,74 @@ def gate3_bracket(
             continue
         exact_arrays = _load(exact_path)
 
-        # Compare by index only when the cohorts are the same graphs in the same
-        # order. aids_graphedx (819 graphs) is a DIFFERENT cohort from Suite 1's
-        # aids (769) and must never be compared positionally.
+        # 🔴 JOIN ON graph_ids, NEVER ON POSITION. Suite-1 `aids` (769 graphs) is a
+        # strict SUBSET of Suite-2 `aids_graphedx` (819): Suite 1 is Suite 2 plus
+        # n_max = 12, so the containment is structural rather than coincidental. A
+        # positional comparison of the two would silently compare unrelated graphs;
+        # the id join recovers the induced 295,296-pair submatrix, which is the
+        # largest lb <= exact <= ub validation arm available above Letter.
+        #
+        # When the two cohorts are identical the join reduces to the positional
+        # comparison, so this is one code path rather than two.
         ours_ids = lb_arrays["graph_ids"].astype(str)
         ref_ids = exact_arrays["graph_ids"].astype(str)
-        if ours_ids.shape != ref_ids.shape or not np.array_equal(ours_ids, ref_ids):
-            detail["exact"] = (
-                "SKIPPED: cohort differs from T-03's; a positional comparison would "
-                "compare unrelated graphs"
-            )
+        common, ours_pos, ref_pos = np.intersect1d(
+            ours_ids, ref_ids, assume_unique=False, return_indices=True
+        )
+        detail["exact"] = {
+            "n_ours": int(ours_ids.size),
+            "n_reference": int(ref_ids.size),
+            "n_common_graphs": int(common.size),
+            "join": "identity"
+            if common.size == ours_ids.size == ref_ids.size
+            else "graph_id join on the induced submatrix",
+        }
+        if common.size < 2:
+            detail["exact"]["skipped"] = "fewer than two graphs in common"
             record.notes.append(
-                f"{dataset}: exact arm skipped, cohort differs from T-03's "
-                f"({ours_ids.shape[0]} vs {ref_ids.shape[0]} graphs)"
+                f"{dataset}: exact arm skipped, only {int(common.size)} graph(s) in "
+                "common with T-03's census"
             )
             continue
+        if common.size != ours_ids.size:
+            record.notes.append(
+                f"{dataset}: exact arm runs on the induced submatrix of "
+                f"{int(common.size)} graphs common to the campaign ({ours_ids.size}) "
+                f"and T-03's census ({ref_ids.size})"
+            )
 
-        certified, _, _ = _upper(exact_arrays["certified_mask"])
-        exact, _, _ = _upper(exact_arrays["ged_matrix"])
+        sub_r, sub_c = np.triu_indices(int(common.size), k=1)
+        sel_rows, sel_cols = ours_pos[sub_r], ours_pos[sub_c]
+        ref_rows, ref_cols = ref_pos[sub_r], ref_pos[sub_c]
+
+        lower_sel = lb_arrays["lb_matrix"][sel_rows, sel_cols]
+        upper_sel = ub_arrays["ub_matrix"][sel_rows, sel_cols]
+        certified = exact_arrays["certified_mask"][ref_rows, ref_cols]
+        exact = exact_arrays["ged_matrix"][ref_rows, ref_cols]
+
+        # 🔴 isfinite, NOT ~isnan. T-03's ged_matrix carries +inf on censored pairs
+        # and ZERO NaN -- linux 92 infinities, aids 122,076, measured. An isnan-based
+        # guard passes every one of them straight through, and `inf <= x` is False
+        # while raising nothing, so the bracket would report violations that are
+        # really censorings.
         selected = certified & np.isfinite(exact)
         n_sel = int(selected.sum())
-        detail["exact"] = {
-            "n_certified": n_sel,
-            "n_certified_but_nonfinite": int((certified & ~np.isfinite(exact)).sum()),
-        }
+        detail["exact"]["n_pairs_in_submatrix"] = int(sub_r.size)
+        detail["exact"]["n_certified"] = n_sel
+        detail["exact"]["n_certified_but_nonfinite"] = int((certified & ~np.isfinite(exact)).sum())
         if n_sel == 0:
             continue
 
-        lo_bad = ~(lower[selected] <= exact[selected] + tol)
-        hi_bad = ~(exact[selected] <= upper[selected] + tol)
-        sel_rows, sel_cols = rows[selected], cols[selected]
+        # Filter once, then compare. Applying `selected` a second time inside the
+        # violation reporting would index an already-filtered array and name the
+        # wrong pairs -- which on a gate whose whole job is to name pairs would be
+        # worse than not reporting them.
+        lb_sel = lower_sel[selected]
+        ub_sel = upper_sel[selected]
+        exact_sel = exact[selected]
+        sel_rows, sel_cols = sel_rows[selected], sel_cols[selected]
+        lo_bad = ~(lb_sel <= exact_sel + tol)
+        hi_bad = ~(exact_sel <= ub_sel + tol)
         record.n_compared += 2 * n_sel
         record.n_violations += int(lo_bad.sum()) + int(hi_bad.sum())
         detail["exact"]["n_lb_above_exact"] = int(lo_bad.sum())
@@ -656,8 +694,8 @@ def gate3_bracket(
                     lo_bad,
                     sel_rows,
                     sel_cols,
-                    lower[selected],
-                    exact[selected],
+                    lb_sel,
+                    exact_sel,
                     max_violations,
                     dataset,
                     "lb <= exact",
@@ -670,8 +708,8 @@ def gate3_bracket(
                     hi_bad,
                     sel_rows,
                     sel_cols,
-                    upper[selected],
-                    exact[selected],
+                    ub_sel,
+                    exact_sel,
                     max_violations,
                     dataset,
                     "exact <= ub",
