@@ -1424,7 +1424,13 @@ def friedman_over_datasets(
     matrix = np.array([[scores[d][m] for m in methods] for d in datasets], dtype=np.float64)
     ranks = np.vstack([stats.rankdata(row) for row in matrix])
     average_ranks = ranks.mean(axis=0)
-    chi2, p_value = stats.friedmanchisquare(*[matrix[:, k] for k in range(len(methods))])
+    # Every method tied on every dataset leaves the omnibus undefined -- the
+    # tie correction divides by zero. Report that rather than a nan dressed
+    # as a statistic.
+    if np.allclose(ranks, ranks[0]) and np.allclose(ranks[0], ranks[0].mean()):
+        chi2, p_value = float("nan"), float("nan")
+    else:
+        chi2, p_value = stats.friedmanchisquare(*[matrix[:, k] for k in range(len(methods))])
     cd = nemenyi_critical_difference(len(methods), len(datasets))
     cliques = rank_cliques([float(r) for r in average_ranks], cd)
     separates = any(
@@ -1779,6 +1785,23 @@ UB_SLACK: dict[str, float] = {
 #: this case would not exercise the real distribution.
 ZERO_LB_FRACTION = 0.12
 
+#: Synthetic M7 rate per method, in microseconds per pair at the dataset's own
+#: n-bar. The probe at n-bar ~ 30 is six times these, so ``BRANCH_TIGHT``
+#: (180 us -> 1080 us on the probe) is the one method the frozen cost gate
+#: excludes. That is deliberate: the fixture must exercise the exclusion
+#: branch of the rule as well as the selection branch.
+FIXTURE_US_PER_PAIR: dict[str, float] = {
+    "BRANCH": 40.0,
+    "BRANCH_FAST": 22.0,
+    "BRANCH_TIGHT": 180.0,
+    "STAR": 30.0,
+    "HED": 55.0,
+    "IPFP": 90.0,
+    "REFINE": 110.0,
+    "BIPARTITE": 35.0,
+    "BP_BEAM": 75.0,
+}
+
 
 def _fixture_meta(spec: FixtureSpec, n_pairs: int, **extra: Any) -> str:
     """Return the CONTRACTS §4 ``meta`` JSON for a synthetic file."""
@@ -1914,9 +1937,7 @@ def build_synthetic_fixture(
 
         if write_timing:
             for method in (*LB_TIGHTNESS, *UB_SLACK):
-                rate = 20.0 + 40.0 * (
-                    list(LB_TIGHTNESS).index(method) if method in LB_TIGHTNESS else 4
-                )
+                rate = FIXTURE_US_PER_PAIR[method]
                 (timing_dir / f"{spec.dataset}__{method}.json").write_text(
                     json.dumps(
                         {
