@@ -33,6 +33,7 @@ return.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -320,8 +321,9 @@ def draw_forest(
         )
 
     ax.set_yticks(positions)
-    ax.set_yticklabels([e.method for e in entries])
-    ax.invert_yaxis()
+    ax.set_yticklabels([e.method for e in entries], fontsize=5.6)
+    ax.tick_params(axis="y", length=0.0, pad=1.5)
+    ax.set_ylim(max(positions) + 0.9, min(positions) - 0.9)
     if show_xlabel:
         ax.set_xlabel("mean relative error (graph-level bootstrap 95 % CI)")
     ax.grid(visible=True, axis="x")
@@ -370,49 +372,80 @@ def draw_critical_difference(
         ax.set_axis_off()
         return
 
-    lo = min(1.0, min(ranks) - 0.5)
-    hi = max(float(len(ranks)), max(ranks) + 0.5)
-    ax.set_xlim(hi, lo)  # rank 1 on the left
-    ax.set_ylim(-0.4 - 0.32 * len(ranks), 1.0)
+    k_methods = len(ranks)
+    lo = min(1.0, min(ranks)) - 0.35
+    hi = max(float(k_methods), max(ranks)) + 0.35
+    step = 0.30
+
+    # Everything lives below the axis. The rank axis is the top spine of
+    # the axes box, so its ticks and label render outside the box and can
+    # never collide with a clique bar -- which is what happens if the
+    # spine is repositioned into the middle of the data range.
+    cliques = tuple(c for c in cd.cliques if len(c) > 1)
+    clique_zone = 0.10 * max(1, len(cliques)) + 0.10
+    n_rows = (k_methods + 1) // 2
+    bottom = -(clique_zone + step * n_rows + 0.46)
+
+    ax.set_xlim(lo, hi)  # rank 1, the best, on the left
+    ax.set_ylim(bottom, 0.0)
     ax.set_yticks([])
     for side in ("left", "right", "bottom"):
         ax.spines[side].set_visible(False)
     ax.spines["top"].set_visible(True)
     ax.xaxis.set_ticks_position("top")
     ax.xaxis.set_label_position("top")
-    ax.set_xlabel("average Friedman rank")
+    ax.set_xlabel("average Friedman rank", labelpad=2.0)
 
-    ordered = sorted(range(len(ranks)), key=lambda k: ranks[k])
-    for depth, k in enumerate(ordered):
-        r = ranks[k]
-        y = -0.28 * (depth + 1)
+    for depth, clique in enumerate(cliques):
+        members = [ranks[idx] for idx in clique]
+        y = -(0.08 + 0.10 * depth)
+        ax.plot(
+            [min(members) - 0.04, max(members) + 0.04],
+            [y, y],
+            color="black",
+            linewidth=2.4,
+            solid_capstyle="butt",
+            zorder=4,
+        )
+
+    # Methods leave the axis alternately left and right, so a label never
+    # sits on top of another method's stem.
+    ordered = sorted(range(k_methods), key=lambda idx: ranks[idx])
+    left_half = ordered[:n_rows]
+    right_half = ordered[n_rows:]
+    for k in ordered:
+        on_left = k in left_half
+        depth = (left_half.index(k) if on_left else right_half.index(k)) + 1
+        rank = ranks[k]
+        y = -(clique_zone + step * depth)
         color = colors.get(cd.methods[k], GRAYED_EDGE)
-        ax.plot([r, r], [0.0, y], color=color, linewidth=0.9)
-        ax.plot([r, lo if depth < len(ranks) / 2 else hi], [y, y], color=color, linewidth=0.9)
+        anchor = lo if on_left else hi
+        ax.plot([rank, rank], [0.0, y], color=color, linewidth=0.9, solid_capstyle="butt")
+        ax.plot([rank, anchor], [y, y], color=color, linewidth=0.9, solid_capstyle="butt")
         ax.annotate(
-            f"{cd.methods[k]} ({r:.2f})",
-            xy=(lo if depth < len(ranks) / 2 else hi, y),
+            f"{cd.methods[k]} ({rank:.2f})",
+            xy=(anchor, y),
+            xytext=(1.5 if on_left else -1.5, 2.5),
+            textcoords="offset points",
             fontsize=6.0,
-            va="center",
-            ha="right" if depth < len(ranks) / 2 else "left",
+            va="bottom",
+            ha="left" if on_left else "right",
             color=color,
         )
 
-    for depth, clique in enumerate(cd.cliques):
-        if len(clique) < 2:
-            continue
-        members = [ranks[k] for k in clique]
-        y = 0.12 + 0.10 * depth
-        ax.plot([min(members), max(members)], [y, y], color="black", linewidth=2.2, zorder=4)
-
-    ax.annotate(
-        f"CD = {cd.cd:.2f} (Nemenyi, N = {cd.n_datasets})",
-        xy=(0.5, 0.98),
-        xycoords="axes fraction",
-        fontsize=6.0,
-        ha="center",
-        va="top",
-    )
+    if math.isfinite(cd.cd):
+        bar_y = bottom + 0.14
+        left = lo + 0.15
+        ax.plot([left, left + cd.cd], [bar_y, bar_y], color="black", linewidth=1.0)
+        for x in (left, left + cd.cd):
+            ax.plot([x, x], [bar_y - 0.045, bar_y + 0.045], color="black", linewidth=1.0)
+        ax.annotate(
+            f"CD = {cd.cd:.2f} (Nemenyi, N = {cd.n_datasets})",
+            xy=(left, bar_y + 0.06),
+            fontsize=6.0,
+            ha="left",
+            va="bottom",
+        )
 
 
 def bound_bakeoff_figure(
@@ -438,15 +471,26 @@ def bound_bakeoff_figure(
 
     apply_ieee_style()
     n_facets = max(1, len(panels.dataset_curves))
-    size = figsize if figsize is not None else (get_figure_size("double")[0], 5.4)
+    # The forest grows one row per (dataset, method), so its height is
+    # data-dependent. A fixed figure height silently overlaps the tick
+    # labels once the roster passes about four methods, which is exactly
+    # what the five-method lower end does.
+    forest_inches = max(1.6, 0.155 * (len(panels.forest) + 2 * n_facets))
+    facet_inches = 1.7
+    width = get_figure_size("double")[0]
+    size = figsize if figsize is not None else (width, facet_inches + forest_inches + 1.1)
     fig = plt.figure(figsize=size)
     gs = GridSpec(
         2,
         n_facets,
         figure=fig,
-        height_ratios=[1.0, 1.45],
-        hspace=0.52,
-        wspace=0.28,
+        height_ratios=[facet_inches, forest_inches],
+        hspace=0.30,
+        wspace=0.32,
+        top=0.90,
+        bottom=0.115,
+        left=0.085,
+        right=0.90,
     )
 
     colors = method_palette(panels.methods)
@@ -501,9 +545,9 @@ def critical_difference_figure(
     import matplotlib.pyplot as plt
 
     apply_ieee_style()
-    size = figsize if figsize is not None else (get_figure_size("double")[0], 2.6)
+    size = figsize if figsize is not None else (get_figure_size("double")[0], 2.3)
     fig = plt.figure(figsize=size)
-    ax = fig.add_axes((0.08, 0.34, 0.84, 0.5))
+    ax = fig.add_axes((0.06, 0.26, 0.88, 0.56))
     draw_critical_difference(ax, cd)
     fig.text(0.5, 0.03, caption, fontsize=5.6, ha="center", va="bottom", wrap=True)
     return fig

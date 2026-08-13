@@ -252,7 +252,9 @@ def test_draw_critical_difference_puts_rank_one_on_the_left(view: ModuleType, ax
     )
     view.draw_critical_difference(axes, cd)
     left, right = axes.get_xlim()
-    assert left > right
+    assert left < right
+    assert left < 1.2
+    assert right > 3.0
 
 
 def test_draw_critical_difference_tolerates_an_empty_summary(

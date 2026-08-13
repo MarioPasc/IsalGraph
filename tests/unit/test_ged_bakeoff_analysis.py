@@ -62,9 +62,31 @@ def test_lower_end_carries_five_methods_including_hed() -> None:
         "STAR",
         "HED",
     )
-    assert bakeoff.methods_for_end("upper") == ("IPFP", "REFINE", "BIPARTITE", "BP_BEAM")
     assert bakeoff.end_of_method("HED") == "lower"
-    assert bakeoff.end_of_method("IPFP") == "upper"
+
+
+def test_upper_end_competitors_are_the_multi_start_arm() -> None:
+    """Only the ``_MS`` arm competes; ``_DET`` is measured but never selected."""
+    assert bakeoff.methods_for_end("upper") == ("IPFP_MS", "REFINE_MS", "BIPARTITE", "BP_BEAM_MS")
+    assert bakeoff.cells_for_end("upper") == (
+        "IPFP_MS",
+        "REFINE_MS",
+        "BIPARTITE",
+        "BP_BEAM_MS",
+        "IPFP_DET",
+        "REFINE_DET",
+        "BP_BEAM_DET",
+    )
+    assert bakeoff.cells_for_end("lower") == bakeoff.methods_for_end("lower")
+    for cell in bakeoff.UPPER_COMPANION_METHODS:
+        assert bakeoff.end_of_method(cell) == "upper"
+
+
+def test_the_grid_is_twelve_cells_per_dataset() -> None:
+    """Five lower bounds and seven upper cells, 60 cells over five datasets."""
+    per_dataset = len(bakeoff.cells_for_end("lower")) + len(bakeoff.cells_for_end("upper"))
+    assert per_dataset == 12
+    assert per_dataset * len(bakeoff.DATASETS) == 60
 
 
 def test_unknown_method_raises() -> None:
@@ -189,11 +211,51 @@ def test_holm_is_applied_within_each_dataset_and_end(linux_bundle: bakeoff.Datas
     payload = bakeoff.pairwise_significance(
         "lower", "linux", linux_bundle.cells, linux_bundle.index
     )
-    for comparison in payload["comparisons"]:
+    evaluated = [c for c in payload["comparisons"] if c["status"] == "evaluated"]
+    for comparison in evaluated:
         assert comparison["p_holm"] >= comparison["p_raw"] - 1e-12
         assert 0.0 <= comparison["p_holm"] <= 1.0
     assert "selection procedure, not a hypothesis test" in payload["statistical_status"]
     assert "not the basis of the selection" in payload["p_value_status"]
+
+
+def test_branch_and_branch_fast_give_a_degenerate_test_kept_in_the_family(
+    linux_bundle: bakeoff.DatasetBundle,
+) -> None:
+    """Provably equivalent cells measure nothing; the row stays in the family.
+
+    Blumenthal et al., *VLDB Journal* §5.2.4: BRANCH and BRANCH-FAST are
+    equivalent for constant edge edit costs, which is cost model D6. The
+    paired difference vector is identically zero, so no p-value and no
+    effect size are printed -- but the comparison is not dropped, because
+    dropping a test on account of its outcome is the post-hoc adjustment
+    the pre-registration exists to prevent.
+    """
+    payload = bakeoff.pairwise_significance(
+        "lower", "linux", linux_bundle.cells, linux_bundle.index
+    )
+    assert payload["family_size"] == payload["family_size_nominal"] == 10
+    degenerate = [c for c in payload["comparisons"] if c["status"] == "degenerate"]
+    assert len(degenerate) == 1
+    row = degenerate[0]
+    assert {row["method_a"], row["method_b"]} == {"BRANCH", "BRANCH_FAST"}
+    assert row["p_raw"] is None
+    assert row["p_holm"] is None
+    assert row["p_used_for_holm"] == 1.0
+    assert row["rank_biserial"] == 0.0
+    assert "provably" not in row["reason"] or "equivalent" in row["reason"]
+    assert "all paired differences are exactly zero" in row["reason"]
+    assert payload["n_degenerate"] == 1
+
+
+def test_degenerate_wilcoxon_is_flagged_not_crashed() -> None:
+    """An all-zero difference vector is where scipy raises; we must not."""
+    x = np.arange(500.0)
+    result = bakeoff.wilcoxon_signed_rank(x, x.copy())
+    assert result.degenerate is True
+    assert result.rank_biserial == 0.0
+    non_degenerate = bakeoff.wilcoxon_signed_rank(x, x + 1.0)
+    assert non_degenerate.degenerate is False
 
 
 # ---------------------------------------------------------------------------
@@ -415,7 +477,7 @@ def test_censored_upper_bound_is_refuted_only_below_the_solver_bracket() -> None
         [6.0, 6.0, 6.0],
         [False, False, False],
     )
-    result = bakeoff.compute_validity(_hand_cell("IPFP", "upper", [2.0, 9.0, 1.0]), index)
+    result = bakeoff.compute_validity(_hand_cell("IPFP_MS", "upper", [2.0, 9.0, 1.0]), index)
     assert result.violations == 1
     assert result.examples[0]["pair_index"] == 2
 
@@ -450,6 +512,117 @@ def test_fixture_contains_zero_but_valid_lower_bounds(
     cell = bundle.cells["BRANCH_FAST"]
     zero_but_positive = (cell.value == 0.0) & (bundle.index.exact > 0) & bundle.index.certified
     assert int(zero_but_positive.sum()) > 0
+
+
+# ---------------------------------------------------------------------------
+# Proven orderings -- gates, not findings
+# ---------------------------------------------------------------------------
+
+
+def test_proven_orderings_hold_on_the_fixture(
+    bundles: dict[str, bakeoff.DatasetBundle],
+) -> None:
+    """BRANCH >= HED, the BIPARTITE-started searches, and BRANCH == BRANCH_FAST."""
+    for dataset, bundle in bundles.items():
+        report = bakeoff.check_proven_orderings(bundle.cells)
+        assert report["violations"] == 0, dataset
+        relations = {check["relation"] for check in report["checks"]}
+        assert "BRANCH >= HED" in relations
+        assert "BIPARTITE >= REFINE_DET" in relations
+        assert "BIPARTITE >= BP_BEAM_DET" in relations
+        assert "BRANCH == BRANCH_FAST" in relations
+
+
+def test_branch_ge_hed_violation_is_caught() -> None:
+    """A HED above BRANCH is a harness bug; the gate must see it."""
+    cells = {
+        "BRANCH": _hand_cell("BRANCH", "lower", [2.0, 2.0, 2.0]),
+        "HED": _hand_cell("HED", "lower", [1.0, 2.0, 3.0]),
+    }
+    report = bakeoff.check_proven_orderings(cells)
+    assert report["violations"] == 1
+    check = next(c for c in report["checks"] if c["relation"] == "BRANCH >= HED")
+    assert check["examples"] == [2]
+    assert check["max_excess"] == pytest.approx(1.0)
+
+
+def test_monotone_local_search_above_bipartite_is_caught() -> None:
+    """REFINE_DET and BP_BEAM_DET only accept strict improvements."""
+    cells = {
+        "BIPARTITE": _hand_cell("BIPARTITE", "upper", [5.0, 5.0, 5.0]),
+        "REFINE_DET": _hand_cell("REFINE_DET", "upper", [4.0, 5.0, 6.0]),
+        "BP_BEAM_DET": _hand_cell("BP_BEAM_DET", "upper", [3.0, 3.0, 3.0]),
+    }
+    report = bakeoff.check_proven_orderings(cells)
+    assert report["violations"] == 1
+    check = next(c for c in report["checks"] if c["relation"] == "BIPARTITE >= REFINE_DET")
+    assert check["violations"] == 1
+
+
+def test_branch_equivalence_violation_is_caught() -> None:
+    """A single disagreeing pair refutes a theorem and must be reported."""
+    cells = {
+        "BRANCH": _hand_cell("BRANCH", "lower", [1.0, 2.0, 3.0]),
+        "BRANCH_FAST": _hand_cell("BRANCH_FAST", "lower", [1.0, 2.0, 4.0]),
+    }
+    report = bakeoff.check_proven_orderings(cells)
+    check = next(c for c in report["checks"] if c["kind"] == "equivalence")
+    assert check["violations"] == 1
+    assert check["max_abs_difference"] == pytest.approx(1.0)
+
+
+def test_proven_ordering_violations_halt_the_run(tmp_path: Path) -> None:
+    """A gate failure counts into ``total_violations`` and sets the halt flag."""
+    bakeoff.build_synthetic_fixture(tmp_path, bakeoff.FIXTURE_SPECS[:1])
+    path = tmp_path / "data" / "cells" / "linux__HED.npz"
+    with np.load(path) as payload:
+        arrays: dict[str, Any] = dict(payload)
+    arrays["value"] = arrays["value"] + 1000.0
+    arrays["value_fwd"] = arrays["value"]
+    np.savez_compressed(path, **arrays)
+
+    written = bakeoff.run_analysis(tmp_path, datasets=["linux"], replicates=4, make_figures=False)
+    validity = json.loads(written["validity"].read_text(encoding="utf-8"))
+    assert validity["proven_ordering_violations"] > 0
+    assert validity["halts_ticket"] is True
+
+
+# ---------------------------------------------------------------------------
+# The deterministic companion
+# ---------------------------------------------------------------------------
+
+
+def test_deterministic_companion_pairs_each_det_with_its_multi_start_twin(
+    bundles: dict[str, bakeoff.DatasetBundle],
+) -> None:
+    """The ``_DET`` arm is reported beside ``_MS``, never inside the selection."""
+    metrics = {
+        dataset: {
+            method: bakeoff.compute_cell_metrics(cell, bundle.index, Path(".")).payload
+            for method, cell in bundle.cells.items()
+        }
+        for dataset, bundle in list(bundles.items())[:1]
+    }
+    companion = bakeoff.deterministic_companion(metrics)
+    row = companion["per_dataset"]["linux"]["IPFP_DET"]
+    assert row["multi_start_cell"] == "IPFP_MS"
+    assert row["multi_start_advantage"] == pytest.approx(
+        row["mean_relative_error_det"] - row["mean_relative_error_ms"]
+    )
+    assert "never in the selection" in companion["role"]
+
+
+def test_det_cells_never_enter_the_selection_candidates(
+    bundles: dict[str, bakeoff.DatasetBundle],
+) -> None:
+    """A companion must not be selectable, however tight it turns out."""
+    bundle = bundles["linux"]
+    metrics = {
+        method: bakeoff.compute_cell_metrics(cell, bundle.index, Path(".")).payload
+        for method, cell in bundle.cells.items()
+    }
+    candidates = bakeoff._candidates("upper", bundle, metrics)
+    assert {c.method for c in candidates} == set(bakeoff.UPPER_METHODS)
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +664,7 @@ def test_m2_domains_differ_but_m1_domains_coincide(
 ) -> None:
     """M2 has a defined value at exact = 0; M1 does not, so M1's two agree."""
     bundle = bundles["iam_letter_med"]
-    payload = bakeoff.compute_cell_metrics(bundle.cells["IPFP"], bundle.index, Path(".")).payload
+    payload = bakeoff.compute_cell_metrics(bundle.cells["IPFP_MS"], bundle.index, Path(".")).payload
     m2 = payload["M2_absolute_error"]
     assert m2["all_certified"]["n"] > m2["exact_gt_zero"]["n"]
     m1 = payload["M1_relative_error"]
@@ -549,12 +722,12 @@ def test_upper_bound_value_must_be_the_min_of_both_orientations(
 ) -> None:
     """A cell whose value is not min(fwd, rev) violates CONTRACTS §3."""
     index = bakeoff.load_index(fixture_root / "data" / "index" / "linux.npz")
-    source = fixture_root / "data" / "cells" / "linux__IPFP.npz"
+    source = fixture_root / "data" / "cells" / "linux__IPFP_MS.npz"
     with np.load(source) as payload:
         arrays: dict[str, Any] = dict(payload)
     arrays["value"] = arrays["value_fwd"]
     arrays["value_rev"] = arrays["value_fwd"] - 1.0
-    broken = tmp_path / "linux__IPFP.npz"
+    broken = tmp_path / "linux__IPFP_MS.npz"
     np.savez_compressed(broken, **arrays)
     with pytest.raises(bakeoff.BakeoffAnalysisError, match="min"):
         bakeoff.load_cell(broken, index)
@@ -846,7 +1019,7 @@ def test_run_analysis_writes_all_five_schema_valid_json(tmp_path: Path) -> None:
     validity = json.loads(written["validity"].read_text(encoding="utf-8"))
     assert validity["total_violations"] == 0
     assert validity["halts_ticket"] is False
-    assert len(validity["cells"]) == 2 * (len(bakeoff.LOWER_METHODS) + len(bakeoff.UPPER_METHODS))
+    assert len(validity["cells"]) == 2 * 12
 
     significance = json.loads(written["significance"].read_text(encoding="utf-8"))
     assert "not the basis of the selection" in significance["p_value_status"]

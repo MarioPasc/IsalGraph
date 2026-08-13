@@ -80,22 +80,50 @@ CI_PERCENTILES = (2.5, 97.5)
 #: dominance ``BED >= HED`` -- and a loose HED confirms that ordering at
 #: 3.8 M-pair scale, which is a result rather than a defect.
 LOWER_METHODS: tuple[str, ...] = ("BRANCH", "BRANCH_FAST", "BRANCH_TIGHT", "STAR", "HED")
-UPPER_METHODS: tuple[str, ...] = ("IPFP", "REFINE", "BIPARTITE", "BP_BEAM")
+
+#: The upper-end **competitors**, i.e. the cells that enter the frozen §5
+#: selection and the Holm family. The local-search bounds run in their
+#: multi-start configuration here, because that is the configuration the
+#: published tightness claim is about and the one a production distance
+#: matrix would use. Holm within this end is therefore C(4, 2) = 6.
+UPPER_METHODS: tuple[str, ...] = ("IPFP_MS", "REFINE_MS", "BIPARTITE", "BP_BEAM_MS")
+
+#: The deterministic-initialisation companions. Reported beside the
+#: competitors, never in the selection: they quantify how much of a
+#: local search's advantage is contingent on multi-start. Freezing this
+#: split before any tightness result is visible is what keeps it from
+#: being an outcome-dependent choice (design §3.11).
+UPPER_COMPANION_METHODS: tuple[str, ...] = ("IPFP_DET", "REFINE_DET", "BP_BEAM_DET")
+
+#: Which multi-start competitor each deterministic companion pairs with.
+DETERMINISTIC_TWIN: dict[str, str] = {
+    "IPFP_DET": "IPFP_MS",
+    "REFINE_DET": "REFINE_MS",
+    "BP_BEAM_DET": "BP_BEAM_MS",
+}
+
 ENDS: tuple[str, ...] = ("lower", "upper")
 
 
 def methods_for_end(end: str) -> tuple[str, ...]:
-    """Return the method roster for a bracket end.
+    """Return the **competitor** roster for a bracket end.
 
-    The roster is the single source of the Holm family size: the lower
-    end runs ten pairwise comparisons (five methods) and the upper end
-    six (four methods). Nothing downstream may hard-code either number.
+    This roster is the single source of the Holm family size and of the
+    selection candidate set: ten pairwise comparisons at the lower end
+    (five bounds) and six at the upper end (four competitors). Nothing
+    downstream may hard-code either number.
+
+    ``BRANCH`` and ``BRANCH_FAST`` stay separate members even though they
+    are provably identical under constant edge edit costs. Dropping a
+    comparison because of its outcome is the post-hoc adjustment the
+    pre-registration exists to prevent; the equivalence is reported
+    *within* the family of ten, as a degenerate test.
 
     Args:
         end: ``"lower"`` or ``"upper"``.
 
     Returns:
-        The method names for that end.
+        The competitor names for that end.
 
     Raises:
         BakeoffAnalysisError: If *end* is neither.
@@ -107,23 +135,46 @@ def methods_for_end(end: str) -> tuple[str, ...]:
     raise BakeoffAnalysisError(f"end must be 'lower' or 'upper', got {end!r}")
 
 
-def end_of_method(method: str) -> str:
-    """Return the bracket end a GEDLIB method belongs to.
+def cells_for_end(end: str) -> tuple[str, ...]:
+    """Return every cell measured at a bracket end, companions included.
+
+    Metrics, validity, symmetry and the bootstrap cover all of these;
+    only :func:`methods_for_end` enters the selection and the Holm
+    family.
 
     Args:
-        method: GEDLIB method name, upper case.
+        end: ``"lower"`` or ``"upper"``.
+
+    Returns:
+        Competitor names followed by companion names.
+
+    Raises:
+        BakeoffAnalysisError: If *end* is neither.
+    """
+    if end == "lower":
+        return LOWER_METHODS
+    if end == "upper":
+        return UPPER_METHODS + UPPER_COMPANION_METHODS
+    raise BakeoffAnalysisError(f"end must be 'lower' or 'upper', got {end!r}")
+
+
+def end_of_method(method: str) -> str:
+    """Return the bracket end a cell belongs to.
+
+    Args:
+        method: Cell name, upper case.
 
     Returns:
         ``"lower"`` or ``"upper"``.
 
     Raises:
-        BakeoffAnalysisError: If the method is in neither roster.
+        BakeoffAnalysisError: If the cell is in neither roster.
     """
     if method in LOWER_METHODS:
         return "lower"
-    if method in UPPER_METHODS:
+    if method in UPPER_METHODS or method in UPPER_COMPANION_METHODS:
         return "upper"
-    raise BakeoffAnalysisError(f"unknown method {method!r}")
+    raise BakeoffAnalysisError(f"unknown cell {method!r}")
 
 
 DATASETS: tuple[str, ...] = (
@@ -287,6 +338,9 @@ class WilcoxonResult:
         n_used: Non-zero differences entering the test.
         n_zero: Discarded zero differences (Wilcoxon's own method).
         z: The normal deviate behind *p_value*.
+        degenerate: Whether every paired difference was exactly zero, in
+            which case the test measures nothing and *p_value* is the
+            conservative 1.0 rather than a result.
     """
 
     statistic: float
@@ -295,6 +349,7 @@ class WilcoxonResult:
     n_used: int
     n_zero: int
     z: float
+    degenerate: bool = False
 
 
 def wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> WilcoxonResult:
@@ -323,7 +378,12 @@ def wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> WilcoxonResult:
     n_zero = int(diff.size - nonzero.size)
     n = int(nonzero.size)
     if n == 0:
-        return WilcoxonResult(0.0, 1.0, 0.0, 0, n_zero, 0.0)
+        # Every paired difference is exactly zero. scipy raises here under
+        # most zero_method settings; the honest report is that the test
+        # measured nothing, not a p-value of 1 dressed as a result. This is
+        # the expected state for BRANCH against BRANCH_FAST, which are
+        # provably equivalent under constant edge edit costs.
+        return WilcoxonResult(0.0, 1.0, 0.0, 0, n_zero, 0.0, degenerate=True)
 
     ranks = midranks(np.abs(nonzero))
     r_plus = float(ranks[nonzero > 0].sum())
@@ -812,6 +872,98 @@ def compute_validity(cell: CellData, index: IndexData, *, max_examples: int = 10
     )
 
 
+#: Cross-cell orderings that are **proven**, not measured. A violation is
+#: a harness bug and is flagged exactly like an M4 failure; it is never
+#: reported as a finding.
+#:
+#: * ``BRANCH >= HED`` -- Blumenthal et al., *VLDB Journal*, §8.1.
+#: * ``REFINE_DET <= BIPARTITE`` and ``BP_BEAM_DET <= BIPARTITE`` -- both
+#:   are monotone local searches started from the BIPARTITE assignment
+#:   and accept only strict improvements, so they cannot end above it.
+PROVEN_DOMINANCE: tuple[tuple[str, str, str], ...] = (
+    ("BRANCH", "HED", "survey §8.1: BED >= HED for every pair"),
+    ("BIPARTITE", "REFINE_DET", "monotone local search from a BIPARTITE start"),
+    ("BIPARTITE", "BP_BEAM_DET", "monotone local search from a BIPARTITE start"),
+)
+
+#: Cells that are provably equal under cost model D6. Blumenthal et al.,
+#: *VLDB Journal*, §5.2.4: for constant edge edit costs BRANCH and
+#: BRANCH-FAST are equivalent. Verified on all 3,916 LINUX pairs, max
+#: absolute difference 0.0.
+PROVEN_EQUIVALENCE: tuple[tuple[str, str, str], ...] = (
+    (
+        "BRANCH",
+        "BRANCH_FAST",
+        "survey §5.2.4: BRANCH and BRANCH-FAST are equivalent for constant "
+        "edge edit costs, which is cost model D6",
+    ),
+)
+
+
+def check_proven_orderings(
+    cells: Mapping[str, CellData],
+    *,
+    max_examples: int = 10,
+) -> dict[str, Any]:
+    """Assert the cross-cell relations the literature proves.
+
+    These are gates, not measurements. ``BRANCH >= HED`` holds for every
+    pair by theorem, and a monotone local search started from BIPARTITE
+    cannot return a worse assignment than BIPARTITE. Either failing means
+    the harness produced the wrong number, so it halts the ticket exactly
+    as an M4 violation does.
+
+    The proven *equivalence* is checked in the same pass: BRANCH and
+    BRANCH_FAST must agree on every pair under constant edge edit costs.
+
+    Args:
+        cells: One dataset's cells, keyed by cell name.
+        max_examples: Refuted pairs recorded per relation.
+
+    Returns:
+        One entry per checkable relation, plus the total violation count.
+    """
+    checks: list[dict[str, Any]] = []
+    for upper, lower, why in PROVEN_DOMINANCE:
+        if upper not in cells or lower not in cells:
+            continue
+        bad = cells[lower].value > cells[upper].value
+        checks.append(
+            {
+                "relation": f"{upper} >= {lower}",
+                "kind": "dominance",
+                "justification": why,
+                "n_checked": int(cells[upper].value.size),
+                "violations": int(bad.sum()),
+                "examples": [int(k) for k in np.flatnonzero(bad)[:max_examples]],
+                "max_excess": float((cells[lower].value - cells[upper].value).max()),
+            }
+        )
+    for left, right, why in PROVEN_EQUIVALENCE:
+        if left not in cells or right not in cells:
+            continue
+        diff = cells[left].value - cells[right].value
+        checks.append(
+            {
+                "relation": f"{left} == {right}",
+                "kind": "equivalence",
+                "justification": why,
+                "n_checked": int(diff.size),
+                "violations": int((diff != 0).sum()),
+                "examples": [int(k) for k in np.flatnonzero(diff != 0)[:max_examples]],
+                "max_abs_difference": float(np.abs(diff).max()),
+            }
+        )
+    return {
+        "checks": checks,
+        "violations": sum(int(c["violations"]) for c in checks),
+        "status": (
+            "A violation here is a harness bug, never a finding. These relations "
+            "are proven, so they gate the run exactly as M4 does."
+        ),
+    }
+
+
 def compute_symmetry(cell: CellData) -> dict[str, float | int]:
     """Evaluate M8 from the two orientations (design §3.6).
 
@@ -1185,7 +1337,7 @@ def bootstrap_dataset(
         "values": {c.method: c.value for c in cells},
         "ends": {c.method: c.end for c in cells},
         "rosters": {
-            end: tuple(m for m in methods_for_end(end) if any(c.method == m for c in cells))
+            end: tuple(m for m in cells_for_end(end) if any(c.method == m for c in cells))
             for end in ENDS
         },
     }
@@ -1257,7 +1409,7 @@ def _replicate_point_estimates(
         "values": {c.method: c.value for c in cells},
         "ends": {c.method: c.end for c in cells},
         "rosters": {
-            end: tuple(m for m in methods_for_end(end) if any(c.method == m for c in cells))
+            end: tuple(m for m in cells_for_end(end) if any(c.method == m for c in cells))
             for end in ENDS
         },
     }
@@ -1357,42 +1509,88 @@ def pairwise_significance(
             result = wilcoxon_signed_rank(errors[method_a], errors[method_b])
             key = f"diff_mean_rel_err::{end}::{method_a}|{method_b}"
             ci = (bootstrap or {}).get("statistics", {}).get(key, {})
-            comparisons.append(
-                {
-                    "method_a": method_a,
-                    "method_b": method_b,
-                    "n_pairs": int(errors[method_a].size),
-                    "mean_error_a": float(errors[method_a].mean()),
-                    "mean_error_b": float(errors[method_b].mean()),
-                    "rank_biserial": result.rank_biserial,
-                    "wilcoxon_statistic": result.statistic,
-                    "z": result.z,
-                    "p_raw": result.p_value,
-                    "n_used": result.n_used,
-                    "n_tied": result.n_zero,
-                    "bootstrap_diff_point": ci.get("point"),
-                    "bootstrap_diff_ci_low": ci.get("ci_low"),
-                    "bootstrap_diff_ci_high": ci.get("ci_high"),
-                    "ci_excludes_zero": (
-                        None if not ci else bool(ci["ci_low"] > 0.0 or ci["ci_high"] < 0.0)
-                    ),
-                }
-            )
+            proven = _proven_equivalence_reason(method_a, method_b)
+            comparison: dict[str, Any] = {
+                "method_a": method_a,
+                "method_b": method_b,
+                "test": "wilcoxon signed-rank",
+                "status": "degenerate" if result.degenerate else "evaluated",
+                "n_pairs": int(errors[method_a].size),
+                "mean_error_a": float(errors[method_a].mean()),
+                "mean_error_b": float(errors[method_b].mean()),
+                "n_used": result.n_used,
+                "n_tied": result.n_zero,
+            }
+            if result.degenerate:
+                comparison.update(
+                    {
+                        "reason": (
+                            "all paired differences are exactly zero"
+                            + (f"; {proven}" if proven else "")
+                        ),
+                        "p_raw": None,
+                        "p_holm": None,
+                        "p_used_for_holm": 1.0,
+                        "rank_biserial": 0.0,
+                        "wilcoxon_statistic": None,
+                        "z": None,
+                        "effect_size_note": (
+                            "The rank-biserial correlation is 0 with no meaningful "
+                            "interval: nothing was measured, so no measurement is printed."
+                        ),
+                        "bootstrap_diff_point": ci.get("point"),
+                        "bootstrap_diff_ci_low": ci.get("ci_low"),
+                        "bootstrap_diff_ci_high": ci.get("ci_high"),
+                        "ci_excludes_zero": False,
+                    }
+                )
+            else:
+                comparison.update(
+                    {
+                        "rank_biserial": result.rank_biserial,
+                        "wilcoxon_statistic": result.statistic,
+                        "z": result.z,
+                        "p_raw": result.p_value,
+                        "bootstrap_diff_point": ci.get("point"),
+                        "bootstrap_diff_ci_low": ci.get("ci_low"),
+                        "bootstrap_diff_ci_high": ci.get("ci_high"),
+                        "ci_excludes_zero": (
+                            None if not ci else bool(ci["ci_low"] > 0.0 or ci["ci_high"] < 0.0)
+                        ),
+                    }
+                )
+            comparisons.append(comparison)
             raw_p.append(result.p_value)
 
+    # The family keeps its nominal size C(k, 2). A degenerate comparison
+    # enters Holm at the conservative p = 1.0 and reports a null adjusted
+    # p; dropping it would be a post-hoc adjustment driven by its outcome,
+    # which is exactly what the pre-registration forbids.
     for comparison, adjusted in zip(comparisons, holm_bonferroni(raw_p), strict=True):
-        comparison["p_holm"] = adjusted
+        if comparison["status"] != "degenerate":
+            comparison["p_holm"] = adjusted
+    n_degenerate = sum(1 for c in comparisons if c["status"] == "degenerate")
     return {
         "dataset": dataset,
         "end": end,
         "methods": methods,
         "family_size": len(comparisons),
-        "correction": "holm-bonferroni within (dataset, end)",
+        "family_size_nominal": len(methods) * (len(methods) - 1) // 2,
+        "n_degenerate": n_degenerate,
+        "correction": "holm-bonferroni within (dataset, end), nominal family size",
         "primary_evidence": "rank_biserial + bootstrap_diff_ci",
         "p_value_status": PVALUE_STATUS,
         "statistical_status": SELECTION_STATUS,
         "comparisons": comparisons,
     }
+
+
+def _proven_equivalence_reason(method_a: str, method_b: str) -> str | None:
+    """Return the citation if two cells are proven equal, else ``None``."""
+    for left, right, why in PROVEN_EQUIVALENCE:
+        if {method_a, method_b} == {left, right}:
+            return why
+    return None
 
 
 def friedman_over_datasets(
@@ -1766,16 +1964,30 @@ FULL_CENSUS_SPECS: tuple[FixtureSpec, ...] = (
 #: 4.09 on LINUX. The upper-bound entries are Poisson means for the slack.
 LB_TIGHTNESS: dict[str, float] = {
     "BRANCH_TIGHT": 0.92,
-    "BRANCH": 0.85,
+    "BRANCH": 0.80,
+    # BRANCH_FAST is byte-identical to BRANCH under constant edge edit costs
+    # (survey §5.2.4), and the fixture reproduces that exactly so the
+    # degenerate-Wilcoxon path and the equivalence gate are both exercised.
     "BRANCH_FAST": 0.80,
     "STAR": 0.55,
+    # HED must stay below BRANCH on every pair: the dominance is proven.
     "HED": 0.30,
 }
 UB_SLACK: dict[str, float] = {
-    "IPFP": 0.35,
-    "REFINE": 0.50,
-    "BP_BEAM": 0.90,
+    "IPFP_MS": 0.35,
+    "REFINE_MS": 0.50,
+    "BP_BEAM_MS": 0.90,
     "BIPARTITE": 1.60,
+}
+
+#: The deterministic companions are drawn as BIPARTITE minus a
+#: non-negative improvement, which is what a monotone local search
+#: started from the BIPARTITE assignment can do and no more. IPFP_DET is
+#: not started from BIPARTITE and carries no such gate.
+UB_DET_IMPROVEMENT: dict[str, float] = {
+    "REFINE_DET": 0.40,
+    "BP_BEAM_DET": 0.25,
+    "IPFP_DET": 0.60,
 }
 
 #: Fraction of lower-bound entries forced to a valid zero. Under cost model
@@ -1796,10 +2008,13 @@ FIXTURE_US_PER_PAIR: dict[str, float] = {
     "BRANCH_TIGHT": 180.0,
     "STAR": 30.0,
     "HED": 55.0,
-    "IPFP": 90.0,
-    "REFINE": 110.0,
+    "IPFP_MS": 90.0,
+    "REFINE_MS": 110.0,
     "BIPARTITE": 35.0,
-    "BP_BEAM": 75.0,
+    "BP_BEAM_MS": 75.0,
+    "IPFP_DET": 28.0,
+    "REFINE_DET": 34.0,
+    "BP_BEAM_DET": 25.0,
 }
 
 
@@ -1905,38 +2120,73 @@ def build_synthetic_fixture(
             meta=np.array(_fixture_meta(spec, n_pairs)),
         )
 
+        zero_lb = rng.random(n_pairs) < ZERO_LB_FRACTION
+        lb_values: dict[str, np.ndarray] = {}
         for method, factor in LB_TIGHTNESS.items():
             value = np.floor(truth * factor)
-            value[rng.random(n_pairs) < ZERO_LB_FRACTION] = 0.0
-            value = np.minimum(value, truth)  # valid by construction
+            value[zero_lb] = 0.0
+            lb_values[method] = np.minimum(value, truth)  # valid by construction
+        # The proven dominance BRANCH >= HED must hold on every pair.
+        lb_values["HED"] = np.minimum(lb_values["HED"], lb_values["BRANCH"])
+        for method, value in lb_values.items():
             np.savez_compressed(
                 cells_dir / f"{spec.dataset}__{method}.npz",
                 value=value,
                 value_fwd=value,
                 meta=np.array(
                     _fixture_meta(
-                        spec, n_pairs, method=method, end="lower", options="", deterministic=True
+                        spec,
+                        n_pairs,
+                        method=method,
+                        cell=method,
+                        end="lower",
+                        options="",
+                        deterministic=True,
                     )
                 ),
             )
+
+        ub_pairs: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for method, slack in UB_SLACK.items():
-            fwd = truth + rng.poisson(slack, size=n_pairs)
-            rev = truth + rng.poisson(slack, size=n_pairs)
-            value = np.minimum(fwd, rev)
+            ub_pairs[method] = (
+                truth + rng.poisson(slack, size=n_pairs),
+                truth + rng.poisson(slack, size=n_pairs),
+            )
+        bip_fwd, bip_rev = ub_pairs["BIPARTITE"]
+        for method, improvement in UB_DET_IMPROVEMENT.items():
+            if method == "IPFP_DET":
+                ub_pairs[method] = (
+                    truth + rng.poisson(improvement, size=n_pairs),
+                    truth + rng.poisson(improvement, size=n_pairs),
+                )
+                continue
+            # A monotone local search started from BIPARTITE only accepts
+            # strict improvements, so it can never end above BIPARTITE.
+            ub_pairs[method] = (
+                np.maximum(truth, bip_fwd - rng.poisson(improvement, size=n_pairs)),
+                np.maximum(truth, bip_rev - rng.poisson(improvement, size=n_pairs)),
+            )
+        for method, (fwd, rev) in ub_pairs.items():
             np.savez_compressed(
                 cells_dir / f"{spec.dataset}__{method}.npz",
-                value=value,
+                value=np.minimum(fwd, rev),
                 value_fwd=fwd,
                 value_rev=rev,
                 meta=np.array(
                     _fixture_meta(
-                        spec, n_pairs, method=method, end="upper", options="", deterministic=False
+                        spec,
+                        n_pairs,
+                        method=method,
+                        cell=method,
+                        end="upper",
+                        options="",
+                        deterministic=method.endswith("_DET"),
                     )
                 ),
             )
 
         if write_timing:
-            for method in (*LB_TIGHTNESS, *UB_SLACK):
+            for method in (*LB_TIGHTNESS, *UB_SLACK, *UB_DET_IMPROVEMENT):
                 rate = FIXTURE_US_PER_PAIR[method]
                 (timing_dir / f"{spec.dataset}__{method}.json").write_text(
                     json.dumps(
@@ -1980,6 +2230,57 @@ def build_synthetic_fixture(
                 )
         written.append(spec.dataset)
     return written
+
+
+def deterministic_companion(metrics: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Report the ``_DET`` arm beside its multi-start twin.
+
+    Quantifies how much of a local search's tightness is contingent on
+    multi-start initialisation. GEDLIB's ``LSBasedMethod`` defaults to
+    ``--initialization-method RANDOM --randomness REAL``, and the
+    published claim about IPFP was measured with multi-start, so the
+    ``_MS`` arm is the competitor and ``_DET`` is the companion. The
+    split was frozen before any tightness result was visible.
+
+    Args:
+        metrics: Per-dataset, per-cell metric payloads.
+
+    Returns:
+        Per dataset and per pair, both mean relative errors and the
+        multi-start advantage between them.
+    """
+    rows: dict[str, dict[str, Any]] = {}
+    for dataset in sorted(metrics):
+        entries: dict[str, Any] = {}
+        for det, multi_start in DETERMINISTIC_TWIN.items():
+            if det not in metrics[dataset] or multi_start not in metrics[dataset]:
+                continue
+            det_mean = float(metrics[dataset][det]["M1_relative_error"]["exact_gt_zero"]["mean"])
+            ms_mean = float(
+                metrics[dataset][multi_start]["M1_relative_error"]["exact_gt_zero"]["mean"]
+            )
+            entries[det] = {
+                "multi_start_cell": multi_start,
+                "mean_relative_error_det": det_mean,
+                "mean_relative_error_ms": ms_mean,
+                "multi_start_advantage": det_mean - ms_mean,
+                "multi_start_advantage_relative": (
+                    (det_mean - ms_mean) / det_mean if det_mean > 0 else float("nan")
+                ),
+            }
+        if entries:
+            rows[dataset] = entries
+    return {
+        "role": "companion, reported beside the competitors and never in the selection",
+        "rationale": (
+            "The _MS arm is the configuration the published tightness claim is about "
+            "and the one a production distance matrix would use, so it is the "
+            "competitor. The _DET arm quantifies how much of that advantage is "
+            "contingent on multi-start. The split was frozen before any tightness "
+            "result was visible (design §3.11)."
+        ),
+        "per_dataset": rows,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2153,6 +2454,7 @@ def run_analysis(
     metrics: dict[str, dict[str, Any]] = {}
     curves: dict[str, dict[str, Any]] = {}
     validity: dict[str, Any] = {}
+    dominance: dict[str, Any] = {}
     for dataset, bundle in bundles.items():
         metrics[dataset] = {}
         curves[dataset] = {}
@@ -2163,21 +2465,27 @@ def run_analysis(
             metrics[dataset][method] = payload
             curves[dataset][method] = error_vs_n(cell, bundle.index)
             validity[f"{dataset}__{method}"] = payload["M4_validity"]
+        dominance[dataset] = check_proven_orderings(bundle.cells)
 
-    total_violations = sum(int(v["violations"]) for v in validity.values())
+    m4_violations = sum(int(v["violations"]) for v in validity.values())
+    gate_violations = sum(int(v["violations"]) for v in dominance.values())
+    total_violations = m4_violations + gate_violations
     written["validity"] = write_json(
         analysis_dir / "validity.json",
         {
-            "provenance": _provenance(analysis="M4 validity"),
+            "provenance": _provenance(analysis="M4 validity and proven-ordering gates"),
             "domain": (
                 "All pairs: two-sided on certified pairs, one-sided on censored ones "
                 "(design §3.5). A lower bound is refuted iff LB > exact_ub, an upper "
                 "bound iff UB < exact_lb. LB == 0 with exact > 0 is legal under cost "
                 "model D6 and is never flagged."
             ),
+            "m4_violations": m4_violations,
+            "proven_ordering_violations": gate_violations,
             "total_violations": total_violations,
             "halts_ticket": total_violations > 0,
             "cells": validity,
+            "proven_orderings": dominance,
         },
     )
 
@@ -2249,7 +2557,14 @@ def run_analysis(
         {
             "provenance": _provenance(analysis="frozen selection rule"),
             "tie_tolerance": TIE_TOLERANCE,
+            "competitors": {end: list(methods_for_end(end)) for end in ENDS},
+            "cells_measured": {end: list(cells_for_end(end)) for end in ENDS},
             "ends": selection,
+            "companion_deterministic_initialisation": deterministic_companion(metrics),
+            "proven_equivalences": [
+                {"cells": [left, right], "justification": why}
+                for left, right, why in PROVEN_EQUIVALENCE
+            ],
         },
     )
 
