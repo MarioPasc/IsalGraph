@@ -73,6 +73,7 @@ import logging
 import math
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -112,6 +113,14 @@ TIMEOUT_MARGIN_REL = 0.01
 
 _INF = float("inf")
 
+#: Exact GED of ``P4`` against ``C4`` under any cost model with unit edge
+#: insertion and deletion: delete one edge. The accessor probe's known answer.
+_PROBE_EXACT = 1.0
+
+#: A deferred "is a zero distance legal for this pair?" decision. Evaluated only
+#: when a read actually returns ``0.0`` -- see :meth:`GedlibBackend._read`.
+ZeroOk = Callable[[], bool]
+
 #: Constant attribute value attached to every node and edge. GEDLIB's GXL
 #: bindings require *string* attribute values; substitution is free under both
 #: permitted cost models, so a constant label cannot influence any distance.
@@ -149,6 +158,30 @@ LOWER_BOUND_METHODS = frozenset({"BRANCH", "BRANCH_FAST", "BRANCH_TIGHT", "STAR"
 
 #: Methods whose ``get_upper_bound()`` was measured to return a real bound.
 UPPER_BOUND_METHODS = frozenset({"BIPARTITE", "IPFP", "REFINE", "BP_BEAM"})
+
+#: Which ends of the bracket a backend evaluates. ``'both'`` is what T-03 ran
+#: and stays the default everywhere. The one-sided modes exist because T-05
+#: runs one campaign per *role* (CONTRACTS §3): a ``BRANCH_FAST`` campaign has
+#: no business paying for an upper bound it will never report, and the upper
+#: bound it would compute would carry a different options string anyway.
+COMPUTE_MODES = frozenset({"both", "lb", "ub"})
+
+#: The frozen role table of CONTRACTS §3, as ``(method, options, accessor)``.
+#: The options string is part of the method name: T-27 §4.2 measured GEDLIB's
+#: upper bounds changing on 91.5-93.6 % of pairs between runs at library
+#: defaults, so a role named without its options string is not a specification.
+#: ``ubt`` is scoped to the size-stratified subsample, the other three to every
+#: pair.
+ROLE_SPECS: dict[str, tuple[str, str, str]] = {
+    "lb": ("BRANCH_FAST", "--threads 1", "lb"),
+    "ub": ("BIPARTITE", "--threads 1", "ub"),
+    "ubs": (
+        "BP_BEAM",
+        "--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1",
+        "ub",
+    ),
+    "ubt": ("IPFP", "--threads 1 --randomness PSEUDO --initial-solutions 10", "ub"),
+}
 
 #: No GEDLIB method returns a certified optimum. ``ANCHOR_AWARE_GED`` claimed
 #: to and does not (amendment 2). Kept as an empty set so that the shape of the
@@ -231,6 +264,12 @@ class PairResult:
         The solver's budget expired before it proved optimality.
     method : str
         Solver identification, e.g. ``'networkx_astar+BRANCH_FAST+IPFP'``.
+    computed : {'both', 'lb', 'ub'}, optional
+        Which ends were actually evaluated. Defaults to ``'both'``, which is
+        T-03's behaviour and enforces the original finiteness invariant
+        unchanged. Under ``'lb'`` the upper end is ``+inf`` and under ``'ub'``
+        the lower end is ``-inf``, and each is *required* to be that sentinel:
+        an unevaluated end must be unmistakable, never a plausible number.
 
     Notes
     -----
@@ -265,12 +304,32 @@ class PairResult:
     seconds: float
     timed_out: bool
     method: str
+    computed: str = "both"
 
     def __post_init__(self) -> None:
         """Enforce the internal consistency of the result."""
-        if not math.isfinite(self.lb) or self.lb < 0.0:
+        if self.computed not in COMPUTE_MODES:
+            raise GedBackendError(
+                f"computed must be one of {sorted(COMPUTE_MODES)}, got {self.computed!r}"
+            )
+        if self.computed == "ub":
+            # The lower end was never evaluated. -inf is the honest sentinel: it
+            # is a valid but vacuous lower bound, so nothing downstream that
+            # treats lb as a bound can be misled by it.
+            if self.lb != -_INF:
+                raise GedBackendError(
+                    f"computed='ub' leaves the lower end unevaluated, which is recorded as "
+                    f"-inf; got lb={self.lb!r}"
+                )
+        elif not math.isfinite(self.lb) or self.lb < 0.0:
             raise GedBackendError(f"lb must be finite and non-negative, got {self.lb!r}")
-        if not math.isfinite(self.ub) or self.ub < 0.0:
+        if self.computed == "lb":
+            if self.ub != _INF:
+                raise GedBackendError(
+                    f"computed='lb' leaves the upper end unevaluated, which is recorded as "
+                    f"+inf; got ub={self.ub!r}"
+                )
+        elif not math.isfinite(self.ub) or self.ub < 0.0:
             raise GedBackendError(f"ub must be finite and non-negative, got {self.ub!r}")
         if self.lb > self.ub + CERT_TOL:
             raise GedBackendError(f"lb {self.lb} exceeds ub {self.ub}")
@@ -718,7 +777,16 @@ class GedlibBackend:
         orientations.
     threads : int, optional
         Value of GEDLIB's ``--threads`` option. Defaults to 1, matching the
-        one-process-per-core layout the cluster jobs use.
+        one-process-per-core layout the cluster jobs use. Supplies the default
+        for both ``lb_options`` and ``ub_options``.
+    lb_options : str, optional
+        Verbatim GEDLIB option string for the lower-bound method. Defaults to
+        ``--threads {threads}``, which is what T-03 ran.
+    ub_options : str, optional
+        Verbatim GEDLIB option string for the upper-bound method. Defaults to
+        ``--threads {threads}``.
+    compute : {'both', 'lb', 'ub'}, optional
+        Which ends to evaluate. ``'both'`` is T-03's behaviour and the default.
     lb_symmetry_probes : int, optional
         Number of leading pairs on which the lower bound is also evaluated in
         the reverse orientation, to measure rather than assume its symmetry.
@@ -728,19 +796,33 @@ class GedlibBackend:
     GedBackendError
         If any method is retired, forbidden, unverified, or paired with an
         accessor it was not measured to support.
+
+    Notes
+    -----
+    **Two option strings, not one.** Before T-27 a single ``--threads {n}``
+    string was passed to both ends. That happens to be right for the ``lb`` and
+    ``ub`` roles of CONTRACTS §3, which both take ``--threads 1``, and wrong for
+    the two sensitivity roles, whose strings differ from each other and from
+    the library defaults. T-27 §4.2 measured GEDLIB's upper bounds moving on
+    91.5-93.6 % of pairs between runs under ``--randomness REAL``, so a method
+    name without its options string does not identify a computation. A single
+    shared string cannot express the frozen specification; these two can.
     """
 
     __slots__ = (
+        "_compute",
         "_costs",
         "_env",
         "_gedlib_module",
-        "_heuristic_options",
         "_init_option",
         "_lb_method",
+        "_lb_options",
         "_lb_symmetry_probes",
+        "_probed",
         "_reset_mode",
         "_timeout_s",
         "_ub_method",
+        "_ub_options",
         "stats",
     )
 
@@ -753,6 +835,9 @@ class GedlibBackend:
         lb_method: str = "BRANCH_FAST",
         ub_method: str = "IPFP",
         threads: int = 1,
+        lb_options: str | None = None,
+        ub_options: str | None = None,
+        compute: str = "both",
         lb_symmetry_probes: int = 32,
     ) -> None:
         if exact_method is not None:
@@ -763,21 +848,34 @@ class GedlibBackend:
                 "that certifies an optimum. Exact GED comes from NetworkxBackend; use "
                 "ExactPlusBoundsBackend to get both in one PairResult."
             )
+        if compute not in COMPUTE_MODES:
+            raise GedBackendError(
+                f"compute must be one of {sorted(COMPUTE_MODES)}, got {compute!r}"
+            )
         _reject_retired(lb_method)
         _reject_retired(ub_method)
-        _validate_method(lb_method, LOWER_BOUND_METHODS, "lower bound")
-        _validate_method(ub_method, UPPER_BOUND_METHODS, "upper bound")
+        # Validate whichever ends will actually be read. A campaign that
+        # computes only one end must still not be allowed to name a nonsense
+        # method for it, and must not be blocked by the other end's default.
+        if compute in ("both", "lb"):
+            _validate_method(lb_method, LOWER_BOUND_METHODS, "lower bound")
+        if compute in ("both", "ub"):
+            _validate_method(ub_method, UPPER_BOUND_METHODS, "upper bound")
 
+        default_options = f"--threads {int(threads)}"
         self._costs = costs
         self._timeout_s = timeout_s
         self._lb_method = lb_method
         self._ub_method = ub_method
+        self._compute = compute
         self._lb_symmetry_probes = int(lb_symmetry_probes)
         self._init_option = "EAGER_WITHOUT_SHUFFLED_COPIES"
-        self._heuristic_options = f"--threads {int(threads)}"
+        self._lb_options = default_options if lb_options is None else str(lb_options)
+        self._ub_options = default_options if ub_options is None else str(ub_options)
         self._gedlib_module: Any = None
         self._env: Any = None
         self._reset_mode = "unknown"
+        self._probed = False
         self.stats = BackendStats()
 
     @property
@@ -793,7 +891,52 @@ class GedlibBackend:
     @property
     def method(self) -> str:
         """Composite solver identification written into every result."""
+        if self._compute == "lb":
+            return self._lb_method
+        if self._compute == "ub":
+            return self._ub_method
         return f"{self._lb_method}+{self._ub_method}"
+
+    @property
+    def compute(self) -> str:
+        """Which ends of the bracket this backend evaluates."""
+        return self._compute
+
+    @property
+    def lb_options(self) -> str:
+        """Verbatim GEDLIB option string used for the lower-bound method."""
+        return self._lb_options
+
+    @property
+    def ub_options(self) -> str:
+        """Verbatim GEDLIB option string used for the upper-bound method."""
+        return self._ub_options
+
+    def specification(self) -> dict[str, Any]:
+        """Return the full method specification, for the run's metadata.
+
+        Returns
+        -------
+        dict
+            ``method``/``options``/``accessor`` per evaluated end, plus the
+            cost model. A run whose metadata does not record the options string
+            verbatim is not reproducible (CONTRACTS §3) and is rejected at the
+            gate, so this is the single place the strings are serialised from.
+        """
+        spec: dict[str, Any] = {
+            "compute": self._compute,
+            "cost_model": list(self._costs.as_gedlib_constant()),
+            "init_option": self._init_option,
+        }
+        if self._compute in ("both", "lb"):
+            spec["lb_method"] = self._lb_method
+            spec["lb_options"] = self._lb_options
+            spec["lb_accessor"] = "lower"
+        if self._compute in ("both", "ub"):
+            spec["ub_method"] = self._ub_method
+            spec["ub_options"] = self._ub_options
+            spec["ub_accessor"] = "upper"
+        return spec
 
     def module(self) -> Any:
         """Import GEDLIB once, in the order the shared libraries require.
@@ -840,7 +983,15 @@ class GedlibBackend:
         self._env = self.module().GEDEnvGXL()
         return self._env
 
-    def _read(self, env: Any, i: int, j: int, accessor: str, method: str, zero_ok: bool) -> float:
+    def _read(
+        self,
+        env: Any,
+        i: int,
+        j: int,
+        accessor: str,
+        method: str,
+        zero_ok: bool | ZeroOk,
+    ) -> float:
         """Read one bound and range-check it.
 
         Parameters
@@ -853,8 +1004,11 @@ class GedlibBackend:
             Which accessor to call.
         method : str
             Method name, for the error message.
-        zero_ok : bool
-            Whether a value of exactly zero is legal for this pair.
+        zero_ok : bool or callable
+            Whether a value of exactly zero is legal for this pair. A
+            zero-argument callable is evaluated **only if** the read actually
+            returns ``0.0``, which is the point: deciding it eagerly costs an
+            ``nx.is_isomorphic`` call on every pair (CONTRACTS §6.1).
 
         Returns
         -------
@@ -877,7 +1031,7 @@ class GedlibBackend:
         if value < 0.0:
             raise GedBackendError(f"{method} returned a negative bound {value!r}")
         if value == 0.0:
-            if not zero_ok:
+            if not (zero_ok() if callable(zero_ok) else zero_ok):
                 raise GedBackendError(
                     f"{method}.get_{'lower' if accessor == 'lb' else 'upper'}_bound returned "
                     "0.00 for a pair whose distance cannot be zero; this is the wrong "
@@ -912,12 +1066,28 @@ class GedlibBackend:
             achievable, which makes their minimum a valid bound and, unlike
             either alone, symmetric.
 
+            Under ``compute='lb'`` the upper end is ``+inf`` and under
+            ``compute='ub'`` the lower end is ``-inf``. Both are the vacuous
+            bound on that side, so nothing that treats the pair as a bracket is
+            misled; they are unmistakable rather than plausible.
+
         Raises
         ------
         GedBackendError
             On any inconsistent read, including an inverted bracket.
         """
-        zero_ok = zero_distance_is_attainable(g1, g2, self._costs)
+        # CONTRACTS §6.1: deferred, not eager. Under D6 this predicate reaches
+        # nx.is_isomorphic whenever n1 == n2 and m1 == m2 -- most Letter pairs,
+        # and a VF2 call on ~30-node graphs for COIL-DEL and Mutagenicity, over
+        # 21.7 M pairs. A read of exactly 0.0 is rare, so paying for the answer
+        # only when one arrives costs nothing and saves the rest. The value
+        # computed is identical; only the moment of computation moves.
+        cached: list[bool] = []
+
+        def zero_ok() -> bool:
+            if not cached:
+                cached.append(zero_distance_is_attainable(g1, g2, self._costs))
+            return cached[0]
 
         env = self._fresh_env()
         i0 = env.add_nx_graph(_with_string_labels(g1), "")
@@ -937,22 +1107,31 @@ class GedlibBackend:
         # instead by the constructor guard, which refuses any method not in
         # LOWER_BOUND_METHODS. Zero lower bounds are counted, because their rate is the
         # bound-quality signal T-05's calibration ladder reports.
-        self._run(env, self._lb_method, self._heuristic_options, i0, i1)
-        lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok=True)
-        if lb == 0.0 and not zero_ok:
-            self.stats.n_trivial_lower_bounds += 1
-        if self.stats.n_lb_orientations_compared < self._lb_symmetry_probes:
-            self._run(env, self._lb_method, self._heuristic_options, i1, i0)
-            lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok=True)
-            self.stats.record_lb_orientations(lb, lb_rev)
-            lb = max(lb, lb_rev)
+        lb = -_INF
+        if self._compute in ("both", "lb"):
+            self._run(env, self._lb_method, self._lb_options, i0, i1)
+            lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok=True)
+            if lb == 0.0 and not zero_ok():
+                self.stats.n_trivial_lower_bounds += 1
+            if self.stats.n_lb_orientations_compared < self._lb_symmetry_probes:
+                self._run(env, self._lb_method, self._lb_options, i1, i0)
+                lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok=True)
+                self.stats.record_lb_orientations(lb, lb_rev)
+                lb = max(lb, lb_rev)
 
-        self._run(env, self._ub_method, self._heuristic_options, i0, i1)
-        ub_fwd = self._read(env, i0, i1, "ub", self._ub_method, zero_ok)
-        self._run(env, self._ub_method, self._heuristic_options, i1, i0)
-        ub_rev = self._read(env, i1, i0, "ub", self._ub_method, zero_ok)
-        self.stats.record_ub_orientations(ub_fwd, ub_rev)
-        ub = min(ub_fwd, ub_rev)
+        ub = _INF
+        if self._compute in ("both", "ub"):
+            self._run(env, self._ub_method, self._ub_options, i0, i1)
+            ub_fwd = self._read(env, i0, i1, "ub", self._ub_method, zero_ok)
+            self._run(env, self._ub_method, self._ub_options, i1, i0)
+            ub_rev = self._read(env, i1, i0, "ub", self._ub_method, zero_ok)
+            self.stats.record_ub_orientations(ub_fwd, ub_rev)
+            ub = min(ub_fwd, ub_rev)
+
+        if self._compute != "both":
+            # Nothing to cross-check: one end is a sentinel, and comparing a
+            # measured bound against it would only ever compare it to infinity.
+            return float(lb), float(ub)
 
         if lb > ub + CERT_TOL:
             raise GedBackendError(
@@ -995,9 +1174,68 @@ class GedlibBackend:
             seconds=seconds,
             timed_out=bool(seconds > self._timeout_s),
             method=self.method,
+            computed=self._compute,
         )
         self.stats.record_result(result)
         return result
+
+    def probe_accessors(self) -> dict[str, float]:
+        """Verify every configured accessor on a pair of known distance.
+
+        Run once at campaign init, before any production pair. ``P4`` against
+        ``C4`` has exact GED 1 under D6 -- delete one edge -- so a correctly
+        configured method must return exactly 1.00 through the accessor it is
+        being read with. GEDLIB does not raise when an accessor and a method
+        disagree: ``get_lower_bound()`` on an upper-bound method returns
+        ``0.00`` and ``HED``'s ``get_upper_bound()`` returns ``inf``, neither
+        with a diagnostic. Without this probe the first evidence of a
+        misconfiguration is a finished matrix of zeros, which is 21.7 M pairs
+        too late.
+
+        Returns
+        -------
+        dict
+            The probed values, keyed ``'lb'`` and/or ``'ub'``.
+
+        Raises
+        ------
+        GedBackendError
+            If any configured accessor does not return exactly 1.00.
+        """
+        env = self._fresh_env()
+        i0 = env.add_nx_graph(_with_string_labels(nx.path_graph(4)), "")
+        i1 = env.add_nx_graph(_with_string_labels(nx.cycle_graph(4)), "")
+        env.set_edit_cost("CONSTANT", edit_cost_constant=self._costs.as_gedlib_constant())
+        env.init(init_option=self._init_option)
+
+        probes: list[tuple[str, str, str]] = []
+        if self._compute in ("both", "lb"):
+            probes.append(("lb", self._lb_method, self._lb_options))
+        if self._compute in ("both", "ub"):
+            probes.append(("ub", self._ub_method, self._ub_options))
+
+        seen: dict[str, float] = {}
+        for accessor, method, options in probes:
+            self._run(env, method, options, i0, i1)
+            raw = env.get_lower_bound(i0, i1) if accessor == "lb" else env.get_upper_bound(i0, i1)
+            value = float(raw)
+            if not math.isfinite(value) or abs(value - _PROBE_EXACT) > CERT_TOL:
+                raise GedBackendError(
+                    f"accessor probe failed: {method} with options {options!r} read through "
+                    f"get_{'lower' if accessor == 'lb' else 'upper'}_bound returned {value!r} "
+                    f"on P4 vs C4, whose exact GED under this cost model is {_PROBE_EXACT}. "
+                    "0.00 is the signature of the wrong accessor and inf of a method that "
+                    "does not set that end; GEDLIB reports neither. Refusing to start the "
+                    "campaign rather than fill a matrix with unusable values."
+                )
+            seen[accessor] = value
+
+        self._probed = True
+        logger.info(
+            "accessor probe passed on P4 vs C4: %s",
+            ", ".join(f"{k}={v:.2f}" for k, v in seen.items()),
+        )
+        return seen
 
 
 class ExactPlusBoundsBackend:
