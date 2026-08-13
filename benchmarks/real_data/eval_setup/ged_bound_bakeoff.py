@@ -1590,6 +1590,29 @@ def run_cross_check(
     is what rules out a systematic misconfiguration of GEDLIB; disagreement is a
     defect in one of them and is reported, never smoothed over.
 
+    **The two constructions need different tests, because they report different
+    kinds of quantity.** ``BRANCH`` reports the optimum of a linear sum
+    assignment. That optimum is unique even when its argmin is not, so plain
+    value equality is the right test and any difference is a real defect.
+
+    ``BIPARTITE`` reports the *induced edit cost of one chosen optimal
+    assignment*. The argmin is routinely non-unique -- on this corpus almost
+    every instance has ties -- and two optimal assignments induce different,
+    individually valid, upper bounds. Value equality therefore tests
+    tie-breaking, not correctness, and would report a disagreement on 61 % of
+    LINUX pairs while nothing is wrong. Two structural tests replace it:
+
+    1. **Same instance, same optimum.** GEDLIB's returned node map is scored
+       against *our* assignment cost matrix and must attain *our* LSAP optimum.
+       This compares the cost model and the assignment instance directly.
+    2. **Same induced-cost function.** GEDLIB's node map is re-costed with
+       ``ged_bounds.induced_edit_cost`` and must reproduce GEDLIB's own reported
+       upper bound.
+
+    Passing both means the only difference is which of several equally optimal
+    assignments each library happened to return. The plain value comparison is
+    still reported, as a measurement of tie-breaking divergence.
+
     ``bipartite_upper_bound`` is called with ``symmetrise=False`` because
     GEDLIB's ``BIPARTITE`` is evaluated in one orientation, and comparing a
     symmetrised value against a single-orientation one would compare two
@@ -1598,9 +1621,11 @@ def run_cross_check(
     Returns
     -------
     dict
-        Per construction: pairs compared, agreements, and up to five
-        disagreement examples.
+        Per construction: pairs compared, agreements, structural agreements for
+        ``BIPARTITE``, and up to five disagreement examples.
     """
+    from scipy.optimize import linear_sum_assignment
+
     bounds_dir = str(Path(__file__).resolve().parent)
     if bounds_dir not in sys.path:
         sys.path.insert(0, bounds_dir)
@@ -1626,28 +1651,66 @@ def run_cross_check(
         env.set_method(method, spec.default_options)
         env.init_method()
         agree = 0
+        same_optimum = 0
+        same_induced = 0
         examples: list[dict[str, Any]] = []
         for s in sample:
             i, j = int(corpus.pair_i[s]), int(corpus.pair_j[s])
+            g1, g2 = corpus.graphs[i], corpus.graphs[j]
             env.run_method(ids[i], ids[j])
             gedlib_value = read_bound(
                 env, ids[i], ids[j], spec.end, context=f"cross-check {method} ({i},{j})"
             )
-            ours = float(
-                reference(corpus.graphs[i], corpus.graphs[j], ged_bounds.UNIT_COSTS, **kwargs)
-            )
+            ours = float(reference(g1, g2, ged_bounds.UNIT_COSTS, **kwargs))
             if abs(gedlib_value - ours) <= 1e-6:
                 agree += 1
             elif len(examples) < 5:
                 examples.append({"i": i, "j": j, "gedlib": gedlib_value, "ours": ours})
-        report[method] = {
+
+            if method != "BIPARTITE":
+                continue
+            nodes1, nodes2 = list(g1.nodes()), list(g2.nodes())
+            n1, n2 = len(nodes1), len(nodes2)
+            forward = env.get_forward_map(ids[i], ids[j])
+            mapping = {nodes1[a]: (nodes2[b] if b < n2 else None) for a, b in enumerate(forward)}
+            recost = ged_bounds.induced_edit_cost(g1, g2, mapping, ged_bounds.UNIT_COSTS)
+            same_induced += abs(recost - gedlib_value) <= 1e-6
+
+            matrix, _, _ = ged_bounds._assignment_matrix(
+                g1, g2, ged_bounds.UNIT_COSTS, halve_edges=False
+            )
+            rows, cols = linear_sum_assignment(matrix)
+            our_optimum = float(matrix[rows, cols].sum())
+            objective = 0.0
+            used: set[int] = set()
+            for a, b in enumerate(forward):
+                column = b if b < n2 else n2 + a
+                objective += float(matrix[a, column])
+                used.add(column)
+            objective += sum(float(matrix[n1 + b, b]) for b in range(n2) if b not in used)
+            same_optimum += abs(objective - our_optimum) <= 1e-6
+
+        entry: dict[str, Any] = {
             "end": end,
             "n_compared": int(sample.size),
             "n_agree": agree,
             "n_disagree": int(sample.size) - agree,
             "examples": examples,
         }
-        logger.info("cross-check %s: %d/%d agree", method, agree, int(sample.size))
+        if method == "BIPARTITE":
+            entry["n_same_lsap_optimum"] = same_optimum
+            entry["n_same_induced_cost"] = same_induced
+            entry["passes"] = same_optimum == int(sample.size) and same_induced == int(sample.size)
+        else:
+            entry["passes"] = agree == int(sample.size)
+        report[method] = entry
+        logger.info(
+            "cross-check %s: %d/%d value-equal, passes=%s",
+            method,
+            agree,
+            int(sample.size),
+            entry["passes"],
+        )
     return report
 
 
