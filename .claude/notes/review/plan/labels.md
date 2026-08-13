@@ -88,7 +88,8 @@ two graphs are indistinguishable to IsalGraph **iff** they share a canonical str
   counted**;
 - one worked example: two molecules, same string, different formula.
 
-**Cost**: one pass over the 19,670 canonical strings T-06 already produces. Minutes.
+**Cost**: one pass over the **16,370** canonical strings T-06 already produces (~~19,670~~, corrected
+by T-01's cohort re-derivation — [data](data.md) §1.3). Minutes.
 **Placement**: two columns in the dataset-properties table plus one sentence. No new section.
 
 Decisive either way: a small fraction bounds the limitation with a number; a large fraction quantifies

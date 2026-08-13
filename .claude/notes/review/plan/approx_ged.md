@@ -1,7 +1,8 @@
 # Approximate GED — Suite 2, the proven bracket
 
 **Owner**: T-05 · **Serves**: AE.1, R3.7a, R3.5b
-**Status**: LOCKED (decision 11). **Cost: ≈ 1.05 core-hours for all 40 M pairs.**
+**Status**: LOCKED (decision 11). **Cost: ≈ 0.57 core-hours for all 21.7 M pairs** (~~1.05 core-h /
+40 M~~ — T-01 re-derived the cohort 2026-08-13, [data](data.md) §1.3).
 
 Related: [gedlib](gedlib.md) · [exact_ged](exact_ged.md) (the calibration anchor) ·
 [data](data.md) · [statistics](statistics.md) D13
@@ -126,8 +127,9 @@ not reproduce.
 | UB — literature reference point | 1 + 2 | `BIPARTITE` | `get_upper_bound()` |
 | UB — refinement arm, if `IPFP` is loose | 2 | `REFINE` | `get_upper_bound()` |
 
-**Cost**: `BRANCH_FAST` / `IPFP` run at ~100 µs/pair at n̄ = 30, so all 40 M Suite-2 pairs cost
-**≈ 1.05 core-hours**. **No pair subsampling is needed anywhere in Suite 2.**
+**Cost**: `BRANCH_FAST` / `IPFP` run at ~100 µs/pair at n̄ = 30, so all **21,710,892** Suite-2 pairs cost
+**≈ 0.57 core-hours**. **No pair subsampling is needed anywhere in Suite 2.**
+(~~40 M pairs, ≈ 1.05 core-hours~~ — superseded by T-01's cohort re-derivation, decision 27.)
 
 ---
 
@@ -165,7 +167,7 @@ Three additions, all cheap:
 2. **Regress, do not assume transfer.** Fit relative bracket width `(UB − LB)/UB` and the ρ-gap on
    `n` over the ladder; report the extrapolation to the Suite-2 range **with its uncertainty**.
 3. **Report `(UB − LB)/UB` as a function of `n` across all of Suite 2.** Needs no exact GED,
-   computable on all 40 M pairs, and is **the single measurement that answers AE.1 most directly**:
+   computable on all 21.7 M pairs, and is **the single measurement that answers AE.1 most directly**:
    it separates "IsalGraph degrades at scale" from "our reference degrades at scale".
 
 ---
