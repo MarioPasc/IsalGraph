@@ -21,16 +21,21 @@ realised bin populations. So a pair present in the shards but absent from the
 list, or present in the list but absent from the shards, is a hard failure
 rather than a dropped row.
 
-A note on ``value_fwd`` and ``value_rev``
------------------------------------------
-CONTRACTS §5 asks for the two orientations separately. The CONTRACT C shard
-schema is frozen at six arrays by §6.2 and carries only ``ub``, which the
-backend has **already** symmetrised to ``min(fwd, rev)``. The per-orientation
-values therefore do not exist in the shard and cannot be recovered from it.
-They are written as ``NaN`` and the metadata says so, rather than duplicating
-the symmetrised value into both columns, which would read as a measurement that
-the two orientations agreed. Reported to the orchestrator as a gap between §5
-and §6.2.
+``value_fwd`` and ``value_rev``
+------------------------------
+CONTRACTS §5 asks for the two orientations separately, and an upper bound built
+from a *directed* assignment genuinely differs between them. They are carried by
+the optional ``ub_fwd``/``ub_rev`` shard columns, which the runner writes only
+under ``--record-orientations``; a campaign run without it leaves both columns
+``NaN`` here and the metadata says which happened.
+
+They are never synthesised. Copying the symmetrised ``min(fwd, rev)`` into both
+columns would assert that the two orientations agreed, which is a fabricated
+measurement of exactly the kind this revision exists to remove -- the manuscript
+currently reports the asymmetry from our own bipartite implementation over 400
+LINUX pairs at mean order 8.71, one small dataset quoted as a cohort property.
+Measuring it here, over a subsample spanning ``n = 2..98`` across ten datasets
+under the production method, is what replaces that figure.
 """
 
 from __future__ import annotations
@@ -94,6 +99,8 @@ class _ShardRows:
     pair_i: np.ndarray
     pair_j: np.ndarray
     value: np.ndarray
+    value_fwd: np.ndarray
+    value_rev: np.ndarray
     seconds: np.ndarray
     meta: dict[str, Any]
 
@@ -162,6 +169,9 @@ def _read_shard(path: Path) -> _ShardRows:
         pair_index = np.asarray(data["pair_index"], dtype=np.int64)
         ub = np.asarray(data["ub"], dtype=np.float64)
         seconds = np.asarray(data["seconds"], dtype=np.float64)
+        nan = np.full(ub.shape, np.nan, dtype=np.float64)
+        fwd = np.asarray(data["ub_fwd"], dtype=np.float64) if "ub_fwd" in data else nan
+        rev = np.asarray(data["ub_rev"], dtype=np.float64) if "ub_rev" in data else nan
         raw_meta = str(data["meta"]) if "meta" in data else "{}"
     try:
         meta = dict(json.loads(raw_meta))
@@ -181,6 +191,8 @@ def _read_shard(path: Path) -> _ShardRows:
         pair_i=np.asarray(i, dtype=np.int64),
         pair_j=np.asarray(j, dtype=np.int64),
         value=ub,
+        value_fwd=fwd,
+        value_rev=rev,
         seconds=seconds,
         meta=meta,
     )
@@ -256,15 +268,26 @@ def merge_subsample(
     shards = collect_subsample_shards(shard_dir)
     logger.info("joining %d shards onto %d listed pairs", len(shards), n_rows)
 
-    computed: dict[tuple[str, int, int], tuple[float, float]] = {}
+    computed: dict[tuple[str, int, int], tuple[float, float, float, float]] = {}
     shard_meta: list[dict[str, Any]] = []
     for path in shards:
         rows = _read_shard(path)
         shard_meta.append(rows.meta)
-        for i, j, value, secs in zip(
-            rows.pair_i.tolist(), rows.pair_j.tolist(), rows.value, rows.seconds, strict=True
+        for i, j, value, fwd, rev, secs in zip(
+            rows.pair_i.tolist(),
+            rows.pair_j.tolist(),
+            rows.value,
+            rows.value_fwd,
+            rows.value_rev,
+            rows.seconds,
+            strict=True,
         ):
-            computed[(rows.dataset_key, int(i), int(j))] = (float(value), float(secs))
+            computed[(rows.dataset_key, int(i), int(j))] = (
+                float(value),
+                float(fwd),
+                float(rev),
+                float(secs),
+            )
 
     wanted = {(keys[t], int(li[t]), int(lj[t])) for t in range(n_rows)}
     missing = wanted - set(computed)
@@ -279,10 +302,14 @@ def merge_subsample(
 
     # Pair-list order, so the file is reproducible from seed 42 alone.
     value = np.empty(n_rows, dtype=np.float64)
+    value_fwd = np.empty(n_rows, dtype=np.float64)
+    value_rev = np.empty(n_rows, dtype=np.float64)
     seconds = np.empty(n_rows, dtype=np.float32)
     for t in range(n_rows):
-        v, s = computed[(keys[t], int(li[t]), int(lj[t]))]
+        v, f, r, s = computed[(keys[t], int(li[t]), int(lj[t]))]
         value[t] = v
+        value_fwd[t] = f
+        value_rev[t] = r
         seconds[t] = s
 
     if n_rows and not np.isfinite(value).all():
@@ -324,12 +351,13 @@ def merge_subsample(
         "realised_per_bin": _bin_counts(bin_index),
         "seconds_total": float(np.sum(seconds, dtype=np.float64)),
         "mean_seconds_per_pair": float(np.mean(seconds)) if n_rows else 0.0,
-        # CONTRACTS §6.2 freezes the shard at six arrays and ub is already
-        # min(fwd, rev); the two orientations are not recoverable from it.
         "orientation_detail": (
-            "not retained: CONTRACT C carries only the symmetrised ub, so value_fwd and "
-            "value_rev are NaN. value is min(fwd, rev), computed in the backend."
+            "recorded per pair via --record-orientations"
+            if bool(np.isfinite(value_fwd).any())
+            else "not recorded: the campaign ran without --record-orientations, so "
+            "value_fwd and value_rev are NaN. value is min(fwd, rev) either way."
         ),
+        "n_orientations_recorded": int(np.count_nonzero(np.isfinite(value_fwd))),
         "n_shards": len(shards),
         "code_commit": _code_commit(),
         "computed_utc": datetime.now(timezone.utc).isoformat(),
@@ -347,8 +375,8 @@ def merge_subsample(
             n_max=n_max,
             bin_index=bin_index,
             value=value,
-            value_fwd=np.full(n_rows, np.nan, dtype=np.float64),
-            value_rev=np.full(n_rows, np.nan, dtype=np.float64),
+            value_fwd=value_fwd,
+            value_rev=value_rev,
             seconds=seconds,
             metadata=np.array(json.dumps(metadata)),
         )

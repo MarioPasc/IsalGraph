@@ -388,6 +388,57 @@ def gate4(
     return rep
 
 
+def _orientation_summary(shards: list[Path]) -> dict[str, Any]:
+    """Pool the per-shard ``ub_fwd``/``ub_rev`` columns into four numbers.
+
+    The upper bound is built from a *directed* assignment and is therefore not
+    symmetric. The manuscript currently reports that asymmetry from our own
+    bipartite implementation over 400 LINUX pairs at mean order 8.71; this
+    measures it under the production method over the whole cohort.
+
+    Args:
+        shards: Shard paths.
+
+    Returns:
+        Counts and magnitudes, or ``{}`` when no shard carried the columns.
+
+    Notes:
+        Aggregate only, deliberately. Two more ``(N, N)`` matrices would add
+        roughly 243 MB on COIL-DEL for a quantity that is only ever reported per
+        dataset, so nothing dense is built here.
+    """
+    n = 0
+    n_asym = 0
+    n_rev_tighter = 0
+    total_gap = 0.0
+    max_gap = 0.0
+    for path in shards:
+        with np.load(path, allow_pickle=False) as data:
+            if "ub_fwd" not in data or "ub_rev" not in data:
+                continue
+            fwd = np.asarray(data["ub_fwd"], dtype=np.float64)
+            rev = np.asarray(data["ub_rev"], dtype=np.float64)
+        usable = np.isfinite(fwd) & np.isfinite(rev)
+        if not bool(usable.any()):
+            continue
+        gap = np.abs(fwd[usable] - rev[usable])
+        n += int(usable.sum())
+        n_asym += int(np.count_nonzero(gap > 1e-9))
+        n_rev_tighter += int(np.count_nonzero(rev[usable] < fwd[usable] - 1e-9))
+        total_gap += float(gap.sum())
+        max_gap = max(max_gap, float(gap.max()))
+    if not n:
+        return {}
+    return {
+        "n_pairs": n,
+        "n_asymmetric": n_asym,
+        "asymmetry_rate": n_asym / n,
+        "mean_abs_gap": total_gap / n,
+        "max_abs_gap": max_gap,
+        "reverse_tighter_rate": n_rev_tighter / n,
+    }
+
+
 def _agreed(shard_meta: list[dict[str, Any]], field_name: str) -> str | None:
     """Return the single value the shards carry for one metadata field.
 
@@ -645,6 +696,9 @@ def merge_shards(
             "accessor": {"exact": "exact", "lb": "lower", "ub": "upper"}[ged_from],
             "n_zero_offdiag": report.n_zero_offdiag,
             "zero_offdiag_fraction": report.zero_offdiag_fraction,
+            # Aggregate, never two more (N,N) matrices. Empty unless the
+            # campaign ran with --record-orientations.
+            "ub_orientation": _orientation_summary(shards),
             "n_pairs": total,
             "n_certified": report.n_certified,
             "n_censored": report.n_censored,

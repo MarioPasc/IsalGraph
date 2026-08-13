@@ -35,6 +35,7 @@ def _write_shard(
     n_graphs: int,
     pairs: list[tuple[int, int]],
     values: list[float],
+    orientations: list[tuple[float, float]] | None = None,
 ) -> None:
     """Write a CONTRACT C shard for one dataset's slice of the subsample.
 
@@ -44,11 +45,18 @@ def _write_shard(
         n_graphs: Cohort size, needed to invert the linear index.
         pairs: ``(i, j)`` graph-index pairs.
         values: One upper bound per pair.
+        orientations: Optional ``(fwd, rev)`` per pair, as the runner writes
+            them under ``--record-orientations``.
     """
     idx = np.array([index_of_pair(i, j, n_graphs) for i, j in pairs], dtype=np.int64)
     m = len(pairs)
+    extra: dict[str, np.ndarray] = {}
+    if orientations is not None:
+        extra["ub_fwd"] = np.array([o[0] for o in orientations], dtype=np.float64)
+        extra["ub_rev"] = np.array([o[1] for o in orientations], dtype=np.float64)
     np.savez_compressed(
         path,
+        **extra,
         pair_index=idx,
         ged=np.full(m, np.inf, dtype=np.float64),
         lb=np.full(m, -np.inf, dtype=np.float64),
@@ -192,17 +200,46 @@ class TestJoin:
         assert meta["method"] == "REFINE"
         assert meta["options_string"] == "--threads 1"
 
-    def test_the_orientation_columns_are_nan_and_the_metadata_says_why(
+    def test_without_the_flag_the_orientation_columns_are_nan_and_say_so(
         self, campaign: tuple[Path, Path], tmp_path: Path
     ) -> None:
-        """CONTRACT C carries only the symmetrised ub; fabricating the two halves would lie."""
+        """Never synthesised from the symmetrised value.
+
+        Copying ``min(fwd, rev)`` into both columns would assert that the two
+        orientations agreed, which is a measurement nobody made.
+        """
         shards, listed = campaign
         out = tmp_path / "s.npz"
         meta = merge_subsample(shard_dir=shards, pair_list=listed, out=out)
         with np.load(out, allow_pickle=False) as data:
             assert np.isnan(data["value_fwd"]).all()
             assert np.isnan(data["value_rev"]).all()
-        assert "not retained" in meta["orientation_detail"]
+        assert "not recorded" in meta["orientation_detail"]
+        assert meta["n_orientations_recorded"] == 0
+
+    def test_recorded_orientations_are_carried_through(self, tmp_path: Path) -> None:
+        """The asymmetry the manuscript currently quotes from 400 LINUX pairs."""
+        shards = tmp_path / "shards"
+        shards.mkdir()
+        _write_shard(
+            shards / "linux_c0000.npz",
+            key="linux",
+            n_graphs=6,
+            pairs=[(0, 1), (2, 3)],
+            values=[5.0, 7.0],
+            orientations=[(5.0, 6.0), (9.0, 7.0)],
+        )
+        listed = tmp_path / "p.npz"
+        _write_pair_list(listed, [("linux", 2, 3, 9, 3), ("linux", 0, 1, 5, 1)])
+        out = tmp_path / "s.npz"
+        meta = merge_subsample(shard_dir=shards, pair_list=listed, out=out)
+        with np.load(out, allow_pickle=False) as data:
+            # Pair-list order: (2,3) first.
+            assert data["value_fwd"].tolist() == [9.0, 5.0]
+            assert data["value_rev"].tolist() == [7.0, 6.0]
+            assert data["value"].tolist() == [7.0, 5.0]
+        assert "recorded per pair" in meta["orientation_detail"]
+        assert meta["n_orientations_recorded"] == 2
 
 
 class TestJoinExactness:

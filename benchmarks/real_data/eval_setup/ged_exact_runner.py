@@ -56,7 +56,7 @@ import sys
 import time
 import zlib
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import FrameType
@@ -504,6 +504,11 @@ class PairOutcome:
         certified: Whether ``ged`` is a proven optimum.
         seconds: Per-pair wall time, required by the D12 censoring analysis.
         failed: Whether the backend raised on this pair.
+        ub_fwd: Upper bound in the ``(i, j)`` orientation, or ``NaN`` when the
+            backend did not report it. Never written to a shard unless
+            ``--record-orientations`` is given, so the six frozen CONTRACT C
+            arrays are unaffected.
+        ub_rev: Upper bound in the ``(j, i)`` orientation, or ``NaN``.
     """
 
     k: int
@@ -513,6 +518,8 @@ class PairOutcome:
     certified: bool
     seconds: float
     failed: bool = False
+    ub_fwd: float = float("nan")
+    ub_rev: float = float("nan")
 
 
 def _outcome_from_result(
@@ -604,20 +611,62 @@ class ShardData:
         """Number of rows accumulated."""
         return len(self.rows)
 
-    def arrays(self) -> dict[str, np.ndarray]:
+    def arrays(self, *, record_orientations: bool = False) -> dict[str, np.ndarray]:
         """Return the shard arrays, sorted ascending by pair index.
 
+        Args:
+            record_orientations: Also emit ``ub_fwd`` and ``ub_rev``. Off by
+                default, so a shard written without the flag carries exactly the
+                six frozen CONTRACT C keys and is byte-identical to what T-03
+                produced.
+
         Returns:
-            A dict with the six CONTRACT C data keys.
+            A dict with the six CONTRACT C data keys, plus two more when asked.
         """
         keys = sorted(self.rows)
-        return {
+        out = {
             "pair_index": np.asarray(keys, dtype=np.int64),
             "ged": np.asarray([self.rows[k].ged for k in keys], dtype=np.float64),
             "lb": np.asarray([self.rows[k].lb for k in keys], dtype=np.float64),
             "ub": np.asarray([self.rows[k].ub for k in keys], dtype=np.float64),
             "certified": np.asarray([self.rows[k].certified for k in keys], dtype=np.bool_),
             "seconds": np.asarray([self.rows[k].seconds for k in keys], dtype=np.float32),
+        }
+        if record_orientations:
+            out["ub_fwd"] = np.asarray([self.rows[k].ub_fwd for k in keys], dtype=np.float64)
+            out["ub_rev"] = np.asarray([self.rows[k].ub_rev for k in keys], dtype=np.float64)
+        return out
+
+    def orientation_stats(self) -> dict[str, Any]:
+        """Summarise the upper bound's asymmetry over this shard.
+
+        Returns:
+            Counts and magnitudes, or ``{}`` when no orientation was recorded.
+            Aggregate only: two more ``(N, N)`` matrices would cost roughly
+            243 MB on COIL-DEL alone for a quantity that is only ever reported
+            per dataset.
+        """
+        fwd = np.asarray([r.ub_fwd for r in self.rows.values()], dtype=np.float64)
+        rev = np.asarray([r.ub_rev for r in self.rows.values()], dtype=np.float64)
+        usable = np.isfinite(fwd) & np.isfinite(rev)
+        n = int(np.count_nonzero(usable))
+        if not n:
+            return {}
+        gap = np.abs(fwd[usable] - rev[usable])
+        # Key names match ged_merge_shards._orientation_summary exactly: the two
+        # describe the same statistic at different scopes, and two spellings of
+        # one quantity is how an analysis ends up silently reading neither.
+        return {
+            "n_pairs": n,
+            "n_asymmetric": int(np.count_nonzero(gap > 1e-9)),
+            "asymmetry_rate": float(np.count_nonzero(gap > 1e-9) / n),
+            "mean_abs_gap": float(gap.mean()),
+            "max_abs_gap": float(gap.max()),
+            # How often the reverse orientation supplied the tighter bound. At
+            # 0.5 the direction carries no information and either would do; far
+            # from 0.5 would mean the pair order itself is informative, which
+            # for an undirected cohort would be a bug worth knowing about.
+            "reverse_tighter_rate": float(np.count_nonzero(rev[usable] < fwd[usable] - 1e-9) / n),
         }
 
     @property
@@ -800,9 +849,15 @@ def _compute_one(k: int, graphs: list[nx.Graph], backend: GedBackend, n: int) ->
     t0 = time.perf_counter()
     try:
         res = backend.pair(graphs[i], graphs[j])
-        return _outcome_from_result(
+        outcome = _outcome_from_result(
             k, res, time.perf_counter() - t0, getattr(backend, "compute", None)
         )
+        # Read immediately after pair(): one backend serves one worker process,
+        # so nothing can interleave between the call and this read.
+        oriented = getattr(backend, "last_ub_orientations", None)
+        if oriented is not None:
+            outcome = replace(outcome, ub_fwd=float(oriented[0]), ub_rev=float(oriented[1]))
+        return outcome
     except Exception:  # noqa: BLE001 - one bad pair must not kill a 100-hour shard
         logger.exception("backend failed on pair k=%d (i=%d, j=%d)", k, i, j)
         return PairOutcome(
@@ -1239,6 +1294,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--role", default=None, help="role label recorded in the shard metadata")
     p.add_argument(
+        "--record-orientations",
+        action="store_true",
+        help=(
+            "also write ub_fwd and ub_rev per pair. Off by default, and with it off the "
+            "shard carries exactly the six frozen CONTRACT C arrays"
+        ),
+    )
+    p.add_argument(
         "--no-accessor-probe",
         action="store_true",
         help="skip the P4/C4 accessor probe; only for a backend that has no accessors",
@@ -1294,8 +1357,12 @@ def _shard_meta(
     """
     arrays = shard.arrays()
     n_cert = int(np.count_nonzero(arrays["certified"]))
+    # Aggregate only, and only when asked: with the flag off the meta is
+    # byte-identical to what T-03 wrote.
+    orientation = shard.orientation_stats() if getattr(args, "record_orientations", False) else {}
     return json.dumps(
         {
+            **({"ub_orientation": orientation} if orientation else {}),
             "dataset": dataset.key,
             "n_graphs": dataset.n_graphs,
             "backend": args.backend,
@@ -1411,7 +1478,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_FAILURE
 
     backend_name = args.backend_factory or args.backend
-    payload: dict[str, np.ndarray | np.generic] = dict(shard.arrays())
+    payload: dict[str, np.ndarray | np.generic] = dict(
+        shard.arrays(record_orientations=bool(args.record_orientations))
+    )
     payload["meta"] = np.array(
         _shard_meta(
             dataset=dataset,

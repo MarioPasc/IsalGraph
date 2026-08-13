@@ -940,6 +940,135 @@ class TestSubsamplePairList:
             _target_pairs(dataset, pair_list=str(listed), chunk_index=0, n_chunks=1)
 
 
+class TestOrientationRecording:
+    """``--record-orientations`` is opt-in and changes nothing when it is off."""
+
+    def _run(self, src: Path, out: Path, *extra: str) -> None:
+        assert (
+            main(
+                [
+                    "--input",
+                    str(src),
+                    "--out",
+                    str(out),
+                    "--backend",
+                    "stub",
+                    "--backend-factory",
+                    STUB_FACTORY_REF,
+                    "--workers",
+                    "1",
+                    "--log-level",
+                    "WARNING",
+                    *extra,
+                ]
+            )
+            == EXIT_OK
+        )
+
+    def test_the_flag_off_produces_the_six_frozen_arrays_only(self, tmp_path: Path) -> None:
+        """T-03's shard schema is untouched by anyone who does not ask for more."""
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(6, seed=11))
+        out = tmp_path / "s.npz"
+        self._run(src, out)
+        with np.load(out) as data:
+            assert set(data.files) == {
+                "pair_index",
+                "ged",
+                "lb",
+                "ub",
+                "certified",
+                "seconds",
+                "meta",
+            }
+            meta = json.loads(str(data["meta"]))
+        assert "ub_orientation" not in meta
+
+    def test_the_flag_off_is_byte_identical_to_a_run_without_the_flag_existing(
+        self, tmp_path: Path
+    ) -> None:
+        """Every array and the whole meta, field for field, modulo timestamps.
+
+        This is the regression guard for a closed ticket: a shard written today
+        without the flag must be the shard T-03 would have written.
+        """
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(6, seed=12))
+        a, b = tmp_path / "a.npz", tmp_path / "b.npz"
+        self._run(src, a)
+        self._run(src, b)
+        with np.load(a) as da, np.load(b) as db:
+            assert set(da.files) == set(db.files)
+            for name in da.files:
+                if name == "meta":
+                    continue
+                assert np.array_equal(da[name], db[name]), name
+            ma = json.loads(str(da["meta"]))
+            mb = json.loads(str(db["meta"]))
+        volatile = {"started_utc", "ended_utc", "hostname", "cpu_model"}
+        assert {k: v for k, v in ma.items() if k not in volatile} == {
+            k: v for k, v in mb.items() if k not in volatile
+        }
+
+    def test_the_flag_on_adds_exactly_two_arrays(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(6, seed=13))
+        out = tmp_path / "s.npz"
+        self._run(src, out, "--record-orientations")
+        with np.load(out) as data:
+            assert "ub_fwd" in data and "ub_rev" in data
+            assert data["ub_fwd"].shape == data["ub"].shape
+            assert data["ub_fwd"].dtype == np.float64
+
+    def test_a_backend_reporting_orientations_reaches_the_shard(self, tmp_path: Path) -> None:
+        """The stub reports none, so this uses one that does."""
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(5, seed=14))
+        dataset = load_contract_a(src)
+
+        class _Oriented:
+            name = "oriented"
+            compute = "both"
+            last_ub_orientations = (7.0, 5.0)
+
+            def pair(self, g1: nx.Graph, g2: nx.Graph) -> _Result:
+                return _Result(1.0, 5.0, None, False, 0.5, False, "oriented")
+
+        shard, _completed, _stats = run_chunk(
+            dataset=dataset,
+            pairs=np.arange(3, dtype=np.int64),
+            backend_spec=BackendSpec(name="stub"),
+            input_path=str(src),
+            workers=1,
+            checkpoint_path=None,
+            checkpoint_every=100,
+            backend_factory=lambda _spec: _Oriented(),
+        )
+        arrays = shard.arrays(record_orientations=True)
+        assert arrays["ub_fwd"].tolist() == [7.0, 7.0, 7.0]
+        assert arrays["ub_rev"].tolist() == [5.0, 5.0, 5.0]
+        stats = shard.orientation_stats()
+        assert stats["n_pairs"] == 3
+        assert stats["asymmetry_rate"] == 1.0
+        assert stats["mean_abs_gap"] == 2.0
+        assert stats["reverse_tighter_rate"] == 1.0
+
+    def test_orientation_stats_are_empty_without_recorded_values(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(5, seed=15))
+        dataset = load_contract_a(src)
+        shard, _c, _s = run_chunk(
+            dataset=dataset,
+            pairs=np.arange(3, dtype=np.int64),
+            backend_spec=BackendSpec(name="stub", factory_ref=STUB_FACTORY_REF),
+            input_path=str(src),
+            workers=1,
+            checkpoint_path=None,
+            checkpoint_every=100,
+        )
+        assert shard.orientation_stats() == {}
+
+
 class TestAccessorProbeAtCampaignInit:
     """A failed probe stops the campaign; it is not swallowed per pair."""
 

@@ -596,6 +596,55 @@ class TestZeroFractionGate:
         assert any("silently-zero-filled" in v for v in rep.violations)
 
 
+class TestOrientationSummary:
+    """The asymmetry statistic, aggregated and never densified."""
+
+    def test_the_summary_is_absent_when_no_shard_recorded_orientations(
+        self, shard_dir: Path
+    ) -> None:
+        out = shard_dir / "m.npz"
+        merge_shards(shard_dir=shard_dir, key="aids", n_graphs=N_GRAPHS, out=out)
+        with np.load(out) as data:
+            meta = json.loads(str(data["metadata"]))
+        assert meta["ub_orientation"] == {}
+
+    def test_the_summary_is_pooled_across_shards_without_a_new_matrix(self, tmp_path: Path) -> None:
+        """Four numbers in the metadata, not two more (N, N) arrays."""
+        _write_cohort(tmp_path / "linux.npz", key="linux")
+        pairs = np.arange(TOTAL, dtype=np.int64)
+        for t, chunk in enumerate(np.array_split(pairs, 2)):
+            payload: dict[str, np.ndarray | np.generic] = dict(_rows(chunk))
+            # fwd exceeds rev by 2 on every pair, so the reverse is always tighter.
+            payload["ub_fwd"] = payload["ub"] + 2.0
+            payload["ub_rev"] = payload["ub"].copy()
+            payload["meta"] = np.array(json.dumps({"cost_model": "unit"}))
+            np.savez_compressed(tmp_path / f"linux_c{t:04d}.npz", **payload)
+        out = tmp_path / "m.npz"
+        merge_shards(shard_dir=tmp_path, key="linux", n_graphs=N_GRAPHS, out=out)
+        with np.load(out) as data:
+            meta = json.loads(str(data["metadata"]))
+            assert "ub_fwd_matrix" not in data
+            assert "ub_rev_matrix" not in data
+            assert set(data.files) == {
+                "ged_matrix",
+                "lb_matrix",
+                "ub_matrix",
+                "certified_mask",
+                "seconds_matrix",
+                "node_counts",
+                "edge_counts",
+                "graph_ids",
+                "labels",
+                "metadata",
+            }
+        summary = meta["ub_orientation"]
+        assert summary["n_pairs"] == TOTAL
+        assert summary["asymmetry_rate"] == 1.0
+        assert summary["mean_abs_gap"] == 2.0
+        assert summary["max_abs_gap"] == 2.0
+        assert summary["reverse_tighter_rate"] == 1.0
+
+
 class TestOneSidedGate:
     """A single-role merge leaves the other end at its sentinel."""
 

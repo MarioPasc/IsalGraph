@@ -821,6 +821,7 @@ class GedlibBackend:
         "_env",
         "_gedlib_module",
         "_init_option",
+        "_last_ub_orientations",
         "_lb_method",
         "_lb_options",
         "_lb_symmetry_probes",
@@ -882,6 +883,7 @@ class GedlibBackend:
         self._env: Any = None
         self._reset_mode = "unknown"
         self._probed = False
+        self._last_ub_orientations: tuple[float, float] | None = None
         self.stats = BackendStats()
 
     @property
@@ -907,6 +909,31 @@ class GedlibBackend:
     def compute(self) -> str:
         """Which ends of the bracket this backend evaluates."""
         return self._compute
+
+    @property
+    def last_ub_orientations(self) -> tuple[float, float] | None:
+        """The two oriented upper bounds of the most recent :meth:`bounds` call.
+
+        Returns
+        -------
+        tuple of float, or None
+            ``(forward, reverse)``, or ``None`` when the last call computed no
+            upper bound.
+
+        Notes
+        -----
+        Exposed here rather than added to :class:`PairResult` because Contract B
+        is frozen at seven fields and ``ged_gates`` builds its payload by
+        iterating them. The caller reads this immediately after ``pair()``; one
+        backend serves one worker process, so there is no interleaving.
+
+        The quantity is worth carrying. An upper bound built from a *directed*
+        assignment is not symmetric, and the manuscript currently reports that
+        asymmetry from our own bipartite implementation over 400 LINUX pairs at
+        mean order 8.71 -- one small dataset quoted as a cohort property, which
+        is the pattern this revision exists to remove.
+        """
+        return self._last_ub_orientations
 
     @property
     def lb_options(self) -> str:
@@ -1126,12 +1153,14 @@ class GedlibBackend:
                 lb = max(lb, lb_rev)
 
         ub = _INF
+        self._last_ub_orientations = None
         if self._compute in ("both", "ub"):
             self._run(env, self._ub_method, self._ub_options, i0, i1)
             ub_fwd = self._read(env, i0, i1, "ub", self._ub_method, zero_ok)
             self._run(env, self._ub_method, self._ub_options, i1, i0)
             ub_rev = self._read(env, i1, i0, "ub", self._ub_method, zero_ok)
             self.stats.record_ub_orientations(ub_fwd, ub_rev)
+            self._last_ub_orientations = (float(ub_fwd), float(ub_rev))
             ub = min(ub_fwd, ub_rev)
 
         if self._compute != "both":
