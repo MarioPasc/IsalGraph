@@ -478,8 +478,71 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-14, amendment 5 — ⚠ AMENDMENT 4'S DIAGNOSIS IS WITHDRAWN. The cost is real; the cause
+  I gave for it was wrong.** Amendment 4 attributed the ~33× gap against T-27's 285 µs/pair to
+  per-pair GEDLIB environment rebuild, and I asked the PI to authorise a fix on that basis.
+  `t05-cohort-env` challenged it, and I settled it by measuring on Picasso rather than adjudicating
+  between two local runs — the machine was the confound.
+
+  **Picasso, IAM Protein, 2,000 seeded pairs, one process, same pairs through both paths:**
+
+  | | µs/pair | share |
+  |---|---:|---:|
+  | per-pair total | 9,502 | |
+  | ├ env setup (`restart_env` + 2 × `add_nx_graph` + `init` + `set_method`) | 2,077 | **22 %** |
+  | └ **`BRANCH_FAST` solve** | **7,424** | **78 %** |
+  | cohort mode | 7,366 | |
+  | **speed-up** | | **1.29×** |
+
+  Reproduced independently by the agent across three roles and three datasets: the saving is a flat
+  per-pair constant **equal to the bare rebuild** — 276.4 µs measured directly on Protein against
+  278–287 µs observed, 185.1 µs on Mutagenicity against 183–190 µs, agreeing within 3 % across roles
+  whose totals span 6×. So the gain is largest where the solve is cheapest: `lb` 1.79–5.77×,
+  `ub` 1.36–2.09×, `ubs` **1.08–1.33×**.
+
+  **The real cause of the gap** is the one T-27 stated and I under-weighted. Its cost probe was
+  **160 graphs with `25 ≤ n ≤ 35`**, while Protein's real pair population runs to `n = 96` with its
+  mass in the `[30,50)` bins. T-27 limitation 3: *"the Suite-2 projections in §5 are lower bounds on
+  true cost."* I quoted that sentence in this note and still built a projection that ignored it.
+
+  **A second hypothesis was also wrong** and is recorded so neither is repeated: the agent proposed
+  that the gap was `--compute both` invoking `IPFP`. The cancelled job's own metadata says
+  `compute: lb`, `method: BRANCH_FAST`, `ub_matrix` all `+inf` — `IPFP` was never invoked.
+
+  **What survives.** Amendment 4's *measured* numbers stand: 18.58 ms/pair on Protein, the per-bin
+  curve, and **70 core-h for `lb`** summed against the bin table. Cohort mode is kept — parity-exact
+  on two machines, ~1.3× on the expensive datasets, one less per-pair failure surface — but it is
+  **opt-in** (`--env-mode`, default `per-pair`) so T-03 is untouched, and it does **not** materially
+  change the campaign's cost. **The campaign is ~810 core-h, not ~25.**
+
+- **2026-08-14, amendment 6 — `IPFP` at T-03's default options is irreproducible, and it reaches
+  the published D11 intervals.** `--ub-options "--threads 1"` leaves `IPFP` on GEDLIB's
+  `--randomness REAL` default. Measured over five fresh runs per string:
+
+  | Population | `--threads 1` | frozen `--randomness PSEUDO --initial-solutions 10` |
+  |---|---|---|
+  | LINUX, all 3,916 pairs | **74.2 %** of values change, max spread 10 | **0.0 %**, 5/5 bit-identical |
+  | AIDS, 400 censored pairs | **82.0 %** change, max spread 6 | **0.0 %**, 5/5 bit-identical |
+
+  Consistent with T-27 §4.2, which measured GEDLIB's `LSBasedMethod` upper bounds changing on
+  **91.5–93.6 %** of pairs at library defaults. The spurious `P₄`/`C₄` accessor-probe failures
+  (10/40 per-pair, 5/40 cohort) are the same defect surfacing at init, so **any `--compute both`
+  campaign at T-03's defaults can abort on a probe that is not actually broken.**
+
+  **The blast radius is bounded, and orchestrator-verified rather than argued.**
+  `ExactPlusBoundsBackend` takes `ub = min(IPFP, A* cost)`, so on a certified pair the recorded upper
+  bound *is* the exact value. Checked directly against T-03's census: `ub_matrix == ged_matrix` on
+  **all 234,258 certified AIDS pairs and all 3,870 certified LINUX pairs**. Every censored pair
+  carries a non-finite `ged` with finite bounds. **So the exposure is exactly the D11 interval upper
+  ends — 61,038 AIDS and 46 LINUX — and nothing else.** A rerun today reproduces T-03's recorded `ub`
+  on ~47 % (AIDS) and ~67 % (LINUX) of them; the lower ends (`BRANCH_FAST`) were 5/5 identical.
+
+  Not fixed here: T-03's file is a closed ticket's artifact. **Owner: T-03 / T-06.** The repair is
+  61,084 pairs under the frozen `PSEUDO` string, not 21.7 M — hours, not a campaign.
+
 - **2026-08-13, amendment 4 — §5's cost model was wrong by ~20×, and the cause is a conformance
   failure against §5's own text. Measured on Picasso, not projected.**
+  ⚠ **Its diagnosis is superseded by amendment 5; its measurements stand.**
 
   Job `1990832` (`aged-lb`, 1 core, `sr008`) ran the real campaign far enough to measure two datasets
   before being cancelled. **IAM Protein: 161,596 pairs in 3,002 s on one core = 18.58 ms/pair** at

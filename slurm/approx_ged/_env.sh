@@ -41,6 +41,15 @@ export PYTHONUNBUFFERED=1
 # and the merge prefers it over rev-parse. Provenance naming the wrong commit is worse
 # than none, because it looks checkable.
 export ISALGRAPH_CODE_COMMIT="${ISALGRAPH_CODE_COMMIT:-unknown-rsync-checkout}"
+# One GEDLIB environment per dataset rather than a rebuild per pair. Proven output-
+# preserving: cohort mode reproduces T-27's LINUX census byte-for-byte on all three
+# roles (sha256 identical, max abs diff 0.0), verified on two machines. The runner
+# still DEFAULTS to per-pair so T-03's behaviour is untouched; this campaign opts in.
+# Worth 1.8-5.8x on `lb` and ~1.1x on `ubs` -- the saving is a flat per-pair constant
+# equal to the bare rebuild (276 us on protein), so it matters most where the solve is
+# cheapest. It is NOT the 33x an earlier diagnosis claimed; measured on Picasso the
+# rebuild is 22% of per-pair cost and the solve is 78%.
+export ENV_MODE="${ENV_MODE:-cohort}"
 # Every solver here runs single-threaded per pool worker; the parallelism is the process
 # pool and `--threads 1` inside every GEDLIB options string (CONTRACTS.md §3). Letting
 # BLAS spawn threads inside N pool workers oversubscribes badly.

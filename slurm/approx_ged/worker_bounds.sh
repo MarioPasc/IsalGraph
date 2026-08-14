@@ -55,13 +55,13 @@ probe_role() {
     if [[ "${compute}" == "lb" ]]; then
         run_py benchmarks.real_data.eval_setup.ged_exact_runner \
             "${args[@]}" --out "${probe_out}" \
-            --backend gedlib --cost-model unit --compute lb --role "${role}" \
+            --backend gedlib --cost-model unit --compute lb --role "${role}" --env-mode "${ENV_MODE}" \
             --lb-method "${method}" --lb-options "${options}" \
             --workers 1 || { echo "[probe:${role}] FAILED -- production is not attempted" >&2; return 1; }
     else
         run_py benchmarks.real_data.eval_setup.ged_exact_runner \
             "${args[@]}" --out "${probe_out}" \
-            --backend gedlib --cost-model unit --compute ub --role "${role}" \
+            --backend gedlib --cost-model unit --compute ub --role "${role}" --env-mode "${ENV_MODE}" \
             --ub-method "${method}" --ub-options "${options}" \
             --workers 1 || { echo "[probe:${role}] FAILED -- production is not attempted" >&2; return 1; }
     fi
@@ -106,7 +106,7 @@ produce_role() {
                 --input "${DATA_DIR}/${key}.npz" \
                 --out "${shards}/${key}_c0000.npz" \
                 --backend gedlib --cost-model unit \
-                --compute lb --role "${role}" \
+                --compute lb --role "${role}" --env-mode "${ENV_MODE}" \
                 --lb-method "${method}" --lb-options "${options}" \
                 --chunk-index 0 --n-chunks 1 \
                 --workers "${W}" \
@@ -117,7 +117,7 @@ produce_role() {
                 --input "${DATA_DIR}/${key}.npz" \
                 --out "${shards}/${key}_c0000.npz" \
                 --backend gedlib --cost-model unit \
-                --compute ub --role "${role}" \
+                --compute ub --role "${role}" --env-mode "${ENV_MODE}" \
                 --ub-method "${method}" --ub-options "${options}" \
                 --chunk-index 0 --n-chunks 1 \
                 --workers "${W}" \
