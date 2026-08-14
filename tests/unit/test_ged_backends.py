@@ -110,6 +110,14 @@ class _FakeEnv:
         self.last_run = (i, j)
 
     def _value(self, accessor: str, i: int, j: int) -> float:
+        # ``graph_values`` keys on the two GRAPHS rather than on their ids. It is
+        # what the cohort-mode tests need: a cohort environment addresses graph
+        # 3 as id 3, a per-pair environment addresses the same graph as id 1, so
+        # an id-keyed fake would report a difference the real library does not
+        # have and the comparison would be vacuous.
+        graph_table = self.behaviour.get("graph_values", {}).get(self.method)
+        if graph_table is not None and accessor in graph_table:
+            return float(graph_table[accessor](self.graphs[i], self.graphs[j]))
         table = self.behaviour["values"][self.method]
         entry = table[accessor]
         return float(entry((i, j)) if callable(entry) else entry)
@@ -978,3 +986,257 @@ class TestAccessorProbe:
         backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub")
         with pytest.raises(GedBackendError, match="accessor probe failed"):
             backend.probe_accessors()
+
+    def test_the_probe_still_fires_in_cohort_mode(self, fake_gedlib: _InstallFake) -> None:
+        """Cohort mode changes when the environment is built, not what is checked.
+
+        The probe is the only thing standing between a wrong accessor and a
+        finished matrix of zeros, and it is the one guard a "build the
+        environment differently" change could plausibly bypass.
+        """
+        fake_gedlib({"values": {"BRANCH_FAST": {"lb": 1.0, "ub": 0.0}}})
+        good = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort")
+        assert good.probe_accessors() == {"lb": 1.0}
+
+        bad = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort")
+        object.__setattr__(bad, "_lb_method", "STAR")  # no values -> reads as a miss
+        fake_gedlib({"values": {"STAR": {"lb": 0.0, "ub": 0.0}}})
+        with pytest.raises(GedBackendError, match="accessor probe failed"):
+            bad.probe_accessors()
+
+
+# --------------------------------------------------------------------------
+# T-05: one environment per dataset instead of one per pair
+# --------------------------------------------------------------------------
+
+
+def _cohort_behaviour() -> dict[str, Any]:
+    """Bounds that are a function of the two graphs, so a mis-pairing shows.
+
+    A constant would make every pairing look correct. Keying on the graphs
+    rather than on their ids is what lets the same value be demanded of both
+    environment modes, which address the same graph by different ids. The upper
+    bound is deliberately orientation-dependent, so dropping one orientation
+    changes the answer.
+    """
+    return {
+        "values": {"BRANCH_FAST": {"ub": 0.0}, "BIPARTITE": {"lb": 0.0}},
+        "graph_values": {
+            "BRANCH_FAST": {"lb": lambda a, b: 1.0 + min(a.number_of_nodes(), b.number_of_nodes())},
+            "BIPARTITE": {
+                "ub": lambda a, b: 10.0 + a.number_of_nodes() + 2.0 * b.number_of_edges()
+            },
+        },
+    }
+
+
+#: Five graphs that are pairwise non-isomorphic, so no zero bound is ever legal.
+COHORT = [
+    nx.path_graph(4),
+    nx.cycle_graph(4),
+    nx.star_graph(4),
+    nx.complete_graph(4),
+    nx.path_graph(5),
+]
+
+
+class TestCohortMode:
+    """``env_mode='cohort'`` computes what ``'per-pair'`` computes, faster."""
+
+    def test_per_pair_is_the_default(self, fake_gedlib: _InstallFake) -> None:
+        """T-03's behaviour is what a caller passing nothing still gets."""
+        fake_gedlib()
+        assert GedlibBackend(UNIT_COSTS).env_mode == "per-pair"
+
+    def test_an_unknown_env_mode_is_refused(self) -> None:
+        with pytest.raises(GedBackendError, match="env_mode must be one of"):
+            GedlibBackend(UNIT_COSTS, env_mode="one-env")
+
+    def test_the_environment_is_built_once_for_the_whole_cohort(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """The defect this change fixes: N graphs added once, ``init`` called once."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="fake")
+        env = backend.env()
+        restarts_after_load = env.n_restarts
+        inits_after_load = sum(1 for c in env.calls if c[0] == "init")
+        adds_after_load = sum(1 for c in env.calls if c[0] == "add_nx_graph")
+
+        for i in range(len(COHORT)):
+            for j in range(i + 1, len(COHORT)):
+                backend.bounds_by_index(i, j)
+
+        assert env.n_restarts == restarts_after_load, "no environment reset during the run"
+        assert sum(1 for c in env.calls if c[0] == "init") == inits_after_load
+        assert sum(1 for c in env.calls if c[0] == "add_nx_graph") == adds_after_load
+        assert len(env.graphs) == len(COHORT)
+        assert backend.cohort_size == len(COHORT)
+        assert backend.cohort_key == "fake"
+
+    def test_cohort_equals_per_pair_on_every_pair(self, fake_gedlib: _InstallFake) -> None:
+        """The acceptance criterion, in miniature: identical values, both ends.
+
+        Verified for real on all 3,916 LINUX pairs against GEDLIB itself -- max
+        abs diff 0.0 and identical sha256 for the ``lb``, ``ub`` and ``ubs``
+        roles, each also matching T-27's recorded census. This test is what
+        keeps that property from regressing on a machine with no GEDLIB.
+        """
+        fake_gedlib(_cohort_behaviour())
+        kwargs: dict[str, Any] = {
+            "lb_method": "BRANCH_FAST",
+            "ub_method": "BIPARTITE",
+            "lb_symmetry_probes": 3,
+        }
+        per_pair = GedlibBackend(UNIT_COSTS, env_mode="per-pair", **kwargs)
+        cohort = GedlibBackend(UNIT_COSTS, env_mode="cohort", **kwargs)
+        cohort.load_cohort(COHORT, key="fake")
+
+        for i in range(len(COHORT)):
+            for j in range(i + 1, len(COHORT)):
+                assert cohort.bounds_by_index(i, j) == per_pair.bounds(COHORT[i], COHORT[j])
+        assert cohort.stats.as_dict() == per_pair.stats.as_dict()
+
+    def test_both_upper_bound_orientations_are_still_run(self, fake_gedlib: _InstallFake) -> None:
+        """A proven-bound requirement, not an optimisation cohort mode may drop."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub", env_mode="cohort")
+        backend.load_cohort(COHORT, key="fake")
+        backend.bounds_by_index(1, 3)
+        runs = [c[1] for c in backend.env().calls if c[0] == "run_method"]
+        assert ("BIPARTITE", 1, 3) in runs and ("BIPARTITE", 3, 1) in runs
+        fwd, rev = backend.last_ub_orientations  # type: ignore[misc]
+        assert backend.bounds_by_index(1, 3)[1] == min(fwd, rev)
+
+    def test_set_method_is_hoisted_out_of_the_pair_loop(self, fake_gedlib: _InstallFake) -> None:
+        """One configuration for a single-role campaign, not one per pair."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="fake")
+        for i in range(len(COHORT)):
+            for j in range(i + 1, len(COHORT)):
+                backend.bounds_by_index(i, j)
+        env = backend.env()
+        assert sum(1 for c in env.calls if c[0] == "set_method") == 1
+        assert sum(1 for c in env.calls if c[0] == "init_method") == 1
+        assert sum(1 for c in env.calls if c[0] == "run_method") >= 10
+
+    def test_the_hoist_can_be_switched_off_and_changes_no_value(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """Whether re-configuring per pair matters is measured, not assumed."""
+        fake_gedlib(_cohort_behaviour())
+        kwargs: dict[str, Any] = {
+            "lb_method": "BRANCH_FAST",
+            "compute": "lb",
+            "env_mode": "cohort",
+        }
+        hoisted = GedlibBackend(UNIT_COSTS, hoist_methods=True, **kwargs)
+        plain = GedlibBackend(UNIT_COSTS, hoist_methods=False, **kwargs)
+        for backend in (hoisted, plain):
+            backend.load_cohort(COHORT, key="fake")
+        for i in range(len(COHORT)):
+            for j in range(i + 1, len(COHORT)):
+                assert hoisted.bounds_by_index(i, j) == plain.bounds_by_index(i, j)
+        assert sum(1 for c in hoisted.env().calls if c[0] == "set_method") == 1
+        assert sum(1 for c in plain.env().calls if c[0] == "set_method") > 1
+
+    def test_a_second_dataset_replaces_the_first_in_the_same_worker(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """A worker that moves to another cohort must not keep the old graph ids."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="first")
+        assert backend.cohort_size == 5
+        first = backend.bounds_by_index(0, 1)
+
+        backend.load_cohort(COHORT[:3], key="second")
+        assert backend.cohort_key == "second"
+        assert backend.cohort_size == 3
+        assert len(backend.env().graphs) == 3, "the previous cohort must not still be present"
+        assert backend.bounds_by_index(0, 1) == first
+        with pytest.raises(GedBackendError, match="out of range"):
+            backend.bounds_by_index(0, 4)
+
+    def test_the_probe_discards_the_cohort_rather_than_leaving_stale_ids(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """``probe_accessors`` empties the environment; it must say so, not lie."""
+        fake_gedlib(_default_behaviour())  # a behaviour whose P4/C4 probe passes
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="fake")
+        backend.probe_accessors()
+        assert backend.cohort_size == 0
+        with pytest.raises(GedBackendError, match="no cohort is loaded"):
+            backend.bounds_by_index(0, 1)
+
+    def test_computing_by_index_without_a_cohort_raises(self, fake_gedlib: _InstallFake) -> None:
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        with pytest.raises(GedBackendError, match="no cohort is loaded"):
+            backend.bounds_by_index(0, 1)
+
+    def test_a_per_pair_backend_refuses_the_cohort_api(self, fake_gedlib: _InstallFake) -> None:
+        """It would rebuild the environment on the next call and lose the cohort."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb")
+        with pytest.raises(GedBackendError, match="requires env_mode='cohort'"):
+            backend.load_cohort(COHORT, key="fake")
+        with pytest.raises(GedBackendError, match="requires env_mode='cohort'"):
+            backend.bounds_by_index(0, 1)
+
+    def test_the_read_guards_are_unchanged_in_cohort_mode(self, fake_gedlib: _InstallFake) -> None:
+        """An impossible zero upper bound is still the wrong-accessor signature."""
+        fake_gedlib({"values": {"BIPARTITE": {"lb": 0.0, "ub": 0.0}}})
+        backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub", env_mode="cohort")
+        backend.load_cohort(COHORT, key="fake")
+        with pytest.raises(GedBackendError, match="wrong accessor"):
+            backend.bounds_by_index(0, 1)  # P4 vs C4: a zero distance is impossible
+
+    def test_a_legal_zero_is_still_accepted_in_cohort_mode(self, fake_gedlib: _InstallFake) -> None:
+        """Suite 1 alone has 306,768 certified off-diagonal pairs at exact GED 0."""
+        fake_gedlib({"values": {"BIPARTITE": {"lb": 0.0, "ub": 0.0}}})
+        backend = GedlibBackend(UNIT_COSTS, ub_method="BIPARTITE", compute="ub", env_mode="cohort")
+        backend.load_cohort([nx.cycle_graph(4), nx.cycle_graph(4)], key="dupes")
+        assert backend.bounds_by_index(0, 1) == (-math.inf, 0.0)
+
+    def test_pair_by_index_returns_a_seven_field_result(self, fake_gedlib: _InstallFake) -> None:
+        """Contract B is frozen; cohort mode does not get an eighth field."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="fake")
+        res = backend.pair_by_index(0, 2)
+        assert isinstance(res, PairResult)
+        assert res.computed == "lb" and res.exact is None and res.certified is False
+        assert backend.stats.as_dict()["n_pairs"] == 1
+
+    def test_the_specification_records_the_env_mode(self, fake_gedlib: _InstallFake) -> None:
+        """A shard must say which call sequence produced it."""
+        fake_gedlib(_cohort_behaviour())
+        assert GedlibBackend(UNIT_COSTS).specification()["env_mode"] == "per-pair"
+        assert GedlibBackend(UNIT_COSTS, env_mode="cohort").specification()["env_mode"] == "cohort"
+
+    def test_the_cost_model_and_init_option_are_unchanged(self, fake_gedlib: _InstallFake) -> None:
+        """D6 and the verified init option survive the environment change."""
+        fake_gedlib(_cohort_behaviour())
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        backend.load_cohort(COHORT, key="fake")
+        env = backend.env()
+        assert env.edit_cost == ("CONSTANT", [1.0, 1.0, 0.0, 1.0, 1.0, 0.0])
+        assert env.init_option == "EAGER_WITHOUT_SHUFFLED_COPIES"
