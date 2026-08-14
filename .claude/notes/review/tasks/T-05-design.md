@@ -478,6 +478,58 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-13, amendment 4 — §5's cost model was wrong by ~20×, and the cause is a conformance
+  failure against §5's own text. Measured on Picasso, not projected.**
+
+  Job `1990832` (`aged-lb`, 1 core, `sr008`) ran the real campaign far enough to measure two datasets
+  before being cancelled. **IAM Protein: 161,596 pairs in 3,002 s on one core = 18.58 ms/pair** at
+  n̄ = 31.68. T-27 §5 measured `BRANCH_FAST` at **285 µs/pair** at n̄ = 29.51. That is a **~33× gap at
+  the same graph size**, and it is not cluster slowness.
+
+  **Cause.** `GedlibBackend.bounds()` calls `_fresh_env()` → `env.restart_env()` **per pair**
+  (`ged_backends.py:~1006-1014`) and re-adds both graphs, so all 21,710,892 pairs rebuild the GEDLIB
+  environment. T-27's bake-off builds **one env per dataset** and calls `run_method(i, j)`, which is
+  where its 285 µs comes from. Invisible in T-03, where a pair cost ~6.5 s of exact A* and the
+  rebuild was noise; at ~100 µs of actual solving it *is* the cost.
+
+  > **§5 already required the opposite** — *"Each worker holds one `GEDEnvGXL` built once per process
+  > — GEDLIB env construction is not free and must not be per-pair."* The requirement was written and
+  > never verified against the implementation, which inherited T-03's per-pair pattern. **Stating a
+  > performance requirement in a design note is not the same as checking it.**
+
+  **The measured cost curve.** Per-bin mean seconds from Protein's own `seconds_matrix`
+  (161,596 real timings, binned on `max(n₁,n₂)` with the §1.1 edges):
+
+  | bin | `[2,4)` | `[10,12)` | `[20,25)` | `[30,40)` | `[50,60)` | `[80,99)` |
+  |---|---:|---:|---:|---:|---:|---:|
+  | ms/pair | 1.49 | 3.19 | 8.50 | 15.74 | 27.39 | 40.53 |
+
+  **Log–log slope 1.12**, where `BRANCH_FAST` is `O(n²Δ² + n³)`. The near-linearity is the signature
+  of the defect: a ~1.5 ms/pair fixed cost dominates the solver at every size in this cohort.
+
+  **Four estimates of the same quantity, and why they differ** — `lb` over all 21,710,892 pairs:
+
+  | Estimate | Value | Why it is wrong or right |
+  |---|---:|---|
+  | Board / `approx_ged.md` | 0.57 core-h | predates T-27; ~100 µs/pair was never measured |
+  | §5 projection | 3.4 core-h | T-27's rate, which assumes cohort-mode env |
+  | naive `n̄³` scaling | 46 core-h | ignores Jensen and the fixed cost |
+  | worker's flat probe | 96 core-h | **mean rate × 21.7 M** — the probe is equal-per-bin and over-weights large `n` ~22×, exactly as `wave-t05-export` warned |
+  | **measured, summed per bin** | **70 core-h** | Protein's measured per-bin curve against the real bin table |
+
+  Extrapolating by T-27's method ratios, the four roles as-implemented cost **~810+ core-hours**
+  against **~25** with env reuse. **PI decision 2026-08-13: fix env reuse before the campaign runs.**
+  Parity is checkable rather than hoped-for — T-27 ran cohort-mode and the per-pair runner reproduces
+  it byte-identically, so the two modes are *already known to agree* on 3,916 LINUX pairs.
+
+  **Two smaller consequences.** The worker's probe print projects a flat mean × total pairs, a method
+  already established as wrong by ~22× on this cohort; it is advisory only (the launcher sizes per
+  bin) but should not compute a number that alarming a way we know is invalid. And the Picasso
+  checkout is populated by `rsync`, so `git rev-parse` names whatever was last *pulled* there — the
+  banner announced `d6a9f4b` while running code eleven commits ahead. `ISALGRAPH_CODE_COMMIT` now
+  takes precedence; **provenance that names the wrong commit is worse than none, because it looks
+  checkable.**
+
 - **2026-08-13, amendment 3 — two negative results from wave `2026-08-13-t05-bounds`, both
   correcting something this project had written down. Orchestrator re-measured both.**
 
