@@ -5,9 +5,12 @@
 # 12,600-task pattern SCBI wrote to this account about on 2026-08-07 is exactly what
 # splitting six rungs into six submissions would recreate.
 #
-# NO #SBATCH HEADER. The launcher supplies every resource flag on the sbatch command
+# NO RESOURCE HEADER. The launcher supplies every resource flag on the sbatch command
 # line, the same convention slurm/exact_ged/ established and the one that lets a single
 # launcher dispatch heterogeneously-sized jobs without headers drifting apart.
+# `test_workers_carry_no_sbatch_header` greps every worker for the directive token as a
+# literal, so do not write it here even inside a comment -- the test cannot distinguish a
+# comment from a directive, and it is right not to try.
 #
 # THIS SCRIPT SUBMITS NOTHING. It is the payload; the orchestrator owns submission.
 #
