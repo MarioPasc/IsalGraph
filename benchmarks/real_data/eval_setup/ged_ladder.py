@@ -86,6 +86,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,7 @@ _COST_MODELS: dict[str, EditCosts] = {"unit": UNIT_COSTS, "graphedx": GRAPHEDX_C
 # --------------------------------------------------------------------------- #
 
 
+@cache
 def _code_commit() -> str:
     """Return the commit that is *running*, not the one ``.git`` happens to hold.
 
@@ -187,6 +189,15 @@ def _code_commit() -> str:
     whatever was last pulled there. Measured 2026-08-13: a banner announced
     ``d6a9f4b`` while executing code eleven commits ahead. Provenance that names
     the wrong commit is worse than none, because it looks checkable.
+
+    **Cached, and warmed by** :func:`main` **before any pair is solved.** The
+    first version of this function resolved the commit at metadata-build time,
+    which is after the rung has run. My own rung-13 pilot then recorded a commit
+    three commits ahead of the code that produced it, because the working tree
+    moved while the ladder was solving. That is the same class of defect as the
+    ``rsync``-pinned banner, arriving from the opposite direction, and a run
+    spanning hours is exactly where it bites: caching pins the answer to when the
+    process started, which is the last moment at which it is certainly right.
 
     Returns
     -------
@@ -1289,6 +1300,11 @@ def main(argv: list[str] | None = None) -> int:
     rungs = _parse_rungs(args.rungs)
     exported_dir = Path(args.exported_dir)
     out_dir = Path(args.out_dir)
+
+    # Pin the commit BEFORE any pair is solved. A ladder runs for hours and the
+    # working tree can move under it; resolving this at metadata-build time made
+    # my own rung-13 pilot name a commit three ahead of the code that ran it.
+    logger.info("code commit %s", _code_commit())
 
     present = [k for k in SUITE2_KEYS if (exported_dir / f"{k}.npz").is_file()]
     if not present:
