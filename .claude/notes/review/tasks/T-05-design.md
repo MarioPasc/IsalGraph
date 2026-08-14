@@ -478,6 +478,42 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-14, amendment 7 — the measured cost table. This supersedes §5's projections; do not
+  quote §5's core-hour figures.** Every rate below is from a Picasso `sr` core (AMD EPYC 7H12) in
+  **cohort** env mode, anchored on IAM Protein's 161,596 pairs, which all four roles ran.
+
+  | Role | Method | Protein, measured | Suite-2 total | §5 said | miss |
+  |---|---|---:|---:|---:|---:|
+  | `lb` | `BRANCH_FAST` | **14.0 ms/pair** | ~47 core-h | 3.4 | 14× |
+  | `ub` | `BIPARTITE` ×2 | — | ~113 core-h | 8.4 | 13× |
+  | `ubs` | `BP_BEAM_DET` ×2 | **163.7 ms/pair** | ~381 core-h | 28 | 14× |
+  | `ubt` | `IPFP_MS` ×2, 28,000-pair subsample | *ratio estimate* | **~886 core-h** | 93 | **9.5×** |
+  | | | | **≈ 1,590 core-h** | 133 + ladder | |
+
+  **Every method costs ~13–14× more at real Suite-2 sizes than T-27's §5 gate probe implied, and the
+  factor is remarkably consistent across three independently measured methods.** That is T-27
+  limitation 3 — *"the cost gate is evaluated at n̄ = 29.5 … the Suite-2 projections in §5 are lower
+  bounds on true cost"* — quantified. The probe was **160 graphs with `25 ≤ n ≤ 35`**; Suite 2 runs
+  to `n = 98`. **A future ticket should read that limitation as "×13", not as a caveat.**
+
+  **The measured method ratios also drift from T-27's**, in the same direction:
+
+  | Ratio | T-27 §5 | measured on Protein |
+  |---|---:|---:|
+  | `ubs` / `lb` | 8.15× | **11.7×** |
+
+  > ⚠ **`ubt`'s 886 core-h is a RATIO estimate, not a measurement, and is the weakest number in this
+  > ticket.** It chains the measured `ubs` rate through T-27's `IPFP_MS`/`BP_BEAM_DET` ratio of
+  > **696×**, and T-27's `IPFP_MS` figure came from the same narrow band that just proved a ×13
+  > underestimate for `BRANCH_FAST`. The caveat is written into
+  > `datasets/isalgraph/suite2/probe_measured.json` itself, not only here, so it cannot be read as
+  > measured. Sized at 128 cores / 6.92 h projected into a **24 h** wallclock — 3.5× headroom — with
+  > checkpointing every 2,000 pairs, so a 3× miss costs wall time, not work.
+
+  **Total ≈ 1,590 core-h against §5's 430–630.** Under T-03's 2,081 and under the ~5,000 threshold
+  at which this ticket escalates, so the campaign proceeded; recorded because the arm scope was
+  approved on the smaller figure.
+
 - **2026-08-14, amendment 5 — ⚠ AMENDMENT 4'S DIAGNOSIS IS WITHDRAWN. The cost is real; the cause
   I gave for it was wrong.** Amendment 4 attributed the ~33× gap against T-27's 285 µs/pair to
   per-pair GEDLIB environment rebuild, and I asked the PI to authorise a fix on that basis.
