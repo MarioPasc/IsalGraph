@@ -39,6 +39,19 @@ mkdir -p "${DEST}"
     echo "FATAL: --pair-list and --out resolve to the same file. Refusing." >&2
     exit 2
 }
+# The per-dataset lists the compute loop consumes. The pooled PAIR_LIST above is the
+# MERGER's input; these ten are the RUNNER's. Both come from the same seed-42 draw.
+PAIR_LIST_DIR="$(dirname "${PAIR_LIST}")/pair_lists"
+[[ -d "${PAIR_LIST_DIR}" ]] || {
+    echo "FATAL: no per-dataset pair lists at ${PAIR_LIST_DIR}." >&2
+    echo "       The runner loads one cohort per invocation and a linear pair_index is" >&2
+    echo "       meaningless without the cohort it indexes, so the pooled list alone is" >&2
+    echo "       not sufficient. Emitted by the sampler alongside subsample_pairs.npz." >&2
+    exit 2
+}
+N_LISTS=$(find "${PAIR_LIST_DIR}" -maxdepth 1 -name '*.npz' | wc -l)
+(( N_LISTS > 0 )) || { echo "FATAL: ${PAIR_LIST_DIR} holds no .npz pair lists" >&2; exit 2; }
+echo "pair-list-dir=${PAIR_LIST_DIR} (${N_LISTS} datasets)"
 
 echo "role=${ROLE} method=${METHOD} options='${OPTIONS}'"
 echo "pair-list=${PAIR_LIST}"
@@ -51,20 +64,34 @@ print(f'[pairs] {z[\"pair_i\"].shape[0]} pairs, keys={sorted(z.files)}')" "${PAI
 SHARDS="${MYLOCAL}/shards_${ROLE}"
 mkdir -p "${SHARDS}"
 
-# The subsample is pooled across datasets by construction (CONTRACTS §5), so this is one
-# flat run over the pair list, not a loop over the ten datasets. UB_TIGHT/ holds ONE flat
-# file, not ten: a dense per-dataset matrix would be 99.9 % missing.
-run_py benchmarks.real_data.eval_setup.ged_exact_runner \
-    --input "${DATA_DIR}" \
-    --pair-list "${PAIR_LIST}" \
-    --out "${SHARDS}/${ROLE}_c0000.npz" \
-    --backend gedlib --cost-model unit \
-    --compute ub --role "${ROLE}" \
-    --ub-method "${METHOD}" --ub-options "${OPTIONS}" \
-    --chunk-index 0 --n-chunks 1 \
-    --workers "${W}" \
-    --checkpoint-every "${CHECKPOINT_EVERY:-2000}" \
-    --checkpoint "${SHARDS}/${ROLE}.ckpt.npz"
+# 🔴 The OUTPUT is pooled across the ten datasets (CONTRACTS §5); the COMPUTATION is not,
+# and conflating the two failed on first contact with the cluster (job 1993159,
+# "[Errno 21] Is a directory"). The runner loads ONE exported cohort per invocation, and a
+# linear `pair_index` is meaningful only relative to the cohort it indexes -- two datasets
+# reuse the same index for different pairs. So this loops over the ten per-dataset lists
+# the sampler emitted for exactly this purpose, writing one shard per dataset.
+#
+# The merger then joins on the composite (dataset_key, i, j), recovering `dataset` and
+# `n_graphs` from each shard's own meta, which the runner copies from its --input. That is
+# what makes the pooled output unambiguous. Do not collapse this back into one call.
+for LIST in "${PAIR_LIST_DIR}"/*.npz; do
+    KEY="$(basename "${LIST}" .npz)"
+    INPUT="${DATA_DIR}/${KEY}.npz"
+    [[ -f "${INPUT}" ]] || { echo "FATAL: no exported cohort ${INPUT} for pair list ${LIST}" >&2; exit 2; }
+    echo "=== ${ROLE} / ${KEY} ==="
+    run_py benchmarks.real_data.eval_setup.ged_exact_runner \
+        --input "${INPUT}" \
+        --pair-list "${LIST}" \
+        --out "${SHARDS}/${KEY}_c0000.npz" \
+        --backend gedlib --cost-model unit \
+        --compute ub --role "${ROLE}" \
+        --ub-method "${METHOD}" --ub-options "${OPTIONS}" \
+        --env-mode "${ENV_MODE}" \
+        --record-orientations \
+        --workers "${W}" \
+        --checkpoint-every "${CHECKPOINT_EVERY:-2000}" \
+        --checkpoint "${SHARDS}/${KEY}.ckpt.npz"
+done
 
 # A SEPARATE merger, not ged_merge_shards. CONTRACTS §7's merge writes a dense (N,N)
 # matrix and cannot express this output: the subsample is pooled across all ten datasets
