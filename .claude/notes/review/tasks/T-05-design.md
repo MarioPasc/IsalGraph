@@ -478,6 +478,48 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-14, amendment 9 — the ladder's rung-13 pilot. Two results that change how §6 and §7
+  must be read, and a measured exact-GED ceiling.**
+
+  25 pairs at the frozen 1,200 s budget, 12 workers, real data. **Zero containment violations, zero
+  censored pairs carrying a finite `exact`, budget honoured to within 1 s.**
+
+  | | rung 13 |
+  |---|---|
+  | certified | **76.0 %** (24 % censored) |
+  | per-pair seconds, all | med 239.3 · mean 465.4 · max 1,201.0 |
+  | per-pair seconds, certified | med 87.6 · mean 233.3 |
+  | full 250-pair rung | **32.3 core-h** |
+
+  **Projected ceiling: the ladder truncates at rung 16–17 under the frozen 25 % rule, so the measured
+  exact-GED ceiling is `n = 15–16` — three to four nodes above T-03's 12**, at **230–280 core-h**
+  (500 hard worst case). That is within §6's 300 core-h estimate, which is the one projection in this
+  ticket that has survived contact with measurement.
+
+  **(a) `BIPARTITE` is loose at `n = 13`, measured directly for the first time above `n = 12`.**
+  Mean relative overestimate **1.370** against the lower bound's **0.156** underestimate, on certified
+  pairs. T-27 §5.4 predicted the upper bound would degrade fastest in exactly this direction and had
+  to extrapolate from `n ≤ 12`; **this is the first datum inside the licensed regime, and it lands
+  where T-27 said it would.** It is also ~8.8× the asymmetry between the two ends, which is the
+  quantity `(UB − LB)/UB` versus `n` is built from.
+
+  **(b) The ladder is six datasets, not ten — and rung 14 is four.** Letter LOW/MED/HIGH and LINUX
+  cap at `n ≤ 10` and **contribute nothing at any rung**. Neither AIDS cohort has a 14-node connected
+  graph, so **rung 14 draws from four datasets**. Composition then shifts across rungs — `coil_del`
+  118 → 85, `mutagenicity` 32 → 75.
+
+  > **So §7 item 1's confound applies to the ladder itself, not only to the Suite-2 bin curve.** A
+  > raw rung-to-rung trend conflates a size effect with a provenance effect, and here the provenance
+  > shift is *forced* — it is which real datasets contain connected graphs of each size. **Report the
+  > ladder's per-rung quantities with their per-dataset composition attached, and fit within dataset
+  > wherever a rung has more than one.** Never a bare rung-to-rung slope.
+
+  **(c) A provenance defect of the same class as amendment 4's, opposite direction**, found and fixed
+  by the agent in its own module: `_code_commit()` resolved at metadata-build time rather than
+  process start, so the pilot recorded a commit **three ahead** of the code that ran. Now pinned at
+  start. Two independent instances in one ticket of provenance naming the wrong commit; both were
+  found by looking, neither by a test.
+
 - **2026-08-14, amendment 8 — `BRANCH_FAST` is symmetric in practice, so
   `lb_symmetry_probes` has never fired. A suspected reproducibility defect, measured and closed.**
 
