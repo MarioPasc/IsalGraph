@@ -478,6 +478,58 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-15, amendment 11 — ⚠ THE POOL IS NEGATIVE-SCALING. `lb`, `ub` and `ubs` all hit their
+  12 h wallclock, and amendments 4 and 7's cost figures were measured inside the pathology.**
+
+  All three campaigns TIMEOUT at 12:00, each having completed **8 of 10** datasets and stalled on
+  COIL-DEL. The eight completed matrices survived via the `TERM` trap in all three role directories.
+
+  **Measured on the identical 211,871-pair Letter HIGH slice, varying only `--workers`:**
+
+  | workers | wall | core-seconds |
+  |---:|---:|---:|
+  | **1** | **36.4 s** | **36** |
+  | 4 | 53.0 s | 212 |
+  | 15 | 61.9 s | 928 |
+  | 32 | 164.4 s | 5,260 |
+
+  **Adding workers makes the wall clock worse and burns core-seconds super-linearly.** The
+  production jobs ran at **15, 37 and 126** workers. This is not a tuning miss; it is a design fault
+  in how this ticket parallelised, and **cores cannot fix it — they cause it.**
+
+  > **Every production per-pair figure in amendments 4 and 7 was measured inside this regime and is
+  > therefore an artefact of it, not a property of the method.** Letter HIGH ran at 19.8 ms/pair in
+  > production against **172 µs/pair single-worker** — a **115× inflation**. The "every method costs
+  > ×13–14 more than T-27's gate probe implied" conclusion in amendment 7 is **withdrawn**: it
+  > compared T-27's single-process probe against pool-inflated production numbers. T-27 limitation 3
+  > may still be directionally right, but **this ticket has not measured it** and must not be cited
+  > as having done so.
+
+  **Single-process rates, random-sampled on an `sr` core, cohort mode** — these are the ones that
+  survive:
+
+  | dataset | µs/pair |
+  |---|---:|
+  | Letter HIGH | 93 |
+  | Mutagenicity | 3,107 |
+  | COIL-DEL | 4,315 |
+  | Protein | 7,366 |
+
+  Weighted over the ten cohorts that is **≈ 17 core-h for `lb`**, not 47 and not 420 — so
+  `ub ≈ 41` and `ubs ≈ 138`, **≈ 200 core-h for all three**, against the ~2,136 core-h the timed-out
+  jobs consumed to finish 80 % of the work.
+
+  **The correct design is T-03's, which this ticket should not have deviated from**: an array over
+  contiguous upper-triangle pair ranges, **`--workers 1` per task**, parallelism across tasks rather
+  than inside a pool. At 17 core-h for `lb`, eight array tasks run ~2.2 h each, which also clears the
+  SCBI floor by construction. §5 rejected the array shape on the grounds that the compute was too
+  small to fill it; that reasoning was sound for the *cost* it assumed and wrong about the
+  *mechanism*, and the pool it chose instead is what failed.
+
+  **Root cause not yet isolated** — most likely a GEDLIB environment rebuilt per pool task rather
+  than per worker process, since the penalty grows with both graph count and worker count. Recorded
+  as unproven; the remedy does not depend on it.
+
 - **2026-08-14, amendment 10 — `ubt` COMPLETE (job 1993160, 2:21:03, 128 cores, `sr042`,
   **300.8 core-h** realised against 886 projected). The size-stratified orientation measurement
   `decisions.md` §6 could not make.**
