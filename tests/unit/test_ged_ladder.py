@@ -306,7 +306,7 @@ def test_timeout_is_censored_never_promoted() -> None:
     bounds, exact_backend = _build_backends(
         UNIT_COSTS, "networkx", "BRANCH_FAST", "", "BIPARTITE", "", 0.001
     )
-    exact, lb, ub, certified, seconds = solve_pair(
+    exact, lb, ub, certified, seconds, best = solve_pair(
         g1, g2, bounds_backend=bounds, exact_backend=exact_backend, bounds_kind="networkx"
     )
     assert certified is False
@@ -314,6 +314,10 @@ def test_timeout_is_censored_never_promoted() -> None:
     assert math.isfinite(lb) and math.isfinite(ub)
     assert lb <= ub
     assert seconds >= 0.0
+    # The best-so-far cost is kept, but beside the bracket and never inside it:
+    # `ub` must not have moved to meet it.
+    assert best == math.inf or best >= lb
+    assert exact == math.inf, "a best-so-far cost is an upper bound, not a distance"
 
 
 def test_write_refuses_a_censored_pair_carrying_a_finite_exact(tmp_path: Path) -> None:
@@ -348,6 +352,51 @@ def test_write_refuses_a_certified_pair_carrying_inf(tmp_path: Path) -> None:
     )
     with pytest.raises(LadderError, match="certified pair carries a non-finite"):
         write_rung_npz(tmp_path / "rung_13.npz", result)
+
+
+def test_write_refuses_a_bestsofar_on_a_certified_pair(tmp_path: Path) -> None:
+    """The side column is a censored-pair record; a certified pair carries ``inf``.
+
+    A finite value there next to a proven optimum is the confusion the separate
+    column exists to prevent: it would read as a second, competing distance.
+    """
+    result = RungResult(
+        rung=13,
+        records=[PairRecord("linux", 0, 1, 13, 5.0, 1.0, 9.0, True, 0.5, ub_astar_bestsofar=5.0)],
+    )
+    with pytest.raises(LadderError, match="finite on a certified pair"):
+        write_rung_npz(tmp_path / "rung_13.npz", result)
+
+
+def test_write_refuses_a_bestsofar_below_the_lower_bound(tmp_path: Path) -> None:
+    """A constructed edit path cannot cost less than a valid lower bound."""
+    result = RungResult(
+        rung=13,
+        records=[
+            PairRecord("linux", 0, 1, 13, math.inf, 6.0, 9.0, False, 0.5, ub_astar_bestsofar=2.0)
+        ],
+    )
+    with pytest.raises(LadderError, match="below the lower bound"):
+        write_rung_npz(tmp_path / "rung_13.npz", result)
+
+
+def test_bestsofar_does_not_move_the_recorded_ub(tmp_path: Path) -> None:
+    """``ub`` keeps its GEDLIB value even when A* found a cheaper path.
+
+    This is the whole point of the separate column: the reproducible bracket must
+    not shift because a particular node got further through the search.
+    """
+    result = RungResult(
+        rung=13,
+        records=[
+            PairRecord("linux", 0, 1, 13, math.inf, 2.0, 9.0, False, 0.5, ub_astar_bestsofar=4.0)
+        ],
+    )
+    target = tmp_path / "rung_13.npz"
+    write_rung_npz(target, result)
+    arrays, _meta = load_rung_npz(target)
+    assert arrays["ub"][0] == 9.0
+    assert arrays["ub_astar_bestsofar"][0] == 4.0
 
 
 def test_write_refuses_a_non_finite_bound(tmp_path: Path) -> None:
@@ -541,6 +590,7 @@ def test_rung_file_carries_the_contracted_keys_and_dtypes(tmp_path: Path) -> Non
         "ub",
         "certified",
         "seconds",
+        "ub_astar_bestsofar",
     }
     assert arrays["pair_i"].dtype == np.int32
     assert arrays["pair_j"].dtype == np.int32
@@ -548,6 +598,7 @@ def test_rung_file_carries_the_contracted_keys_and_dtypes(tmp_path: Path) -> Non
     assert arrays["exact"].dtype == np.float64
     assert arrays["lb"].dtype == np.float64
     assert arrays["ub"].dtype == np.float64
+    assert arrays["ub_astar_bestsofar"].dtype == np.float64
     assert arrays["certified"].dtype == bool
     assert arrays["seconds"].dtype == np.float32
     assert arrays["dataset_key"].dtype.kind == "U"
@@ -643,14 +694,14 @@ def test_gedlib_and_ged_bounds_agree_as_bounds() -> None:
         UNIT_COSTS, "networkx", "BRANCH_FAST", "", "BIPARTITE", "", 120.0
     )
     for g1, g2 in pairs:
-        e_gl, lb_gl, ub_gl, cert_gl, _ = solve_pair(
+        e_gl, lb_gl, ub_gl, cert_gl, _, _ = solve_pair(
             g1,
             g2,
             bounds_backend=gl_bounds,
             exact_backend=exact_backend,
             bounds_kind="gedlib",
         )
-        e_nx, lb_nx, ub_nx, cert_nx, _ = solve_pair(
+        e_nx, lb_nx, ub_nx, cert_nx, _, _ = solve_pair(
             g1,
             g2,
             bounds_backend=nx_bounds,

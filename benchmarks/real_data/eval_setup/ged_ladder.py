@@ -55,11 +55,17 @@ not. **The options string is part of the method name**: GEDLIB's upper bounds
 change on 74-94 % of pairs between runs at library defaults (amendment 6, T-27
 §4.2).
 
+The best-so-far cost is not thrown away, though. It lands in its own
+``ub_astar_bestsofar`` column, **censored pairs only**, so whoever wants the
+tighter D11 interval can have it while ``ub`` keeps a single meaning. That column
+is flagged machine-dependent in the metadata and no §6 analysis consumes it.
+
 Output, one file per rung, flat arrays of length ``P``::
 
     ladder/rung_{n}.npz   dataset_key <U | pair_i pair_j n_max int32 |
-                          exact lb ub float64 | certified bool |
-                          seconds float32 | metadata <U (JSON, 0-d)
+                          exact lb ub ub_astar_bestsofar float64 |
+                          certified bool | seconds float32 |
+                          metadata <U (JSON, 0-d)
     ladder/manifest.json  the same summary across rungs, plus the ceiling
 
 ``exact`` is ``inf`` on a censored pair -- never ``nan``, matching T-03's census,
@@ -581,6 +587,15 @@ class PairRecord:
         Whether the exact search terminated before its deadline.
     seconds : float
         Wall time for the whole pair -- bounds plus exact search.
+    ub_astar_bestsofar : float
+        The cost of the best complete edit path A* constructed before its budget
+        expired, on **censored pairs only**; ``inf`` on a certified pair and on a
+        censored pair where no complete path was found. It is a valid upper
+        bound -- the path exists -- and usually a tighter one than ``ub``, so it
+        narrows the D11 interval for anyone who wants that. It is **not** part of
+        the reproducible bracket: how far A* gets in 1,200 s is a function of the
+        machine, so this column moves between nodes while ``lb`` and ``ub`` do
+        not. Recorded, never consumed by a §6 analysis.
     """
 
     dataset_key: str
@@ -592,6 +607,7 @@ class PairRecord:
     ub: float
     certified: bool
     seconds: float
+    ub_astar_bestsofar: float = _INF
 
 
 def solve_pair(
@@ -601,7 +617,7 @@ def solve_pair(
     bounds_backend: Any,
     exact_backend: NetworkxBackend,
     bounds_kind: str,
-) -> tuple[float, float, float, bool, float]:
+) -> tuple[float, float, float, bool, float, float]:
     """Bracket one pair and try to certify it, keeping the two independent.
 
     Parameters
@@ -619,8 +635,11 @@ def solve_pair(
     Returns
     -------
     tuple
-        ``(exact, lb, ub, certified, seconds)`` with ``exact = inf`` when the
-        search did not terminate.
+        ``(exact, lb, ub, certified, seconds, ub_astar_bestsofar)`` with
+        ``exact = inf`` when the search did not terminate.
+        ``ub_astar_bestsofar`` is the cost of the best complete edit path A*
+        built before its budget expired, on censored pairs only, and ``inf``
+        otherwise. It is recorded beside the bracket rather than folded into it.
 
     Raises
     ------
@@ -646,17 +665,23 @@ def solve_pair(
     if lb > ub + CERT_TOL:
         raise LadderError(f"inverted bracket: lb {lb} exceeds ub {ub}")
 
-    exact, _best_cost, _solver_seconds, _timed_out = exact_backend.solve_exact(g1, g2)
+    exact, best_cost, _solver_seconds, _timed_out = exact_backend.solve_exact(g1, g2)
 
     # Deliberately NOT ``ub = min(ub, best_cost)``. See the module docstring: the
     # A* best-so-far cost is a valid upper bound but a machine-dependent one, and
     # folding it in makes ``ub`` equal ``exact`` on every certified pair, which is
-    # precisely the quantity this ladder measures.
+    # precisely the quantity this ladder measures. It is kept in its own column
+    # instead, so the tighter D11 interval is recoverable without giving ``ub``
+    # two meanings.
     if exact is not None and not (lb - CERT_TOL <= exact <= ub + CERT_TOL):
         raise LadderError(
             f"certified optimum {exact} outside its bracket [{lb}, {ub}]; the bounds "
             "and the exact solver are independent implementations, so one is wrong"
         )
+
+    best = _INF
+    if exact is None and math.isfinite(best_cost):
+        best = float(best_cost)
 
     seconds = time.perf_counter() - t0
     return (
@@ -665,6 +690,7 @@ def solve_pair(
         ub,
         exact is not None,
         seconds,
+        best,
     )
 
 
@@ -753,19 +779,19 @@ def _init_worker(
 
 def _solve_task(
     task: tuple[str, int, int, int],
-) -> tuple[str, int, int, int, float, float, float, bool, float]:
+) -> tuple[str, int, int, int, float, float, float, bool, float, float]:
     """Solve one ``(key, i, j, rung)`` task inside a pool worker."""
     key, i, j, rung = task
     graphs = _WORKER["graphs"][key]
     g1, g2 = graphs[i], graphs[j]
-    exact, lb, ub, certified, seconds = solve_pair(
+    exact, lb, ub, certified, seconds, best = solve_pair(
         g1,
         g2,
         bounds_backend=_WORKER["bounds"],
         exact_backend=_WORKER["exact"],
         bounds_kind=_WORKER["bounds_kind"],
     )
-    return key, int(i), int(j), int(rung), exact, lb, ub, certified, seconds
+    return key, int(i), int(j), int(rung), exact, lb, ub, certified, seconds, best
 
 
 # --------------------------------------------------------------------------- #
@@ -926,7 +952,7 @@ def run_rung(
                         time.perf_counter() - t_start,
                     )
 
-    for key, i, j, rung, exact_v, lb_v, ub_v, cert_v, secs in rows:
+    for key, i, j, rung, exact_v, lb_v, ub_v, cert_v, secs, best_v in rows:
         records.append(
             PairRecord(
                 dataset_key=key,
@@ -938,6 +964,7 @@ def run_rung(
                 ub=float(ub_v),
                 certified=bool(cert_v),
                 seconds=float(secs),
+                ub_astar_bestsofar=float(best_v),
             )
         )
 
@@ -975,6 +1002,12 @@ def run_rung(
         "ub_options": ub_opt,
         "bounds_kind": bounds_kind,
         "solver": "networkx.graph_edit_distance (A*), completion by astar_completed",
+        "ub_astar_bestsofar_note": (
+            "Side column, censored pairs only, inf elsewhere. A valid upper bound (the "
+            "edit path was constructed) but MACHINE-DEPENDENT: how far A* gets in the "
+            "budget is a function of the node. It is not part of the reproducible "
+            "bracket and must not enter a section 6 analysis; lb and ub are."
+        ),
         "env_mode": "per-pair",
         "lb_symmetry_probes": 0,
         "workers": int(workers),
@@ -1021,6 +1054,7 @@ def write_rung_npz(path: Path, result: RungResult) -> None:
     ub = np.asarray([r.ub for r in result.records], dtype=np.float64)
     certified = np.asarray([r.certified for r in result.records], dtype=bool)
     seconds = np.asarray([r.seconds for r in result.records], dtype=np.float32)
+    ub_astar = np.asarray([r.ub_astar_bestsofar for r in result.records], dtype=np.float64)
 
     if n:
         if not np.all(np.isfinite(lb)) or not np.all(np.isfinite(ub)):
@@ -1039,6 +1073,20 @@ def write_rung_npz(path: Path, result: RungResult) -> None:
             raise LadderError("a certified optimum falls outside its own bracket")
         if not np.all(n_max == result.rung):
             raise LadderError(f"n_max must equal the rung {result.rung} on every pair")
+        # The side column is a censored-pair record only. A finite value on a
+        # certified pair would mean an A* cost was kept next to a proven optimum,
+        # which is the confusion the separate column exists to prevent.
+        if np.any(np.isfinite(ub_astar[certified])):
+            raise LadderError(
+                "ub_astar_bestsofar is finite on a certified pair; it records only what "
+                "a search that did NOT terminate had reached"
+            )
+        censored_finite = ~certified & np.isfinite(ub_astar)
+        if np.any(ub_astar[censored_finite] < lb[censored_finite] - CERT_TOL):
+            raise LadderError(
+                "an A* best-so-far cost falls below the lower bound; a constructed edit "
+                "path cannot be cheaper than a valid lower bound"
+            )
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1057,6 +1105,7 @@ def write_rung_npz(path: Path, result: RungResult) -> None:
         ub=ub,
         certified=certified,
         seconds=seconds,
+        ub_astar_bestsofar=ub_astar,
         metadata=np.array(json.dumps(result.meta, sort_keys=True)),
     )
     os.replace(tmp, path)
