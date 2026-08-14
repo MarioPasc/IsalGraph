@@ -42,16 +42,28 @@ mkdir -p "${SHARDS}"
 echo "role=${ROLE} key=${KEY} chunk=${CHUNK}/${N_CHUNKS} method=${METHOD} options='${OPTIONS}'"
 echo "workers=1 (deliberate -- see the header)"
 
+# 🔴 An ARRAY, not command substitution. `$(... && echo --lb-options "${OPTIONS}")` splits
+# its output on whitespace, so `--threads 1` arrives as two words and argparse reads
+# `--threads` as the next FLAG -- "argument --lb-options: expected one argument". That
+# killed array 2005370 in seconds. The options string is load-bearing (CONTRACTS §3: a
+# method name without its options is not a specification), so it must survive quoting
+# intact all the way to GEDLIB.
+METHOD_ARGS=()
+if [[ "${COMPUTE}" == "lb" ]]; then
+    METHOD_ARGS=(--lb-method "${METHOD}" --lb-options "${OPTIONS}")
+else
+    METHOD_ARGS=(--ub-method "${METHOD}" --ub-options "${OPTIONS}")
+fi
+SHARD_OUT="${SHARDS}/${KEY}_c$(printf '%04d' "${CHUNK}").npz"
+
 # --workers 1 is not a conservative default here, it is the measured optimum. Do not raise
 # it: every value above 1 was slower in BOTH wall clock and core-seconds.
 run_py benchmarks.real_data.eval_setup.ged_exact_runner \
     --input "${INPUT}" \
-    --out "${SHARDS}/${KEY}_c$(printf '%04d' "${CHUNK}").npz" \
+    --out "${SHARD_OUT}" \
     --backend gedlib --cost-model unit \
     --compute "${COMPUTE}" --role "${ROLE}" \
-    $( [[ "${COMPUTE}" == "lb" ]] \
-        && echo --lb-method "${METHOD}" --lb-options "${OPTIONS}" \
-        || echo --ub-method "${METHOD}" --ub-options "${OPTIONS}" ) \
+    "${METHOD_ARGS[@]}" \
     --env-mode "${ENV_MODE}" \
     --chunk-index "${CHUNK}" --n-chunks "${N_CHUNKS}" \
     --workers 1 \
