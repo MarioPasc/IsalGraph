@@ -478,6 +478,39 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-14, amendment 8 — `BRANCH_FAST` is symmetric in practice, so
+  `lb_symmetry_probes` has never fired. A suspected reproducibility defect, measured and closed.**
+
+  `GedlibBackend` evaluates the lower bound in **both** orientations for the first
+  `lb_symmetry_probes = 32` pairs of each backend instance and keeps `max(lb, lb_rev)`. In a
+  process pool that makes a pair's recorded `lb` depend on **which worker took it and how early**,
+  so a rerun at a different `--workers` count would assign the both-orientation treatment to a
+  different set of pairs. Raised by `t05-ladder` while three campaigns were already running.
+
+  **Measured, `BRANCH_FAST` / `--threads 1` / D6, both argument orders on every pair:**
+
+  | | pairs | asymmetric | max \|fwd − rev\| |
+  |---|---:|---:|---:|
+  | mutagenicity, coil_del, protein, aids_iam, linux — uniform **and** top-decile `n` strata | **9,406** | **0** | **0.0** |
+
+  Two strata per dataset so an asymmetry appearing only at large `n` could not hide; the top-decile
+  pool for Mutagenicity and Protein reaches the top of the Suite-2 size range. **Identically equal,
+  not equal within tolerance.**
+
+  **Independently corroborated end-to-end**: the LINUX census reproduces T-27 byte-for-byte at
+  `--workers 4`, `--workers 1`, in per-pair mode and in cohort mode. Under the asymmetry hypothesis
+  those four runs give the both-orientation treatment to different pairs, so **identical sha256
+  across all four is only explicable if the two orientations always agree.** Two independent lines
+  of evidence, one direct and one end-to-end.
+
+  **So `max(lb, lb_rev) == lb` always, the probe is a no-op on values, and the running campaigns are
+  unaffected.** Record it as a verification that has never fired, not as a tightening.
+
+  > **Scope, and it is a real limit.** 9,406 pairs is a sample, not the 21.7 M census, and it covers
+  > **`BRANCH_FAST` under D6 only**. The symmetry follows from a constant-edge-cost assignment
+  > problem; **it does not transfer to `BRANCH_TIGHT` or `STAR`**, which are different algorithms. A
+  > later ticket swapping the `lb` role must re-measure before assuming it.
+
 - **2026-08-14, amendment 7 — the measured cost table. This supersedes §5's projections; do not
   quote §5's core-hour figures.** Every rate below is from a Picasso `sr` core (AMD EPYC 7H12) in
   **cohort** env mode, anchored on IAM Protein's 161,596 pairs, which all four roles ran.
