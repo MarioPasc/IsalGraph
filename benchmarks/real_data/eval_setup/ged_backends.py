@@ -73,7 +73,7 @@ import logging
 import math
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -165,6 +165,24 @@ UPPER_BOUND_METHODS = frozenset({"BIPARTITE", "IPFP", "REFINE", "BP_BEAM"})
 #: no business paying for an upper bound it will never report, and the upper
 #: bound it would compute would carry a different options string anyway.
 COMPUTE_MODES = frozenset({"both", "lb", "ub"})
+
+#: How a :class:`GedlibBackend` manages its GEDLIB environment.
+#:
+#: ``'per-pair'`` is T-03's behaviour and stays the default: the environment is
+#: emptied with ``restart_env()``, the two graphs are added, ``init()`` runs,
+#: and the pair is solved. ``'cohort'`` adds **all** N graphs of a dataset once,
+#: calls ``init()`` once, and thereafter runs pairs by graph index.
+#:
+#: The difference is not a micro-optimisation. Measured on Picasso against IAM
+#: Protein (n_bar 31.68, n_max 96), the production per-pair runner cost
+#: 18.58 ms/pair on one core while T-27's cohort-mode bake-off cost 285 us/pair
+#: at a comparable mean order -- a ~33x gap that is entirely per-pair
+#: environment setup, not solving. The measured cost curve was n^1.12, near
+#: linear where ``BRANCH_FAST`` is O(n^2 d^2 + n^3), because a ~1.5 ms/pair
+#: fixed cost dominates the solver at every size in this cohort. It was
+#: invisible in T-03, where a pair cost ~6.5 s of exact A* and the rebuild was
+#: noise.
+ENV_MODES = frozenset({"per-pair", "cohort"})
 
 #: The frozen role table of CONTRACTS §3, as ``(method, options, accessor)``.
 #: The options string is part of the method name: T-27 §4.2 measured GEDLIB's
@@ -764,6 +782,15 @@ class GedlibBackend:
     than reconstructed, so that a run of hundreds of thousands of pairs neither
     pays construction cost per pair nor accumulates graphs without bound.
 
+    That reset is still not free, and on a bounds-only campaign it is the whole
+    cost. Under ``env_mode='cohort'`` the reset does not happen at all:
+    :meth:`load_cohort` adds every graph of a dataset once, calls ``init()``
+    once, and :meth:`pair_by_index` then runs pairs by graph index for the life
+    of the process. Order matters -- :meth:`probe_accessors` empties the
+    environment to install ``P4`` and ``C4``, so it must run *before*
+    :meth:`load_cohort`, and any later call to it discards the cohort by design
+    rather than leaving stale ids behind.
+
     Parameters
     ----------
     costs : EditCosts, optional
@@ -796,6 +823,19 @@ class GedlibBackend:
     lb_symmetry_probes : int, optional
         Number of leading pairs on which the lower bound is also evaluated in
         the reverse orientation, to measure rather than assume its symmetry.
+    env_mode : {'per-pair', 'cohort'}, optional
+        How the environment is managed. ``'per-pair'`` is T-03's behaviour and
+        the default, so a caller that passes nothing computes exactly what the
+        exact-GED census computed, by exactly the same call sequence.
+        ``'cohort'`` requires :meth:`load_cohort` first and then works through
+        :meth:`bounds_by_index` / :meth:`pair_by_index`.
+    hoist_methods : bool, optional
+        In cohort mode, skip ``set_method``/``init_method`` when the requested
+        ``(method, options)`` is already the configured one. Defaults to
+        ``True``. Exposed so that the hoist can be switched off and the two
+        outputs compared, which is the only way to say whether it changes a
+        value rather than to assume it does not. Ignored in per-pair mode,
+        where ``restart_env()`` invalidates the configuration on every pair.
 
     Raises
     ------
@@ -816,10 +856,16 @@ class GedlibBackend:
     """
 
     __slots__ = (
+        "_cohort_graphs",
+        "_cohort_ids",
+        "_cohort_key",
         "_compute",
+        "_configured",
         "_costs",
         "_env",
+        "_env_mode",
         "_gedlib_module",
+        "_hoist_methods",
         "_init_option",
         "_last_ub_orientations",
         "_lb_method",
@@ -846,6 +892,8 @@ class GedlibBackend:
         ub_options: str | None = None,
         compute: str = "both",
         lb_symmetry_probes: int = 32,
+        env_mode: str = "per-pair",
+        hoist_methods: bool = True,
     ) -> None:
         if exact_method is not None:
             _reject_retired(exact_method)
@@ -859,6 +907,8 @@ class GedlibBackend:
             raise GedBackendError(
                 f"compute must be one of {sorted(COMPUTE_MODES)}, got {compute!r}"
             )
+        if env_mode not in ENV_MODES:
+            raise GedBackendError(f"env_mode must be one of {sorted(ENV_MODES)}, got {env_mode!r}")
         _reject_retired(lb_method)
         _reject_retired(ub_method)
         # Validate whichever ends will actually be read. A campaign that
@@ -884,6 +934,12 @@ class GedlibBackend:
         self._reset_mode = "unknown"
         self._probed = False
         self._last_ub_orientations: tuple[float, float] | None = None
+        self._env_mode = env_mode
+        self._hoist_methods = bool(hoist_methods)
+        self._configured: tuple[str, str] | None = None
+        self._cohort_ids: list[int] | None = None
+        self._cohort_graphs: list[nx.Graph] | None = None
+        self._cohort_key = ""
         self.stats = BackendStats()
 
     @property
@@ -909,6 +965,21 @@ class GedlibBackend:
     def compute(self) -> str:
         """Which ends of the bracket this backend evaluates."""
         return self._compute
+
+    @property
+    def env_mode(self) -> str:
+        """How the GEDLIB environment is managed: ``'per-pair'`` or ``'cohort'``."""
+        return self._env_mode
+
+    @property
+    def cohort_key(self) -> str:
+        """Key of the cohort currently loaded, or ``''`` when none is."""
+        return self._cohort_key
+
+    @property
+    def cohort_size(self) -> int:
+        """Number of graphs in the loaded cohort, ``0`` when none is loaded."""
+        return 0 if self._cohort_ids is None else len(self._cohort_ids)
 
     @property
     def last_ub_orientations(self) -> tuple[float, float] | None:
@@ -960,6 +1031,7 @@ class GedlibBackend:
             "compute": self._compute,
             "cost_model": list(self._costs.as_gedlib_constant()),
             "init_option": self._init_option,
+            "env_mode": self._env_mode,
         }
         if self._compute in ("both", "lb"):
             spec["lb_method"] = self._lb_method
@@ -1008,13 +1080,65 @@ class GedlibBackend:
         return self._env
 
     def _fresh_env(self) -> Any:
-        """Return the environment emptied of graphs, methods and costs."""
+        """Return the environment emptied of graphs, methods and costs.
+
+        Any loaded cohort and any configured method go with it: the graph ids
+        an emptied environment would hand back are not the ids the cohort was
+        built with, and a stale id is exactly the kind of silent mis-pairing
+        this module exists to refuse.
+        """
+        self._configured = None
+        self._cohort_ids = None
+        self._cohort_graphs = None
+        self._cohort_key = ""
         env = self.env()
         if self._reset_mode == "restart_env":
             env.restart_env()
             return env
         self._env = self.module().GEDEnvGXL()
         return self._env
+
+    def load_cohort(self, graphs: Sequence[nx.Graph], *, key: str = "") -> None:
+        """Add a whole dataset to one environment and initialise it once.
+
+        The cohort-mode counterpart of the per-pair ``add_nx_graph`` / ``init``
+        that :meth:`bounds` performs. Call it once per (worker process,
+        dataset), **after** :meth:`probe_accessors`: the probe empties the
+        environment to install ``P4`` and ``C4``, which would otherwise take the
+        cohort's graph ids with it.
+
+        Parameters
+        ----------
+        graphs : sequence of networkx.Graph
+            The dataset, in the order the caller will index it by. Position
+            ``i`` in this sequence is what :meth:`bounds_by_index` means by
+            ``i``.
+        key : str, optional
+            Dataset key, recorded for diagnostics.
+
+        Raises
+        ------
+        GedBackendError
+            If the backend was not constructed with ``env_mode='cohort'``.
+        """
+        if self._env_mode != "cohort":
+            raise GedBackendError(
+                f"load_cohort requires env_mode='cohort', not {self._env_mode!r}; a per-pair "
+                "backend rebuilds its environment on every call and would discard the cohort"
+            )
+        env = self._fresh_env()
+        ids = [env.add_nx_graph(_with_string_labels(g), "") for g in graphs]
+        env.set_edit_cost("CONSTANT", edit_cost_constant=self._costs.as_gedlib_constant())
+        env.init(init_option=self._init_option)
+        self._cohort_ids = ids
+        self._cohort_graphs = list(graphs)
+        self._cohort_key = str(key)
+        logger.info(
+            "GEDLIB cohort %r loaded into one environment: %d graphs, init_option=%s",
+            self._cohort_key,
+            len(ids),
+            self._init_option,
+        )
 
     def _read(
         self,
@@ -1074,10 +1198,138 @@ class GedlibBackend:
         return value
 
     def _run(self, env: Any, method: str, options: str, i: int, j: int) -> None:
-        """Select, initialise and run one method on one ordered pair."""
-        env.set_method(method, options)
-        env.init_method()
+        """Select, initialise and run one method on one ordered pair.
+
+        In per-pair mode the three calls are emitted unconditionally, exactly as
+        T-03 emitted them: ``restart_env()`` has just wiped the configuration,
+        so there is nothing to reuse.
+
+        In cohort mode the environment survives between pairs, so
+        ``set_method``/``init_method`` are hoisted out of the loop and re-emitted
+        only when the ``(method, options)`` actually changes. That is the
+        pattern T-27's bake-off uses -- configure once per cell, then
+        ``run_method`` over every pair -- and T-27's values are reproduced
+        byte-identically by the per-pair runner, so the two call sequences are
+        known to agree on real data rather than assumed to.
+        """
+        if self._env_mode == "cohort" and self._hoist_methods:
+            if self._configured != (method, options):
+                env.set_method(method, options)
+                env.init_method()
+                self._configured = (method, options)
+        else:
+            env.set_method(method, options)
+            env.init_method()
         env.run_method(i, j)
+
+    def _zero_ok(self, g1: nx.Graph, g2: nx.Graph) -> ZeroOk:
+        """Return a memoised "is a zero legal for this pair?" predicate.
+
+        CONTRACTS §6.1: deferred, not eager. Under D6 the predicate reaches
+        ``nx.is_isomorphic`` whenever ``n1 == n2`` and ``m1 == m2`` -- most
+        Letter pairs, and a VF2 call on ~30-node graphs for COIL-DEL and
+        Mutagenicity, over 21.7 M pairs. A read of exactly ``0.0`` is rare, so
+        paying for the answer only when one arrives costs nothing and saves the
+        rest. The value computed is identical; only the moment of computation
+        moves.
+
+        Parameters
+        ----------
+        g1, g2 : networkx.Graph
+            The graphs compared.
+
+        Returns
+        -------
+        callable
+            Zero-argument predicate, evaluated at most once.
+        """
+        cached: list[bool] = []
+
+        def zero_ok() -> bool:
+            if not cached:
+                cached.append(zero_distance_is_attainable(g1, g2, self._costs))
+            return cached[0]
+
+        return zero_ok
+
+    def _bracket(self, env: Any, i0: int, i1: int, zero_ok: ZeroOk) -> tuple[float, float]:
+        """Evaluate the configured ends on one ordered pair of graph ids.
+
+        The single implementation of the bracket, shared verbatim by per-pair
+        and cohort mode. Sharing it is what makes the two modes agree by
+        construction rather than by inspection: the guards, the orientation
+        handling, the symmetry probe and the inversion check exist once.
+
+        Parameters
+        ----------
+        env : object
+            An initialised GEDLIB environment holding both graphs.
+        i0, i1 : int
+            Graph ids inside that environment.
+        zero_ok : callable
+            The deferred zero-legality predicate for this pair.
+
+        Returns
+        -------
+        tuple of float
+            ``(lb, ub)``, with the vacuous sentinel on any end not computed.
+
+        Raises
+        ------
+        GedBackendError
+            On any inconsistent read, including an inverted bracket.
+        """
+        # A LOWER bound of zero is always mathematically valid -- it is the trivial
+        # bound, merely uninformative -- so it must not trip the zero-guard. Measured on
+        # Picasso 2026-08-12, BRANCH_FAST returns 0.00 for real pairs whose true GED is
+        # 2 and 6; the guard rejected those and failed gates 1 and 3 after ~50 pairs.
+        #
+        # The `0 < v < inf` rule the plan states exists to catch an accessor MISMATCH --
+        # calling get_lower_bound() on an upper-bound method, which silently returns
+        # 0.00. That can only manifest on the UPPER bound, where a zero really is
+        # impossible unless a zero-cost edit path exists. The lower bound is protected
+        # instead by the constructor guard, which refuses any method not in
+        # LOWER_BOUND_METHODS. Zero lower bounds are counted, because their rate is the
+        # bound-quality signal T-05's calibration ladder reports.
+        lb = -_INF
+        if self._compute in ("both", "lb"):
+            self._run(env, self._lb_method, self._lb_options, i0, i1)
+            lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok=True)
+            if lb == 0.0 and not zero_ok():
+                self.stats.n_trivial_lower_bounds += 1
+            if self.stats.n_lb_orientations_compared < self._lb_symmetry_probes:
+                self._run(env, self._lb_method, self._lb_options, i1, i0)
+                lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok=True)
+                self.stats.record_lb_orientations(lb, lb_rev)
+                lb = max(lb, lb_rev)
+
+        ub = _INF
+        self._last_ub_orientations = None
+        if self._compute in ("both", "ub"):
+            # Both orientations, always. An upper bound built from a directed
+            # assignment is not symmetric, each orientation is separately
+            # achievable, and the minimum is therefore still a proven bound and,
+            # unlike either alone, symmetric. This is a correctness requirement,
+            # not an optimisation, and cohort mode does not get to skip it.
+            self._run(env, self._ub_method, self._ub_options, i0, i1)
+            ub_fwd = self._read(env, i0, i1, "ub", self._ub_method, zero_ok)
+            self._run(env, self._ub_method, self._ub_options, i1, i0)
+            ub_rev = self._read(env, i1, i0, "ub", self._ub_method, zero_ok)
+            self.stats.record_ub_orientations(ub_fwd, ub_rev)
+            self._last_ub_orientations = (float(ub_fwd), float(ub_rev))
+            ub = min(ub_fwd, ub_rev)
+
+        if self._compute != "both":
+            # Nothing to cross-check: one end is a sentinel, and comparing a
+            # measured bound against it would only ever compare it to infinity.
+            return float(lb), float(ub)
+
+        if lb > ub + CERT_TOL:
+            raise GedBackendError(
+                f"GEDLIB bracket is inverted: {self._lb_method} lb {lb} exceeds "
+                f"{self._ub_method} ub {ub}; one of the two is misconfigured"
+            )
+        return float(min(lb, ub)), float(ub)
 
     def bounds(self, g1: nx.Graph, g2: nx.Graph) -> tuple[float, float]:
         """Return the GEDLIB bracket ``(lb, ub)`` for one pair.
@@ -1109,71 +1361,85 @@ class GedlibBackend:
         GedBackendError
             On any inconsistent read, including an inverted bracket.
         """
-        # CONTRACTS §6.1: deferred, not eager. Under D6 this predicate reaches
-        # nx.is_isomorphic whenever n1 == n2 and m1 == m2 -- most Letter pairs,
-        # and a VF2 call on ~30-node graphs for COIL-DEL and Mutagenicity, over
-        # 21.7 M pairs. A read of exactly 0.0 is rare, so paying for the answer
-        # only when one arrives costs nothing and saves the rest. The value
-        # computed is identical; only the moment of computation moves.
-        cached: list[bool] = []
-
-        def zero_ok() -> bool:
-            if not cached:
-                cached.append(zero_distance_is_attainable(g1, g2, self._costs))
-            return cached[0]
-
+        zero_ok = self._zero_ok(g1, g2)
         env = self._fresh_env()
         i0 = env.add_nx_graph(_with_string_labels(g1), "")
         i1 = env.add_nx_graph(_with_string_labels(g2), "")
         env.set_edit_cost("CONSTANT", edit_cost_constant=self._costs.as_gedlib_constant())
         env.init(init_option=self._init_option)
+        return self._bracket(env, i0, i1, zero_ok)
 
-        # A LOWER bound of zero is always mathematically valid -- it is the trivial
-        # bound, merely uninformative -- so it must not trip the zero-guard. Measured on
-        # Picasso 2026-08-12, BRANCH_FAST returns 0.00 for real pairs whose true GED is
-        # 2 and 6; the guard rejected those and failed gates 1 and 3 after ~50 pairs.
-        #
-        # The `0 < v < inf` rule the plan states exists to catch an accessor MISMATCH --
-        # calling get_lower_bound() on an upper-bound method, which silently returns
-        # 0.00. That can only manifest on the UPPER bound, where a zero really is
-        # impossible unless a zero-cost edit path exists. The lower bound is protected
-        # instead by the constructor guard, which refuses any method not in
-        # LOWER_BOUND_METHODS. Zero lower bounds are counted, because their rate is the
-        # bound-quality signal T-05's calibration ladder reports.
-        lb = -_INF
-        if self._compute in ("both", "lb"):
-            self._run(env, self._lb_method, self._lb_options, i0, i1)
-            lb = self._read(env, i0, i1, "lb", self._lb_method, zero_ok=True)
-            if lb == 0.0 and not zero_ok():
-                self.stats.n_trivial_lower_bounds += 1
-            if self.stats.n_lb_orientations_compared < self._lb_symmetry_probes:
-                self._run(env, self._lb_method, self._lb_options, i1, i0)
-                lb_rev = self._read(env, i1, i0, "lb", self._lb_method, zero_ok=True)
-                self.stats.record_lb_orientations(lb, lb_rev)
-                lb = max(lb, lb_rev)
+    def bounds_by_index(self, i: int, j: int) -> tuple[float, float]:
+        """Return the bracket for two graphs of the loaded cohort.
 
-        ub = _INF
-        self._last_ub_orientations = None
-        if self._compute in ("both", "ub"):
-            self._run(env, self._ub_method, self._ub_options, i0, i1)
-            ub_fwd = self._read(env, i0, i1, "ub", self._ub_method, zero_ok)
-            self._run(env, self._ub_method, self._ub_options, i1, i0)
-            ub_rev = self._read(env, i1, i0, "ub", self._ub_method, zero_ok)
-            self.stats.record_ub_orientations(ub_fwd, ub_rev)
-            self._last_ub_orientations = (float(ub_fwd), float(ub_rev))
-            ub = min(ub_fwd, ub_rev)
+        The cohort-mode counterpart of :meth:`bounds`. Both go through the same
+        :meth:`_bracket`; the only difference is where the two graph ids come
+        from, so the two modes cannot drift apart in the bound they compute.
 
-        if self._compute != "both":
-            # Nothing to cross-check: one end is a sentinel, and comparing a
-            # measured bound against it would only ever compare it to infinity.
-            return float(lb), float(ub)
+        Parameters
+        ----------
+        i, j : int
+            Positions in the sequence handed to :meth:`load_cohort`.
 
-        if lb > ub + CERT_TOL:
+        Returns
+        -------
+        tuple of float
+            ``(lb, ub)``, with the vacuous sentinel on any end not computed.
+
+        Raises
+        ------
+        GedBackendError
+            If no cohort is loaded, if an index is out of range, or on any
+            inconsistent read.
+        """
+        if self._env_mode != "cohort":
             raise GedBackendError(
-                f"GEDLIB bracket is inverted: {self._lb_method} lb {lb} exceeds "
-                f"{self._ub_method} ub {ub}; one of the two is misconfigured"
+                f"bounds_by_index requires env_mode='cohort', not {self._env_mode!r}"
             )
-        return float(min(lb, ub)), float(ub)
+        if self._cohort_ids is None or self._cohort_graphs is None:
+            raise GedBackendError(
+                "no cohort is loaded; call load_cohort() once per worker process before "
+                "computing any pair by index"
+            )
+        n = len(self._cohort_ids)
+        if not (0 <= i < n and 0 <= j < n):
+            raise GedBackendError(f"cohort index out of range: ({i}, {j}) against {n} graphs")
+        zero_ok = self._zero_ok(self._cohort_graphs[i], self._cohort_graphs[j])
+        return self._bracket(self.env(), self._cohort_ids[i], self._cohort_ids[j], zero_ok)
+
+    def pair_by_index(self, i: int, j: int) -> PairResult:
+        """Return the bracket for two graphs of the loaded cohort, as a result.
+
+        Parameters
+        ----------
+        i, j : int
+            Positions in the sequence handed to :meth:`load_cohort`.
+
+        Returns
+        -------
+        PairResult
+            ``exact`` is ``None`` and ``certified`` is ``False``, exactly as in
+            :meth:`pair`; GEDLIB has no method that certifies an optimum.
+
+        Raises
+        ------
+        GedBackendError
+            On any inconsistent read, or if no cohort is loaded.
+        """
+        t0 = time.perf_counter()
+        lb, ub = self.bounds_by_index(i, j)
+        seconds = time.perf_counter() - t0
+        result = PairResult(
+            lb=lb,
+            ub=ub,
+            exact=None,
+            certified=False,
+            seconds=seconds,
+            timed_out=bool(seconds > self._timeout_s),
+            method=self.method,
+        )
+        self.stats.record_result(result)
+        return result
 
     def pair(self, g1: nx.Graph, g2: nx.Graph) -> PairResult:
         """Return the GEDLIB bracket for one pair. Never an exact value.

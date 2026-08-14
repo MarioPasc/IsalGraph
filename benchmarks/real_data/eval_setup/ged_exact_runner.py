@@ -35,7 +35,8 @@ CLI, frozen in CONTRACTS §6::
       --backend {gedlib,networkx,stub} --cost-model {unit,graphedx} \\
       --chunk-index 7 --n-chunks 24 [--pair-list p.npz] [--seed-from prev.npz] \\
       --workers 64 --timeout-per-pair 300 --checkpoint-every 2000 \\
-      --checkpoint <shards>/<key>_c0007.ckpt.npz
+      --checkpoint <shards>/<key>_c0007.ckpt.npz \\
+      [--env-mode {per-pair,cohort}]
 
 Exit codes: ``0`` success, ``1`` failure, ``143`` terminated by ``SIGTERM`` with the
 checkpoint flushed and the chunk incomplete (the launcher should requeue).
@@ -757,6 +758,54 @@ class _WorkerSpec:
 _WORKER_GRAPHS: list[nx.Graph] | None = None
 _WORKER_BACKEND: GedBackend | None = None
 _WORKER_N: int = 0
+#: Whether this worker's backend holds the whole cohort and is addressed by
+#: graph index rather than by graph object. Set in :func:`_init_worker`, which
+#: runs *inside* the child process, so no environment is ever inherited across
+#: a ``fork``: GEDLIB state is not fork-safe once ``init()`` has run.
+_WORKER_BY_INDEX: bool = False
+
+
+def _load_cohort(backend: Any, graphs: list[nx.Graph], key: str) -> bool:
+    """Hand the whole cohort to the backend when it is in cohort mode.
+
+    Structural, like every other backend interaction in this module: a backend
+    that declares no ``env_mode`` or offers no ``load_cohort`` is left entirely
+    alone, so the stub, the networkx backend and every injected test double
+    behave exactly as before.
+
+    Must be called **after** :func:`_probe_backend`. The probe empties the
+    environment to install its ``P4``/``C4`` pair, which would otherwise
+    invalidate the cohort's graph ids.
+
+    Args:
+        backend: The constructed backend.
+        graphs: The cohort, in the order pair indices address it by.
+        key: Dataset key, recorded by the backend for diagnostics.
+
+    Returns:
+        ``True`` when the backend now holds the cohort and pairs must be
+        computed by index, ``False`` when the caller should keep passing graph
+        objects.
+
+    Raises:
+        RunnerError: If the backend declares cohort mode but rejects the cohort.
+            Falling back to the per-pair path would silently compute the run at
+            33x the cost the campaign was sized for.
+    """
+    if getattr(backend, "env_mode", "per-pair") != "cohort":
+        return False
+    loader = getattr(backend, "load_cohort", None)
+    if loader is None:
+        raise RunnerError(
+            f"backend {getattr(backend, 'name', backend)!r} declares env_mode='cohort' but has "
+            "no load_cohort(); it cannot be addressed by graph index"
+        )
+    try:
+        loader(graphs, key=key)
+    except Exception as exc:
+        raise RunnerError(f"cohort mode: load_cohort failed for {key!r}: {exc}") from exc
+    logger.info("cohort mode: %d graphs held in one environment for %r", len(graphs), key)
+    return True
 
 
 def _probe_backend(backend: Any, spec: BackendSpec) -> None:
@@ -801,13 +850,16 @@ def _init_worker(spec: _WorkerSpec) -> None:
     Args:
         spec: The worker specification.
     """
-    global _WORKER_GRAPHS, _WORKER_BACKEND, _WORKER_N
+    global _WORKER_GRAPHS, _WORKER_BACKEND, _WORKER_N, _WORKER_BY_INDEX
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     dataset = load_contract_a(spec.input_path)
     _WORKER_GRAPHS = dataset.graphs
     _WORKER_N = dataset.n_graphs
     _WORKER_BACKEND = make_backend(spec.backend)
     _probe_backend(_WORKER_BACKEND, spec.backend)
+    # Built here, inside the child, and never in the parent: a GEDLIB
+    # environment inherited across fork() after init() is not safe to use.
+    _WORKER_BY_INDEX = _load_cohort(_WORKER_BACKEND, dataset.graphs, dataset.key)
 
 
 def _compute_batch(batch: tuple[int, ...]) -> list[PairOutcome]:
@@ -824,10 +876,15 @@ def _compute_batch(batch: tuple[int, ...]) -> list[PairOutcome]:
     """
     if _WORKER_BACKEND is None or _WORKER_GRAPHS is None:
         raise RunnerError("worker process was not initialised")
-    return [_compute_one(k, _WORKER_GRAPHS, _WORKER_BACKEND, _WORKER_N) for k in batch]
+    return [
+        _compute_one(k, _WORKER_GRAPHS, _WORKER_BACKEND, _WORKER_N, by_index=_WORKER_BY_INDEX)
+        for k in batch
+    ]
 
 
-def _compute_one(k: int, graphs: list[nx.Graph], backend: GedBackend, n: int) -> PairOutcome:
+def _compute_one(
+    k: int, graphs: list[nx.Graph], backend: GedBackend, n: int, *, by_index: bool = False
+) -> PairOutcome:
     """Compute one pair, converting any backend exception into a censored row.
 
     A raising backend is a failure, not a missing value: the row is written with a
@@ -841,6 +898,9 @@ def _compute_one(k: int, graphs: list[nx.Graph], backend: GedBackend, n: int) ->
         graphs: The worker's graph list.
         backend: The worker's backend.
         n: Number of graphs.
+        by_index: Address the backend by cohort position rather than by graph
+            object. Set only where :func:`_load_cohort` returned ``True``, so
+            the default reproduces T-03's call exactly.
 
     Returns:
         The outcome for this pair.
@@ -848,7 +908,7 @@ def _compute_one(k: int, graphs: list[nx.Graph], backend: GedBackend, n: int) ->
     i, j = pair_from_index(k, n)
     t0 = time.perf_counter()
     try:
-        res = backend.pair(graphs[i], graphs[j])
+        res = backend.pair_by_index(i, j) if by_index else backend.pair(graphs[i], graphs[j])  # type: ignore[attr-defined]
         outcome = _outcome_from_result(
             k, res, time.perf_counter() - t0, getattr(backend, "compute", None)
         )
@@ -1141,11 +1201,14 @@ def run_chunk(
             else make_backend(backend_spec)
         )
         _probe_backend(backend, backend_spec)
+        by_index = _load_cohort(backend, dataset.graphs, dataset.key)
         for batch in batches:
             if _TERMINATE:
                 completed = False
                 break
-            _collect([_compute_one(k, dataset.graphs, backend, n) for k in batch])
+            _collect(
+                [_compute_one(k, dataset.graphs, backend, n, by_index=by_index) for k in batch]
+            )
             if _checkpoint_due():
                 _flush_and_reset()
     else:
@@ -1292,6 +1355,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("lb", "ub", "both"),
         help="which ends of the bracket to evaluate (default both, T-03's behaviour)",
     )
+    p.add_argument(
+        "--env-mode",
+        default="per-pair",
+        choices=("per-pair", "cohort"),
+        help=(
+            "how the GEDLIB environment is managed. 'per-pair' is T-03's behaviour and the "
+            "default. 'cohort' adds every graph of the dataset to one environment once per "
+            "worker process and thereafter runs pairs by graph index, which is what T-27's "
+            "bake-off does and where the ~33x speed difference on a bounds-only campaign lives"
+        ),
+    )
     p.add_argument("--role", default=None, help="role label recorded in the shard metadata")
     p.add_argument(
         "--record-orientations",
@@ -1330,6 +1404,7 @@ def _backend_options(args: argparse.Namespace) -> dict[str, Any]:
         "ub_method": str(args.ub_method),
         "ub_options": str(args.ub_options),
         "compute": str(args.compute),
+        "env_mode": str(getattr(args, "env_mode", "per-pair")),
     }
 
 
@@ -1374,6 +1449,11 @@ def _shard_meta(
             # computed and is rejected at the gate.
             "role": getattr(args, "role", None),
             "compute": str(getattr(args, "compute", "both")),
+            # Not a method parameter: cohort mode is proven to reproduce the
+            # per-pair values byte-identically. Recorded so that a shard says
+            # which call sequence produced it, which is what makes a later
+            # divergence attributable rather than mysterious.
+            "env_mode": str(getattr(args, "env_mode", "per-pair")),
             "lb_method": str(getattr(args, "lb_method", "BRANCH_FAST")),
             "lb_options": str(getattr(args, "lb_options", "--threads 1")),
             "ub_method": str(getattr(args, "ub_method", "IPFP")),

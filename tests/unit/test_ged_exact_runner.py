@@ -23,6 +23,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import os
 import signal
 import subprocess
 import sys
@@ -1113,3 +1114,276 @@ class TestAccessorProbeAtCampaignInit:
             checkpoint_every=100,
         )
         assert completed and len(shard) == 3
+
+
+# --------------------------------------------------------------------------- #
+# T-05: one GEDLIB environment per dataset instead of one per pair
+# --------------------------------------------------------------------------- #
+
+
+class _CohortBackend:
+    """A cohort-mode backend that answers only by graph index.
+
+    Refuses ``pair()`` outright. That is the point: a runner that quietly kept
+    passing graph objects would still produce a correct shard against a real
+    GEDLIB backend, at the per-pair cost the whole change exists to remove, and
+    no assertion on the values would notice.
+    """
+
+    env_mode = "cohort"
+    name = "cohort_fake"
+
+    def __init__(self) -> None:
+        """Start with no cohort loaded and an empty call log."""
+        self.graphs: list[nx.Graph] | None = None
+        self.key: str | None = None
+        self.n_loads = 0
+        self.index_calls: list[tuple[int, int]] = []
+        self.pid_at_load: int | None = None
+
+    def load_cohort(self, graphs: list[nx.Graph], *, key: str = "") -> None:
+        """Take the whole cohort, recording the process that did so."""
+        import os
+
+        self.graphs = list(graphs)
+        self.key = key
+        self.n_loads += 1
+        self.pid_at_load = os.getpid()
+
+    def pair(self, g1: nx.Graph, g2: nx.Graph) -> _Result:
+        """Refuse: a cohort backend must never be addressed by graph object."""
+        raise AssertionError("cohort mode must address the backend by graph index")
+
+    def pair_by_index(self, i: int, j: int) -> _Result:
+        """Return a bracket derived from the two cohort positions."""
+        if self.graphs is None:
+            raise AssertionError("pair_by_index before load_cohort")
+        self.index_calls.append((i, j))
+        val = float(abs(self.graphs[i].number_of_nodes() - self.graphs[j].number_of_nodes()) + 1)
+        return _Result(val, val + 2.0, None, False, 0.25, False, "cohort_fake")
+
+
+class TestCohortEnvMode:
+    """``--env-mode cohort`` addresses the backend by graph index, once loaded."""
+
+    def test_the_default_is_per_pair(self) -> None:
+        """T-03's behaviour is untouched until the orchestrator flips it."""
+        assert _parsed(_BASE_ARGV).env_mode == "per-pair"
+        assert _backend_options(_parsed(_BASE_ARGV))["env_mode"] == "per-pair"
+
+    def test_the_flag_reaches_the_backend(self) -> None:
+        args = _parsed([*_BASE_ARGV, "--env-mode", "cohort"])
+        assert _backend_options(args)["env_mode"] == "cohort"
+
+    def test_an_unknown_env_mode_is_refused_by_the_parser(self) -> None:
+        with pytest.raises(SystemExit):
+            _parsed([*_BASE_ARGV, "--env-mode", "one-env"])
+
+    def test_a_non_gedlib_backend_still_takes_no_options(self) -> None:
+        args = _parsed(["--input", "i.npz", "--out", "o.npz", "--backend", "stub"])
+        assert _backend_options(args) == {}
+
+    def test_the_cohort_is_loaded_once_and_pairs_go_by_index(
+        self, cohort: tuple[Path, ContractA]
+    ) -> None:
+        """One load for the chunk, and the indices are the ones the pair index names."""
+        path, dataset = cohort
+        backend = _CohortBackend()
+        pairs = np.array([0, 1, 11, 20, 64, 65], dtype=np.int64)
+        shard, completed, _stats = _run(dataset, path, pairs, backend)
+        assert completed and len(shard) == 6
+        assert backend.n_loads == 1
+        assert backend.key == dataset.key
+        assert backend.graphs is not None and len(backend.graphs) == dataset.n_graphs
+        assert backend.index_calls == [pair_from_index(int(k), dataset.n_graphs) for k in pairs]
+
+    def test_cohort_and_per_pair_produce_the_same_shard(
+        self, cohort: tuple[Path, ContractA]
+    ) -> None:
+        """The acceptance criterion at the runner level, not just the backend's.
+
+        Measured for real against GEDLIB on all 3,916 LINUX pairs: the ``lb``,
+        ``ub`` and ``ubs`` roles each matched per-pair mode with max abs diff
+        0.0 and an identical sha256, and each matched T-27's recorded census.
+        """
+
+        class _ByGraph(_CohortBackend):
+            """Same numbers, reached through ``pair()`` on the per-pair path."""
+
+            env_mode = "per-pair"
+
+            def pair(self, g1: nx.Graph, g2: nx.Graph) -> _Result:
+                val = float(abs(g1.number_of_nodes() - g2.number_of_nodes()) + 1)
+                return _Result(val, val + 2.0, None, False, 0.25, False, "cohort_fake")
+
+        path, dataset = cohort
+        pairs = np.arange(0, 66, dtype=np.int64)
+        by_index, _, _ = _run(dataset, path, pairs, _CohortBackend())
+        by_graph, _, _ = _run(dataset, path, pairs, _ByGraph())
+        for key, value in by_index.arrays().items():
+            assert np.array_equal(value, by_graph.arrays()[key]), key
+
+    def test_a_cohort_backend_that_cannot_serve_it_raises_rather_than_falls_back(
+        self, cohort: tuple[Path, ContractA]
+    ) -> None:
+        """A silent fallback would run the campaign at 33x its budgeted cost."""
+
+        class _Broken:
+            env_mode = "cohort"
+            name = "broken"
+
+            def pair(self, g1: nx.Graph, g2: nx.Graph) -> _Result:
+                raise AssertionError("must not be reached")
+
+        path, dataset = cohort
+        with pytest.raises(RunnerError, match="no load_cohort"):
+            _run(dataset, path, np.arange(3, dtype=np.int64), _Broken())
+
+    def test_a_failing_load_cohort_stops_the_run(self, cohort: tuple[Path, ContractA]) -> None:
+        class _Failing(_CohortBackend):
+            def load_cohort(self, graphs: list[nx.Graph], *, key: str = "") -> None:
+                raise ValueError("GEDLIB rejected the cohort")
+
+        path, dataset = cohort
+        with pytest.raises(RunnerError, match="load_cohort failed"):
+            _run(dataset, path, np.arange(3, dtype=np.int64), _Failing())
+
+    def test_the_shard_records_which_call_sequence_produced_it(self, tmp_path: Path) -> None:
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(6, seed=21))
+        out = tmp_path / "s.npz"
+        assert (
+            main(
+                [
+                    "--input",
+                    str(src),
+                    "--out",
+                    str(out),
+                    "--backend",
+                    "stub",
+                    "--backend-factory",
+                    STUB_FACTORY_REF,
+                    "--workers",
+                    "1",
+                    "--env-mode",
+                    "cohort",
+                    "--log-level",
+                    "WARNING",
+                ]
+            )
+            == EXIT_OK
+        )
+        with np.load(out) as data:
+            assert set(data.files) == {
+                "pair_index",
+                "ged",
+                "lb",
+                "ub",
+                "certified",
+                "seconds",
+                "meta",
+            }
+            meta = json.loads(str(data["meta"]))
+        assert meta["env_mode"] == "cohort"
+
+    def test_the_reference_stub_is_untouched_by_the_flag(self, tmp_path: Path) -> None:
+        """A backend that declares no env_mode keeps its per-pair call path.
+
+        The stub, networkx and every injected double must be unaffected, so a
+        shard written with the flag set is byte-identical to one written
+        without it wherever the backend does not opt in.
+        """
+        src = tmp_path / "d.npz"
+        write_contract_a(src, _make_graphs(7, seed=22))
+        outs = []
+        for name, extra in (("a", []), ("b", ["--env-mode", "cohort"])):
+            out = tmp_path / f"{name}.npz"
+            assert (
+                main(
+                    [
+                        "--input",
+                        str(src),
+                        "--out",
+                        str(out),
+                        "--backend",
+                        "stub",
+                        "--backend-factory",
+                        STUB_FACTORY_REF,
+                        "--workers",
+                        "1",
+                        "--log-level",
+                        "WARNING",
+                        *extra,
+                    ]
+                )
+                == EXIT_OK
+            )
+            outs.append(out)
+        with np.load(outs[0]) as a, np.load(outs[1]) as b:
+            for key in ("pair_index", "ged", "lb", "ub", "certified", "seconds"):
+                assert np.array_equal(a[key], b[key]), key
+
+
+class TestCohortIsBuiltPerProcess:
+    """A GEDLIB environment must never be inherited across ``fork()``."""
+
+    def test_the_parent_never_builds_a_backend_for_a_pool_run(
+        self, cohort: tuple[Path, ContractA], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Any parent-side construction would be inherited by every child.
+
+        ``ProcessPoolExecutor`` forks on Linux, and GEDLIB state is not
+        fork-safe once ``init()`` has run. The guarantee is structural: with
+        ``workers > 1`` the parent must reach the pool without ever calling
+        ``make_backend``, leaving construction entirely to ``_init_worker``,
+        which runs inside the child.
+        """
+        import benchmarks.eval_setup.ged_exact_runner as mod
+
+        path, dataset = cohort
+        built: list[int] = []
+        monkeypatch.setattr(mod, "make_backend", lambda spec: built.append(1) or _CohortBackend())
+        pooled: list[object] = []
+        monkeypatch.setattr(mod, "_run_pool", lambda **kw: pooled.append(kw) or True)
+
+        run_chunk(
+            dataset=dataset,
+            pairs=np.arange(4, dtype=np.int64),
+            backend_spec=BackendSpec(name="gedlib"),
+            input_path=str(path),
+            workers=4,
+            checkpoint_path=None,
+            checkpoint_every=100,
+        )
+        assert built == [], "the parent must not construct a backend before forking"
+        assert len(pooled) == 1
+
+    def test_each_worker_loads_its_own_cohort(
+        self, cohort: tuple[Path, ContractA], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``_init_worker`` runs in the child, so every process gets its own env."""
+        import benchmarks.eval_setup.ged_exact_runner as mod
+
+        path, dataset = cohort
+        # _init_worker installs SIG_IGN for SIGTERM, which is right in a pool
+        # child and wrong in the pytest process.
+        monkeypatch.setattr(mod.signal, "signal", lambda *_a: None)
+        monkeypatch.setattr(mod, "_WORKER_BY_INDEX", False, raising=False)
+
+        mod._init_worker(
+            mod._WorkerSpec(
+                input_path=str(path),
+                backend=BackendSpec(name="stub", factory_ref=STUB_FACTORY_REF),
+            )
+        )
+        assert mod._WORKER_BY_INDEX is False, "a stub declares no env_mode"
+
+        backend = _CohortBackend()
+        monkeypatch.setattr(mod, "make_backend", lambda _spec: backend)
+        mod._init_worker(mod._WorkerSpec(input_path=str(path), backend=BackendSpec(name="gedlib")))
+        assert mod._WORKER_BY_INDEX is True
+        assert backend.n_loads == 1
+        assert backend.pid_at_load == os.getpid()
+        assert backend.graphs is not None
+        assert len(backend.graphs) == dataset.n_graphs
+        monkeypatch.setattr(mod, "_WORKER_BY_INDEX", False, raising=False)
