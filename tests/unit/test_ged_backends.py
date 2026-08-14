@@ -987,22 +987,36 @@ class TestAccessorProbe:
         with pytest.raises(GedBackendError, match="accessor probe failed"):
             backend.probe_accessors()
 
-    def test_the_probe_still_fires_in_cohort_mode(self, fake_gedlib: _InstallFake) -> None:
-        """Cohort mode changes when the environment is built, not what is checked.
-
-        The probe is the only thing standing between a wrong accessor and a
-        finished matrix of zeros, and it is the one guard a "build the
-        environment differently" change could plausibly bypass.
-        """
+    def test_the_probe_passes_in_cohort_mode(self, fake_gedlib: _InstallFake) -> None:
+        """Cohort mode changes when the environment is built, not what is checked."""
         fake_gedlib({"values": {"BRANCH_FAST": {"lb": 1.0, "ub": 0.0}}})
-        good = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort")
-        assert good.probe_accessors() == {"lb": 1.0}
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        assert backend.probe_accessors() == {"lb": 1.0}
 
-        bad = GedlibBackend(UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort")
-        object.__setattr__(bad, "_lb_method", "STAR")  # no values -> reads as a miss
+    def test_a_wrong_accessor_still_fires_the_probe_in_cohort_mode(
+        self, fake_gedlib: _InstallFake
+    ) -> None:
+        """The one guard a "build the environment differently" change could bypass.
+
+        Without it the first evidence of a misconfiguration is a finished matrix
+        of zeros, which is 21.7 M pairs too late.
+
+        Installed once per test, deliberately. Calling the fixture twice inside
+        one test leaves a fake ``gklearn`` in ``sys.modules`` after teardown --
+        ``monkeypatch.delitem`` records the *fake* installed by the first call
+        as the value to restore -- and the leak makes
+        ``test_ged_bound_bakeoff.py`` stop skipping and fail on a module with no
+        ``__file__``.
+        """
         fake_gedlib({"values": {"STAR": {"lb": 0.0, "ub": 0.0}}})
+        backend = GedlibBackend(
+            UNIT_COSTS, lb_method="BRANCH_FAST", compute="lb", env_mode="cohort"
+        )
+        object.__setattr__(backend, "_lb_method", "STAR")  # a dead lower accessor
         with pytest.raises(GedBackendError, match="accessor probe failed"):
-            bad.probe_accessors()
+            backend.probe_accessors()
 
 
 # --------------------------------------------------------------------------
