@@ -478,6 +478,37 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-14, amendment 10 — `ubt` COMPLETE (job 1993160, 2:21:03, 128 cores, `sr042`,
+  **300.8 core-h** realised against 886 projected). The size-stratified orientation measurement
+  `decisions.md` §6 could not make.**
+
+  28,000 rows, all finite, `value == min(fwd, rev)` exactly, values 0–273. Asymmetry of `IPFP_MS`
+  across the frozen §1.1 bins:
+
+  | bin | `[2,4)` | `[4,6)` | `[8,10)` | `[12,15)` | `[20,25)` | `[30,40)` | `[40,50)` | `[60,80)` | `[80,99)` |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+  | asymmetric | **0.0 %** | 0.7 % | 3.7 % | 12.0 % | 32.4 % | 47.6 % | 52.8 % | **59.5 %** | 59.1 % |
+  | mean \|fwd−rev\| | 0.000 | 0.017 | 0.086 | 0.265 | 0.813 | 1.350 | 1.525 | **1.863** | 1.592 |
+
+  **Orientation asymmetry is a function of size, and a single number cannot represent this cohort.**
+  `decisions.md` §6 records **33.2 %**, from our own BP implementation on **400 LINUX pairs at
+  n̄ = 8.71**. In the bin containing n̄ = 8.71 the measured rate here is **3.7 %**; 33.2 % is not
+  reached until `[20,25)`. The §6 figure is not merely imprecise — **it names a rate that belongs to
+  graphs three times larger than the ones it was measured on.**
+
+  > **The two upper bounds move in opposite directions in `n`, which is why one number was never
+  > going to work.** Measured on `BIPARTITE`: **22.8 %** on all 3,916 LINUX pairs (n̄ 8.71) falling to
+  > **11.2 %** on Mutagenicity (n̄ 28.5). Measured on `IPFP_MS` here: **3.7 % rising to 59.5 %** over
+  > the same size range. Multi-start appears to find the same optimum from both directions on small
+  > graphs and to diverge as the search space grows, while `BIPARTITE`'s single assignment does the
+  > reverse. **Any rewrite of §6 must state the method and the size range; neither alone is a fact
+  > about "the upper bound".**
+
+  **No systematic orientation bias**: reverse tighter on 14.2 %, forward on 13.9 %, near-balanced as
+  an undirected cohort should be. So symmetrisation is doing real work — it improves the bound on
+  **28.1 %** of pairs — without the pair ordering carrying information. That is the check that
+  distinguishes a needed `min` from a mis-ordered input.
+
 - **2026-08-14, amendment 9 — the ladder's rung-13 pilot. Two results that change how §6 and §7
   must be read, and a measured exact-GED ceiling.**
 
