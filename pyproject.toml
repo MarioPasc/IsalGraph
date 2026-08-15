@@ -81,6 +81,20 @@ bench = [
     "scikit-learn>=1.3",
     "grakel",
 ]
+# The competitor representations (isalgraph.competitors). Every one of these
+# is optional at import time -- `import isalgraph.competitors` succeeds with
+# all four absent, and requesting a backend whose library is missing raises
+# BackendUnavailableError rather than degrading. pynauty is pinned: the PyPI
+# sdist bundles nauty 2.8.8, and the from-source build under gcc 12.2.0 is
+# what the Picasso smoke gates.
+competitors = [
+    "isalgraph[networkx]",
+    "rapidfuzz>=3.0",
+    "pynauty==2.8.8.1",
+    "grakel",
+    "scipy>=1.10",
+    "numpy==1.26.4",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -121,7 +135,7 @@ strict = true
 warn_return_any = true
 
 [[tool.mypy.overrides]]
-module = ["networkx", "networkx.*", "igraph", "igraph.*", "torch", "torch.*", "torch_geometric", "torch_geometric.*", "Levenshtein", "Levenshtein.*"]
+module = ["networkx", "networkx.*", "igraph", "igraph.*", "torch", "torch.*", "torch_geometric", "torch_geometric.*", "Levenshtein", "Levenshtein.*", "scipy", "scipy.*", "grakel", "grakel.*", "pynauty", "pynauty.*", "rapidfuzz", "rapidfuzz.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
@@ -132,6 +146,13 @@ line-length = 100
 select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
+# N818: four competitor exceptions read as predicates rather than as errors --
+# BudgetExceeded, BitCountUndefined, DistanceUndefined, NotReversible. The names
+# are frozen in the T-04 design note and in three agent briefs, and each states a
+# fact about the representation rather than a fault in the caller: an undefined
+# distance is a REPORTED F1 result, and a stated ceiling is a result while a
+# silent one is a defect. Renaming them to *Error would invert that reading.
+"src/isalgraph/errors.py" = ["N818"]
 # E402: imports after pytest.importorskip() -- standard pattern for optional deps
 "tests/integration/*.py" = ["E402"]
 # N802: test names use uppercase IsalGraph instruction names (V, C, N, P, W)
