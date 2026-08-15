@@ -1,8 +1,10 @@
 # Approximate GED — Suite 2, the proven bracket
 
 **Owner**: T-05 · **Serves**: AE.1, R3.7a, R3.5b
-**Status**: LOCKED (decision 11). **Cost: ≈ 0.57 core-hours for all 21.7 M pairs** (~~1.05 core-h /
-40 M~~ — T-01 re-derived the cohort 2026-08-13, [data](data.md) §1.3).
+**Status**: **DONE 2026-08-15 (T-05)** — see the RESULT section at the end of this file.
+**Cost: ≈ 2,140 core-hours realised** for all 21,710,892 pairs across the three full-cohort roles
+(~~≈ 0.57 core-h~~ — a rate that predates T-27 and was never measured; ~~1.05 core-h / 40 M~~ — T-01
+re-derived the cohort 2026-08-13, [data](data.md) §1.3).
 
 Related: [gedlib](gedlib.md) · [exact_ged](exact_ged.md) (the calibration anchor) ·
 [data](data.md) · [statistics](statistics.md) D13
@@ -221,9 +223,45 @@ Three additions, all cheap:
    **Every node the exact solver buys widens the calibration and directly strengthens AE.1.**
 2. **Regress, do not assume transfer.** Fit relative bracket width `(UB − LB)/UB` and the ρ-gap on
    `n` over the ladder; report the extrapolation to the Suite-2 range **with its uncertainty**.
-3. **Report `(UB − LB)/UB` as a function of `n` across all of Suite 2.** Needs no exact GED,
+
+> ## ⚠ CORRECTED 2026-08-15 by T-05 — item 3's measure is under-determined, and **reported alone it
+> inverts the AE.1 conclusion**. The deliverable survives; the metric must be paired.
+>
+> `(UB − LB)/UB` is a **ratio whose denominator grows with `n`**. A bound whose absolute gap is
+> merely constant therefore yields a *falling* relative width, and a falling relative width does not
+> imply a tightening bracket. Measured by T-05 on all 21,710,892 Suite-2 pairs, fitting both measures
+> on `max(n₁,n₂)` within each dataset:
+>
+> | | absolute gap `UB − LB` | relative width `(UB − LB)/UB` |
+> |---|---|---|
+> | slope sign | **positive in 10 of 10 datasets** | negative in 6 of 10 |
+> | the four unconfounded datasets | `coil_del` **+1.52**, `protein` **+1.46**, `mutagenicity` **+0.52**, `aids_iam` **+0.25** ops/node | −0.0031, −0.0030, −0.0054, −0.0127 |
+>
+> All ten absolute CIs exclude zero (graph-level cluster bootstrap, D15 tiers, seed 42). **In 4 of 10
+> datasets the two measures carry opposite signs**, so reporting the relative width alone would have
+> told a reviewer that the bracket tightens at scale — the opposite of the truth, on precisely the
+> point AE.1 disputes.
+>
+> **What this changes**: the **absolute gap leads**, and the relative width is reported beside it with
+> its denominator named. `LB/UB` is *not* a third quantity — it is exactly `1 − (UB−LB)/UB` and
+> carries no independent information.
+>
+> **What survives**: everything else in item 3. The measurement still needs no exact GED, is still
+> computable on all 21.7 M pairs, and still separates "IsalGraph degrades at scale" from "our
+> reference degrades at scale" — T-05 ran that separation via the `BP_BEAM_DET` arm and it fired in
+> 10/10 datasets. The item was right about *what to measure and why*; it named one scale where two
+> are needed.
+>
+> Full result: [T-05 article notes](../tasks/T-05-article-notes.md),
+> `results/reports/T-05-bounded-ged/REPORT.md` §7.1.
+
+3. **Report the absolute gap `UB − LB` *and* the relative width `(UB − LB)/UB` as functions of `n`
+   across all of Suite 2**, absolute leading. Needs no exact GED, computable on all 21.7 M pairs,
+   and separates "IsalGraph degrades at scale" from "our reference degrades at scale".
+
+   ~~3. **Report `(UB − LB)/UB` as a function of `n` across all of Suite 2.** Needs no exact GED,
    computable on all 21.7 M pairs, and is **the single measurement that answers AE.1 most directly**:
-   it separates "IsalGraph degrades at scale" from "our reference degrades at scale".
+   it separates "IsalGraph degrades at scale" from "our reference degrades at scale".~~
 
 ---
 
@@ -303,3 +341,80 @@ Blumenthal et al., GbRPR 2019 (GEDLIB itself) ·
 Jain et al., NeurIPS 2024 (GraphEdX, already cited).~~
 
 Slot accounting in [compliance](compliance.md).
+
+---
+
+## RESULT — T-05, closed 2026-08-15
+
+**All 21,710,892 Suite-2 pairs bounded under one cost model. Every gate passed and was
+re-verified independently of the gate code.** Artifacts:
+`$SANDISK/data/source/APPROX_GED/{LB,UB,UB_SENSITIVITY,UB_TIGHT,ladder,gates,exported_suite2}`
++ `manifest.json` + `PROVENANCE.md` (48 files, 1.2 GB) · analysis
+`results/reports/T-05-bounded-ged/` · [article notes](../tasks/T-05-article-notes.md) ·
+[design + 15 amendments](../tasks/T-05-design.md).
+
+### The frozen roles, as run
+
+| Role | Method | Options string, verbatim | Scope |
+|---|---|---|---|
+| `lb` | `BRANCH_FAST` | `--threads 1` | all 21,710,892 pairs |
+| `ub` | `BIPARTITE` | `--threads 1` | all 21,710,892 pairs |
+| `ubs` | `BP_BEAM` | `--threads 1 --randomness PSEUDO --initialization-method BIPARTITE --initial-solutions 1` | all 21,710,892 pairs |
+| `ubt` | `IPFP` | `--threads 1 --randomness PSEUDO --initial-solutions 10` | the §1.1 28,000-pair subsample |
+
+Cost model D6 `[1,1,0,1,1,0]`, `CONSTANT`, every run. **0 spec mismatches across all 30 files.**
+
+### Gates — pre-declared, all fired as written
+
+| Gate | Result |
+|---|---|
+| **G1** cohort | all ten rows exact: **16,370 graphs, 21,710,892 pairs**, exit 0 |
+| **G2** T-27 reproduction | **element-wise equal on 10,807,845 pairs across three arms** (design required two), every `sha256` byte-identical |
+| **G3** bracket validity | **0 violations over all 21,710,892 pairs**; **0** `lb ≤ exact ≤ ub` violations over 3,836,827 T-03-certified pairs, joined on `graph_ids` |
+| **G4** structural | all 30 matrices symmetric, zero-diagonal, finite, `≥ 0`, off-diagonal zero fraction `< 0.99` |
+
+### §4's standing request, answered — the certification rate, measured per dataset
+
+This file twice forbids promising a rate before T-05 measured it. Measured, `|LB − UB| ≤ 1e-9`:
+
+| dataset | certified | mean gap `UB−LB` | | dataset | certified | mean gap |
+|---|---:|---:|---|---|---:|---:|
+| `iam_letter_med` | **28.46 %** | 1.85 | | `grec` | 1.32 % | 14.46 |
+| `iam_letter_low` | 28.05 % | 1.82 | | `coil_del` | 0.87 % | 45.95 |
+| `iam_letter_high` | 23.61 % | 2.23 | | `aids_iam` | 0.67 % | 13.16 |
+| `linux` | 2.02 % | 6.94 | | `aids_graphedx` | 0.41 % | 12.26 |
+| `protein` | 0.16 % | 76.60 | | `mutagenicity` | **0.03 %** | 32.25 |
+
+**The rate spans a factor of 949 across the cohort and collapses with `n`.** T-27 measured
+1.2–40.2 % at `n ≤ 12`; at Suite-2 sizes it is under 1 % on six of ten datasets. **No text may
+promise a certification rate without naming its dataset.**
+
+### The headline, and it corrects this file's own §3.1 item 3
+
+**The absolute gap `UB − LB` rises with `n` in 10 of 10 datasets** (all CIs exclude zero), while the
+relative width `(UB − LB)/UB` falls in 6 of 10. See the ⚠ CORRECTED block at item 3. The
+`BP_BEAM_DET` arm fired in **10/10** datasets, and its share of the widening is **63–88 %** on the
+small-`n` cohorts against **35–51 %** on the four that span the disputed range — so most of the
+large-`n` looseness is **not** attributable to the frozen gate and would survive replacing
+`BIPARTITE`. **`BIPARTITE` remains primary by PI ruling; `BP_BEAM_DET` is a disclosed arm.**
+
+### The calibration ladder — §3.1 item 1, delivered
+
+Rungs `n = 13…18`, 250 pairs each, `networkx.graph_edit_distance` under D6, 1,200 s per-pair budget,
+seed 42. The frozen 25 % truncation rule fired at rung 18 (20.8 % certified) against rung 17's
+28.4 %, so the **measured exact-GED ceiling is `n = 17`** — five nodes above T-03's 12, and two above
+the 15–16 the rung-13 pilot projected. Certification: 81.2 % → 20.8 % across the rungs.
+
+> **The ladder is six datasets, not ten, and its composition shifts across rungs** — Letter and LINUX
+> cap at `n ≤ 10` and contribute at none; neither AIDS cohort has a 14-node connected graph. A bare
+> rung-to-rung slope conflates size with provenance, and the shift is *forced*. Report per-rung
+> quantities with their composition attached.
+
+### Debts, with owners
+
+| Debt | Owner |
+|---|---|
+| **§7.5** — `ρ(Lev, ·)` per dataset. Needs a canonical string per Suite-2 graph; only five datasets have Levenshtein matrices and all cap at `n ≤ 12`. Deferred in full by PI decision 2026-08-15 | **T-06** |
+| **T-03's `ub_matrix` is run-dependent** — 74–82 % of values change between runs. Exposure verified as exactly the 61,084 D11 censored interval upper ends. Accepted as a stated limitation, no repair | **T-20** (limitations text) |
+| `slurm_job_id` absent from all 30 files' metadata although CONTRACTS §4 lists it; ids recoverable from `run_reports/` | T-06 |
+| 60 `.ckpt.npz` files (289 MB) left in `$E/shards/` on Picasso after the merges | housekeeping |

@@ -79,11 +79,36 @@ words. Write the row as a stated scope decision; see [corrections](corrections.m
 
 **Contingency, with a date.** If S-f's extension is granted *and* T-03 has finished, a minimal arm may
 run: character-level Transformer, ≤ 2 M parameters, on canonical strings, **graph classification only**,
-on the datasets that already carry class labels (Letter 15 classes, GREC 22, Mutagenicity 2, Protein
-6, AIDS 2, COIL-DEL 100). Baselines: the WL subtree kernel (already computed) and the same model on
+on the datasets that already carry class labels (~~Letter 15 classes, GREC 22~~ → **see the correction
+below**; Mutagenicity 2, Protein 6, AIDS 2, COIL-DEL 100). Baselines: the WL subtree kernel (already computed) and the same model on
 the **competitor** strings — which makes it a *representation* comparison rather than a weak claim
 about Transformers. Fixed splits, one seed set, no architecture search. Reported as a **feasibility
 demonstration**, explicitly not a benchmark result.
+
+> ## ⚠ CORRECTED 2026-08-15 (T-05) — the class counts above are RAW counts and **two are false of
+> the filtered cohort**. The contingency survives; its dataset list shrinks.
+>
+> The counts are what the IAM `.cxl` indices ship — re-verified, all correct **as raw figures**. They
+> are not the counts that survive `require_connected`, which every Suite-2 cohort applies. Measured
+> by T-05's exporter on the real tree:
+>
+> | dataset | raw classes | **retained after the filter** |
+> |---|---:|---:|
+> | IAM Letter LOW | 15 | **9** |
+> | GREC | 22 | **17** |
+> | IAM Letter HIGH | 15 | 15 |
+> | Mutagenicity / Protein / COIL-DEL | 2 / 6 / 100 | 2 / 6 / 100 |
+> | **LINUX**, **AIDS (GraphEdX)** | — | **0 — no class label at all** |
+>
+> **What this changes**: any manuscript sentence of the form "Letter, 15 classes" or "GREC, 22
+> classes" is **false of the cohort actually analysed**, and a graph-classification arm cannot run on
+> LINUX or AIDS-GraphEdX at all — `graphedx_loader` has no label field. This is the labels
+> counterpart of the size-biased connectivity discard already recorded in §7. **Owners: T-18, T-06.**
+>
+> **What survives**: the contingency itself, its baselines, and its framing as a feasibility
+> demonstration. Only the dataset list and the printed counts change. The realised count is a
+> **measured output** recorded per file in `exported_suite2/*.npz` `metadata` and in that directory's
+> `manifest.json` — never an assertion.
 
 > **The contingency is live only if the extension is granted.** [schedule](schedule.md) establishes
 > there is no slack — the critical path is 27.5–28.0 days minimum in a 19-day window — so an

@@ -81,6 +81,36 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 >    labelling** — 290/300 disagreement with a sorted rebuild, and it made graph6 and sparse6
 >    serialise *different* labellings.
 
+> ## ⚠ T-05 closed 2026-08-15 and invalidated a measure this plan named. **T-06, T-18 and T-20
+> inherit corrections.**
+>
+> 1. **`(UB − LB)/UB` alone inverts the AE.1 conclusion.** It is a ratio whose denominator grows with
+>    `n`. Measured on all 21,710,892 pairs: the **absolute gap rises in 10/10 datasets** while the
+>    relative width falls in 6/10 — **opposite signs in 4 of 10**. `approx_ged.md` §3.1 item 3 called
+>    it "the single measurement that answers AE.1 most directly"; it is corrected in place. **Report
+>    the absolute gap first.** **Inherits: T-06, T-20.**
+> 2. **Class counts in `decisions.md` are RAW counts and two are false of the filtered cohort** —
+>    Letter LOW retains **9 of 15**, GREC **17 of 22**, and **LINUX and AIDS-GraphEdX carry no class
+>    label at all**. Any "Letter, 15 classes" sentence is false of what we analysed, and a
+>    classification arm cannot run on those two. **Inherits: T-18, T-06.**
+> 3. **`decisions.md` §6's 33.2 % orientation figure names a rate belonging to graphs ~3× larger than
+>    those it was measured on**, and the two upper bounds move in **opposite** directions in `n`
+>    (`BIPARTITE` 22.8 %→11.2 %, `IPFP_MS` 3.7 %→59.5 %). Any restatement must name method *and* size
+>    range. **Inherits: T-20.**
+> 4. **T-03's `ub_matrix` is run-dependent** (74–82 % of values change between runs), bounded to
+>    exactly the **61,084 D11 censored interval upper ends**. Accepted unrepaired by PI decision, so
+>    **stating it is obligatory** — otherwise re-running the reproduction script gives different
+>    numbers, the R3.5a failure mode. **Inherits: T-20.**
+> 5. **D14's "a few graphs" understates canonicalisation censoring at Suite-2 sizes** (5/10 random
+>    `protein` and `coil_del` graphs exceed 15 s), and **its 300 s timeout cannot be enforced with a
+>    Python signal** — `SIGALRM` does not interrupt the C++ engine; use a killed subprocess.
+>    **Inherits: T-06.**
+> 6. **`cohort_audit.py` can no longer re-derive the LINUX and AIDS-GraphEdX rows** on the current
+>    tree — no single `--source` resolves both roots. The counts are confirmed by a *different*
+>    program. **Inherits: T-06.**
+>
+> Full detail: [T-05 article notes](../tasks/T-05-article-notes.md).
+
 > ⚠ **T-04 was scouted 2026-08-13 on the REAL cohort and several of its premises are wrong.**
 > Every competitor was installed and run against Suite 1's **certified exact GED** (T-03) and
 > Suite 2's IAM GXL. Evidence: **one file per competitor in
@@ -129,7 +159,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 | ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
 | ~~**T-04**~~ | ~~**Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS**~~ → **DONE 2026-08-15.** **Eleven backends, 6 metrics, 383 tests**, 9,510 lines; ruff + `mypy --strict` clean; full suite **2,106 passed / 321 skipped**. **The reproduction gate closed bit-for-bit**: replaying each scout script's `Random(42)` stream reproduces `real_suite1.json` on **all 5 datasets × 8 rows at delta `0.00e+00`**. Oracles: AGM **327 graphs / 0 mismatches** vs the lex-min over all `n!`; min-DFS distinct codes **1/2/6/21/112** = OEIS A001349, **0 collisions**; budget **24/400 Mutagenicity, 0 elsewhere**. `pynauty` **builds from source under gcc 12.2.0 on Picasso**, byte-identical output (stop-condition 2 closed). **Five plan files corrected — see the header warning.** Carries: **the corrected ρ table supersedes `competitors/README` §4.1/§4.2**; **IsalGraph clears the size null on 1 of 5, not 2**; **bootstrap CIs are now a precondition for any printed ρ** | — | **done** | — | [T-04 design](../tasks/T-04-design.md), [article notes](../tasks/T-04-article-notes.md), [wave](../../2026-08-14-t04-competitors/summary.md) |
 | **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix.** F3 and the separation ratio already have synthetic priors ([competitors/README](competitors/README.md) §3); T-04a is what makes them real | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3, [competitors/README](competitors/README.md) |
-| **T-05** | **Bounded GED via GEDLIB** — wire the **bounds T-27 selects** (not `BRANCH_FAST` + `IPFP` by default), pass the validation gates, run the **calibration ladder**, then all **21,710,892** Suite-2 pairs (≈ 0.57 core-h) | ~~T-01~~, ~~T-03~~, **T-27** | 5–10 | **P0** | [approx_ged](approx_ged.md), [gedlib](gedlib.md), [exact_ged](exact_ged.md) §4 |
+| ~~**T-05**~~ | ~~**Bounded GED via GEDLIB** — wire the bounds T-27 selects, pass the validation gates, run the calibration ladder, then all 21,710,892 Suite-2 pairs (≈ 0.57 core-h)~~ → **DONE 2026-08-15.** All **21,710,892** pairs bounded under D6, **≈ 2,140 core-h realised** (not 0.57). G1–G4 all passed and were re-verified with independent code: **0 bracket violations over all 21.7 M pairs**, **0** containment violations over 3,836,827 T-03-certified pairs, and G2 reproduces T-27 **element-wise on 10,807,845 pairs across three arms**, byte-identical. Ladder rungs 13–18 → **measured exact-GED ceiling `n = 17`** (up from 12). Certification spans **28.46 % → 0.03 %**, a factor of 949. ⚠ **The absolute gap `UB−LB` RISES with `n` in 10/10 datasets while `(UB−LB)/UB` falls in 6/10 — the measure this plan named would have inverted the AE.1 conclusion** (approx_ged §3.1 item 3, corrected). The `BP_BEAM_DET` arm fired 10/10: the frozen gate explains **63–88 %** of the widening at small `n` but only **35–51 %** at the disputed sizes. **Carries: §7.5 (`ρ(Lev,·)`) deferred in full → T-06** · **class counts false of the filtered cohort (Letter LOW 9/15, GREC 17/22, LINUX & AIDS-GraphEdX none) → T-18, T-06** · **T-03's `ub_matrix` run-dependent, accepted unrepaired → T-20 must state it** · **D14's censoring premise understated, and its 300 s timeout cannot be enforced with a Python signal → T-06** | ~~T-01~~, ~~T-03~~, ~~T-27~~ | 5–10 | ~~P0~~ **done** | [log](../tasks/T-05-design.md), [notes](../tasks/T-05-article-notes.md), [letter](../tasks/T-05-letter-fragment.md), [plan RESULT](approx_ged.md) |
 | **T-06** | **Full recompute** — all experiments, C++ engine, new cohorts, competitor columns, new statistics | T-02…T-05 | 10–14 | **P0** | [statistics](statistics.md), [data](data.md), [competitors](competitors.md), [labels](labels.md) |
 | **T-07** | **Read [28] and [29]**; inherited/modified/new delta table **plus the sufficiency paragraph**; resolve D19 | — | 1–4 | **P0** | [corrections](corrections.md) §4, [decisions](decisions.md) 9 |
 | **T-08** | **Related-work section** (§1.x) + bibliography to ≤ 55 | T-07 | 4–10 | P1 | [compliance](compliance.md), [manuscript](manuscript.md) §1 |

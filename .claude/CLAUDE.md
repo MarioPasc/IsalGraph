@@ -267,8 +267,27 @@ use `importlib.import_module`, which formatters cannot reorder.
 | **Upper bound** | `BIPARTITE`, `IPFP`, `REFINE`, `BP_BEAM` | `get_upper_bound()` |
 
 Calling `get_lower_bound()` on an upper-bound method returns **0.00**; `HED` returns
-`get_upper_bound() = inf`. Neither raises. **Assert `0 < value < inf` on every read** -- otherwise a
-whole GED matrix silently fills with zeros.
+`get_upper_bound() = inf`. Neither raises.
+~~**Assert `0 < value < inf` on every read** -- otherwise a whole GED matrix silently fills with
+zeros.~~
+
+> ## ⚠ CORRECTED 2026-08-15 (T-05) -- `0 < value < inf` per pair is WRONG and will abort a correct
+> run. The failure it guards against is real; the guard is at the wrong level.
+>
+> **GED is legitimately 0 for isomorphic graphs.** Measured on Suite 2: **28.05 %** of IAM Letter LOW
+> pairs are certified with `LB == UB`, and **1.01 %** of the whole 21,710,892-pair cohort has
+> `UB == 0`. Suite 1 alone holds 306,768 certified off-diagonal pairs with exact GED = 0. A blanket
+> per-pair `value > 0` assertion fires on all of them.
+>
+> **The correct guards, which T-05 ran on all 21.7 M pairs with zero false aborts:**
+>
+> - **Per read** -- reject non-finite; reject `< 0`. Reject `== 0` **only when the pair cannot
+>   attainably have distance 0** (`ged_backends.py:402 zero_distance_is_attainable`).
+> - **Per campaign, at init** -- an accessor probe on P4 vs C4 (true GED 1) asserting the method
+>   returns 1.00 *through the accessor it is being read with*. This is the check that actually
+>   catches a wrong accessor, and it is cheap.
+> - **Per merged matrix** -- record the off-diagonal exact-zero fraction and abort if it is
+>   **>= 0.99**. That is the shape of the silent-zero failure; a per-pair rule is not.
 
 Verified on Picasso 2026-08-11 with P4 vs C4 (true GED = 1): `ANCHOR_AWARE_GED` 1.00/1.00,
 `BRANCH_FAST` LB 1.00 (0.20 ms), `IPFP` UB 1.00 (0.33 ms), `BIPARTITE` UB 1.00, `STAR` LB 1.00.

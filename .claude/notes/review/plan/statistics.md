@@ -317,6 +317,46 @@ The greedy-min substitution is a *stated degradation of the representation*, not
 observation, and it is exactly the fallback a practitioner would use. Reporting both arms converts an
 exclusion into a characterisation.
 
+> ## ⚠ QUALIFIED 2026-08-15 (T-05) — **"a few" understates it, and the 300 s timeout cannot be
+> enforced the obvious way.** D14 itself survives intact and is *more* necessary than when written.
+>
+> D14's premise was set when every canonicalised graph in this project was `n ≤ 12`. T-05 measured
+> `canonical_string` through the C++ engine on **10 uniformly random graphs per dataset, seed 42**,
+> each in its own process killed at a **15 s** budget:
+>
+> | dataset | `n` range | canonical killed | canonical median | greedy-min killed | greedy-min median |
+> |---|---|---:|---:|---:|---:|
+> | `protein` | 11–48 | **5/10** | 0.899 s | 0/10 | 2.6 ms |
+> | `coil_del` | 7–35 | **5/10** | 0.089 s | 0/10 | 3.1 ms |
+> | `mutagenicity` | 10–37 | 1/10 | 0.317 s | 0/10 | 3.9 ms |
+> | `grec` | 8–17 | 0/10 | 0.2 ms | 0/10 | 0.2 ms |
+> | `aids_iam` / `aids_graphedx` | 7–12 | 0/10 | 0.2 ms | 0/10 | 0.2 ms |
+>
+> **15 s is not 300 s and these rates must not be extrapolated to it.** What they do establish: at
+> Suite-2 sizes censoring is a **bulk property of two or three datasets**, not a marginal tail. So
+> D14's greedy-min primary arm and its complete-case sensitivity arm will carry real weight, and the
+> **censoring-rate table is a headline result of T-06, not a footnote**.
+>
+> **The cliff is not a node count.** COIL-DEL censors 5/10 by `n = 35` while Mutagenicity censors
+> 1/10 by `n = 37`, and GREC is clean to `n = 17` with a 10.7 ms maximum. That is the direction §8
+> already argues — canonicalisation cost tracks **structural symmetry**, not size or density — and it
+> is why §8's symmetry stratum exists. Ten graphs per dataset cannot resolve the mechanism, only the
+> fact that the ordering is not by `n`.
+>
+> ### 🔴 A Python signal-based timeout does NOT interrupt the C++ engine
+>
+> CPython runs signal handlers only *between bytecode instructions*, so `SIGALRM` stays queued for
+> the entire duration of a native call. A first attempt using `signal.setitimer` **hung for 25
+> minutes on a single graph** with the budget silently not applying. The table above was produced
+> with a **killed subprocess**, which does work. Anyone implementing D14 against the C++ engine must
+> do the same — and this failure presents as a hang, not as an error.
+>
+> **What survives**: all of D14. The fallback is sound and now measured at Suite-2 sizes rather than
+> at `n ≤ 12` — greedy-min ran 0.2–3.9 ms with **0 kills** across all six datasets, four to five
+> orders of magnitude under exhaustive canonicalisation.
+>
+> Data: `.claude/notes/review/tasks/T-05-canonicalisation-probe.json`. **Owner: T-06.**
+
 ---
 
 ## 8. Stratification

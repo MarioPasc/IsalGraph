@@ -199,7 +199,38 @@ distance matrix**, and Levenshtein would be correlated against an asymmetric ref
 
 **The exposed bound therefore takes the minimum of both orientations**, which is symmetric, still
 provably an upper bound (each orientation is an achievable edit path), and never worse. Measured
-gain: tighter on **33.2 %** of pairs, mean **1.15 edit operations**, ρ(exact, UB) from 0.479 → 0.522.
+gain: ~~tighter on **33.2 %** of pairs, mean **1.15 edit operations**~~ → **see the correction
+below**; ρ(exact, UB) from 0.479 → 0.522.
+
+> ## ⚠ CORRECTED 2026-08-15 (T-05) — **33.2 % is not a cohort-level rate, and no single number is.**
+> The decision to symmetrise survives untouched and is now better supported.
+>
+> The 33.2 % / 1.15-operation figure comes from **our own BP implementation on 400 LINUX pairs at
+> n̄ = 8.71**. T-05 measured orientation asymmetry across the frozen `IPFP_MS` subsample, which spans
+> `n = 2…98` over all ten Suite-2 datasets:
+>
+> | bin of `max(n₁,n₂)` | `[2,4)` | `[8,10)` | `[12,15)` | `[20,25)` | `[40,50)` | `[60,80)` |
+> |---|---:|---:|---:|---:|---:|---:|
+> | asymmetric | **0.0 %** | **3.7 %** | 12.0 % | 32.4 % | 52.8 % | **59.5 %** |
+>
+> **In the bin containing n̄ = 8.71 the rate is 3.7 %; 33.2 % is not reached until `[20,25)`.** So the
+> figure does not merely lack precision — **it names a rate belonging to graphs roughly three times
+> larger than the ones it was measured on.**
+>
+> **And the two upper bounds move in opposite directions in `n`**, which is why one number was never
+> going to work: `BIPARTITE`'s asymmetry rate **falls** from 22.8 % (LINUX, n̄ 8.71) to 11.2 %
+> (Mutagenicity, n̄ 28.5), while `IPFP_MS`'s **rises** from 3.7 % to 59.5 % over the same range.
+> **Any restatement must name the method and the size range; neither alone is a fact about "the
+> upper bound".**
+>
+> **What survives — all of it, and more firmly.** Symmetrisation is doing real work: it improves the
+> bound on **28.1 %** of subsample pairs. And there is **no systematic orientation bias** (reverse
+> tighter on 14.2 %, forward on 13.9 %), which is the check that distinguishes a needed `min` from a
+> mis-ordered input. The instruction to T-05 below was followed: every upper bound is computed in
+> both orientations and minimised, and `BRANCH_FAST`'s symmetry was **measured** on 9,406 pairs
+> across five datasets and two size strata — identically equal, not equal within tolerance.
+>
+> **Retire the 400-pair BP figure from any cohort-level claim.** Owner of the rewrite: **T-20**.
 
 > **This applies to GEDLIB and it is T-05's problem, not just ours.** `BIPARTITE`, `IPFP`, `REFINE`
 > and `BP_BEAM` all construct an edit path from a directed assignment and have the same property.

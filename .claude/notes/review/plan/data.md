@@ -14,6 +14,26 @@ tracked code (`cohort_audit.py`, `iam_gxl_loader.py`, 34 unit tests). See §7 RE
 > ```bash
 > ~/.conda/envs/isalgraph-cpp/bin/python -m benchmarks.real_data.eval_setup.cohort_audit
 > ```
+>
+> ## ⚠ CORRECTED 2026-08-15 (T-05) — **that command can no longer re-derive two of the ten rows.**
+> The cohort numbers are unaffected; the *reproduction* is.
+>
+> `cohort_audit.py:254` and `export_graphs.py:430` both resolve GraphEdX as
+> `<source>/GED_PRECOMPUTED/<NAME>`. The real path is `<source>/GED_PRECOMPUTED/**datasets**/<NAME>`,
+> and `<source>/GED_PRECOMPUTED/LINUX` does not exist — orchestrator-verified. Because IAM now lives
+> under `APPROX_GED/datasets/IAM_Database/extracted` while GraphEdX lives under
+> `GED_PRECOMPUTED/datasets`, **no single `--source` value makes either module resolve both roots.**
+>
+> **What this changes**: decision 22's tracked reproduction script — whose entire purpose is that
+> "what it measures becomes the table" — **cannot re-derive the LINUX and AIDS-GraphEdX rows on the
+> current tree without a path fix**. Neither file was patched by T-05: both are frozen T-01/T-03
+> artifacts and patching them would re-open a closed ticket's certified output.
+>
+> **What survives**: every count in §1. T-05's own exporter takes **two roots** and reproduced all
+> ten rows exactly (16,370 graphs, 21,710,892 pairs, exit 0) on 2026-08-15, so the numbers are
+> confirmed — by a different program than the one this line names.
+>
+> **Owner: T-06**, which must either fix the two paths or state the two-root invocation here.
 
 Related: [exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [statistics](statistics.md) ·
 [preregistration](preregistration.md) · [decisions](decisions.md) · [tickets](tickets.md)
@@ -233,7 +253,7 @@ Exact GED grows **≈ 5× per added node** near n = 12; encoding ≈ 1.15× per 
 | Levenshtein, all pairs | 1–2 | ~2 min |
 | WL kernel (not accelerated) | 2–4 | ~5 min |
 | Bootstrap + Mantel ([statistics](statistics.md) D15) | **40–80** | ~1 h |
-| **Suite 2, both GED bounds, 21.7 M pairs** | **≈ 0.57** | minutes |
+| **Suite 2, both GED bounds, 21.7 M pairs** | ~~≈ 0.57~~ → **≈ 2,140 realised** (T-05, done) | see note |
 | **Suite 1, exact GED** | ~~≈ 1,000–1,650~~ → **≈ 2,081 measured** (T-03, done) | 16–26 h |
 
 **All new compute is GED.** No pair subsampling is needed anywhere except Suite 1 —
@@ -242,6 +262,28 @@ see [exact_ged](exact_ged.md) §3.
 > **Updated 2026-08-13 (T-01):** graph and pair counts follow §1's COIL-DEL correction (16,370 graphs,
 > 21,710,892 Suite-2 pairs). Suite 1's figure is now T-03's **measured** ≈ 2,081 core-hours rather
 > than the estimate. ~~19,670 graphs · 40 M pairs · ≈ 1.05 core-h~~
+
+> ## ⚠ CORRECTED 2026-08-15 (T-05) — the Suite-2 bounds row was wrong by ~3,750×, and the row it
+> sat next to explains why nobody caught it
+>
+> **≈ 0.57 core-h** came from "~100 µs/pair", a rate that predates T-27 and **was never measured**.
+> The realised cost of the three full-cohort roles was **≈ 2,140 core-hours** — comparable to
+> Suite 1's exact GED, not to "minutes". Two independent errors compounded:
+>
+> | | |
+> |---|---|
+> | **The rate was wrong.** | T-27 measured `BRANCH_FAST` at 285 µs/pair at n̄ = 29.51, not 100 µs, and its probe used **160 graphs with `25 ≤ n ≤ 35`** while Suite 2 reaches `n = 98`. Per-pair cost scales roughly as `max(n₁,n₂)³`. |
+> | **The parallelisation was pathological.** | The process pool used by the first campaigns is **negative-scaling**: on identical work, 1 worker took 36 core-s, 4 → 212, 15 → 928, 32 → 5,260. Three campaigns hit a 12 h wallclock after 8 of 10 datasets. `--workers 1` is the measured optimum and the array is the only correct fan-out. |
+>
+> **What this changes**: no Suite-2 GED figure in this table may be quoted from a rate that was not
+> measured on Suite-2-sized graphs. The ~2,140 core-h is realised, not projected.
+>
+> **What survives**: "All new compute is GED" — still true, and now more so. The Levenshtein, WL and
+> bootstrap rows are untouched by this and remain estimates.
+>
+> ⚠ **The `seconds_matrix` in the published files is *in-worker solver time*, not job wall time**, so
+> it under-reports job consumption and is **not comparable across datasets** (they ran at different
+> worker counts). See [T-05 article notes](../tasks/T-05-article-notes.md).
 
 ---
 
