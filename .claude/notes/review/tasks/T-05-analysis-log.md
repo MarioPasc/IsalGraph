@@ -14,7 +14,7 @@ skip-with-banner default make the ten-dataset re-run a one-command repeat.
 | Path | Description |
 |---|---|
 | `benchmarks/real_data/eval_setup/approx_ged_analysis.py` | The §7.1–§7.4 analysis module and its CLI. 3,300 lines. |
-| `tests/unit/test_approx_ged_analysis.py` | 96 unit tests. |
+| `tests/unit/test_approx_ged_analysis.py` | 108 unit tests. |
 | `results/reports/T-05-bounded-ged/REPORT.md` | The report. 460 lines. |
 | `results/reports/T-05-bounded-ged/data/*.json` | 9 files; every number the report prints. |
 | `results/reports/T-05-bounded-ged/figures/*.pdf` | 6 figures, all through `benchmarks/plotting_styles`. |
@@ -74,7 +74,7 @@ in 5.9 s, emitting the `COHORT INCOMPLETE` warning and banner.
 
 ### AC2 — every prose number is in a JSON
 
-Seven figures grepped out of the prose and located in `data/` (re-run after the absolute-gap change):
+Nine figures grepped out of the prose and located in `data/` (re-run after the gate-attribution change):
 
 | claim | value in prose | found in |
 |---|---:|---|
@@ -83,10 +83,13 @@ Seven figures grepped out of the prose and located in `data/` (re-run after the 
 | aids_iam relative slope | −0.01272 | `s71_within_dataset_slopes.json` |
 | pooled **absolute** slope | 0.9522 | `s71_pooled.json` |
 | protein mean gap | 76.60 | `s71_within_dataset_slopes.json` |
+| gate ratio, letter_low arm slope | 0.0859 | `summary.json` |
+| gate ratio, protein arm slope | 0.9444 | `summary.json` |
+| gate rule fired count | 8 | `summary.json` |
 | iam_letter_high total core-s | 605.84 | `s74_cost.json` |
 | zero-UB pair count | 217,612 | `summary.json` |
 
-**PASS**, 7/7. Structurally this cannot fail by accident: `write_report` renders from the same
+**PASS**, 9/9. Structurally this cannot fail by accident: `write_report` renders from the same
 `results` dict that is serialised, and computes nothing at render time.
 `test_report_numbers_appear_in_the_json` enforces it for every dataset's slope.
 
@@ -94,7 +97,7 @@ Seven figures grepped out of the prose and located in `data/` (re-run after the 
 
 ```
 $ PYTHONPATH=~/opt/build_gedlib/graphkit-learn python -m pytest tests/ -q -k approx_ged_analysis
-96 passed, 1 skipped, 1935 deselected in 3.16s
+108 passed, 1 skipped, 1935 deselected in 3.33s
 ```
 
 **PASS**, re-run after the absolute-gap change. Covers all five named cases: width at `UB == 0` (5 parametrised scalar cases + an
@@ -126,9 +129,9 @@ figure helpers so the file is clean anyway.
 | | failed | passed | skipped |
 |---|---:|---:|---:|
 | baseline (`df75dbc`, measured by me before writing anything) | **0** | **1,273** | **1** |
-| after | **0** | **1,369** | **1** |
+| after | **0** | **1,381** | **1** |
 
-**PASS.** +96 passes, all mine. No lost pass, no new failure.
+**PASS.** +108 passes, all mine. No lost pass, no new failure.
 
 > **The design's §8.9 baseline table is stale.** It records **8 failed / 907 passed / 1 skipped**
 > with GEDLIB at `885d98d`, and says the 8 failures are `test_export_graphs.py` real-data tests. On
@@ -189,6 +192,34 @@ bound degrades fastest in `n`; on the absolute scale it does, in all eight datas
 9(a)'s rung-13 measurement (mean relative overestimate 1.370 for `BIPARTITE` against the lower
 bound's 0.156) was never in tension with the relative result either. My earlier claim that "the
 bracket does not follow" was an artefact of the measure, and is withdrawn.
+
+**1c. THE §7.1c DECISION RULE FIRED IN 8/8 DATASETS — and the nuance reverses the naive reading.**
+The ratio of the two absolute slopes (primary / arm, same pairs, same lower bound, so it is purely a
+comparison of two upper bounds):
+
+| dataset | mean n | primary abs | arm abs | ratio | gate's share |
+|---|---:|---:|---:|---:|---:|
+| iam_letter_low | 4.07 | 0.7043 | 0.0859 | **8.2×** | 88 % |
+| iam_letter_med | 4.11 | 0.7425 | 0.0930 | **8.0×** | 87 % |
+| iam_letter_high | 4.58 | 1.0010 | 0.3261 | **3.1×** | 67 % |
+| linux | 8.71 | 1.3522 | 0.5010 | **2.7×** | 63 % |
+| aids_graphedx | 11.03 | 0.6194 | 0.2711 | **2.3×** | 56 % |
+| grec | 11.45 | 0.8971 | 0.4116 | **2.2×** | 54 % |
+| aids_iam | 14.02 | 0.2529 | 0.1230 | **2.1×** | 51 % |
+| protein | 31.68 | 1.4557 | 0.9444 | **1.5×** | 35 % |
+
+The naive reading is "the widening is a gate artefact". **The ratio falls monotonically as mean `n`
+rises**, so the gate's contribution is proportionally largest exactly where it matters least — small,
+already well-resolved graphs — and smallest at the large-`n` end where AE.1 bites. At n̄ = 31.7 a
+better upper bound buys only ~35 % off the slope; **most of the Protein widening is not attributable
+to the gate and would survive replacing `BIPARTITE`.** So the large-`n` looseness is substantially a
+property of the LB/UB gap itself.
+
+Computed in `gate_attribution()` / `gate_attribution_summary()` and serialised to both
+`summary.json` and `s71_within_dataset_slopes.json`; nothing is arithmetic done in prose. The
+monotone fall is **descriptive only** — 8 points, provenance moving with n̄, and no regression is
+fitted to it (`trend_is_fitted: false`, asserted by a test). **`BIPARTITE` remains primary by the
+design §1.1 PI ruling**; this quantifies the cost of the frozen gate, it does not reopen it.
 
 **2. The pooled RELATIVE slope is +0.00178 while every unconfounded within-dataset relative slope is
 negative.** A textbook Simpson reversal. Amendment 12 demoted the pooled curve to a descriptive

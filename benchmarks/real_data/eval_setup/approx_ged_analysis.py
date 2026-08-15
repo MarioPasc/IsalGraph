@@ -1204,6 +1204,122 @@ def _size_profile(
     return rows
 
 
+def gate_attribution(primary_slope: float, arm_slope: float) -> dict[str, Any]:
+    """Quantify how much of the absolute widening the frozen gate contributes.
+
+    §7.1's decision rule: *if the primary arm widens materially faster than the
+    sensitivity arm, the widening is substantially an artefact of the frozen
+    gate's choice of upper bound.* The rule needs a number to fire on, and this
+    is it --- the ratio of the two absolute slopes, both fitted on the same
+    pairs against the same lower bound, so the ratio is a comparison of two
+    upper bounds and nothing else.
+
+    A ratio of 1 means the two upper bounds widen identically and the gate
+    contributes nothing; a ratio of 8 means the frozen gate widens eight times
+    as fast as the alternative and dominates the observed widening.
+
+    **This quantifies the cost of the frozen gate; it does not reopen it.**
+    Design §1.1 rules that ``BIPARTITE`` remains primary and ``BP_BEAM_DET`` is
+    a disclosed sensitivity arm, never substituted after the fact.
+
+    Parameters
+    ----------
+    primary_slope
+        Absolute-gap slope of the primary arm, edit operations per node.
+    arm_slope
+        Absolute-gap slope of the sensitivity arm, same units.
+
+    Returns
+    -------
+    dict
+        ``ratio`` (``nan`` when the arm slope is not strictly positive, since a
+        ratio against a non-widening denominator is not interpretable),
+        ``fired`` and the two slopes it was built from.
+    """
+    finite = math.isfinite(primary_slope) and math.isfinite(arm_slope)
+    ratio = primary_slope / arm_slope if finite and arm_slope > 0.0 else math.nan
+    return {
+        "primary_absolute_slope": float(primary_slope),
+        "sensitivity_absolute_slope": float(arm_slope),
+        "ratio": float(ratio),
+        "fired": bool(finite and primary_slope > arm_slope),
+        "rule": (
+            "fires when the primary arm's absolute slope exceeds the sensitivity arm's, "
+            "i.e. when the frozen gate widens faster than the alternative upper bound"
+        ),
+    }
+
+
+def gate_attribution_summary(
+    per_dataset: Mapping[str, Any],
+    datasets: Sequence[str],
+) -> dict[str, Any]:
+    """Aggregate the §7.1c gate-attribution verdict across datasets.
+
+    Reports whether the rule fired, and how the ratio moves with mean graph
+    size. **The movement is reported descriptively and no trend is fitted**:
+    there are at most ten points, and provenance moves with mean size across
+    them, so a fitted slope would carry the same confound §7.1's pooled curve
+    already carries.
+
+    Parameters
+    ----------
+    per_dataset
+        The per-dataset results blocks.
+    datasets
+        Dataset keys to summarise.
+
+    Returns
+    -------
+    dict
+        Per-dataset rows ordered by mean node count, the fired count, and the
+        monotonicity of the ratio in mean node count.
+    """
+    rows = [
+        {
+            "dataset": d,
+            "mean_nodes": per_dataset[d]["mean_nodes"],
+            "slope_role": per_dataset[d]["slope_role"],
+            **per_dataset[d]["s71"]["gate_attribution"],
+        }
+        for d in datasets
+    ]
+    rows.sort(key=lambda row: row["mean_nodes"])
+    ratios = [row["ratio"] for row in rows if math.isfinite(row["ratio"])]
+    n_fired = sum(1 for row in rows if row["fired"])
+    monotone = all(a >= b for a, b in zip(ratios, ratios[1:], strict=False))
+    summary: dict[str, Any] = {
+        "n_datasets": len(rows),
+        "n_fired": n_fired,
+        "fired_in_all": n_fired == len(rows) and len(rows) > 0,
+        "rows_by_mean_nodes": rows,
+        "ratio_falls_monotonically_with_mean_nodes": bool(monotone and len(ratios) > 1),
+        "trend_is_fitted": False,
+        "trend_note": (
+            "Descriptive only. At most ten points, and provenance moves with mean graph size "
+            "across them, so no regression is fitted to the ratio."
+        ),
+        "ruling": (
+            "BIPARTITE remains primary by PI ruling (design §1.1); BP_BEAM_DET is a disclosed "
+            "sensitivity arm and is never substituted for the primary after the fact. This "
+            "quantifies the cost of the frozen gate; it does not reopen it."
+        ),
+    }
+    if ratios:
+        finite_rows = [row for row in rows if math.isfinite(row["ratio"])]
+        smallest = min(finite_rows, key=lambda row: row["ratio"])
+        largest = max(finite_rows, key=lambda row: row["ratio"])
+        summary["max_ratio"] = largest["ratio"]
+        summary["max_ratio_dataset"] = largest["dataset"]
+        summary["max_ratio_mean_nodes"] = largest["mean_nodes"]
+        summary["min_ratio"] = smallest["ratio"]
+        summary["min_ratio_dataset"] = smallest["dataset"]
+        summary["min_ratio_mean_nodes"] = smallest["mean_nodes"]
+        summary["gate_share_at_min_ratio"] = 1.0 - 1.0 / smallest["ratio"]
+        summary["gate_share_at_max_ratio"] = 1.0 - 1.0 / largest["ratio"]
+    return summary
+
+
 def _cost_rows(files: Mapping[str, RoleFile], size_code: npt.NDArray[Any]) -> list[dict[str, Any]]:
     """Build the §7.4 cost rows for one dataset.
 
@@ -1315,9 +1431,10 @@ def analyse_dataset(
         "primary_absolute": (gap, gap_matrix),
         "sensitivity_absolute": (gap_sensitivity, gap_sensitivity_matrix),
     }
-    s71_arms = {
+    arm_fits = {name: ols_fit(n_max, vector) for name, (vector, _) in arms.items()}
+    s71_arms: dict[str, Any] = {
         name: {
-            "fit": ols_fit(n_max, vector).as_dict(),
+            "fit": arm_fits[name].as_dict(),
             "slope_ci": bootstrap_slope_ci(matrix, n_max_mat, tier, config.seed),
             "measure": (
                 "absolute gap UB - LB, edit operations"
@@ -1325,8 +1442,12 @@ def analyse_dataset(
                 else "relative width (UB - LB)/UB, dimensionless"
             ),
         }
-        for name, (vector, matrix) in arms.items()
+        for name, (_, matrix) in arms.items()
     }
+    s71_arms["gate_attribution"] = gate_attribution(
+        arm_fits["primary_absolute"].slope,
+        arm_fits["sensitivity_absolute"].slope,
+    )
 
     n_zero_ub = int((upper_triangle(files["UB"].ged) == 0.0).sum())
     role_in_slope_set = (
@@ -2360,29 +2481,85 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
     add("")
     add("### §7.1c Sensitivity arm -- both measures on `UBS = BP_BEAM_DET`")
     add("")
+    gate = results["pooled"]["gate_attribution"]
     lines += _table(
         [
             "dataset",
-            "abs slope",
-            "95 % CI",
+            "mean n",
             "primary abs slope",
-            "rel slope",
-            "95 % CI",
-            "primary rel slope",
+            "arm abs slope",
+            "**ratio**",
+            "fired?",
+            "rel slope (arm)",
+            "rel slope (primary)",
         ],
         [
             [
-                d,
-                _fmt(per_dataset[d]["s71"]["sensitivity_absolute"]["fit"]["slope"], 4),
-                _ci_text(per_dataset[d]["s71"]["sensitivity_absolute"]["slope_ci"]),
-                _fmt(per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"], 4),
-                _fmt(per_dataset[d]["s71"]["sensitivity"]["fit"]["slope"], 5),
-                _ci_text(per_dataset[d]["s71"]["sensitivity"]["slope_ci"]),
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["slope"], 5),
+                row["dataset"],
+                _fmt(row["mean_nodes"], 2),
+                _fmt(row["primary_absolute_slope"], 4),
+                _fmt(row["sensitivity_absolute_slope"], 4),
+                f"**{row['ratio']:.1f}x**" if math.isfinite(row["ratio"]) else "--",
+                "yes" if row["fired"] else "no",
+                _fmt(per_dataset[row["dataset"]]["s71"]["sensitivity"]["fit"]["slope"], 5),
+                _fmt(per_dataset[row["dataset"]]["s71"]["primary"]["fit"]["slope"], 5),
             ]
-            for d in datasets
+            for row in gate["rows_by_mean_nodes"]
         ],
     )
+    add(
+        "Rows are ordered by **mean node count**, not by the cohort order used elsewhere, because "
+        "the ratio's behaviour in `n` is the point of the table. Every value is computed in "
+        "`gate_attribution()` and serialised to `data/s71_within_dataset_slopes.json` and "
+        "`data/summary.json` under `gate_attribution`; nothing here is arithmetic done in prose."
+    )
+    add("")
+    add("#### VERDICT -- the §7.1c decision rule fired, and the nuance is the interesting part")
+    add("")
+    add(
+        f"**1. The rule fired in {gate['n_fired']}/{gate['n_datasets']} datasets.** The primary "
+        "arm's absolute gap widens faster than the sensitivity arm's in "
+        + ("every dataset" if gate["fired_in_all"] else f"{gate['n_fired']} of them")
+        + ". Both arms share the **same lower bound**, so the ratio is a comparison of two upper "
+        "bounds and carries no lower-bound contribution. Part of the observed widening is "
+        "therefore attributable to the frozen gate's choice of upper bound."
+    )
+    add("")
+    if gate.get("ratio_falls_monotonically_with_mean_nodes") and "max_ratio" in gate:
+        add(
+            "**2. But the ratio falls monotonically as mean graph size rises -- from "
+            f"{gate['max_ratio']:.1f}x on `{gate['max_ratio_dataset']}` "
+            f"(mean n = {gate['max_ratio_mean_nodes']:.2f}) to "
+            f"{gate['min_ratio']:.1f}x on `{gate['min_ratio_dataset']}` "
+            f"(mean n = {gate['min_ratio_mean_nodes']:.2f}) -- so the gate's contribution is "
+            "proportionally largest exactly where it matters least.** On the smallest graphs the "
+            "bracket is already well resolved and the gate accounts for roughly "
+            f"{100 * gate['gate_share_at_max_ratio']:.0f} % of the widening; at "
+            f"mean n = {gate['min_ratio_mean_nodes']:.2f} it accounts for about "
+            f"{100 * gate['gate_share_at_min_ratio']:.0f} %. "
+            f"**At the large-`n` end, where AE.1 actually bites, replacing `BIPARTITE` with the "
+            f"arm would buy only about {100 * gate['gate_share_at_min_ratio']:.0f} % off the "
+            "slope: most of that widening is not attributable to the gate and would survive the "
+            "substitution.**"
+        )
+        add("")
+        add(
+            "**3. The honest reading, and the one a reviewer will reach anyway: the large-`n` "
+            "looseness is substantially a property of the LB/UB gap itself, not of the frozen "
+            "choice of upper bound.** A better upper bound narrows the bracket everywhere, but it "
+            "does not remove the size trend, and the share it could remove shrinks as graphs "
+            "grow. §7.1's first reading -- *the bracket widens because the reference degrades* -- "
+            "therefore survives the sensitivity arm at the sizes that matter."
+        )
+        add("")
+    add(
+        "**4. Confound, stated in one line: the fall of the ratio in mean `n` is measured across "
+        f"the same {gate['n_datasets']} datasets whose provenance moves with size, so it carries "
+        "the same confound §7.1f's pooled curve carries.** " + gate["trend_note"]
+    )
+    add("")
+    add("> **" + gate["ruling"] + "**")
+    add("")
     add("#### What the two arms separate, and why the arm is not optional")
     add("")
     add(
@@ -3257,6 +3434,7 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
         "density_strata": pooled_density_strata(vectors, edges, labels),
         "density_cells": secondary_density_cells(vectors, edges, labels, config.min_cell_pairs),
         "slope": pooled_slope(vectors),
+        "gate_attribution": gate_attribution_summary(per_dataset, datasets),
     }
 
     n_pairs = sum(v.n_pairs for v in vectors)
@@ -3312,7 +3490,8 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
                     "cohort",
                     "strata",
                 )
-            },
+            }
+            | {"gate_attribution": pooled["gate_attribution"]},
             data_dir / "summary.json",
         ),
         _dump_json(
@@ -3328,6 +3507,7 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
                     "gap already yields a falling ratio and a falling ratio does not imply a "
                     "tightening bound. LB/UB is not reported: it is exactly 1 - (UB - LB)/UB."
                 ),
+                "gate_attribution": pooled["gate_attribution"],
                 "datasets": {
                     d: {
                         "bootstrap": per_dataset[d]["bootstrap"],
@@ -3352,6 +3532,7 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
                             * per_dataset[d]["s71"]["primary"]["fit"]["slope"]
                             > 0
                         ),
+                        "gate_attribution": per_dataset[d]["s71"]["gate_attribution"],
                         "by_size_stratum_gap_primary": per_dataset[d]["s71"][
                             "by_size_stratum_gap_primary"
                         ],

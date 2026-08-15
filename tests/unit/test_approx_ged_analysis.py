@@ -296,6 +296,129 @@ def test_absolute_gap_reaches_every_report_surface(
 
 
 # ---------------------------------------------------------------------------
+# §7.1c gate attribution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("primary", "arm", "ratio", "fired"),
+    [
+        (0.7043, 0.0859, 8.199, True),
+        (1.4557, 0.9444, 1.5414, True),
+        (0.5, 0.5, 1.0, False),  # identical widening: the gate contributes nothing
+        (0.2, 0.5, 0.4, False),  # the arm widens faster: the rule does not fire
+    ],
+)
+def test_gate_attribution_ratio(primary: float, arm: float, ratio: float, fired: bool) -> None:
+    """The ratio and the fired flag follow the frozen decision rule."""
+    result = aga.gate_attribution(primary, arm)
+    assert result["ratio"] == pytest.approx(ratio, rel=1e-3)
+    assert result["fired"] is fired
+
+
+@pytest.mark.parametrize("arm", [0.0, -0.5])
+def test_gate_attribution_guards_a_non_widening_denominator(arm: float) -> None:
+    """A zero or negative arm slope gives nan, never a signed infinity.
+
+    On the full cohort an arm slope could be non-positive; a ratio against it
+    is not interpretable and must not be printed as though it were.
+    """
+    result = aga.gate_attribution(1.0, arm)
+    assert math.isnan(result["ratio"])
+    assert result["fired"] is True
+
+
+def test_gate_attribution_handles_nan_slopes() -> None:
+    """A nan slope propagates to nan and does not fire the rule."""
+    result = aga.gate_attribution(math.nan, 0.5)
+    assert math.isnan(result["ratio"])
+    assert result["fired"] is False
+
+
+def _fake_dataset(mean_nodes: float, primary: float, arm: float) -> dict[str, object]:
+    """Build the minimal per-dataset block the summary reads."""
+    return {
+        "mean_nodes": mean_nodes,
+        "slope_role": "unconfounded",
+        "s71": {"gate_attribution": aga.gate_attribution(primary, arm)},
+    }
+
+
+def test_gate_attribution_summary_orders_by_mean_nodes_and_detects_monotone() -> None:
+    """Rows sort by mean node count and the monotone fall is detected."""
+    per_dataset = {
+        "big": _fake_dataset(30.0, 1.5, 1.0),  # ratio 1.5
+        "small": _fake_dataset(4.0, 8.0, 1.0),  # ratio 8.0
+        "mid": _fake_dataset(12.0, 2.0, 1.0),  # ratio 2.0
+    }
+    summary = aga.gate_attribution_summary(per_dataset, ["big", "small", "mid"])
+    assert [row["dataset"] for row in summary["rows_by_mean_nodes"]] == ["small", "mid", "big"]
+    assert summary["ratio_falls_monotonically_with_mean_nodes"] is True
+    assert summary["n_fired"] == 3
+    assert summary["fired_in_all"] is True
+    assert summary["max_ratio_dataset"] == "small"
+    assert summary["min_ratio_dataset"] == "big"
+    assert summary["gate_share_at_min_ratio"] == pytest.approx(1.0 - 1.0 / 1.5)
+
+
+def test_gate_attribution_summary_detects_a_non_monotone_cohort() -> None:
+    """A cohort whose ratio does not fall monotonically is reported as such.
+
+    This is the branch the full ten-dataset run may take, and the report must
+    not claim a monotone fall that the data does not show.
+    """
+    per_dataset = {
+        "a": _fake_dataset(4.0, 2.0, 1.0),
+        "b": _fake_dataset(12.0, 8.0, 1.0),
+        "c": _fake_dataset(30.0, 1.5, 1.0),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, ["a", "b", "c"])
+    assert summary["ratio_falls_monotonically_with_mean_nodes"] is False
+
+
+def test_gate_attribution_summary_reports_a_rule_that_did_not_fire() -> None:
+    """A dataset where the arm widens faster is counted honestly."""
+    per_dataset = {
+        "a": _fake_dataset(4.0, 2.0, 1.0),
+        "b": _fake_dataset(12.0, 0.5, 1.0),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, ["a", "b"])
+    assert summary["n_fired"] == 1
+    assert summary["fired_in_all"] is False
+
+
+def test_gate_attribution_summary_never_fits_a_trend() -> None:
+    """The summary is descriptive: no regression is fitted to the ratio."""
+    per_dataset = {"a": _fake_dataset(4.0, 8.0, 1.0), "b": _fake_dataset(30.0, 1.5, 1.0)}
+    summary = aga.gate_attribution_summary(per_dataset, ["a", "b"])
+    assert summary["trend_is_fitted"] is False
+    assert "slope" not in summary
+    assert "no regression is fitted" in summary["trend_note"]
+    assert "BIPARTITE remains primary" in summary["ruling"]
+
+
+def test_gate_attribution_reaches_the_report_and_both_json_files(
+    synthetic_tree: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    """The verdict is computed once and serialised where the close can find it."""
+    root, datasets = synthetic_tree
+    out = tmp_path / "gate"
+    results = aga.run_analysis(_config(root, out, tuple(datasets)), command="pytest")
+    gate = results["pooled"]["gate_attribution"]
+    assert gate["n_datasets"] == len(datasets)
+    summary = json.loads((out / "data" / "summary.json").read_text())
+    slopes = json.loads((out / "data" / "s71_within_dataset_slopes.json").read_text())
+    assert summary["gate_attribution"]["n_fired"] == gate["n_fired"]
+    assert slopes["gate_attribution"]["n_fired"] == gate["n_fired"]
+    for dataset in datasets:
+        assert "gate_attribution" in slopes["datasets"][dataset]
+    report = (out / "REPORT.md").read_text()
+    assert "VERDICT" in report
+    assert f"fired in {gate['n_fired']}/{gate['n_datasets']}" in report
+    assert "BIPARTITE remains primary" in report
+
+
+# ---------------------------------------------------------------------------
 # Strict upper triangle
 # ---------------------------------------------------------------------------
 
