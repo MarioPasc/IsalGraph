@@ -478,6 +478,50 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-15, amendment 14 — measured for T-06, not for T-05: exhaustive canonicalisation at
+  Suite-2 sizes censors at a rate D14 does not anticipate, and D14's timeout cannot be enforced the
+  obvious way.** Handoff artifact produced while §7.5 was being deferred; `scratchpad`-free, the
+  result JSON is in the session scratchpad and the numbers are here.
+
+  **Method**: 10 uniformly random graphs per dataset, seed 42, `canonical_string` and greedy-min
+  through the **C++ engine**, each in its own process killed at a **15 s** budget.
+
+  | dataset | `n` range | canonical killed | canonical median | canonical max | greedy-min killed | greedy-min median |
+  |---|---|---:|---:|---:|---:|---:|
+  | `protein` | 11–48 | **5/10** | 0.899 s | 8.03 s | 0/10 | 2.6 ms |
+  | `coil_del` | 7–35 | **5/10** | 0.089 s | 4.18 s | 0/10 | 3.1 ms |
+  | `mutagenicity` | 10–37 | 1/10 | 0.317 s | 7.98 s | 0/10 | 3.9 ms |
+  | `grec` | 8–17 | 0/10 | 0.2 ms | 10.7 ms | 0/10 | 0.2 ms |
+  | `aids_iam` | 8–12 | 0/10 | 0.2 ms | 0.7 ms | 0/10 | 0.2 ms |
+  | `aids_graphedx` | 7–12 | 0/10 | 0.2 ms | 0.5 ms | 0/10 | 0.2 ms |
+
+  **(a) "A few large, highly symmetric graphs" understates it.** D14's premise was set when every
+  canonicalised graph in this project was `n ≤ 12`. On a **random** sample — not a hard-case sample —
+  **half of Protein and half of COIL-DEL exceed 15 s**. The budget measured is not D14's 300 s and
+  these rates **must not be extrapolated to it**; what they do establish is that censoring at
+  Suite-2 sizes is a bulk property of two or three datasets rather than a marginal tail, so D14's
+  greedy-min primary arm and its complete-case sensitivity arm will carry real weight, and the
+  **censoring-rate table is a headline result of T-06, not a footnote**.
+
+  **(b) The cliff is not a node count.** COIL-DEL censors 5/10 by `n = 35` while Mutagenicity
+  censors 1/10 by `n = 37`, and GREC is clean to `n = 17` with a 10.7 ms maximum. That is the
+  direction [statistics](../plan/statistics.md) §8 already argues — canonicalisation cost tracks
+  **structural symmetry**, not size or density — and it is why §8 adds the symmetry stratum. The
+  sample here is 10 graphs per dataset and cannot resolve the mechanism; it can only say the
+  ordering is not by `n`.
+
+  **(c) ⚠ D14's 300 s timeout cannot be enforced with a Python signal.** A first attempt used
+  `signal.setitimer` and **hung for 25 minutes on a single graph**: CPython runs signal handlers only
+  between bytecode instructions, so `SIGALRM` stays queued for the entire duration of a native call
+  and the budget silently does not apply. The table above was produced with a **killed subprocess**,
+  which does work. Anyone implementing D14 against the C++ engine must do the same — and this is a
+  failure that looks like a hang, not like an error.
+
+  **(d) The fallback is cheap and never censored.** Greedy-min ran 0.2–3.9 ms across all six
+  datasets with **0 kills**, four to five orders of magnitude under exhaustive canonicalisation.
+  D14's choice of it as the primary-arm substitution is sound and this is the measurement that
+  supports it at Suite-2 sizes rather than at `n ≤ 12`.
+
 - **2026-08-15, amendment 13 — two PI decisions taken at finalisation. §7.5 leaves this ticket, and
   T-03's `ub_matrix` defect is accepted rather than repaired.**
 

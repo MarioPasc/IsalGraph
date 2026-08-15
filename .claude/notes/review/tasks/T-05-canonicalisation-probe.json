@@ -1,0 +1,68 @@
+{
+  "budget_s": 15.0,
+  "sample": 10,
+  "seed": 42,
+  "timeout_mechanism": "process-level kill; signal.setitimer does NOT interrupt the C++ engine",
+  "datasets": {
+    "protein": {
+      "n_min": 11,
+      "n_max": 48,
+      "sampled": 10,
+      "canonical_killed": 5,
+      "canonical_median_s": 0.8985074039997016,
+      "canonical_max_s": 8.027777712999978,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.0025941709998278384
+    },
+    "mutagenicity": {
+      "n_min": 10,
+      "n_max": 37,
+      "sampled": 10,
+      "canonical_killed": 1,
+      "canonical_median_s": 0.3168897589998778,
+      "canonical_max_s": 7.98195727700022,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.0038995084998987295
+    },
+    "coil_del": {
+      "n_min": 7,
+      "n_max": 35,
+      "sampled": 10,
+      "canonical_killed": 5,
+      "canonical_median_s": 0.08895993800024371,
+      "canonical_max_s": 4.179572590000134,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.003134990500029744
+    },
+    "aids_iam": {
+      "n_min": 8,
+      "n_max": 12,
+      "sampled": 10,
+      "canonical_killed": 0,
+      "canonical_median_s": 0.0002081680001992936,
+      "canonical_max_s": 0.000728599000012764,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.00024218300018219452
+    },
+    "grec": {
+      "n_min": 8,
+      "n_max": 17,
+      "sampled": 10,
+      "canonical_killed": 0,
+      "canonical_median_s": 0.00018281350003235275,
+      "canonical_max_s": 0.010732103000009374,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.00021175000028961222
+    },
+    "aids_graphedx": {
+      "n_min": 7,
+      "n_max": 12,
+      "sampled": 10,
+      "canonical_killed": 0,
+      "canonical_median_s": 0.00023965499985934002,
+      "canonical_max_s": 0.0005390679998527048,
+      "greedymin_killed": 0,
+      "greedymin_median_s": 0.000236342999869521
+    }
+  }
+}
