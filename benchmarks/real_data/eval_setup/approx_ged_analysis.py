@@ -1698,7 +1698,15 @@ def make_figures(results: Mapping[str, Any], figures_dir: Path) -> list[str]:
     return written
 
 
-def _figure_width_vs_n(results, datasets, colours, figures_dir, plt, get_figure_size, save_figure):
+def _figure_width_vs_n(
+    results: Mapping[str, Any],
+    datasets: Sequence[str],
+    colours: Mapping[str, str],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw mean bracket width against ``n_max``, within dataset, both arms."""
     fig, axes = plt.subplots(
         1, 2, figsize=get_figure_size("double", height_ratio=0.42), sharey=True
@@ -1732,7 +1740,14 @@ def _figure_width_vs_n(results, datasets, colours, figures_dir, plt, get_figure_
     return [Path(p).name for p in written]
 
 
-def _figure_slope_forest(results, datasets, figures_dir, plt, get_figure_size, save_figure):
+def _figure_slope_forest(
+    results: Mapping[str, Any],
+    datasets: Sequence[str],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw the within-dataset slope with its bootstrap CI, both arms."""
     fig, axis = plt.subplots(figsize=get_figure_size("single", height_ratio=0.85))
     offsets = {"primary": -0.16, "sensitivity": 0.16}
@@ -1767,7 +1782,13 @@ def _figure_slope_forest(results, datasets, figures_dir, plt, get_figure_size, s
     return [Path(p).name for p in written]
 
 
-def _figure_pooled_overlay(results, figures_dir, plt, get_figure_size, save_figure):
+def _figure_pooled_overlay(
+    results: Mapping[str, Any],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw the pooled size-stratum overlay with its dominance shares."""
     rows = [row for row in results["pooled"]["size_strata"] if row["n_pairs"] > 0]
     fig, axis = plt.subplots(figsize=get_figure_size("single", height_ratio=0.75))
@@ -1813,8 +1834,14 @@ def _figure_pooled_overlay(results, figures_dir, plt, get_figure_size, save_figu
 
 
 def _figure_certification(
-    results, datasets, colours, figures_dir, plt, get_figure_size, save_figure
-):
+    results: Mapping[str, Any],
+    datasets: Sequence[str],
+    colours: Mapping[str, str],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw the certification rate per dataset and size stratum."""
     fig, axis = plt.subplots(figsize=get_figure_size("single", height_ratio=0.75))
     for dataset in datasets:
@@ -1842,7 +1869,13 @@ def _figure_certification(
     return [Path(p).name for p in written]
 
 
-def _figure_strata(results, figures_dir, plt, get_figure_size, save_figure):
+def _figure_strata(
+    results: Mapping[str, Any],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw pooled bracket width by size stratum and by density quintile."""
     size_rows = [row for row in results["pooled"]["size_strata"] if row["n_pairs"] > 0]
     density_rows = [row for row in results["pooled"]["density_strata"] if row["n_pairs"] > 0]
@@ -1888,7 +1921,14 @@ def _figure_strata(results, figures_dir, plt, get_figure_size, save_figure):
     return [Path(p).name for p in written]
 
 
-def _figure_cost(results, datasets, figures_dir, plt, get_figure_size, save_figure):
+def _figure_cost(
+    results: Mapping[str, Any],
+    datasets: Sequence[str],
+    figures_dir: Path,
+    plt: Any,
+    get_figure_size: Any,
+    save_figure: Any,
+) -> list[str]:
     """Draw the realised per-pair wall time per dataset and role."""
     fig, axis = plt.subplots(figsize=get_figure_size("single", height_ratio=0.72))
     colours = dict(zip(ROLES, _figure_palette(3)))
@@ -2434,11 +2474,35 @@ def _report_s74(results: Mapping[str, Any]) -> list[str]:
         "single-worker, a 115x inflation.\n>\n"
         "> The `lb`, `ub` and `ubs` campaigns ran at **15, 37 and 126** workers respectively, and "
         "the datasets within a campaign were not all processed under the same effective load. So "
-        "every number in this table is **realised wall time under a known-pathological "
-        "parallelisation**. It is not a per-pair cost of `BRANCH_FAST`, `BIPARTITE` or "
-        "`BP_BEAM_DET`, it is **not comparable across datasets as a property of the method**, and "
-        "it does not measure T-27 limitation 3. This ticket has not measured that limitation and "
-        "must not be cited as having done so."
+        "no number in this table is a per-pair cost of `BRANCH_FAST`, `BIPARTITE` or "
+        "`BP_BEAM_DET`, none is **comparable across datasets as a property of the method**, and "
+        "none measures T-27 limitation 3. This ticket has not measured that limitation and must "
+        "not be cited as having done so."
+    )
+    add("")
+    add(
+        "> ### WHAT `seconds_matrix` ACTUALLY HOLDS -- measured here, and it is not what a reader "
+        "would assume\n>\n"
+        "> It is **solver time per pair as timed inside the worker process**, not job wall time "
+        "divided by pairs. Three checks establish this:\n>\n"
+        "> 1. Letter HIGH `lb` sums to **0.2859 ms/pair** here. Amendment 11's *production* figure "
+        "for the same campaign is **19.8 ms/pair** -- **69x** apart. A table of realised wall time "
+        "would have reproduced 19.8.\n"
+        "> 2. The measured rates sit at **1.67x** (Protein) and **3.07x** (Letter HIGH) of "
+        "amendment 11's single-worker rates of 7,366 and 93 us/pair. That is the contention "
+        "slowdown of an oversubscribed core, which is what a per-pair timer inside a worker "
+        "records.\n"
+        "> 3. Amendment 7's Protein anchors -- 14.0 ms/pair for `lb`, 163.7 for `ubs` -- agree "
+        "with the 12.289 and 145.726 measured here to within 12 %, so amendment 7 was reading "
+        "this same quantity.\n>\n"
+        "> **Consequence, and it runs opposite to the obvious reading.** This table "
+        "**under-reports** the resource the campaigns actually consumed, by roughly two orders of "
+        "magnitude on the small-graph datasets; it does not inflate it. The pool pathology lives "
+        "almost entirely in the gap between these numbers and the job's wall clock. What survives "
+        "*inside* the table is the residual contention factor, and that factor is **1.67x on "
+        "Protein against 3.07x on Letter HIGH** -- unequal, dataset-dependent, and not recoverable "
+        "from the files, because **the worker count is not recorded in any file's metadata**. That "
+        "is why the cross-dataset comparison is still void."
     )
     add("")
     add(
@@ -2977,9 +3041,13 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
         _dump_json(
             {
                 "caveat": (
-                    "Realised wall time under the negative-scaling process pool of T-05 design "
-                    "amendment 11. NOT a per-pair cost of the method and NOT comparable across "
-                    "datasets as a property of the method."
+                    "Solver time per pair as timed inside the worker process, under the "
+                    "negative-scaling pool of T-05 design amendment 11. NOT a per-pair cost of "
+                    "the method, NOT comparable across datasets as a property of the method, and "
+                    "NOT the resource the campaign consumed: it under-reports the job's wall "
+                    "clock by ~69x on iam_letter_high. The residual contention factor against "
+                    "amendment 11's single-worker rates is 1.67x on protein and 3.07x on "
+                    "iam_letter_high, and the worker count is absent from every file's metadata."
                 ),
                 "datasets": {
                     d: {
@@ -3121,10 +3189,11 @@ def _sign_word(value: float) -> str:
 
 def _ci_excludes_zero(block: Mapping[str, Any]) -> bool:
     """Return True when a percentile CI lies entirely on one side of zero."""
-    low, high = block["ci_low"], block["ci_high"]
+    low = float(block["ci_low"])
+    high = float(block["ci_high"])
     if not (math.isfinite(low) and math.isfinite(high)):
         return False
-    return low > 0.0 or high < 0.0
+    return bool(low > 0.0 or high < 0.0)
 
 
 def _report_headline(results: Mapping[str, Any]) -> list[str]:
