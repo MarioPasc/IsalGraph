@@ -205,3 +205,55 @@ work, which is answered by reading the sources ([corrections](corrections.md), T
 3. No representation reaches a results table on a distance that fails F1, F2, F3 or F4.
 4. Both bit conventions reported for every method in Claim A.
 5. The three pre-committed outcomes in §4 are stated in the paper regardless of which way they fall.
+
+
+---
+
+## 8. RESULT — T-04, closed 2026-08-15
+
+**Built, not run.** T-04 ships the machinery; T-04a runs the grid, T-06 the production matrices,
+T-17 the AE.3 table. Full API: `src/isalgraph/competitors/README.md`.
+
+| Delivered | |
+|---|---|
+| Backends | **11 registered**, 10 available (`size_null` filtered as a baseline), 0 unavailable |
+| Metrics | 6 — `levenshtein`, `levenshtein_char`, `hamming`, `padded_hamming`, `kernel`, `size_null` |
+| Tests | **383**, in six files; full suite **2,106 passed / 321 skipped**; ruff + `mypy --strict` clean |
+| Size | 26 files, **+9,510 / −20** |
+
+### Did the pre-declared rules fire as written?
+
+| Rule | Fired |
+|---|---|
+| §3.4's selection rule is **F5-blind by construction** | **yes, structurally.** `grid.py` computes F1–F4 and F6; `f5.py` is the only entry point that can reach a GED loader, and a test asserts `grid.py`'s **import closure** never does. Decision 24 is defensible on the import graph, not on prose |
+| §3.2 "every cell attempted; a failure is a result" | **yes.** The 20-graph dry run emits all 66 cells. `padded_hamming × sparse6` is **undefined** and prints as such — the cell §3.2 was written to catch |
+| §5 "both bit conventions for every method" | **yes**, and a defect was found doing it: `realised_bits` for `adjacency`/`agm_cam` was **halved** (`8·⌈T/16⌉` for `8·⌈T/8⌉`). Found independently by two tracks |
+| §4 outcome 1, "non-canonical graph6 should fail F3" | **confirmed, and explained.** It fails on exactly the non-complete graphs — see [competitors/README](competitors/README.md) §3 |
+| §4 outcome 2, "canonical graph6 may also correlate poorly" | **confirmed.** nauty→graph6 is the weakest of the three canonical serialisations, 0.42–0.68 all-pairs |
+| §4 outcome 3, "sparse6 beats IsalGraph on sparse graphs" | **inverted**, as finding 4 already recorded; it resolves on `m/n`, not size |
+| §4's missing **fourth** pre-committed outcome, the size null | **now measured and it is the headline.** See §1 of [T-04 article notes](../tasks/T-04-article-notes.md) — IsalGraph clears it on one of five, and on none by a margin that survives resampling |
+
+### Standing requests this file made of T-04, answered
+
+- *"Verify on day 1 whether `LasseRegin/gSpan` exposes the minimum DFS code"* (§2 Risk) — **answered
+  by the scout and confirmed here: vendor nothing.** Three repositories tested, three rejected. The
+  min-DFS code is ours, with V1/V2/V3 oracles; distinct codes at `n = 2…6` are **1/2/6/21/112**
+  (OEIS A001349, zero collisions), and the `kaviniitm` gate ships as an acceptance test any future
+  third-party candidate must pass, **K2 first**.
+- *"T-04a decides the distance"* (§2 table) — **the machinery is shipped and unrun.** `grid.py`
+  proves it runs end to end on a 20-graph dry run; T-04a runs the 200-graph stratified sample.
+- *"`GEDBackend`"* (§1) — **deliberately not built.** GEDLIB lives in
+  `benchmarks/real_data/eval_setup/ged_backends.py` (T-27); a second one would fork the cost model.
+
+### Artifacts
+
+| File | From |
+|---|---|
+| `.claude/notes/2026-08-14-t04-competitors/corrected_rho_table.json` | `reproduce --mode table` — **quote this, not §4.1/§4.2** |
+| `.../repro_artefacts.json` | `reproduce --mode artefacts` — 40/40 Suite-1 cells at delta `0.00e+00` |
+| `.../smoke_picasso_suite{1,2}.json` | the loginexa run; `pynauty` from-source gate |
+| `.../agm_ceiling_B.json` | AGM's ceiling, `agm.md` §2.2b |
+| `.../{summary,VERIFICATION,WAVE0-FINDINGS,PICASSO,CONTRACTS}.md` | the wave record |
+
+**Article notes**: [T-04-article-notes.md](../tasks/T-04-article-notes.md) — read its
+*"What is NOT claimable"* section before quoting anything from this folder.

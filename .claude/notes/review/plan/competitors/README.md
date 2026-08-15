@@ -72,7 +72,18 @@ representation into **CAM** (AGM, FSG, FFSM) and **M-DFSC** (gSpan). R1.2 named 
 ## 3. The master table
 
 F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per dataset.
+
+> **What F3 measures for a non-canonical format, established 2026-08-15 by T-04 and proved, not
+> sampled.** Over *every* connected graph on `n = 2…6`, exactly **5** are invariant under **every**
+> relabelling, and **all 5 are complete graphs** — the strict upper triangle is relabelling-invariant
+> iff the adjacency matrix is constant off-diagonal. So `0–6 / 50` for `adjacency`, `graph6` and
+> `sparse6` is **the count of complete graphs in the draw**, not a sampling artefact of the 20-draw
+> harness: exhaustive enumeration over all `n!` relabellings returns the same counts. That is why the
+> Letter sets (many `K₂`/`K₃`) score 4–9/50 while LINUX, AIDS and GREC score **0/50**. Put this in
+> the F3 caption; it turns an incidental-looking number into a statement about the cohort.
+
 ρ = Spearman of Levenshtein against **certified exact GED**, 200-graph sample per dataset.
+**The ρ column below inherits §4.1's three-draw provenance — see the block there.**
 
 | Representation | Reproducible? | F3 (real) | Complete invariant | Primary distance | ρ range, Suite 1 | Claim A bits | Ceiling |
 |---|---|---|---|---|---|---|---|
@@ -91,6 +102,33 @@ F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per data
 ## 4. The three orderings that decide the paper
 
 ### 4.1 ρ against certified exact GED — per dataset, real
+
+> ## ⚠ SUPERSEDED 2026-08-15 by T-04 — this table is a composite of three draws
+>
+> **It does not match this folder's own raw output.** The rows below come from three different
+> scripts, each with its own `Random(42)` stream and therefore its own 200-graph sample: most rows
+> from `scratch/real_size_null.py`, the **AGM** row from `scratch/real_suite1.py`, the **WL** row
+> from `scratch/real_wl.py`. Against `real_suite1.out` the printed values differ by up to **0.074**
+> (AIDS IsalGraph 0.255 printed, **0.3288** logged; AIDS min-DFS 0.551 printed, **0.6131** logged).
+> LINUX is the control: `N = 89 < 200`, so all three scripts draw the same set and all three agree.
+>
+> This is finding 14 — ρ moving up to 0.07 between draws — appearing *inside* the table rather than
+> beside it.
+>
+> **The shipped code is not the problem.** `python -m isalgraph.competitors.reproduce --mode
+> artefacts` replays each script's stream and reproduces its raw artefact on **all five datasets and
+> all forty cells with delta exactly `0.00e+00`** — bit-for-bit, not to a tolerance.
+>
+> **Use instead**: `.claude/notes/2026-08-14-t04-competitors/corrected_rho_table.json`, from
+> `reproduce --mode table` — one script, one seed-42 draw per dataset, one convention (column-wise
+> adjacency, shared-vocabulary WL at `h = 2`), eleven rows including the null and both views.
+> **T-06, T-17 and T-20 quote that file, not this table.**
+>
+> **What changes materially** (see [T-04-article-notes](../../tasks/T-04-article-notes.md) §1):
+> IsalGraph clears the size null on **one** of five datasets, not two — Letter MED's `+0.007`
+> becomes `−0.044`, a margin an order of magnitude below the between-draw variability finding 14
+> records. **What survives**: min-DFS beats IsalGraph on all five; AGM beats it wherever computable;
+> the null dominates; the equal-`n` canonical/non-canonical gap on Letter LOW is if anything wider.
 
 200-graph sample, seed 42, certified-exact pairs only. Levenshtein throughout; WL uses its kernel
 distance. **Bold = best in column.**
@@ -126,6 +164,17 @@ distance. **Bold = best in column.**
 
 ### 4.2 The equal-`n` restriction — where canonicity actually shows up
 
+> ## ⚠ SUPERSEDED 2026-08-15 by T-04 — same three-draw provenance as §4.1
+>
+> Replaced by the `equal_n` view of `corrected_rho_table.json`. **The argument survives and gets
+> stronger**: on Letter LOW the canonical representations score 0.97–1.00 against the non-canonical
+> 0.54–0.61, a gap of **0.42–0.46**, and that subtraction is still the answer to R1.2's uniqueness
+> axis. **What does not survive is "min-DFS still wins every column"**: on the single-draw table
+> `isalgraph_canonical` takes Letter LOW (**0.9987** vs min-DFS 0.9956) and `wl_subtree` takes AIDS
+> (**0.4332** vs 0.3993). IsalGraph leading a column is a result the paper may use, and it appears
+> only in this view.
+
+
 Restricting to pairs with `n₁ = n₂` (22–26 % of pairs) removes the size channel entirely, so the
 null is constant and every column is pure structure. **This is the comparison the paper should
 lead with.**
@@ -151,6 +200,27 @@ lead with.**
 ### 4.3 Claim A — message length, real per-graph bit counts
 
 Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph sample).
+
+> ## ⚠ TWO CORRECTIONS 2026-08-15 by T-04
+>
+> **1. The `sparse6` column is 6 bits high on every row.** It was computed as `6·len(code)`
+> *including* the `':'` prefix; the design note then froze `6·len(wire) − 6`, deliberately, because
+> the prefix is framing and not payload. Both are defensible and they differ by exactly one
+> character. **The frozen convention wins**, so every sparse6 entry drops by 6: Letter LOW
+> 24.0 → **18.0**, Protein 390.0 → **384.0**, Mutagenicity 168.0 → **162.0**. Track A's tests assert
+> both conventions so the delta is provably the prefix and nothing else. [sparse6](sparse6.md) §4 is
+> self-contradictory on this and follows the frozen rule.
+>
+> **2. The five Suite-2 rows are not exactly reproducible, and the five Suite-1 rows are.** Suite 1
+> is the full retained cohort, so it is deterministic — track A reproduced `adjacency` and `graph6`
+> **10/10**. Suite 2 is a *400-graph draw* taken by `scratch/real_suite2.py` from the raw IAM GXL
+> tree, **which is no longer on this workstation**; the cohort was recovered as exported `.npz` from
+> Picasso and enumerates in a different order. Coarse statistics survive the change of draw, finer
+> ones do not: min-DFS's `m·2⌈log₂ n⌉` gives Protein **620.0 against 615.0**, and AGM's AIDS-IAM
+> ceiling **80.25 % against 82 %**. Both are sample differences, not algorithm differences — GREC
+> reproduces exactly at **76.00 %** with the same code and call. **Quote the Suite-2 rows with their
+> draw, or requote them from a run whose sample is recorded.**
+
 
 | Dataset | `n̄` | `m̄` | adjacency / AGM | graph6 | sparse6 | min-DFS | **IsalGraph pruned** | GED constr. |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -239,7 +309,7 @@ Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph s
 | **9** | **The four `n²` members share one Claim A number.** Four identical columns read as a copy-paste error | one row + footnote | T-17 |
 | **10** | **The gSpan vendoring plan is superseded. Three repositories tested, three rejected**: `LasseRegin/gSpan` (broken on numpy ≥ 1.24, `G2DFS` not minimal), `betterenvi` (`_is_min` private), **`kaviniitm/DFSCode` (builds, claims exactly this, not isomorphism-invariant — 46/90)**. Vendor nothing. Effort **2–3 d → ~1 d** | [competitors](../competitors.md) §2 | T-04, [schedule](../schedule.md) |
 | **11** | **The competitor runtime figure must be language-matched.** Timing a pure-Python min-DFS against the C++ engine reproduces R1.1's own complaint inside our answer to it | [gspan-mdfsc](gspan-mdfsc.md) §5 | T-06, Fig. 2 |
-| **12** | **`grakel`'s `n_iter = k` equals our `h = k−1`** (verified: `grakel(3)` ≡ `ours(2)` = 5.830952). **E10's existing WL numbers must be re-checked** | [wl-subtree-kernel](wl-subtree-kernel.md) §1 | T-06 |
+| **12** | ~~**`grakel`'s `n_iter = k` equals our `h = k−1`** (verified: `grakel(3)` ≡ `ours(2)` = 5.830952)~~ **CORRECTED 2026-08-15 by T-04: there is no off-by-one.** `grakel(n_iter=k) ≡ ours(h=k)`, from the source and confirmed by arithmetic; `grakel(n_iter=2) = 5.830952` and `grakel(n_iter=3) = 7.211103`. The off-by-one was in **our own** `scratch/backends.py::wl_features`, which compresses colours per graph per round so rounds ≥ 2 are cross-graph incomparable. **Frozen `h = 2` means `n_iter = 2`**, and `wl_kernel_computer.py`'s `n_iter = 5` is `h = 5`, not `h = 4`. §4.1's WL row moves (Letter LOW 0.895 → 0.7792). **E10's existing WL numbers must still be re-checked** | [wl-subtree-kernel](wl-subtree-kernel.md) §1 | T-06 |
 | **13** | **`nx.relabel_nodes(copy=True)` preserves insertion order**, so any F3 test built on it is void | method note for T-04a | T-04a |
 | **14** | **ρ moved by up to 0.07 between two independent 200-graph draws on AIDS** (0.329 vs 0.255). Direct support for [statistics](../statistics.md) D2: effective sample size is governed by **graphs**, not pairs | evidence for D2 | T-02 |
 | **15** | **bliss / Traces stay cut** — the `pynauty` from-source build was rehearsed under gcc 12.2.0 and succeeded | decision S-g | — |
@@ -269,7 +339,10 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
 
 1. Counting the adjacency matrix as `len('1010…') * 8` — inflates it 8× and hands us a baseline we
    beat for free ([adjacency-matrix](adjacency-matrix.md) §7).
-2. Inverting `pynauty.canon_label` — a deterministic wrong labelling that **passes F3**
+2. ~~Inverting `pynauty.canon_label` — a deterministic wrong labelling that **passes F3**~~
+   **CORRECTED 2026-08-15 by T-04**: inverting `canon_label` **fails F3 loudly** (non-invariant on
+   every connected trial), and the prescribed guard `nx.is_isomorphic(G, relabelled)` **can never
+   fire** — any bijective relabelling is isomorphic by construction. This trap is loud, not quiet.
    ([nauty](nauty.md) §1).
 3. Fitting the WL kernel per batch rather than per dataset — makes the distance matrix depend on
    batching order ([wl-subtree-kernel](wl-subtree-kernel.md) §7).

@@ -162,7 +162,7 @@ follow.** nauty produces *a* canonical labelling — the one its own refinement 
 pruning arrive at — not the labelling that minimises AGM's code. Measured on the running example:
 
 ```
-nauty canonical labelling -> graph6 payload   ' E@ro'  ->  bits 001110010011100
+nauty canonical labelling -> graph6 payload   ' E@ro'  ->  bits 000001110011110   <- CORRECTED 2026-08-15
 AGM lex-min labelling                                  ->  bits 000001110011110
 ```
 
