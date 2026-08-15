@@ -79,6 +79,15 @@ def _f3(backend: ReprBackend | VectorBackend, graphs: list[nx.Graph], seed: int)
     ``nx.relabel_nodes(copy=True)`` alone preserves insertion order and makes
     order-dependent formats look invariant, which would make this harness
     incapable of failing -- and a harness that cannot fail is worthless.
+
+    A ``VectorBackend`` is fitted **once per graph family** -- the graph and
+    all twenty of its relabellings together -- and never once per graph.
+    Fitting per graph is the per-batch trap at batch size one: it builds a
+    different colour vocabulary for each member and makes the comparison
+    depend on the batching rather than on the structure.  It happens to be
+    harmless for a WL whose features are fit-independent, and it would
+    silently corrupt any future ``VectorBackend`` whose features are not.
+    Reported by track C, 2026-08-15.
     """
     import random
 
@@ -86,10 +95,19 @@ def _f3(backend: ReprBackend | VectorBackend, graphs: list[nx.Graph], seed: int)
     invariant = 0
     for graph in graphs:
         try:
-            codes = {_signature(backend, graph)}
-            for _ in range(F3_RELABELLINGS):
-                codes.add(_signature(backend, fixtures.shuffled_copy(graph, rng)))
-        except CompetitorError:
+            copies = [fixtures.shuffled_copy(graph, rng) for _ in range(F3_RELABELLINGS)]
+            if isinstance(backend, VectorBackend):
+                backend.fit([graph, *copies])
+            codes = {_signature(backend, g) for g in (graph, *copies)}
+        except Exception:  # noqa: BLE001 - see below
+            # Broad by design. min-DFS raises a plain ValueError on a
+            # disconnected graph, which is not a CompetitorError, so a
+            # narrower clause let it escape and abort the whole smoke run --
+            # every other backend's numbers lost to one graph the cohort
+            # filter was supposed to exclude. A graph that fails to encode is
+            # simply not evidence of invariance; run_backend records the
+            # failure separately, so nothing is dropped here that is not
+            # counted there.
             continue
         if len(codes) == 1:
             invariant += 1
@@ -97,15 +115,13 @@ def _f3(backend: ReprBackend | VectorBackend, graphs: list[nx.Graph], seed: int)
 
 
 def _signature(backend: ReprBackend | VectorBackend, graph: nx.Graph) -> str:
+    """A comparable string for one graph.  **Does not fit** -- see :func:`_f3`."""
     if isinstance(backend, VectorBackend):
-        backend.fit([graph])
         return json.dumps(sorted(backend.features(graph).items()))
     return "".join(backend.encode(graph).symbols)
 
 
-def run_backend(
-    name: str, graphs: list[nx.Graph], *, seed: int, dataset: str
-) -> dict[str, Any]:
+def run_backend(name: str, graphs: list[nx.Graph], *, seed: int, dataset: str) -> dict[str, Any]:
     """Encode every graph, timing each, recording every failure.
 
     **Every failure is recorded, never dropped.**  The failure *rate* is a
