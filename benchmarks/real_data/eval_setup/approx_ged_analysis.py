@@ -316,6 +316,49 @@ def bracket_width(lb: npt.NDArray[Any], ub: npt.NDArray[Any]) -> FloatArray:
     return np.clip(width, 0.0, 1.0)
 
 
+def absolute_gap(lb: npt.NDArray[Any], ub: npt.NDArray[Any]) -> FloatArray:
+    """Return the absolute bracket gap ``UB - LB``, in edit operations.
+
+    The absolute gap and the relative width :func:`bracket_width` answer
+    different questions and can move in opposite directions, because the
+    relative width's denominator grows with ``n``. A constant absolute gap
+    produces a *falling* relative width automatically, so a falling relative
+    width does not imply a tightening bound. Both are reported.
+
+    Parameters
+    ----------
+    lb
+        Lower bounds.
+    ub
+        Upper bounds, same shape as ``lb``.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``UB - LB`` in edit operations, float64, non-negative.
+
+    Raises
+    ------
+    InputError
+        If the shapes differ, if any value is negative or non-finite, or if
+        ``LB > UB`` anywhere beyond ``CERTIFIED_TOL``. The validation is the
+        same as :func:`bracket_width`'s, so the two never disagree on whether
+        an input is usable.
+    """
+    lb64 = np.asarray(lb, dtype=np.float64)
+    ub64 = np.asarray(ub, dtype=np.float64)
+    if lb64.shape != ub64.shape:
+        raise InputError(f"shape mismatch: lb {lb64.shape} vs ub {ub64.shape}")
+    if not (np.isfinite(lb64).all() and np.isfinite(ub64).all()):
+        raise InputError("non-finite bound encountered")
+    if (lb64 < 0).any() or (ub64 < 0).any():
+        raise InputError("negative bound encountered")
+    n_violations = int((lb64 > ub64 + CERTIFIED_TOL).sum())
+    if n_violations:
+        raise InputError(f"{n_violations} pairs violate LB <= UB")
+    return np.maximum(ub64 - lb64, 0.0)
+
+
 def graph_density(node_counts: npt.NDArray[Any], edge_counts: npt.NDArray[Any]) -> FloatArray:
     """Return per-graph density ``2 m / (n (n - 1))``.
 
@@ -928,6 +971,9 @@ class PairVectors:
     size_code: npt.NDArray[np.int8]
     width: Float32Array
     width_sensitivity: Float32Array
+    gap: Float32Array
+    gap_sensitivity: Float32Array
+    upper_bound: Float32Array
     density: Float32Array
     certified: BoolArray
     certified_sensitivity: BoolArray
@@ -1103,20 +1149,31 @@ def _size_profile(
     n_max: npt.NDArray[Any],
     width: npt.NDArray[Any],
     width_sensitivity: npt.NDArray[Any],
+    gap: npt.NDArray[Any],
+    gap_sensitivity: npt.NDArray[Any],
+    upper_bound: npt.NDArray[Any],
 ) -> list[dict[str, Any]]:
-    """Return the mean bracket width at each distinct value of ``n_max``.
+    """Return the mean bracket quantities at each distinct value of ``n_max``.
 
     This is the compact form the §7.1 figures are drawn from, so a figure and
-    the report read the same numbers.
+    the report read the same numbers. The mean upper bound is carried beside
+    the two bracket measures because it is the denominator that makes them
+    diverge: the relative width can fall while the absolute gap rises.
 
     Parameters
     ----------
     n_max
         ``max(n1, n2)`` per pair.
     width
-        Primary-arm bracket width per pair.
+        Primary-arm relative bracket width per pair.
     width_sensitivity
-        Sensitivity-arm bracket width per pair.
+        Sensitivity-arm relative bracket width per pair.
+    gap
+        Primary-arm absolute gap ``UB - LB`` per pair.
+    gap_sensitivity
+        Sensitivity-arm absolute gap ``UBS - LB`` per pair.
+    upper_bound
+        Primary upper bound per pair.
 
     Returns
     -------
@@ -1128,21 +1185,22 @@ def _size_profile(
     sorted_values = values[order]
     unique, starts = np.unique(sorted_values, return_index=True)
     bounds = list(starts) + [sorted_values.size]
-    primary = np.asarray(width, dtype=np.float64)[order]
-    arm = np.asarray(width_sensitivity, dtype=np.float64)[order]
+    columns = {
+        "width": np.asarray(width, dtype=np.float64)[order],
+        "width_sensitivity": np.asarray(width_sensitivity, dtype=np.float64)[order],
+        "gap": np.asarray(gap, dtype=np.float64)[order],
+        "gap_sensitivity": np.asarray(gap_sensitivity, dtype=np.float64)[order],
+    }
+    upper = np.asarray(upper_bound, dtype=np.float64)[order]
     rows: list[dict[str, Any]] = []
     for position, value in enumerate(unique):
         lo, hi = bounds[position], bounds[position + 1]
-        rows.append(
-            {
-                "n_max": int(value),
-                "n_pairs": int(hi - lo),
-                "mean_width": float(primary[lo:hi].mean()),
-                "median_width": float(np.median(primary[lo:hi])),
-                "mean_width_sensitivity": float(arm[lo:hi].mean()),
-                "median_width_sensitivity": float(np.median(arm[lo:hi])),
-            }
-        )
+        row: dict[str, Any] = {"n_max": int(value), "n_pairs": int(hi - lo)}
+        for name, column in columns.items():
+            row[f"mean_{name}"] = float(column[lo:hi].mean())
+            row[f"median_{name}"] = float(np.median(column[lo:hi]))
+        row["mean_upper_bound"] = float(upper[lo:hi].mean())
+        rows.append(row)
     return rows
 
 
@@ -1235,8 +1293,14 @@ def analyse_dataset(
     n_max_mat = n_max_matrix(reference.node_counts)
     density = graph_density(reference.node_counts, reference.edge_counts)
 
+    gap_matrix = absolute_gap(lb, files["UB"].ged)
+    gap_sensitivity_matrix = absolute_gap(lb, files["UBS"].ged)
+
     width = upper_triangle(width_matrix)
     width_sensitivity = upper_triangle(width_sensitivity_matrix)
+    gap = upper_triangle(gap_matrix)
+    gap_sensitivity = upper_triangle(gap_sensitivity_matrix)
+    upper_bound = upper_triangle(files["UB"].ged)
     n_max = upper_triangle(n_max_mat)
     d_pair = upper_triangle(pair_density_matrix(density))
     certified = upper_triangle(certified_matrix)
@@ -1244,11 +1308,25 @@ def analyse_dataset(
     size_code = size_bin_codes(n_max)
 
     tier = bootstrap_tier(dataset)
-    primary_fit = ols_fit(n_max, width)
-    sensitivity_fit = ols_fit(n_max, width_sensitivity)
     LOGGER.info("%s: bootstrapping %d replicates (tier %d)", dataset, tier.replicates, tier.tier)
-    primary_ci = bootstrap_slope_ci(width_matrix, n_max_mat, tier, config.seed)
-    sensitivity_ci = bootstrap_slope_ci(width_sensitivity_matrix, n_max_mat, tier, config.seed)
+    arms = {
+        "primary": (width, width_matrix),
+        "sensitivity": (width_sensitivity, width_sensitivity_matrix),
+        "primary_absolute": (gap, gap_matrix),
+        "sensitivity_absolute": (gap_sensitivity, gap_sensitivity_matrix),
+    }
+    s71_arms = {
+        name: {
+            "fit": ols_fit(n_max, vector).as_dict(),
+            "slope_ci": bootstrap_slope_ci(matrix, n_max_mat, tier, config.seed),
+            "measure": (
+                "absolute gap UB - LB, edit operations"
+                if name.endswith("_absolute")
+                else "relative width (UB - LB)/UB, dimensionless"
+            ),
+        }
+        for name, (vector, matrix) in arms.items()
+    }
 
     n_zero_ub = int((upper_triangle(files["UB"].ged) == 0.0).sum())
     role_in_slope_set = (
@@ -1264,15 +1342,24 @@ def analyse_dataset(
         "n_max_max": int(n_max.max()),
         "mean_nodes": float(reference.node_counts.mean()),
         "mean_pair_density": float(d_pair.mean()),
+        "mean_upper_bound": float(upper_bound.mean()),
+        "mean_gap": float(gap.mean()),
+        "mean_gap_sensitivity": float(gap_sensitivity.mean()),
         "n_pairs_with_zero_ub": n_zero_ub,
         "slope_role": role_in_slope_set,
         "consistency": consistency,
         "provenance": _provenance(files),
         "bootstrap": tier.as_dict(),
         "s71": {
-            "primary": {"fit": primary_fit.as_dict(), "slope_ci": primary_ci},
-            "sensitivity": {"fit": sensitivity_fit.as_dict(), "slope_ci": sensitivity_ci},
-            "size_profile": _size_profile(n_max, width, width_sensitivity),
+            **s71_arms,
+            "size_profile": _size_profile(
+                n_max, width, width_sensitivity, gap, gap_sensitivity, upper_bound
+            ),
+            "by_size_stratum_gap_primary": _stratum_table(size_code, SIZE_BIN_LABELS, gap),
+            "by_size_stratum_gap_sensitivity": _stratum_table(
+                size_code, SIZE_BIN_LABELS, gap_sensitivity
+            ),
+            "by_size_stratum_upper_bound": _stratum_table(size_code, SIZE_BIN_LABELS, upper_bound),
         },
         "s72": {
             "certification_rate_primary": float(certified.mean()),
@@ -1315,6 +1402,9 @@ def analyse_dataset(
         size_code=size_code,
         width=width.astype(np.float32),
         width_sensitivity=width_sensitivity.astype(np.float32),
+        gap=gap.astype(np.float32),
+        gap_sensitivity=gap_sensitivity.astype(np.float32),
+        upper_bound=upper_bound.astype(np.float32),
         density=d_pair.astype(np.float32),
         certified=certified,
         certified_sensitivity=certified_sensitivity,
@@ -1416,51 +1506,91 @@ def pooled_size_strata(
     """
     rows: list[dict[str, Any]] = []
     for index, label in enumerate(SIZE_BIN_LABELS):
-        parts_primary: list[npt.NDArray[np.float32]] = []
-        parts_arm: list[npt.NDArray[np.float32]] = []
-        parts_density: list[npt.NDArray[np.float32]] = []
-        parts_certified: list[BoolArray] = []
-        composition: dict[str, int] = {}
-        for vector in vectors:
-            mask = vector.size_code == index
-            count = int(mask.sum())
-            if count == 0:
-                continue
-            composition[vector.dataset] = count
-            parts_primary.append(vector.width[mask])
-            parts_arm.append(vector.width_sensitivity[mask])
-            parts_density.append(vector.density[mask])
-            parts_certified.append(vector.certified[mask])
-        total = sum(composition.values())
-        row: dict[str, Any] = {
-            "stratum": label,
-            "stratum_index": index,
-            "n_pairs": total,
-            "composition": dict(sorted(composition.items(), key=lambda kv: -kv[1])),
-            "composition_share": {
-                key: value / total
-                for key, value in sorted(composition.items(), key=lambda kv: -kv[1])
-            }
-            if total
-            else {},
-        }
-        if total:
-            top_key, top_count = max(composition.items(), key=lambda kv: kv[1])
-            row["dominant_dataset"] = top_key
-            row["dominant_share"] = top_count / total
-            row["width_primary"] = _describe(np.concatenate(parts_primary))
-            row["width_sensitivity"] = _describe(np.concatenate(parts_arm))
-            row["mean_pair_density"] = float(np.concatenate(parts_density).mean())
-            row["certification_rate_primary"] = float(np.concatenate(parts_certified).mean())
-        else:
-            row["dominant_dataset"] = None
-            row["dominant_share"] = math.nan
-            row["width_primary"] = _describe(np.zeros(0))
-            row["width_sensitivity"] = _describe(np.zeros(0))
-            row["mean_pair_density"] = math.nan
-            row["certification_rate_primary"] = math.nan
+        row = _pooled_stratum_row(vectors, label, index, {v.dataset: v.size_code for v in vectors})
+        parts_density = [
+            part for part in (v.density[v.size_code == index] for v in vectors) if part.size
+        ]
+        row["mean_pair_density"] = (
+            float(np.concatenate(parts_density).mean()) if parts_density else math.nan
+        )
+        row["composition_share"] = (
+            {key: value / row["n_pairs"] for key, value in row["composition"].items()}
+            if row["n_pairs"]
+            else {}
+        )
         rows.append(row)
     return rows
+
+
+#: The per-pair quantities every pooled stratum row summarises. The absolute
+#: gap sits beside the relative width because the two can move in opposite
+#: directions, and the mean upper bound is the denominator that makes them.
+_STRATUM_FIELDS: tuple[tuple[str, str], ...] = (
+    ("width_primary", "width"),
+    ("width_sensitivity", "width_sensitivity"),
+    ("gap_primary", "gap"),
+    ("gap_sensitivity", "gap_sensitivity"),
+    ("upper_bound", "upper_bound"),
+)
+
+
+def _pooled_stratum_row(
+    vectors: Sequence[PairVectors],
+    label: str,
+    index: int,
+    codes: Mapping[str, npt.NDArray[Any]],
+) -> dict[str, Any]:
+    """Summarise one pooled stratum across every dataset.
+
+    Parameters
+    ----------
+    vectors
+        Per-dataset pair vectors.
+    label
+        Stratum label.
+    index
+        Zero-based stratum index.
+    codes
+        Dataset key to that dataset's stratum code per pair.
+
+    Returns
+    -------
+    dict
+        Composition, dominance share and a describe block per quantity.
+    """
+    parts: dict[str, list[npt.NDArray[np.float32]]] = {name: [] for name, _ in _STRATUM_FIELDS}
+    parts_certified: list[BoolArray] = []
+    composition: dict[str, int] = {}
+    for vector in vectors:
+        mask = codes[vector.dataset] == index
+        count = int(mask.sum())
+        if count == 0:
+            continue
+        composition[vector.dataset] = count
+        for name, attribute in _STRATUM_FIELDS:
+            parts[name].append(getattr(vector, attribute)[mask])
+        parts_certified.append(vector.certified[mask])
+    total = sum(composition.values())
+    row: dict[str, Any] = {
+        "stratum": label,
+        "stratum_index": index,
+        "n_pairs": total,
+        "composition": dict(sorted(composition.items(), key=lambda kv: -kv[1])),
+    }
+    if total:
+        top_key, top_count = max(composition.items(), key=lambda kv: kv[1])
+        row["dominant_dataset"] = top_key
+        row["dominant_share"] = top_count / total
+        for name, _ in _STRATUM_FIELDS:
+            row[name] = _describe(np.concatenate(parts[name]))
+        row["certification_rate_primary"] = float(np.concatenate(parts_certified).mean())
+    else:
+        row["dominant_dataset"] = None
+        row["dominant_share"] = math.nan
+        for name, _ in _STRATUM_FIELDS:
+            row[name] = _describe(np.zeros(0))
+        row["certification_rate_primary"] = math.nan
+    return row
 
 
 def pooled_density_strata(
@@ -1484,44 +1614,8 @@ def pooled_density_strata(
     list of dict
         One row per quintile.
     """
-    rows: list[dict[str, Any]] = []
     codes = {v.dataset: density_codes(v.density, edges) for v in vectors}
-    for index, label in enumerate(labels):
-        parts_primary: list[npt.NDArray[np.float32]] = []
-        parts_arm: list[npt.NDArray[np.float32]] = []
-        parts_certified: list[BoolArray] = []
-        composition: dict[str, int] = {}
-        for vector in vectors:
-            mask = codes[vector.dataset] == index
-            count = int(mask.sum())
-            if count == 0:
-                continue
-            composition[vector.dataset] = count
-            parts_primary.append(vector.width[mask])
-            parts_arm.append(vector.width_sensitivity[mask])
-            parts_certified.append(vector.certified[mask])
-        total = sum(composition.values())
-        row: dict[str, Any] = {
-            "stratum": label,
-            "stratum_index": index,
-            "n_pairs": total,
-            "composition": dict(sorted(composition.items(), key=lambda kv: -kv[1])),
-        }
-        if total:
-            top_key, top_count = max(composition.items(), key=lambda kv: kv[1])
-            row["dominant_dataset"] = top_key
-            row["dominant_share"] = top_count / total
-            row["width_primary"] = _describe(np.concatenate(parts_primary))
-            row["width_sensitivity"] = _describe(np.concatenate(parts_arm))
-            row["certification_rate_primary"] = float(np.concatenate(parts_certified).mean())
-        else:
-            row["dominant_dataset"] = None
-            row["dominant_share"] = math.nan
-            row["width_primary"] = _describe(np.zeros(0))
-            row["width_sensitivity"] = _describe(np.zeros(0))
-            row["certification_rate_primary"] = math.nan
-        rows.append(row)
-    return rows
+    return [_pooled_stratum_row(vectors, label, index, codes) for index, label in enumerate(labels)]
 
 
 def secondary_density_cells(
@@ -1573,8 +1667,13 @@ def secondary_density_cells(
             x = vector.n_max[mask].astype(np.float64)
             entry["primary"] = ols_fit(x, vector.width[mask]).as_dict()
             entry["sensitivity"] = ols_fit(x, vector.width_sensitivity[mask]).as_dict()
+            entry["primary_absolute"] = ols_fit(x, vector.gap[mask]).as_dict()
+            entry["sensitivity_absolute"] = ols_fit(x, vector.gap_sensitivity[mask]).as_dict()
             entry["mean_width_primary"] = float(vector.width[mask].mean())
             entry["mean_width_sensitivity"] = float(vector.width_sensitivity[mask].mean())
+            entry["mean_gap_primary"] = float(vector.gap[mask].mean())
+            entry["mean_gap_sensitivity"] = float(vector.gap_sensitivity[mask].mean())
+            entry["mean_upper_bound"] = float(vector.upper_bound[mask].mean())
             entry["n_max_min"] = int(vector.n_max[mask].min())
             entry["n_max_max"] = int(vector.n_max[mask].max())
             fitted.append(entry)
@@ -1604,15 +1703,22 @@ def pooled_slope(vectors: Sequence[PairVectors]) -> dict[str, Any]:
     dict
         Primary and sensitivity fits with the caveat attached.
     """
+    names = {
+        "primary": "width",
+        "sensitivity": "width_sensitivity",
+        "primary_absolute": "gap",
+        "sensitivity_absolute": "gap_sensitivity",
+    }
     if not vectors:
         empty = OlsFit(math.nan, math.nan, math.nan, 0).as_dict()
-        return {"primary": empty, "sensitivity": empty, "status": "no data"}
+        return {**{key: empty for key in names}, "status": "no data"}
     x = np.concatenate([v.n_max.astype(np.float64) for v in vectors])
-    primary = ols_fit(x, np.concatenate([v.width for v in vectors]))
-    arm = ols_fit(x, np.concatenate([v.width_sensitivity for v in vectors]))
+    fits = {
+        key: ols_fit(x, np.concatenate([getattr(v, attribute) for v in vectors])).as_dict()
+        for key, attribute in names.items()
+    }
     return {
-        "primary": primary.as_dict(),
-        "sensitivity": arm.as_dict(),
+        **fits,
         "caveat": (
             "Descriptive only. Size and provenance are confounded in Suite 2: the "
             "small-n strata are dominated by Letter and the large-n strata by "
@@ -1707,31 +1813,34 @@ def _figure_width_vs_n(
     get_figure_size: Any,
     save_figure: Any,
 ) -> list[str]:
-    """Draw mean bracket width against ``n_max``, within dataset, both arms."""
-    fig, axes = plt.subplots(
-        1, 2, figsize=get_figure_size("double", height_ratio=0.42), sharey=True
+    """Draw both bracket measures against ``n_max``, within dataset.
+
+    The absolute gap leads, on the left, because it is the quantity the AE.1
+    answer rests on; the relative width follows with the mean upper bound
+    behind it, which is the denominator that makes the two disagree.
+    """
+    fig, axes = plt.subplots(1, 3, figsize=get_figure_size("double", height_ratio=0.36))
+    panels = (
+        ("mean_gap", axes[0], "Absolute gap $UB-LB$", "mean gap (edit operations)"),
+        ("mean_width", axes[1], "Relative width $(UB-LB)/UB$", "mean relative width"),
+        ("mean_upper_bound", axes[2], "Denominator: mean $UB$", "mean upper bound (ops)"),
     )
-    for arm, axis, title in (
-        ("mean_width", axes[0], "Primary arm: BIPARTITE"),
-        ("mean_width_sensitivity", axes[1], "Sensitivity arm: BP_BEAM_DET"),
-    ):
+    for key, axis, title, ylabel in panels:
         for dataset in datasets:
             profile = results["per_dataset"][dataset]["s71"]["size_profile"]
-            x = [row["n_max"] for row in profile]
-            y = [row[arm] for row in profile]
             axis.plot(
-                x,
-                y,
+                [row["n_max"] for row in profile],
+                [row[key] for row in profile],
                 marker="o",
-                markersize=2.0,
-                linewidth=1.0,
+                markersize=1.8,
+                linewidth=0.9,
                 color=colours[dataset],
                 label=dataset.replace("_", " "),
             )
         axis.set_xlabel(r"$n_{\max} = \max(n_1, n_2)$")
-        axis.set_title(title)
-    axes[0].set_ylabel(r"mean bracket width $(UB-LB)/UB$")
-    axes[1].legend(fontsize=4.5, ncol=2, loc="lower right")
+        axis.set_title(title, fontsize=6)
+        axis.set_ylabel(ylabel, fontsize=6)
+    axes[0].legend(fontsize=4.0, ncol=2, loc="upper left")
     fig.tight_layout()
     written = save_figure(
         fig, str(figures_dir / "fig_71_width_vs_n_within_dataset"), formats=("pdf",)
@@ -1748,34 +1857,56 @@ def _figure_slope_forest(
     get_figure_size: Any,
     save_figure: Any,
 ) -> list[str]:
-    """Draw the within-dataset slope with its bootstrap CI, both arms."""
-    fig, axis = plt.subplots(figsize=get_figure_size("single", height_ratio=0.85))
-    offsets = {"primary": -0.16, "sensitivity": 0.16}
-    markers = {"primary": "o", "sensitivity": "s"}
-    colours = dict(zip(("primary", "sensitivity"), _figure_palette(2)))
+    """Draw the within-dataset slope with its bootstrap CI, on both scales.
+
+    Two panels rather than one axis, because the two measures carry different
+    units and, on this cohort, different signs. Plotting them on a shared axis
+    would invite exactly the comparison that is not meaningful.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=get_figure_size("double", height_ratio=0.40))
+    offsets = {"": -0.16, "_arm": 0.16}
+    markers = {"": "o", "_arm": "s"}
+    colours = dict(zip(("", "_arm"), _figure_palette(2)))
     positions = list(range(len(datasets)))
-    for arm in ("primary", "sensitivity"):
-        for position, dataset in zip(positions, datasets):
-            block = results["per_dataset"][dataset]["s71"][arm]
-            slope = block["fit"]["slope"]
-            ci = block["slope_ci"]
-            if not math.isfinite(slope):
-                continue
-            y = position + offsets[arm]
-            axis.plot([ci["ci_low"], ci["ci_high"]], [y, y], color=colours[arm], linewidth=1.0)
-            axis.plot(
-                [slope],
-                [y],
-                marker=markers[arm],
-                markersize=3.0,
-                color=colours[arm],
-                label=arm if position == positions[0] else None,
-            )
-    axis.axvline(0.0, color="0.4", linewidth=0.6, linestyle="--")
-    axis.set_yticks(positions)
-    axis.set_yticklabels([d.replace("_", " ") for d in datasets], fontsize=5)
-    axis.set_xlabel(r"OLS slope of $(UB-LB)/UB$ on $n_{\max}$ (per node)")
-    axis.legend(fontsize=5, loc="best")
+    panels = (
+        (
+            axes[0],
+            "primary_absolute",
+            "sensitivity_absolute",
+            r"OLS slope of $UB-LB$ on $n_{\max}$ (ops/node)",
+        ),
+        (axes[1], "primary", "sensitivity", r"OLS slope of $(UB-LB)/UB$ on $n_{\max}$ (per node)"),
+    )
+    for axis, primary_key, arm_key, xlabel in panels:
+        for suffix, key, label in (
+            ("", primary_key, "BIPARTITE"),
+            ("_arm", arm_key, "BP_BEAM_DET"),
+        ):
+            for position, dataset in zip(positions, datasets):
+                block = results["per_dataset"][dataset]["s71"][key]
+                slope = block["fit"]["slope"]
+                ci = block["slope_ci"]
+                if not math.isfinite(slope):
+                    continue
+                y = position + offsets[suffix]
+                axis.plot(
+                    [ci["ci_low"], ci["ci_high"]], [y, y], color=colours[suffix], linewidth=1.0
+                )
+                axis.plot(
+                    [slope],
+                    [y],
+                    marker=markers[suffix],
+                    markersize=3.0,
+                    color=colours[suffix],
+                    label=label if position == positions[0] else None,
+                )
+        axis.axvline(0.0, color="0.4", linewidth=0.6, linestyle="--")
+        axis.set_yticks(positions)
+        axis.set_yticklabels([d.replace("_", " ") for d in datasets], fontsize=5)
+        axis.set_xlabel(xlabel, fontsize=6)
+    axes[0].set_title("Absolute gap -- the AE.1 answer", fontsize=6)
+    axes[1].set_title("Relative width -- the design's named measure", fontsize=6)
+    axes[0].legend(fontsize=5, loc="best")
     fig.tight_layout()
     written = save_figure(fig, str(figures_dir / "fig_71_slope_forest"), formats=("pdf",))
     plt.close(fig)
@@ -2124,34 +2255,57 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
     lines: list[str] = []
     add = lines.append
 
-    add("## §7.1 -- `(UB - LB)/UB` versus `n`")
+    add("## §7.1 -- the bracket versus `n`, on both scales")
     add("")
     add(
-        "The single measurement that answers AE.1. Source: "
+        "The measurement that answers AE.1. Source: "
         "`data/s71_within_dataset_slopes.json`, `data/s71_size_profiles.json`, "
         "`data/s71_density_cells.json`, `data/s71_pooled.json`."
     )
     add("")
-    add("### §7.1a PRIMARY -- within-dataset slope, graph-level cluster bootstrap")
+    add(
+        "> ### TWO MEASURES, AND THEY MOVE IN OPPOSITE DIRECTIONS\n>\n"
+        "> - **Absolute gap** `UB - LB`, in **edit operations**. How much of the graph's edit "
+        "distance is unresolved.\n"
+        "> - **Relative width** `(UB - LB)/UB`, **dimensionless**. The unresolved fraction *of the "
+        "upper bound*.\n>\n"
+        "> **The mechanism, stated once so no reader has to derive it: the relative width's "
+        "denominator grows with `n`, so a bound whose absolute gap is merely constant already "
+        "produces a falling relative width, and a falling relative width therefore does not imply "
+        "a tightening bound.** The design named `(UB - LB)/UB` and it is reported here in full, "
+        "but **the absolute gap leads**, because it is the quantity that says whether the "
+        "reference GED is better or worse resolved at large `n` than at small `n`."
+    )
+    add("")
+    add("### §7.1a PRIMARY -- absolute gap `UB - LB`, within dataset")
     add("")
     add(
-        "OLS of `w` on `n_max` within each dataset, with a graph-level cluster bootstrap "
-        "95 % percentile CI on the slope at that dataset's frozen D15 tier. Replicate count and "
-        "within-replicate pair budget are in the last column of every row; they are not uniform "
+        "OLS of the absolute gap on `n_max` within each dataset, with a graph-level cluster "
+        "bootstrap 95 % percentile CI on the slope at that dataset's frozen D15 tier. Replicate "
+        "count and within-replicate pair budget are in the `effort` column; they are not uniform "
         "across datasets and a CI from 1,000 replicates is not silently presented beside one from "
-        "2,000."
+        "2,000. Slope units are **edit operations per node**."
     )
     add("")
     lines += _table(
-        ["dataset", "slope /node", "95 % CI", "intercept", "R^2", "pairs", "effort", "role"],
+        [
+            "dataset",
+            "abs slope (ops/node)",
+            "95 % CI",
+            "R^2",
+            "mean UB",
+            "mean gap",
+            "effort",
+            "role",
+        ],
         [
             [
                 d,
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["slope"], 5),
-                _ci_text(per_dataset[d]["s71"]["primary"]["slope_ci"]),
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["intercept"], 4),
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["r_squared"], 4),
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["n_pairs"]),
+                _fmt(per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"], 4),
+                _ci_text(per_dataset[d]["s71"]["primary_absolute"]["slope_ci"]),
+                _fmt(per_dataset[d]["s71"]["primary_absolute"]["fit"]["r_squared"], 4),
+                _fmt(per_dataset[d]["mean_upper_bound"], 2),
+                _fmt(per_dataset[d]["mean_gap"], 2),
                 f"{per_dataset[d]['bootstrap']['replicates']}x"
                 f"{per_dataset[d]['bootstrap']['within_replicate_pairs']}",
                 per_dataset[d]["slope_role"],
@@ -2159,23 +2313,72 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
             for d in datasets
         ],
     )
-    add("### §7.1b Sensitivity arm -- the same fit on `w_s = (UBS - LB)/UBS`")
+    add("### §7.1b Relative width `(UB - LB)/UB`, within dataset -- the design's named measure")
+    add("")
+    add(
+        "The same fit on the relative width, and the absolute slope beside it so the divergence "
+        "is visible in one row. A negative relative slope with a positive absolute slope means the "
+        "upper bound grew faster than the gap did; it does **not** mean the bound tightened."
+    )
     add("")
     lines += _table(
-        ["dataset", "slope /node", "95 % CI", "intercept", "R^2", "primary slope", "arm - primary"],
+        [
+            "dataset",
+            "rel slope /node",
+            "95 % CI",
+            "R^2",
+            "abs slope",
+            "same sign?",
+            "mean UB",
+            "role",
+        ],
         [
             [
                 d,
+                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["slope"], 5),
+                _ci_text(per_dataset[d]["s71"]["primary"]["slope_ci"]),
+                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["r_squared"], 4),
+                _fmt(per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"], 4),
+                "yes"
+                if (
+                    per_dataset[d]["s71"]["primary"]["fit"]["slope"]
+                    * per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"]
+                    > 0
+                )
+                else "**NO**",
+                _fmt(per_dataset[d]["mean_upper_bound"], 2),
+                per_dataset[d]["slope_role"],
+            ]
+            for d in datasets
+        ],
+    )
+    add(
+        "> `LB/UB` is deliberately **not** reported as a third quantity: it is exactly "
+        "`1 - (UB - LB)/UB`, so its slope is the negation of the relative slope and it carries no "
+        "information the two columns above do not already contain."
+    )
+    add("")
+    add("### §7.1c Sensitivity arm -- both measures on `UBS = BP_BEAM_DET`")
+    add("")
+    lines += _table(
+        [
+            "dataset",
+            "abs slope",
+            "95 % CI",
+            "primary abs slope",
+            "rel slope",
+            "95 % CI",
+            "primary rel slope",
+        ],
+        [
+            [
+                d,
+                _fmt(per_dataset[d]["s71"]["sensitivity_absolute"]["fit"]["slope"], 4),
+                _ci_text(per_dataset[d]["s71"]["sensitivity_absolute"]["slope_ci"]),
+                _fmt(per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"], 4),
                 _fmt(per_dataset[d]["s71"]["sensitivity"]["fit"]["slope"], 5),
                 _ci_text(per_dataset[d]["s71"]["sensitivity"]["slope_ci"]),
-                _fmt(per_dataset[d]["s71"]["sensitivity"]["fit"]["intercept"], 4),
-                _fmt(per_dataset[d]["s71"]["sensitivity"]["fit"]["r_squared"], 4),
                 _fmt(per_dataset[d]["s71"]["primary"]["fit"]["slope"], 5),
-                _fmt(
-                    per_dataset[d]["s71"]["sensitivity"]["fit"]["slope"]
-                    - per_dataset[d]["s71"]["primary"]["fit"]["slope"],
-                    5,
-                ),
             ]
             for d in datasets
         ],
@@ -2183,9 +2386,8 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
     add("#### What the two arms separate, and why the arm is not optional")
     add("")
     add(
-        "The bracket `(UB - LB)/UB` is a property of **our reference bounds**, not of IsalGraph. "
-        "A bracket that widens with `n` admits exactly two readings, and the two arms separate "
-        "them:"
+        "The bracket is a property of **our reference bounds**, not of IsalGraph. A bracket that "
+        "widens with `n` admits exactly two readings, and the two arms separate them:"
     )
     add("")
     add(
@@ -2208,38 +2410,83 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "The `arm - primary` column above is the difference the comparison rests on. Its sign "
-        "and magnitude per dataset are in `data/s71_within_dataset_slopes.json`. Note that the "
-        "two arms share the **same lower bound**, so the difference between them is entirely a "
-        "difference between two upper bounds and carries no lower-bound contribution."
+        "The primary-versus-arm columns above are the difference the comparison rests on. The "
+        "two arms share the **same lower bound**, so any difference between them is entirely a "
+        "difference between two upper bounds and carries no lower-bound contribution. A lower "
+        "bound that loosened with `n` would raise both absolute slopes equally and is invisible "
+        "in this comparison."
     )
     add("")
 
-    add("### §7.1c SECONDARY -- within (dataset x density quintile)")
+    add("### §7.1d SECONDARY -- within (dataset x density quintile), both measures")
     add("")
     cells = results["pooled"]["density_cells"]
     add(
         f"{cells['n_cells_fitted']} cells fitted, {cells['n_cells_dropped']} dropped for holding "
         f"fewer than {cells['min_cell_pairs']:,} pairs. Dropped cells are listed in "
         "`data/s71_density_cells.json` under `dropped` with their populations; they are not "
-        "silently omitted."
+        "silently omitted. Holding density fixed is the check on whether a within-dataset slope "
+        "is a size effect or the density gradient that travels with size."
     )
     add("")
     lines += _table(
-        ["dataset", "density quintile", "pairs", "n_max range", "slope /node", "R^2", "arm slope"],
+        [
+            "dataset",
+            "density quintile",
+            "pairs",
+            "n_max range",
+            "abs slope",
+            "rel slope",
+            "same sign?",
+            "mean UB",
+        ],
         [
             [
                 cell["dataset"],
                 cell["density_stratum"],
                 _fmt(cell["n_pairs"]),
                 f"{cell['n_max_min']}--{cell['n_max_max']}",
+                _fmt(cell["primary_absolute"]["slope"], 4),
                 _fmt(cell["primary"]["slope"], 5),
-                _fmt(cell["primary"]["r_squared"], 4),
-                _fmt(cell["sensitivity"]["slope"], 5),
+                "yes"
+                if (cell["primary_absolute"]["slope"] * cell["primary"]["slope"] > 0)
+                else "**NO**",
+                _fmt(cell["mean_upper_bound"], 2),
             ]
             for cell in cells["cells"]
         ],
     )
+    negative_abs = [c for c in cells["cells"] if c["primary_absolute"]["slope"] <= 0]
+    n_abs_positive = cells["n_cells_fitted"] - len(negative_abs)
+    n_rel_positive = sum(1 for c in cells["cells"] if c["primary"]["slope"] > 0)
+    add(
+        f"**Of the {cells['n_cells_fitted']} populated cells, the absolute gap rises with `n` in "
+        f"{n_abs_positive} and the relative width rises in only {n_rel_positive}.** Conditioning "
+        "on density therefore does not overturn the absolute result; it overturns the *relative* "
+        "one, which is positive within three of the Letter datasets but negative in "
+        f"{cells['n_cells_fitted'] - n_rel_positive} of the {cells['n_cells_fitted']} cells."
+    )
+    add("")
+    if negative_abs:
+        add(
+            f"The {len(negative_abs)} cells where the absolute gap does **not** rise, "
+            "listed rather than counted:"
+        )
+        add("")
+        lines += _table(
+            ["dataset", "density quintile", "pairs", "n_max range", "abs slope", "mean UB"],
+            [
+                [
+                    c["dataset"],
+                    c["density_stratum"],
+                    _fmt(c["n_pairs"]),
+                    f"{c['n_max_min']}--{c['n_max_max']}",
+                    _fmt(c["primary_absolute"]["slope"], 4),
+                    _fmt(c["mean_upper_bound"], 2),
+                ]
+                for c in negative_abs
+            ],
+        )
     if cells["dropped"]:
         add("Dropped cells:")
         add("")
@@ -2251,14 +2498,66 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
             ],
         )
 
-    add("### §7.1d POOLED -- descriptive overlay only")
+    add("### §7.1e Both measures by size stratum, pooled")
+    add("")
+    add(
+        "The divergence in one table: the mean upper bound is the denominator, and it is what "
+        "makes the two columns beside it disagree. Source: `data/s71_pooled.json`."
+    )
+    add("")
+    lines += _table(
+        [
+            "n_max stratum",
+            "pairs",
+            "mean UB",
+            "mean gap (ops)",
+            "mean w",
+            "mean gap_s (ops)",
+            "mean w_s",
+        ],
+        [
+            [
+                row["stratum"],
+                _fmt(row["n_pairs"]),
+                _fmt(row["upper_bound"]["mean"], 2),
+                _fmt(row["gap_primary"]["mean"], 3),
+                _fmt(row["width_primary"]["mean"], 4),
+                _fmt(row["gap_sensitivity"]["mean"], 3),
+                _fmt(row["width_sensitivity"]["mean"], 4),
+            ]
+            for row in results["pooled"]["size_strata"]
+        ],
+    )
+    add("By pair-density quintile:")
+    add("")
+    lines += _table(
+        ["quintile", "pairs", "mean UB", "mean gap (ops)", "mean w", "dominant"],
+        [
+            [
+                row["stratum"],
+                _fmt(row["n_pairs"]),
+                _fmt(row["upper_bound"]["mean"], 2),
+                _fmt(row["gap_primary"]["mean"], 3),
+                _fmt(row["width_primary"]["mean"], 4),
+                f"{row['dominant_dataset']} {100 * row['dominant_share']:.0f} %"
+                if row["dominant_dataset"]
+                else "--",
+            ]
+            for row in results["pooled"]["density_strata"]
+        ],
+    )
+
+    add("### §7.1f POOLED slope -- descriptive overlay only")
     add("")
     pooled = results["pooled"]["slope"]
     add(
-        f"Pooled slope {_fmt(pooled['primary']['slope'], 5)} per node "
+        f"Pooled absolute slope {_fmt(pooled['primary_absolute']['slope'], 4)} ops/node "
+        f"(R^2 {_fmt(pooled['primary_absolute']['r_squared'], 4)}); pooled relative slope "
+        f"{_fmt(pooled['primary']['slope'], 5)} per node "
         f"(R^2 {_fmt(pooled['primary']['r_squared'], 4)}, "
-        f"{_fmt(pooled['primary']['n_pairs'])} pairs); sensitivity arm "
-        f"{_fmt(pooled['sensitivity']['slope'], 5)}."
+        f"{_fmt(pooled['primary']['n_pairs'])} pairs). Sensitivity arm: "
+        f"{_fmt(pooled['sensitivity_absolute']['slope'], 4)} ops/node absolute, "
+        f"{_fmt(pooled['sensitivity']['slope'], 5)} relative."
     )
     add("")
     add(
@@ -2275,8 +2574,8 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
             "dominant dataset",
             "share",
             "mean d_pair",
+            "mean gap",
             "mean w",
-            "mean w_s",
         ],
         [
             [
@@ -2287,8 +2586,8 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
                 if math.isfinite(row["dominant_share"])
                 else "--",
                 _fmt(row["mean_pair_density"], 4),
+                _fmt(row["gap_primary"]["mean"], 3),
                 _fmt(row["width_primary"]["mean"], 4),
-                _fmt(row["width_sensitivity"]["mean"], 4),
             ]
             for row in results["pooled"]["size_strata"]
         ],
@@ -2687,8 +2986,23 @@ def _report_s75_and_limitations(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "5. **The OLS fit is linear in `n_max` and unweighted.** The bracket width is bounded in "
-        "`[0, 1]`, so a linear fit is guaranteed to be misspecified far enough out; the slopes are "
+        "5. **THE MEASURE THE DESIGN NAMED WOULD HAVE INVERTED THE CONCLUSION, AND THAT IS A "
+        "FINDING ABOUT THE PLAN.** `T-05-design.md` §7 item 1 names `(UB - LB)/UB` and calls it "
+        "'the single measurement that answers AE.1 most directly'. It is a **ratio whose "
+        "denominator grows with `n`**, so it falls whenever `UB` outgrows the gap --- which is "
+        "what Suite 2 does. Reported alone it would have told a reviewer that the bracket tightens "
+        "at scale, the opposite of the truth on the point AE.1 disputes. Both measures are now "
+        "reported, the absolute leads, and the relative is presented with its denominator beside "
+        "it. **No number in the design was wrong; the measure was under-determined, and the "
+        "review close should record that the plan named a scale-dependent ratio without naming "
+        "its scale-free companion.** `LB/UB` is not reported as a third quantity: it is exactly "
+        "`1 - (UB - LB)/UB` and carries no independent information."
+    )
+    add("")
+    add(
+        "6. **The OLS fit is linear in `n_max` and unweighted.** The relative width is bounded in "
+        "`[0, 1]`, so a linear fit is guaranteed to be misspecified far enough out; the absolute "
+        "gap is unbounded above but is not linear in `n` a priori either. The slopes are "
         "local descriptions of the trend over each dataset's own `n` range, not extrapolable. "
         "Pairs are also not independent -- each graph appears in `N - 1` pairs -- which is exactly "
         "why the CI comes from a graph-level cluster bootstrap rather than from the OLS standard "
@@ -2697,14 +3011,14 @@ def _report_s75_and_limitations(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "6. **`n_max` is a coarse summary of a pair.** Two graphs of sizes (3, 97) and (96, 97) "
+        "7. **`n_max` is a coarse summary of a pair.** Two graphs of sizes (3, 97) and (96, 97) "
         "share `n_max = 97` and are not comparable problems. `n_max` is the frozen regressor "
         "because it is what §7.1 names; `|n1 - n2|` is uncontrolled and correlates with the "
         "bracket through the node insertion/deletion cost under D6."
     )
     add("")
     add(
-        "7. **Tier 3 runs a different estimator from tiers 1 and 2.** COIL-DEL and Mutagenicity "
+        "8. **Tier 3 runs a different estimator from tiers 1 and 2.** COIL-DEL and Mutagenicity "
         "use 1,000 replicates on a 2,000,000-pair subsample per replicate; the other datasets use "
         "2,000 replicates on all induced pairs. The two CIs are not the same estimator and the "
         "tier-3 intervals are wider for two reasons at once -- fewer replicates and within-"
@@ -2713,7 +3027,7 @@ def _report_s75_and_limitations(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "8. **Nothing in this report measures IsalGraph.** The bracket is a property of GEDLIB's "
+        "9. **Nothing in this report measures IsalGraph.** The bracket is a property of GEDLIB's "
         "`BRANCH_FAST`/`BIPARTITE`/`BP_BEAM_DET` under cost model D6. It bounds the *resolution* "
         "available to any later correlation against GED at a given `n`; it is not itself evidence "
         "for or against the encoding, and §7.5 -- the deliverable that would connect the two -- "
@@ -2721,7 +3035,7 @@ def _report_s75_and_limitations(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "9. **The cohort analysed here is "
+        "10. **The cohort analysed here is "
         + ("complete." if results["cohort"]["complete"] else "INCOMPLETE.")
         + "** "
         + (
@@ -2738,7 +3052,21 @@ def _report_s75_and_limitations(results: Mapping[str, Any]) -> list[str]:
     )
     add("")
     add(
-        "10. **The two arms share their lower bound, so this is not a two-sided sensitivity "
+        "11. **Certification here is derived from the two `ged_matrix` arrays, never from a "
+        "file's `certified_mask` -- and that is load-bearing.** `certified_mask` and "
+        "`metadata.n_certified` are written by a **separate cross-fill step** over two separate "
+        "campaigns (CONTRACTS §4.2), not by the campaign that produced each role file. Before "
+        "cross-fill runs, every role file carries an all-False off-diagonal mask and "
+        "`n_certified = 0`, and the two are perfectly consistent with each other in that state. "
+        "**An analysis that trusted the mask against a partially-finalised tree would report a "
+        "certification rate of exactly zero for every dataset and raise nothing.** This module "
+        "computes `|LB - UB| <= 1e-9` from `LB/ged_matrix` and `UB/ged_matrix` directly, so its "
+        "numbers do not depend on whether cross-fill has run. Recorded as a trap for any future "
+        "ticket reading these files, not as a defect in them."
+    )
+    add("")
+    add(
+        "12. **The two arms share their lower bound, so this is not a two-sided sensitivity "
         "analysis.** `BRANCH_FAST` is the only lower bound computed. Every width in this report "
         "inherits whatever looseness that bound carries, and the primary-versus-arm comparison "
         "isolates the upper bound alone. A lower bound that degrades with `n` would widen both "
@@ -2993,16 +3321,43 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
                     "The resampling unit is the graph, drawn with replacement; the subsample, "
                     "where a tier has one, applies only to the induced pairs inside a replicate."
                 ),
+                "measure_note": (
+                    "Two measures. primary_absolute / sensitivity_absolute fit UB - LB in edit "
+                    "operations; primary / sensitivity fit the dimensionless ratio "
+                    "(UB - LB)/UB. The ratio's denominator grows with n, so a constant absolute "
+                    "gap already yields a falling ratio and a falling ratio does not imply a "
+                    "tightening bound. LB/UB is not reported: it is exactly 1 - (UB - LB)/UB."
+                ),
                 "datasets": {
                     d: {
                         "bootstrap": per_dataset[d]["bootstrap"],
                         "slope_role": per_dataset[d]["slope_role"],
+                        "mean_upper_bound": per_dataset[d]["mean_upper_bound"],
+                        "mean_gap": per_dataset[d]["mean_gap"],
+                        "mean_gap_sensitivity": per_dataset[d]["mean_gap_sensitivity"],
+                        "primary_absolute": per_dataset[d]["s71"]["primary_absolute"],
+                        "sensitivity_absolute": per_dataset[d]["s71"]["sensitivity_absolute"],
                         "primary": per_dataset[d]["s71"]["primary"],
                         "sensitivity": per_dataset[d]["s71"]["sensitivity"],
+                        "arm_minus_primary_slope_absolute": (
+                            per_dataset[d]["s71"]["sensitivity_absolute"]["fit"]["slope"]
+                            - per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"]
+                        ),
                         "arm_minus_primary_slope": (
                             per_dataset[d]["s71"]["sensitivity"]["fit"]["slope"]
                             - per_dataset[d]["s71"]["primary"]["fit"]["slope"]
                         ),
+                        "measures_agree_in_sign": bool(
+                            per_dataset[d]["s71"]["primary_absolute"]["fit"]["slope"]
+                            * per_dataset[d]["s71"]["primary"]["fit"]["slope"]
+                            > 0
+                        ),
+                        "by_size_stratum_gap_primary": per_dataset[d]["s71"][
+                            "by_size_stratum_gap_primary"
+                        ],
+                        "by_size_stratum_upper_bound": per_dataset[d]["s71"][
+                            "by_size_stratum_upper_bound"
+                        ],
                     }
                     for d in datasets
                 },
@@ -3018,6 +3373,7 @@ def run_analysis(config: AnalysisConfig, command: str = "") -> dict[str, Any]:
             {
                 "slope": pooled["slope"],
                 "size_strata": pooled["size_strata"],
+                "density_strata": pooled["density_strata"],
                 "density_quintile_edges": edges,
             },
             data_dir / "s71_pooled.json",
@@ -3206,52 +3562,107 @@ def _report_headline(results: Mapping[str, Any]) -> list[str]:
     add("")
     unconfounded = [d for d in datasets if d in UNCONFOUNDED_DATASETS]
     small_n = [d for d in datasets if d in SMALL_N_DATASETS]
-    pooled_slope_value = results["pooled"]["slope"]["primary"]["slope"]
+    pooled_relative = results["pooled"]["slope"]["primary"]["slope"]
+
+    def absolute_slope(dataset: str) -> float:
+        """Absolute-gap slope for one dataset."""
+        return float(per_dataset[dataset]["s71"]["primary_absolute"]["fit"]["slope"])
+
+    def relative_slope(dataset: str) -> float:
+        """Relative-width slope for one dataset."""
+        return float(per_dataset[dataset]["s71"]["primary"]["fit"]["slope"])
+
+    n_abs_positive = sum(1 for d in datasets if absolute_slope(d) > 0)
+    n_disagree = sum(1 for d in datasets if absolute_slope(d) * relative_slope(d) < 0)
 
     add(
-        "**§7.1's primary estimate is the within-dataset slope of `(UB - LB)/UB` on `n_max`.** "
-        "Signs, with the graph-level cluster bootstrap 95 % percentile CI:"
+        "**The bracket is measured on two scales and they do not agree, so the headline is stated "
+        "on both.**"
+    )
+    add("")
+    add(
+        "- **Absolute gap `UB - LB`, in edit operations.** How much of the pair's edit distance "
+        "is unresolved.\n"
+        "- **Relative width `(UB - LB)/UB`, dimensionless.** The unresolved fraction *of the "
+        "upper bound*. This is the measure the design named.\n"
+        "\n"
+        "**Mechanism, in one sentence: the relative width's denominator grows with `n`, so a "
+        "bound whose absolute gap is merely constant already yields a falling relative width, and "
+        "a falling relative width therefore does not imply a tightening bound.**"
     )
     add("")
     lines += _table(
-        ["dataset", "slope /node", "95 % CI", "R^2", "direction", "CI excludes 0", "role"],
+        [
+            "dataset",
+            "**abs slope** (ops/node)",
+            "95 % CI",
+            "rel slope",
+            "95 % CI",
+            "mean UB",
+            "mean gap",
+            "role",
+        ],
         [
             [
                 d,
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["slope"], 5),
+                _fmt(absolute_slope(d), 4),
+                _ci_text(per_dataset[d]["s71"]["primary_absolute"]["slope_ci"]),
+                _fmt(relative_slope(d), 5),
                 _ci_text(per_dataset[d]["s71"]["primary"]["slope_ci"]),
-                _fmt(per_dataset[d]["s71"]["primary"]["fit"]["r_squared"], 3),
-                _sign_word(per_dataset[d]["s71"]["primary"]["fit"]["slope"]),
-                "yes" if _ci_excludes_zero(per_dataset[d]["s71"]["primary"]["slope_ci"]) else "no",
+                _fmt(per_dataset[d]["mean_upper_bound"], 2),
+                _fmt(per_dataset[d]["mean_gap"], 2),
                 per_dataset[d]["slope_role"],
             ]
             for d in datasets
         ],
     )
-    if unconfounded:
-        signs = {_sign_word(per_dataset[d]["s71"]["primary"]["fit"]["slope"]) for d in unconfounded}
+    if n_abs_positive == len(datasets):
         add(
-            "**Among the datasets that span enough `n` to carry an unconfounded slope "
-            f"(`{'`, `'.join(unconfounded)}`), the bracket "
-            + ("**narrows**" if signs == {"narrows"} else "moves in mixed directions")
-            + " with `n`.** "
+            f"> ### THE ABSOLUTE GAP RISES WITH `n` IN ALL {len(datasets)} DATASETS\n>\n"
+            "> Every absolute slope above is **positive**, and that includes every dataset §7 "
+            "names as spanning enough `n` to carry an unconfounded slope. **The bound gets "
+            "absolutely looser as graphs grow.** `UB` simply grows faster than the gap does, "
+            "which is why the relative width can fall over the same range.\n>\n"
+            "> This **confirms** T-27 §5.4's prediction that the upper bound degrades fastest in "
+            "`n`, and it is consistent with design amendment 9(a)'s rung-13 measurement of a "
+            "1.370 mean relative overestimate for `BIPARTITE` against the lower bound's 0.156. "
+            f"**Neither was ever in tension with the relative result.** In {n_disagree} of "
+            f"{len(datasets)} datasets the two measures carry opposite signs, so reporting the "
+            "relative width alone would have inverted the conclusion on exactly the point AE.1 "
+            "disputes."
         )
-        if signs == {"narrows"} and pooled_slope_value > 0:
-            add("")
-            add(
-                "> ### SIGN REVERSAL BETWEEN THE POOLED AND THE WITHIN-DATASET FITS\n>\n"
-                f"> The pooled slope is **{pooled_slope_value:+.5f}** per node --- positive --- "
-                "while every unconfounded within-dataset slope is negative. This is a Simpson "
-                "reversal, and it is the empirical vindication of the rule amendment 12 froze "
-                "before the analysis ran: **the pooled curve is a descriptive overlay and never "
-                "the estimate a conclusion rests on.** A conclusion drawn from the pooled fit "
-                "would report the opposite sign from every dataset that actually spans the size "
-                "range in dispute. The mechanism is visible in the dominance table in §7.1d: the "
-                "small-`n` strata are dense Letter graphs with a narrow bracket and the large-`n` "
-                "strata are sparse graphs from entirely different datasets, so the pooled fit is "
-                "reading a provenance and density transition as if it were a size effect."
-            )
         add("")
+    if unconfounded:
+        worst = max(unconfounded, key=absolute_slope)
+        add(
+            "Among the datasets that span enough `n` to carry an unconfounded slope "
+            f"(`{'`, `'.join(unconfounded)}`), the steepest absolute widening is `{worst}` at "
+            f"**{absolute_slope(worst):+.4f} edit operations per node**, on a mean upper bound of "
+            f"{per_dataset[worst]['mean_upper_bound']:.2f} and a mean gap of "
+            f"{per_dataset[worst]['mean_gap']:.2f}. On that dataset the bracket is roughly "
+            f"[{per_dataset[worst]['mean_upper_bound'] - per_dataset[worst]['mean_gap']:.0f}, "
+            f"{per_dataset[worst]['mean_upper_bound']:.0f}] edit operations at the mean."
+        )
+        add("")
+        relative_signs = {_sign_word(relative_slope(d)) for d in unconfounded}
+        if relative_signs == {"narrows"} and pooled_relative > 0:
+            add(
+                "> ### SIMPSON REVERSAL, ON THE RELATIVE MEASURE\n>\n"
+                f"> The pooled **relative** slope is **{pooled_relative:+.5f}** per node --- "
+                "positive --- while every unconfounded within-dataset relative slope is negative. "
+                "This is a Simpson reversal and it is the empirical vindication of the rule "
+                "amendment 12 froze before the analysis ran: **the pooled curve is a descriptive "
+                "overlay and never the estimate a conclusion rests on.** The mechanism is in "
+                "§7.1f's dominance table --- the small-`n` strata are dense Letter graphs and the "
+                "large-`n` strata are sparse graphs from entirely different datasets, so the "
+                "pooled fit reads a provenance and density transition as if it were a size "
+                "effect.\n>\n"
+                "> **This finding stands, and it does not carry the AE.1 conclusion.** It is a "
+                "statement about how the *relative* measure must be aggregated. The AE.1 answer "
+                "rests on the absolute gap, which is positive within every dataset and therefore "
+                "has no reversal to resolve."
+            )
+            add("")
     if small_n:
         add(
             f"`{'`, `'.join(small_n)}` cap at `n <= "
@@ -3265,11 +3676,11 @@ def _report_headline(results: Mapping[str, Any]) -> list[str]:
         "`n <= 12` were licensed to `n = 98`. The bracket is the resolution the reference GED is "
         "known to at each size: a wide bracket means a downstream correlation against GED cannot "
         "discriminate at that size, whatever IsalGraph does. The measurement above says the "
-        "bracket does **not** degrade monotonically with `n` inside a dataset over this cohort. "
-        "It says nothing about IsalGraph, because no Levenshtein distance enters it --- that is "
-        "§7.5, which is not computed (see below). The R^2 column is small throughout: `n_max` "
-        "explains a minor share of the pair-to-pair variance in bracket width, so these slopes "
-        "describe a trend, not a predictive relation."
+        "reference GED is **absolutely less well resolved at large `n`**, by a margin that grows "
+        "roughly linearly in `n` within every dataset. It says nothing about IsalGraph, because "
+        "no Levenshtein distance enters it --- that is §7.5, deferred to T-06. The R^2 values are "
+        "small throughout: `n_max` explains a minor share of the pair-to-pair variance, so these "
+        "slopes describe a trend, not a predictive relation."
     )
     add("")
     add(

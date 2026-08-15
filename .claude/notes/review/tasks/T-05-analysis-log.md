@@ -14,7 +14,7 @@ skip-with-banner default make the ten-dataset re-run a one-command repeat.
 | Path | Description |
 |---|---|
 | `benchmarks/real_data/eval_setup/approx_ged_analysis.py` | The §7.1–§7.4 analysis module and its CLI. 3,300 lines. |
-| `tests/unit/test_approx_ged_analysis.py` | 84 unit tests. |
+| `tests/unit/test_approx_ged_analysis.py` | 96 unit tests. |
 | `results/reports/T-05-bounded-ged/REPORT.md` | The report. 460 lines. |
 | `results/reports/T-05-bounded-ged/data/*.json` | 9 files; every number the report prints. |
 | `results/reports/T-05-bounded-ged/figures/*.pdf` | 6 figures, all through `benchmarks/plotting_styles`. |
@@ -74,17 +74,19 @@ in 5.9 s, emitting the `COHORT INCOMPLETE` warning and banner.
 
 ### AC2 — every prose number is in a JSON
 
-Five figures grepped out of the prose and located in `data/`:
+Seven figures grepped out of the prose and located in `data/` (re-run after the absolute-gap change):
 
 | claim | value in prose | found in |
 |---|---:|---|
-| aids_iam primary slope | −0.01272 | `s71_within_dataset_slopes.json` |
-| protein certified pairs | 251 | `s72_certification.json` |
-| pooled slope | 0.00178 | `s71_pooled.json` |
+| protein **absolute** slope | 1.4557 | `s71_within_dataset_slopes.json` |
+| aids_iam **absolute** slope | 0.2529 | `s71_within_dataset_slopes.json` |
+| aids_iam relative slope | −0.01272 | `s71_within_dataset_slopes.json` |
+| pooled **absolute** slope | 0.9522 | `s71_pooled.json` |
+| protein mean gap | 76.60 | `s71_within_dataset_slopes.json` |
 | iam_letter_high total core-s | 605.84 | `s74_cost.json` |
 | zero-UB pair count | 217,612 | `summary.json` |
 
-**PASS**, 5/5. Structurally this cannot fail by accident: `write_report` renders from the same
+**PASS**, 7/7. Structurally this cannot fail by accident: `write_report` renders from the same
 `results` dict that is serialised, and computes nothing at render time.
 `test_report_numbers_appear_in_the_json` enforces it for every dataset's slope.
 
@@ -92,10 +94,10 @@ Five figures grepped out of the prose and located in `data/`:
 
 ```
 $ PYTHONPATH=~/opt/build_gedlib/graphkit-learn python -m pytest tests/ -q -k approx_ged_analysis
-84 passed, 1 skipped, 1935 deselected in 2.20s
+96 passed, 1 skipped, 1935 deselected in 3.16s
 ```
 
-**PASS.** Covers all five named cases: width at `UB == 0` (5 parametrised scalar cases + an
+**PASS**, re-run after the absolute-gap change. Covers all five named cases: width at `UB == 0` (5 parametrised scalar cases + an
 all-zero array under `np.errstate(all="raise")` + a not-filtered test), the resampling unit being the
 graph, the tier lookup (1,000/2e6 for the two, 2,000/all for the other eight, plus a test that
 exactly two of ten are tier 3), the density quintiles over pairs, and strict-upper-triangle indexing
@@ -124,9 +126,9 @@ figure helpers so the file is clean anyway.
 | | failed | passed | skipped |
 |---|---:|---:|---:|
 | baseline (`df75dbc`, measured by me before writing anything) | **0** | **1,273** | **1** |
-| after | **0** | **1,357** | **1** |
+| after | **0** | **1,369** | **1** |
 
-**PASS.** +84 passes, all mine. No lost pass, no new failure.
+**PASS.** +96 passes, all mine. No lost pass, no new failure.
 
 > **The design's §8.9 baseline table is stale.** It records **8 failed / 907 passed / 1 skipped**
 > with GEDLIB at `885d98d`, and says the 8 failures are `test_export_graphs.py` real-data tests. On
@@ -138,52 +140,83 @@ figure helpers so the file is clean anyway.
 
 ## 3. Headline results (eight datasets)
 
-### §7.1 primary — within-dataset slope of `(UB−LB)/UB` on `n_max`
+### §7.1 primary — within-dataset slope, on both scales
 
-| dataset | slope /node | 95 % CI | R² | role |
-|---|---:|---|---:|---|
-| iam_letter_low | +0.06246 | [0.05495, 0.07071] | 0.046 | small-n only |
-| iam_letter_med | +0.06389 | [0.05635, 0.07238] | 0.048 | small-n only |
-| iam_letter_high | +0.08131 | [0.07576, 0.08701] | 0.099 | small-n only |
-| linux | +0.02875 | [−0.00604, 0.05776] | 0.011 | small-n only |
-| aids_graphedx | **−0.02855** | [−0.03098, −0.02593] | 0.149 | intermediate |
-| grec | **−0.01531** | [−0.01770, −0.01292] | 0.086 | intermediate |
-| **aids_iam** | **−0.01272** | [−0.01363, −0.01198] | 0.436 | **unconfounded** |
-| **protein** | **−0.00297** | [−0.00376, −0.00208] | 0.031 | **unconfounded** |
+> **CORRECTED 2026-08-15 after coordinator challenge.** An earlier version of this log headlined
+> "the bracket narrows with `n`", from the relative measure alone. **That was wrong in the
+> direction that matters** and is retracted in full below.
 
-Two of the four unconfounded datasets are present. **Both are negative and both CIs exclude zero.**
-`coil_del` and `mutagenicity` are the other two and will decide whether this holds at n = 98.
+| dataset | **abs slope** (ops/node) | 95 % CI | rel slope | 95 % CI | mean UB | mean gap | role |
+|---|---:|---|---:|---|---:|---:|---|
+| iam_letter_low | **+0.7043** | [0.6597, 0.7504] | +0.06246 | [0.0550, 0.0707] | 4.55 | 1.82 | small-n only |
+| iam_letter_med | **+0.7425** | [0.6953, 0.7939] | +0.06389 | [0.0564, 0.0724] | 4.62 | 1.85 | small-n only |
+| iam_letter_high | **+1.0010** | [0.9677, 1.0351] | +0.08131 | [0.0758, 0.0870] | 5.69 | 2.23 | small-n only |
+| linux | **+1.3522** | [1.0385, 1.7090] | +0.02875 | [−0.0060, 0.0578] | 10.96 | 6.94 | small-n only |
+| aids_graphedx | **+0.6194** | [0.5790, 0.6662] | −0.02855 | [−0.0310, −0.0259] | 18.06 | 12.26 | intermediate |
+| grec | **+0.8971** | [0.8409, 0.9570] | −0.01531 | [−0.0177, −0.0129] | 24.74 | 14.46 | intermediate |
+| **aids_iam** | **+0.2529** | [0.2354, 0.2713] | −0.01272 | [−0.0136, −0.0120] | 30.63 | 13.16 | **unconfounded** |
+| **protein** | **+1.4557** | [1.2098, 1.7397] | −0.00297 | [−0.0038, −0.0021] | 122.53 | 76.60 | **unconfounded** |
+
+**All eight absolute slopes are positive and all eight CIs exclude zero.** My absolute slopes
+reproduce the coordinator's independent fit to four decimals on every dataset, and my relative
+slopes reproduced there too, so the two implementations agree exactly.
 
 ### The surprises, in order of how much they matter
 
-**1. The bracket NARROWS with `n` inside every dataset that spans a real size range.** T-27 §5.4
-raised §7.1 to T-05's most important measurement precisely because `BIPARTITE`'s relative error
-grows ~10× faster in `n` than the alternatives, and design amendment 9(a) measured a 1.370 mean
-relative overestimate at n = 13 and read it as confirmation. The bracket does not follow. The two
-are not the same quantity — amendment 9 measured `UB` against **exact** GED on certified pairs, while
-`(UB−LB)/UB` moves with the lower bound too — but §7.1 names the bracket, and the bracket goes the
-other way. This is the single most consequential number I produced and it wants a second pair of
-eyes.
+**1. THE BRACKET GETS ABSOLUTELY LOOSER WITH `n` IN EVERY DATASET — and I initially reported the
+opposite.** The absolute gap `UB − LB` rises with `n` everywhere, including all four §7 names as
+unconfounded. `UB` simply grows faster than the gap, so the *ratio* falls on the four larger
+datasets while the *bound* loosens. On Protein the bracket is 76.6 edit operations wide on a mean
+upper bound of 122.5 — it brackets roughly [46, 123].
 
-**2. The pooled slope is +0.00178 while every unconfounded within-dataset slope is negative.** A
-textbook Simpson reversal. Amendment 12 demoted the pooled curve to a descriptive overlay on
-*a priori* grounds; this is the measurement that shows the rule was not merely prudent. A conclusion
-drawn from the pooled fit reports **the opposite sign** from every dataset that spans the disputed
-range. The report headlines it.
+> **What I got wrong, and why it matters more than the number.** I fitted only `(UB−LB)/UB`,
+> because that is the quantity `T-05-design.md` §7 item 1 names and calls "the single measurement
+> that answers AE.1 most directly". I then read its sign as a statement about the bound. **It is a
+> ratio whose denominator grows with `n`**: a bound with a merely *constant* absolute gap already
+> produces a falling relative width. I noted the concern in my open questions ("its denominator
+> grows with `n`, so a constant absolute gap produces a decreasing relative width automatically")
+> and *still* let the headline stand on the relative measure. Flagging a confound and then not
+> resolving it before writing the headline is the failure mode here, not missing it.
+>
+> **The consequence for the plan, which is the reportable finding:** reporting the design's named
+> measure alone would have told a reviewer that the bracket tightens at scale, the opposite of the
+> truth on exactly the point AE.1 disputes. The design named a scale-dependent ratio without
+> naming its scale-free companion. `review-close` should record that. Both are now reported, the
+> absolute leads, and `LB/UB` is deliberately excluded as exactly `1 − (UB−LB)/UB`.
 
-**3. §7.1c shows the Letter datasets' positive slopes are themselves a density artefact.** Holding
-density fixed, the sign flips:
+**1b. T-27 §5.4 and amendment 9(a) are CONFIRMED, not contradicted.** T-27 predicted the upper
+bound degrades fastest in `n`; on the absolute scale it does, in all eight datasets. Amendment
+9(a)'s rung-13 measurement (mean relative overestimate 1.370 for `BIPARTITE` against the lower
+bound's 0.156) was never in tension with the relative result either. My earlier claim that "the
+bracket does not follow" was an artefact of the measure, and is withdrawn.
 
-| dataset | Q2 | Q3 | Q4 | Q5 |
+**2. The pooled RELATIVE slope is +0.00178 while every unconfounded within-dataset relative slope is
+negative.** A textbook Simpson reversal. Amendment 12 demoted the pooled curve to a descriptive
+overlay on *a priori* grounds; this is the measurement that shows the rule was not merely prudent.
+**This finding stands and is real — but it is about how the relative measure must be aggregated, and
+it does not carry the AE.1 conclusion.** The AE.1 answer rests on the absolute gap, which is
+positive within every dataset and so has no reversal to resolve. The pooled *absolute* slope is
++0.9522 ops/node, the same sign as every within-dataset absolute slope.
+
+**3. §7.1d on the absolute scale: 21 of 28 populated (dataset × density quintile) cells are
+positive, against only 5 of 28 on the relative scale.** So conditioning on density **does not**
+overturn the absolute result; it overturns the relative one. My earlier claim that "3 of 4 Letter
+cells flip negative" was again a relative-scale statement. On the absolute scale the Letter cells
+are +0.40 to +0.79 in eleven of twelve, the exception being `iam_letter_low` Q2 at −0.0245 on
+10,404 pairs. The relative-scale table below is retained because it is still the correct
+description of *that* measure:
+
+| dataset | Q2 rel (abs) | Q3 rel (abs) | Q4 rel (abs) | Q5 rel (abs) |
 |---|---:|---:|---:|---:|
-| iam_letter_low | −0.2569 | −0.0406 | −0.0180 | **+0.0193** |
-| iam_letter_med | −0.2380 | −0.0539 | −0.0116 | **+0.0180** |
-| iam_letter_high | −0.1337 | −0.0622 | −0.0078 | **+0.0380** |
+| iam_letter_low | −0.2569 (**−0.0245**) | −0.0406 (+0.5954) | −0.0180 (+0.5269) | **+0.0193** (+0.4906) |
+| iam_letter_med | −0.2380 (+0.0514) | −0.0539 (+0.5300) | −0.0116 (+0.5667) | **+0.0180** (+0.4523) |
+| iam_letter_high | −0.1337 (+0.4028) | −0.0622 (+0.7092) | −0.0078 (+0.7872) | **+0.0380** (+0.5606) |
 
-**Three of four cells are negative in each Letter dataset**; only the densest quintile is positive,
-and that is where the n = 2–3 graphs (density 1.0, `w = 0`) sit. So the secondary analysis
-amendment 12 required as a check on the primary **contradicts the primary on the small-n datasets**,
-in the direction of the large-n ones. 28 cells fitted, 7 dropped below 1,000 pairs.
+On the **relative** measure three of four cells are negative in each Letter dataset, and only the
+densest quintile is positive — that is where the n = 2–3 graphs (density 1.0, `w = 0`) sit. On the
+**absolute** measure eleven of those twelve cells are positive. **The density-conditioned check
+therefore agrees with the absolute within-dataset result and disagrees with the relative one**,
+which is the same pattern as everywhere else in §7.1. 28 cells fitted, 7 dropped below 1,000 pairs.
 
 **4. Density dominates the bracket far more than size does.** Pooled by quintile: mean `w` falls
 0.6512 → 0.2142 from Q2 to Q5 and the certification rate rises 0.79 % → 37.98 %. R² on `n_max`
@@ -266,27 +299,59 @@ after the cohort completes.
   and `graph_ids`. I used it as a **cross-check** (graph ids, node counts and edge counts must match
   the export element-wise, or the run raises). All eight pass. If the orchestrator intended
   something else, say so.
-- The brief's `certified pair: |LB − UB| <= 1e-9` and the files' own `certified_mask` disagree in
-  count for the `UB` role (`metadata.n_certified = 0` on Protein while I measure 251). I compute
-  certification from `LB.ged_matrix` and `UB.ged_matrix` as instructed and ignore `certified_mask`
-  entirely, so nothing downstream depends on this — but a role file claiming zero certified pairs
-  when 251 exist is worth someone's attention.
+### 4.5 ~~`metadata.n_certified = 0` where 251 pairs are certified~~ — RETRACTED
+
+I reported this as a defect. **It is not one, and the retraction is mine.** The coordinator checked
+all 26 landed files: every one records `n_certified = 0` **and** an all-False off-diagonal
+`certified_mask`, so metadata and array agree perfectly — 0 disagreements across 26 files. The
+251 I counted are correct as a *computation*, but I obtained them by comparing `LB/ged_matrix`
+against `UB/ged_matrix`, which is not what the file's own mask holds **until cross-fill runs**.
+`CONTRACTS` §4.2 specifies exactly this: the mask is derived by a separate cross-fill step over two
+separate campaigns, not written by the campaign that produced each file. Running
+`approx_ged_crossfill` on a copy of `linux.npz` takes `n_certified` 0 → 79 and
+`certification_rate` → 0.020174 in all three roles, matching the 79 off-diagonal `True` entries in
+the rewritten mask. **I asserted a defect from a partial reading of a two-stage contract without
+checking the contract.**
+
+**The useful note that replaces it**, now recorded as limitation 11 in `REPORT.md`: reading
+`certified_mask` or `metadata.n_certified` from a role file **before** cross-fill silently yields a
+certification rate of exactly zero, for every dataset, raising nothing. That is a live trap for any
+future ticket analysing a partially-finalised tree. This module is immune by construction — it
+derives `|LB − UB| <= 1e-9` from the two `ged_matrix` arrays — and that immunity is now stated
+rather than incidental.
 
 ---
 
 ## 5. Open questions
 
-1. **Does result 1 survive Mutagenicity and COIL-DEL?** Those are the two datasets §7.1 leans on
-   hardest. If they too give negative slopes, T-05 reports that the bracket does not degrade with
-   `n` over Suite 2 — which is *favourable* to the manuscript's position on AE.1 and therefore
-   deserves more scepticism, not less.
-2. **Is `(UB−LB)/UB` the right normalisation?** It is what §7 names, so I did not deviate. But it
-   is bounded in [0, 1] and its denominator grows with `n`, so a *constant absolute* gap
-   `UB − LB` produces a *decreasing* relative width automatically. I did not compute the absolute
-   gap; if the PI wants the negative slopes interrogated, that is the first thing to add and it is
-   two lines.
-3. **Should §7.1's primary fit be weighted or non-linear?** Unweighted linear OLS on a [0,1]
-   response is misspecified far enough out, and each dataset's slope is dominated by its most
-   populous `n_max`. Frozen as-is; flagged in the report's limitations.
-4. Nothing in this report measures IsalGraph. §7.5 is deferred to T-06 per amendment 13(a), which
+1. **Does the absolute result survive Mutagenicity and COIL-DEL?** Those are the two datasets §7.1
+   leans on hardest and both are absent here. The eight present all give positive absolute slopes
+   with CIs excluding zero, so the expectation is that they will too — but the expectation is not
+   the measurement, and Mutagenicity reaches n = 98 where nothing has been measured.
+2. ~~**Is `(UB−LB)/UB` the right normalisation?**~~ **Answered, and it was the load-bearing
+   question.** It is not sufficient alone. Both measures are now first-class; see the correction at
+   the top of §3 and limitation 5 in `REPORT.md`.
+3. **Should §7.1's fits be weighted or non-linear?** Unweighted linear OLS on a [0,1] response is
+   misspecified far enough out, and the absolute gap is not linear in `n` a priori either. Each
+   dataset's slope is dominated by its most populous `n_max`. Frozen as-is; flagged in the report's
+   limitations.
+4. **Is the absolute gap's growth sub-linear in `n`?** The slopes are fitted linearly, but
+   `BIPARTITE`'s error is expected to grow super-linearly and Protein's mean gap of 76.6 on a mean
+   `UB` of 122.5 suggests the gap may be closer to a constant *fraction* than a constant increment
+   at large `n`. A log-log fit would settle the exponent. Not run; it is outside what §7 names and
+   would be a new measurement rather than a correction.
+5. Nothing in this report measures IsalGraph. §7.5 is deferred to T-06 per amendment 13(a), which
    the report states in those terms.
+
+---
+
+## 6. Two process notes, since both cost a correction
+
+1. **I flagged the ratio-denominator confound in my own open questions and let the headline stand
+   on the ratio anyway.** Noticing a confound is not the same as resolving it. The rule that would
+   have caught this: *if a stated open question could change the sign of the headline, it is not an
+   open question, it is a blocking one.*
+2. **I asserted a defect (§4.5) without reading the contract that governs the field.** The other
+   three defect reports survived scrutiny because each was backed by a measurement against an
+   independent reference. §4.5 was backed by a single reading of one file. The asymmetry is the
+   lesson.

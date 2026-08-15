@@ -175,6 +175,127 @@ def test_bracket_width_shape_mismatch() -> None:
 
 
 # ---------------------------------------------------------------------------
+# The absolute gap, and its divergence from the relative width
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("lb", "ub", "expected"),
+    [
+        (0.0, 0.0, 0.0),
+        (0.0, 1.0, 1.0),
+        (1.0, 1.0, 0.0),
+        (2.0, 4.0, 2.0),
+        (46.0, 123.0, 77.0),
+    ],
+)
+def test_absolute_gap_scalar_cases(lb: float, ub: float, expected: float) -> None:
+    """The absolute gap is UB - LB in edit operations."""
+    result = aga.absolute_gap(np.array([lb]), np.array([ub]))
+    np.testing.assert_allclose(result, [expected], rtol=0, atol=1e-12)
+
+
+def test_absolute_gap_and_width_share_their_validation() -> None:
+    """Both measures reject exactly the same bad input."""
+    bad = [
+        (np.array([2.0]), np.array([1.0])),
+        (np.array([-1.0]), np.array([1.0])),
+        (np.array([np.nan]), np.array([1.0])),
+        (np.zeros(3), np.zeros(4)),
+    ]
+    for lb, ub in bad:
+        with pytest.raises(aga.InputError):
+            aga.bracket_width(lb, ub)
+        with pytest.raises(aga.InputError):
+            aga.absolute_gap(lb, ub)
+
+
+def test_absolute_gap_equals_width_times_upper_bound() -> None:
+    """gap == w * UB wherever UB > 0, which is the algebraic link."""
+    rng = np.random.default_rng(31)
+    ub = rng.integers(1, 60, size=500).astype(np.float64)
+    lb = np.floor(ub * rng.random(500))
+    np.testing.assert_allclose(
+        aga.absolute_gap(lb, ub), aga.bracket_width(lb, ub) * ub, rtol=1e-12, atol=1e-12
+    )
+
+
+def test_constant_absolute_gap_gives_a_falling_relative_width() -> None:
+    """The mechanism the report states, as an executable assertion.
+
+    A bound whose absolute gap is *constant* in ``n`` already produces a
+    strictly falling relative width, because the ratio's denominator grows.
+    This is why a falling relative width does not imply a tightening bound.
+    """
+    n = np.arange(5, 100, dtype=np.float64)
+    ub = 1.5 * n  # an upper bound that grows with n
+    lb = ub - 4.0  # a gap that does not
+    gap = aga.absolute_gap(lb, ub)
+    width = aga.bracket_width(lb, ub)
+    assert aga.ols_fit(n, gap).slope == pytest.approx(0.0, abs=1e-12)
+    assert aga.ols_fit(n, width).slope < 0.0
+
+
+def test_relative_slope_can_oppose_the_absolute_slope() -> None:
+    """A rising absolute gap can coexist with a falling relative width."""
+    n = np.arange(5, 100, dtype=np.float64)
+    ub = 3.0 * n
+    lb = ub - (2.0 + 0.5 * n)  # the gap rises, but slower than UB does
+    assert aga.ols_fit(n, aga.absolute_gap(lb, ub)).slope > 0.0
+    assert aga.ols_fit(n, aga.bracket_width(lb, ub)).slope < 0.0
+
+
+def test_lb_over_ub_is_redundant_with_the_relative_width() -> None:
+    """LB/UB is exactly 1 - w, so it carries no independent information."""
+    rng = np.random.default_rng(37)
+    ub = rng.integers(1, 60, size=400).astype(np.float64)
+    lb = np.floor(ub * rng.random(400))
+    width = aga.bracket_width(lb, ub)
+    np.testing.assert_allclose(lb / ub, 1.0 - width, rtol=1e-12, atol=1e-12)
+    n = rng.integers(2, 90, size=400).astype(np.float64)
+    np.testing.assert_allclose(
+        aga.ols_fit(n, lb / ub).slope, -aga.ols_fit(n, width).slope, rtol=1e-9, atol=1e-12
+    )
+
+
+def test_absolute_gap_is_bootstrapped_at_the_same_tier(
+    synthetic_tree: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    """Both measures get a CI, from the same graph resamples and tier."""
+    root, datasets = synthetic_tree
+    out = tmp_path / "abs"
+    results = aga.run_analysis(_config(root, out, tuple(datasets)), command="pytest")
+    for dataset in datasets:
+        block = results["per_dataset"][dataset]["s71"]
+        for arm in ("primary", "sensitivity", "primary_absolute", "sensitivity_absolute"):
+            assert arm in block, arm
+            assert block[arm]["slope_ci"]["bootstrap"]["resampling_unit"] == "graph"
+            assert block[arm]["slope_ci"]["bootstrap"]["replicates"] == 2000
+        assert "absolute gap" in block["primary_absolute"]["measure"]
+        assert "relative width" in block["primary"]["measure"]
+
+
+def test_absolute_gap_reaches_every_report_surface(
+    synthetic_tree: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    """The gap is fitted per dataset, per density cell, per stratum and pooled."""
+    root, datasets = synthetic_tree
+    out = tmp_path / "surfaces"
+    results = aga.run_analysis(_config(root, out, tuple(datasets)), command="pytest")
+    assert "primary_absolute" in results["pooled"]["slope"]
+    for cell in results["pooled"]["density_cells"]["cells"]:
+        assert "primary_absolute" in cell
+        assert "mean_upper_bound" in cell
+    for row in results["pooled"]["size_strata"]:
+        assert "gap_primary" in row
+        assert "upper_bound" in row
+    for row in results["pooled"]["density_strata"]:
+        assert "gap_primary" in row
+    profile = results["per_dataset"][datasets[0]]["s71"]["size_profile"]
+    assert {"mean_gap", "mean_width", "mean_upper_bound"} <= set(profile[0])
+
+
+# ---------------------------------------------------------------------------
 # Strict upper triangle
 # ---------------------------------------------------------------------------
 
@@ -433,6 +554,9 @@ def test_density_quintiles_are_computed_over_pairs_not_graphs() -> None:
             size_code=np.zeros(pair_density.size, dtype=np.int8),
             width=np.zeros(pair_density.size, dtype=np.float32),
             width_sensitivity=np.zeros(pair_density.size, dtype=np.float32),
+            gap=np.zeros(pair_density.size, dtype=np.float32),
+            gap_sensitivity=np.zeros(pair_density.size, dtype=np.float32),
+            upper_bound=np.zeros(pair_density.size, dtype=np.float32),
             density=pair_density,
             certified=np.zeros(pair_density.size, dtype=bool),
             certified_sensitivity=np.zeros(pair_density.size, dtype=bool),
@@ -459,6 +583,9 @@ def test_density_quintiles_partition_the_pair_population() -> None:
             size_code=np.zeros(values.size, dtype=np.int8),
             width=np.zeros(values.size, dtype=np.float32),
             width_sensitivity=np.zeros(values.size, dtype=np.float32),
+            gap=np.zeros(values.size, dtype=np.float32),
+            gap_sensitivity=np.zeros(values.size, dtype=np.float32),
+            upper_bound=np.zeros(values.size, dtype=np.float32),
             density=values,
             certified=np.zeros(values.size, dtype=bool),
             certified_sensitivity=np.zeros(values.size, dtype=bool),
