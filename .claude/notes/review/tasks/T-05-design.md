@@ -478,6 +478,40 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-15, amendment 12 — the §7 analysis rules that were still under-specified, frozen before
+  the analysis runs. Two are references to rules already frozen elsewhere; one is new and is mine.**
+
+  §7 was written as "computable once the matrices exist", and three of its five deliverables need a
+  rule that §7 does not state. Written down now, before the first figure, so none of them can be
+  chosen after seeing a curve.
+
+  1. **Resampling effort is D15's frozen tier assignment, not a new budget.**
+     [statistics](../plan/statistics.md) §5 already fixes replicates per dataset from the locked pair
+     counts — tier 1 (≤ 10⁶ pairs) 2,000 replicates all pairs; tier 2 (10⁶–5 × 10⁶) 2,000 all pairs;
+     tier 3 (> 5 × 10⁶ — **COIL-DEL and Mutagenicity only**) **1,000 replicates on a uniform
+     subsample of 2 × 10⁶ induced pairs, seed 42**. §7.1's "D2 graph-level bootstrap" runs at exactly
+     these settings. The resampling unit stays the **graph**; subsampling applies only to the induced
+     pairs within a replicate. Every table states its replicate count.
+  2. **The size stratum is [statistics](../plan/statistics.md) §8's node-count bins** — `3–5, 6–9,
+     10–12, 13–20, 21–40, > 40` on `max(n₁, n₂)` — **not** §1.1's 14 subsample bins. §1.1's edges
+     exist to stratify a *draw*; §8's exist to stratify a *report*, and §7.2/§7.3 are reports.
+  3. **⚠ New rule, and it is a choice — pair density is the mean of the two graphs' densities.**
+     §8 defines density `2m / (n(n−1))` as a **graph**-level variable in pooled quintiles, and §7.3
+     asks for bracket width by density stratum over **pairs**. Nothing in the plan says how a pair
+     inherits a density from two graphs. Frozen: `d_pair = (d₁ + d₂) / 2`, with the quintile edges
+     computed over the **pooled Suite-2 pair population**, not over the graph population.
+
+     > Rejected: `min`, `max`, and the density of the union. The mean is the only one of the four
+     > that is symmetric in the pair *and* reduces to the common value when the two graphs match,
+     > which is the property the diagonal-adjacent strata need. It is recorded as a choice rather
+     > than a derivation because the alternatives are defensible and the result must not be able to
+     > depend on which was picked after the fact.
+
+  **§7.1's four unconfounded datasets are the four §7 already names** — Mutagenicity, COIL-DEL,
+  AIDS-IAM, Protein — and the within-dataset slope is primary for the reason §7 states. Letter and
+  LINUX cap at `n ≤ 10` and constrain only the small-`n` end. The pooled curve carries the
+  provenance confound in its caption, including bin 13's **97.1 % Mutagenicity** dominance share.
+
 - **2026-08-15, amendment 11 — ⚠ THE POOL IS NEGATIVE-SCALING. `lb`, `ub` and `ubs` all hit their
   12 h wallclock, and amendments 4 and 7's cost figures were measured inside the pathology.**
 
