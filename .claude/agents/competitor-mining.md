@@ -1,7 +1,7 @@
 ---
 name: competitor-mining
 description: T-04 track C — implement the gSpan minimum DFS code and the Weisfeiler-Lehman subtree backends in src/isalgraph/competitors/backends/, with their exhaustive validation oracles. Owns the tuple-vs-character Levenshtein convention and the grakel n_iter off-by-one. Spawn only from the T-04 orchestrator with a base commit and a CONTRACTS.md pointer.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, TodoWrite, SendMessage
 model: opus
 effort: xhigh
 ---

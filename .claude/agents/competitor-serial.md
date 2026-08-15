@@ -1,7 +1,7 @@
 ---
 name: competitor-serial
 description: T-04 track A — implement the three zero-dependency serialisation backends (adjacency matrix, graph6, sparse6) in src/isalgraph/competitors/backends/. Owns the strict-upper-triangle reading order the whole n² family depends on. Spawn only from the T-04 orchestrator with a base commit and a CONTRACTS.md pointer.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, TodoWrite, SendMessage
 model: opus
 effort: xhigh
 ---

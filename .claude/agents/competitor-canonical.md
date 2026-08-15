@@ -1,7 +1,7 @@
 ---
 name: competitor-canonical
 description: T-04 track B — implement the canonical-labelling backends (nauty→graph6, sparse6-nauty, AGM CAM) in src/isalgraph/competitors/backends/. Owns the pynauty dependency and the canon_label inversion assertion. Spawn only from the T-04 orchestrator with a base commit and a CONTRACTS.md pointer.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, TodoWrite, SendMessage
 model: opus
 effort: xhigh
 ---
