@@ -68,6 +68,35 @@ job. Always read the step-4 log, never just its exit code.
 
 ---
 
+## 2b. Competitor representations (`isalgraph.competitors`, T-04)
+
+Added for the *Pattern Recognition* revision. **T-04 ships the machinery; it does not run
+the science** — T-04a runs the grid, T-06 the production matrices, T-17 the AE.3 table.
+Full API: [`src/isalgraph/competitors/README.md`](../src/isalgraph/competitors/README.md).
+
+| Competitor | Serves | Feeds | Entry point |
+|---|---|---|---|
+| `adjacency`, `graph6`, `nauty_graph6`, `agm_cam` | AE.3, R1.2a/b — the `n²` family, which isolates **canonicity at fixed format** | Claim A **one row + footnote**, not four identical columns; Claim B | `grid`, `f5` |
+| `sparse6`, `sparse6_nauty` | R3.6a — IsalGraph's only genuine rival on message length | Claim A; `sparse6_nauty` is **supplementary**, not a preregistered comparator | `grid`, `f5` |
+| `min_dfs` | R1.1, R1.2 — gSpan, named by R1 by name | Claim A, Claim B, Fig. 2 (**language-matched**) | `grid`, `f5` |
+| `wl_subtree` | R1.2b — the completeness witness | Claim B **only**; no bit count, cell empty with the reason printed | `grid`, `f5` |
+| `isalgraph_pruned`, `isalgraph_canonical` | the reference arm | every table | `grid`, `f5` |
+| `size_null` | **finding 1** — `ρ(\|n₁−n₂\|, GED)` = 0.71–0.93 | a **baseline row beside every printed ρ**; outside the confirmatory family (decision 23) | `f5` |
+
+| Artefact | Produced by | Consumed by |
+|---|---|---|
+| `repro_artefacts.json` | `reproduce --mode artefacts` | the provenance record — all 40 Suite-1 cells at delta `0.00e+00` |
+| `corrected_rho_table.json` | `reproduce --mode table` | **T-06, T-17, T-20** — supersedes `competitors/README.md` §4.1/§4.2 |
+| `smoke_picasso_suite{1,2}.json` | `smoke` on loginexa | the `pynauty` from-source gate |
+| `agm_ceiling_B.json` | track B | AGM's 76 % / 82 % ceiling, `agm.md` §2.2b |
+
+> **Fig. 2 must be language-matched.** Timing a pure-Python min-DFS against the C++ engine
+> reproduces R1.1's own complaint inside our answer to it. Every smoke header records
+> `isalgraph_engine`, so a timing cannot be quoted without it. Measured on Picasso with both
+> arms in Python, GREC: `min_dfs` 1.03 ms/graph against `isalgraph_pruned` 17.6 ms/graph.
+
+---
+
 ## 3. Artifact registry (figures and tables in the submitted PDF)
 
 | Paper artifact | Section | Generating code | Upstream step | Controlling config |
