@@ -2486,6 +2486,113 @@ def write_report(results: Mapping[str, Any], out_dir: Path) -> Path:
     return _write_report_body(lines, results, out_dir)
 
 
+#: Wording reserved for a ratio that really is monotone in mean graph size.
+#: A test asserts it never appears when the monotonicity flag is False, which
+#: is what stops the ordered-sequence claim outliving the data that supported
+#: it.
+MONOTONE_PHRASE: str = "falls monotonically as mean graph size rises"
+
+
+def _report_gate_pattern(gate: Mapping[str, Any]) -> list[str]:
+    """Render §7.1c verdict points 2 and 3, in a form true of the data.
+
+    The gate ratio was monotone in mean graph size on the eight-dataset cohort
+    and is **not** on the full ten, so the pattern is reported as a **range
+    within each slope role** rather than as an ordered sequence. The range form
+    is true either way; the monotone sentence is emitted only when the flag
+    says so, and the counter-example is named when it does not.
+
+    Parameters
+    ----------
+    gate
+        The ``gate_attribution`` summary block.
+
+    Returns
+    -------
+    list of str
+        Markdown lines for points 2 and 3, or an empty list when no dataset
+        produced an interpretable ratio.
+    """
+    by_role = list(gate.get("by_slope_role", []))
+    if not by_role:
+        return []
+    lines: list[str] = []
+    add = lines.append
+    monotone = bool(gate.get("ratio_falls_monotonically_with_mean_nodes"))
+    counterexample = gate.get("monotonicity_counterexample")
+
+    add(
+        "**2. The gate's share of the widening is much larger on small graphs than at the sizes "
+        "AE.1 disputes.** Ratio range within each slope role, which is the grouping §7.1 already "
+        "assigns and not a size cut invented here:"
+    )
+    add("")
+    lines += _table(
+        ["slope role", "datasets", "mean n range", "ratio range", "gate's share of the widening"],
+        [
+            [
+                entry["slope_role"],
+                str(entry["n_datasets"]),
+                f"{entry['mean_nodes_min']:.2f}--{entry['mean_nodes_max']:.2f}",
+                f"**{entry['min_ratio']:.2f}x** (`{entry['min_ratio_dataset']}`) -- "
+                f"**{entry['max_ratio']:.2f}x** (`{entry['max_ratio_dataset']}`)",
+                f"{100 * entry['gate_share_at_min_ratio']:.0f} % -- "
+                f"{100 * entry['gate_share_at_max_ratio']:.0f} %",
+            ]
+            for entry in by_role
+        ],
+    )
+    index = {entry["slope_role"]: entry for entry in by_role}
+    small = index.get("small-n constraint only")
+    large = index.get("unconfounded")
+    if small and large and gate.get("small_n_and_unconfounded_ranges_disjoint"):
+        add(
+            f"**The two ranges do not overlap**: every `small-n constraint only` dataset sits at "
+            f"{small['min_ratio']:.2f}x or above, and every `unconfounded` dataset at "
+            f"{large['max_ratio']:.2f}x or below. So the claim survives without any appeal to a "
+            "trend: the frozen gate accounts for "
+            f"{100 * small['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * small['gate_share_at_max_ratio']:.0f} % of the widening on the small-`n` "
+            f"cohorts and {100 * large['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * large['gate_share_at_max_ratio']:.0f} % on the four datasets that span the "
+            "disputed size range."
+        )
+        add("")
+    if monotone:
+        add(
+            f"Across the cohort the ratio {MONOTONE_PHRASE}, from "
+            f"{gate['max_ratio']:.2f}x on `{gate['max_ratio_dataset']}` "
+            f"(mean n = {gate['max_ratio_mean_nodes']:.2f}) to {gate['min_ratio']:.2f}x on "
+            f"`{gate['min_ratio_dataset']}` (mean n = {gate['min_ratio_mean_nodes']:.2f})."
+        )
+        add("")
+    elif counterexample:
+        add(
+            "> **The relationship is NOT monotone in mean `n`, and it is not described here as a "
+            f"trend.** `{counterexample['dataset']}` is the counter-example: at mean n = "
+            f"{counterexample['mean_nodes']:.2f} its ratio is "
+            f"{counterexample['ratio']:.2f}x, **above** `{counterexample['exceeds_dataset']}`'s "
+            f"{counterexample['exceeds_dataset_ratio']:.2f}x at the smaller mean n = "
+            f"{counterexample['exceeds_dataset_mean_nodes']:.2f}. The **grouped ranges** above are "
+            "therefore the claim; an ordered fall in `n` is not."
+        )
+        add("")
+    if large:
+        add(
+            "**3. The implication is unchanged, and it is the AE.1-relevant part: at the "
+            "unconfounded sizes a better upper bound buys only about "
+            f"{100 * large['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * large['gate_share_at_max_ratio']:.0f} % off the primary slope, so **most of "
+            "the widening there is not attributable to the frozen gate and would survive replacing "
+            "`BIPARTITE`.** The large-`n` looseness is substantially a property of the LB/UB gap "
+            "itself. A better upper bound narrows the bracket everywhere, but it does not remove "
+            "the size effect, and §7.1's first reading -- *the bracket widens because the "
+            "reference degrades* -- survives the sensitivity arm at the sizes that matter."
+        )
+        add("")
+    return lines
+
+
 def _report_s71(results: Mapping[str, Any]) -> list[str]:
     """Render §7.1 -- bracket width against node count."""
     datasets = list(results["datasets"])
@@ -2644,7 +2751,7 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
     add("")
     lines += _report_gate_pattern(gate)
     add(
-        "**4. Confound, stated in one line: the fall of the ratio in mean `n` is measured across "
+        "**4. Confound, stated in one line: the ratio's behaviour across sizes is measured over "
         f"the same {gate['n_datasets']} datasets whose provenance moves with size, so it carries "
         "the same confound §7.1f's pooled curve carries.** " + gate["trend_note"]
     )
