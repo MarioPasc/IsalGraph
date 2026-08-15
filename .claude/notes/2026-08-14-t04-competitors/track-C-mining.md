@@ -18,9 +18,8 @@
 ```
 
 `git diff --stat 9d2291b8 HEAD`, verbatim. Nothing outside the ownership list was touched.
-`git status --porcelain` is empty except `sitecustomize.py` and `wtpy`, which are **not committed**
-(the worktree's `.git/worktrees/.../info/exclude` is not writable from inside the worktree and
-`git config --worktree` refuses without `worktreeConfig`, so they are simply never `git add`ed).
+**`git status --porcelain` is empty** — `sitecustomize.py` and `wtpy` are already excluded by
+`.git/info/exclude:18-19` in the shared checkout, so they are neither tracked nor listed.
 
 Commits, incremental:
 
