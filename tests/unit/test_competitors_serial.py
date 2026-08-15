@@ -480,28 +480,28 @@ def test_adjacency_bits_are_not_inflated_eightfold(fixture_name: str) -> None:
     [k for k, v in sorted(fixtures.ALL_FIXTURES.items()) if v[0] >= 5],
 )
 def test_adjacency_realised_bits_beat_one_bit_per_character(fixture_name: str) -> None:
-    """The brief's literal criterion 4, on the fixtures where it is arithmetic.
+    """No 8x inflation, in the form that is actually satisfiable.
 
-    ``realised_bits < len(text)`` requires ``8 ceil(T/16) < T`` with
-    ``T = n(n-1)/2``, i.e. ``T >= 9``, i.e. ``n >= 5``.  ``PATH_2`` (T = 1)
-    and ``EMPTY_3`` (T = 3) cannot satisfy it: one byte is the floor.
+    The brief and design criterion 4 said ``realised_bits < len(text)``.  That
+    can never hold: packing ``T`` bits into whole bytes costs ``8*ceil(T/8) >=
+    T`` bits, so the assertion contradicts the frozen formula.  It appeared to
+    hold only while ``bits.py`` was halving the count (track A's own finding 1,
+    since fixed).  The trap being guarded against is counting ``'1010...'`` at
+    **eight bits per character**, so the comparison is against ``8*len(text)``.
+
+    ``entropy <= realised < entropy + 8`` is the tighter and always-true form:
+    byte padding, and nothing more.  It subsumes the 8x check for every
+    ``T >= 2`` and stays correct at ``T = 1``, where one byte genuinely is
+    eight bits and there is nothing to catch.
     """
     graph = fixtures.to_networkx(fixtures.ALL_FIXTURES[fixture_name])
     encoding = backend("adjacency").encode(graph)
-    assert backend("adjacency").bits(encoding).realised_bits < len(encoding.text)
+    counted = backend("adjacency").bits(encoding)
+    assert counted.entropy_bits <= counted.realised_bits < counted.entropy_bits + 8
+    if len(encoding.text) >= 2:
+        assert counted.realised_bits < 8 * len(encoding.text)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "CONTRACT DEFECT, orchestrator's bits.py, reported not fixed. The design "
-        "note §4.2 and CONTRACTS §5 specify realised_bits = 8*ceil(n(n-1)/16), "
-        "i.e. the triangle packed 8 bits to a byte = 8*ceil(T/8) with T = "
-        "n(n-1)/2. bits.py:46 calls _packed_bits(triangle, word=16), which is "
-        "8*ceil(T/16) = 8*ceil(n(n-1)/32) -- half the specified value. At n=6 it "
-        "returns 8 bits (one byte) for a 15-bit triangle, which does not fit."
-    ),
-)
 @pytest.mark.parametrize("n", (5, 6, 7, 10, 20))
 def test_adjacency_realised_bits_match_the_frozen_closed_form(n: int) -> None:
     """``8 ceil(n(n-1)/16)``, the value the design note freezes."""

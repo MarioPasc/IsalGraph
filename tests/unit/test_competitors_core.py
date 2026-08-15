@@ -279,9 +279,12 @@ def test_no_eightfold_inflation_on_the_adjacency_matrix(name: str) -> None:
     backend = get_repr_backend("adjacency")
     encoding = backend.encode(fixtures.to_networkx(fixtures.ALL_FIXTURES[name]))
     counted = backend.bits(encoding)
-    assert counted.realised_bits < 8 * len(encoding.text)
-    # Byte padding and nothing more.
+    # Byte padding and nothing more.  This is the always-true form, and it
+    # subsumes the 8x check for every T >= 2.
     assert counted.entropy_bits <= counted.realised_bits < counted.entropy_bits + 8
+    if len(encoding.text) >= 2:
+        # At T = 1 one byte genuinely is eight bits, so there is nothing to catch.
+        assert counted.realised_bits < 8 * len(encoding.text)
 
 
 def test_adjacency_realised_bits_pack_the_triangle_into_bytes() -> None:
