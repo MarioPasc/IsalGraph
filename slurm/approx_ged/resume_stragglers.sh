@@ -13,7 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ACCOUNT="tic_163_uma"
 CONSTRAINT="sr"
-REPO_DIR="${REPO_DIR:-/mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalGraph}"
+FSCRATCH="${FSCRATCH:-/mnt/home/users/tic_163_uma/mpascual/fscratch}"
+# 🔴 _env.sh consumes these WITHOUT a default (`PY="${CONDA_ENV_PREFIX}/bin/python"`), so
+# omitting either kills the job in 3 s with `unbound variable`. Job 2010228 died exactly
+# that way: a launcher written beside finish_remaining.sh rather than derived from its
+# export list. CONTRACTS §8 is the authority for both paths.
+CONDA_ENV_PREFIX="${CONDA_ENV_PREFIX:-${FSCRATCH}/conda_envs/isalgraph}"
+GEDLIB_DIR="${GEDLIB_DIR:-${FSCRATCH}/build_gedlib/graphkit-learn}"
+REPO_DIR="${REPO_DIR:-${FSCRATCH}/repos/IsalGraph}"
 OUT_DIR="${OUT_DIR:-/mnt/home/users/tic_163_uma/mpascual/execs/isalgraph/approx_ged}"
 DATA_DIR="${DATA_DIR:-/mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/isalgraph/suite2}"
 LOGS_DIR="${LOGS_DIR:-${OUT_DIR}/logs}"
@@ -58,6 +65,7 @@ submit() {
 CODE_COMMIT="${ISALGRAPH_CODE_COMMIT:-10752df35d4c318a36cf5c932654f3724f6e72e9}"
 
 EXPORTS="ALL,REPO_DIR=${REPO_DIR},OUT_DIR=${OUT_DIR},DATA_DIR=${DATA_DIR}"
+EXPORTS+=",CONDA_ENV_PREFIX=${CONDA_ENV_PREFIX},GEDLIB_DIR=${GEDLIB_DIR}"
 EXPORTS+=",ISALGRAPH_CODE_COMMIT=${CODE_COMMIT}"
 EXPORTS+=",ROLE=${ROLE},KEY=${KEY},N_CHUNKS=${N_CHUNKS},CHUNKS=${CHUNKS}"
 EXPORTS+=",N_GRAPHS=${N_GRAPHS},START_CUTOFF_S=${START_CUTOFF_S}"
