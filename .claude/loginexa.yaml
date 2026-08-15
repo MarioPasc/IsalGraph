@@ -1,0 +1,61 @@
+# Picasso loginexa smoke — IsalGraph
+#
+# Validates that a run works on Picasso's interactive login node BEFORE anything
+# is queued. loginexa has a 30-minute wallclock and NO scheduler, so SCBI's
+# 2-hour job floor does not apply to it — which is exactly why T-04's smoke runs
+# here rather than through `sbatch`.
+
+project: IsalGraph
+picasso_repo: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalGraph
+conda_env: /mnt/home/users/tic_163_uma/mpascual/fscratch/conda_envs/isalgraph
+log_dir: ~/execs/isalgraph/logs
+
+# The engine is NOT built in this env. Every competitor backend is pure Python
+# and needs none; `isalgraph` is reached by PYTHONPATH rather than pip install,
+# so no build tree is created against an fscratch already at 91 % of its FILE
+# quota (226.7k / 250.0k, hard limit 400.0k — the limit that bites here is the
+# file count, never the space).
+env:
+  PYTHONPATH: /mnt/home/users/tic_163_uma/mpascual/fscratch/repos/IsalGraph/src
+  ISALGRAPH_COHORT_ROOT: /mnt/home/users/tic_163_uma/mpascual/fscratch/datasets/isalgraph
+
+modules:
+  - gcc/12.2.0        # needed for the from-source pynauty build; verified 2026-08-15
+
+smoke:
+  # One Suite-1 and one Suite-2 dataset, all eleven backends. The reference arm
+  # runs UNBUDGETED and is labelled so: `timeout_s` is a cpp-only parameter and
+  # the backend refuses a budget the active engine cannot enforce rather than
+  # dropping it and letting the bit counts be quoted as if budgeted.
+  timeout_minutes: 25          # 5 minutes of margin under the 30-minute wallclock
+  commands:
+    - >-
+      python -m isalgraph.competitors.smoke
+      --backends adjacency,graph6,sparse6,nauty_graph6,sparse6_nauty,agm_cam,min_dfs,wl_subtree,size_null
+      --dataset iam_letter_low --n-graphs 200 --seed 42
+      --out smoke_picasso_suite1.json
+    - >-
+      python -m isalgraph.competitors.smoke
+      --backends adjacency,graph6,sparse6,nauty_graph6,min_dfs,size_null
+      --dataset grec --n-graphs 200 --seed 42
+      --out smoke_picasso_suite2.json
+
+pass_criteria:
+  # What this run actually gates (design note §7): that pynauty BUILDS FROM
+  # SOURCE under gcc 12.2.0 where production will run. A failure takes
+  # nauty_graph6, sparse6_nauty and AGM's orbit pruning down together and
+  # changes k in N_actual = 182 - 15k - 8d.
+  - every requested backend reports available == true, or a typed import_error
+  - nauty_graph6 encodes 200/200 on iam_letter_low with f3_invariant_of_50 == 50/50
+  - every failure carries a typed exception name, never a bare Exception
+  - the run header records isalgraph_engine and the package versions
+
+known_limitations:
+  # grakel 0.1.10 is numpy-1 code and this env carries numpy 2.4.6 for T-05's
+  # sake. A source rebuild does not fix it (ComplexWarning moved to
+  # numpy.exceptions in numpy 2). wl_subtree therefore runs its own
+  # implementation here, which needs no numpy at all; the grakel cross-check is
+  # workstation-side, where both implementations already agree to 1e-9.
+  - grakel unusable on Picasso — see .claude/notes/2026-08-14-t04-competitors/PICASSO.md
+  - agm_cam is SUITE1_ONLY and is omitted from the Suite-2 command by design
+  - the C++ engine is absent, so isalgraph.engine() reads "python" here

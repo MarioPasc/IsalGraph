@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     import networkx as nx
 
 from isalgraph.competitors import datasets, fixtures
-from isalgraph.competitors.base import ReprBackend, VectorBackend
+from isalgraph.competitors.base import Budget, ReprBackend, VectorBackend
 from isalgraph.competitors.registry import (
     available_backends,
     get_backend,
@@ -72,7 +72,12 @@ def _run_header(dataset: str, seed: int, n_graphs: int) -> dict[str, Any]:
     }
 
 
-def _f3(backend: ReprBackend | VectorBackend, graphs: list[nx.Graph], seed: int) -> int:
+def _f3(
+    backend: ReprBackend | VectorBackend,
+    graphs: list[nx.Graph],
+    seed: int,
+    budget: Budget | None = None,
+) -> tuple[int, int]:
     """How many of *graphs* encode identically under 20 fresh relabellings.
 
     The relabeller **rebuilds** each copy with a new insertion order.
@@ -88,40 +93,61 @@ def _f3(backend: ReprBackend | VectorBackend, graphs: list[nx.Graph], seed: int)
     harmless for a WL whose features are fit-independent, and it would
     silently corrupt any future ``VectorBackend`` whose features are not.
     Reported by track C, 2026-08-15.
+
+    Returns:
+        ``(invariant, skipped)``.  **The skip count is not optional.**  A graph
+        that fails to encode is not evidence of invariance, so it is skipped --
+        but a skip and a genuine non-invariance both push the ratio down, and
+        without the second number ``0/50`` reads identically whether the format
+        is order-dependent or the harness never managed to call it.  That is
+        not hypothetical: this function ignored *budget* on its first outing
+        and reported ``isalgraph_pruned`` at ``0/50`` on Picasso, where the
+        default 2 s budget is unenforceable and every single encode raised.
+        The number was plausible, wrong, and silent, which is the exact failure
+        the whole ticket is written against.
     """
     import random
 
     rng = random.Random(seed)
     invariant = 0
+    skipped = 0
     for graph in graphs:
         try:
             copies = [fixtures.shuffled_copy(graph, rng) for _ in range(F3_RELABELLINGS)]
             if isinstance(backend, VectorBackend):
                 backend.fit([graph, *copies])
-            codes = {_signature(backend, g) for g in (graph, *copies)}
+            codes = {_signature(backend, g, budget) for g in (graph, *copies)}
         except Exception:  # noqa: BLE001 - see below
             # Broad by design. min-DFS raises a plain ValueError on a
             # disconnected graph, which is not a CompetitorError, so a
             # narrower clause let it escape and abort the whole smoke run --
             # every other backend's numbers lost to one graph the cohort
-            # filter was supposed to exclude. A graph that fails to encode is
-            # simply not evidence of invariance; run_backend records the
-            # failure separately, so nothing is dropped here that is not
-            # counted there.
+            # filter was supposed to exclude. run_backend records the failure
+            # separately, and `skipped` makes it visible here too.
+            skipped += 1
             continue
         if len(codes) == 1:
             invariant += 1
-    return invariant
+    return invariant, skipped
 
 
-def _signature(backend: ReprBackend | VectorBackend, graph: nx.Graph) -> str:
+def _signature(
+    backend: ReprBackend | VectorBackend, graph: nx.Graph, budget: Budget | None = None
+) -> str:
     """A comparable string for one graph.  **Does not fit** -- see :func:`_f3`."""
     if isinstance(backend, VectorBackend):
         return json.dumps(sorted(backend.features(graph).items()))
-    return "".join(backend.encode(graph).symbols)
+    return "".join(backend.encode(graph, budget=budget).symbols)
 
 
-def run_backend(name: str, graphs: list[nx.Graph], *, seed: int, dataset: str) -> dict[str, Any]:
+def run_backend(
+    name: str,
+    graphs: list[nx.Graph],
+    *,
+    seed: int,
+    dataset: str,
+    unbudgeted_reference: bool = False,
+) -> dict[str, Any]:
     """Encode every graph, timing each, recording every failure.
 
     **Every failure is recorded, never dropped.**  The failure *rate* is a
@@ -146,6 +172,16 @@ def run_backend(name: str, graphs: list[nx.Graph], *, seed: int, dataset: str) -
         backend.fit(graphs)
         record["fit_s"] = time.perf_counter() - t0
 
+    # The override is narrowed to the reference arm ON PURPOSE. Handing every
+    # backend a Budget whose fields are None would read as "unbounded" to AGM
+    # and min-DFS, silently discarding the 200k/100k and 50,000 caps that their
+    # published failure rates were measured at. Only isalgraph_* reads
+    # `timeout_s`, and only it is affected here.
+    budget: Budget | None = None
+    if unbudgeted_reference and name.startswith("isalgraph_"):
+        budget = Budget(timeout_s=None)
+        record["budget"] = "timeout_s=None -- UNBUDGETED, engine cannot enforce one"
+
     elapsed: list[float] = []
     failures: list[dict[str, Any]] = []
     n_encoded = 0
@@ -157,7 +193,7 @@ def run_backend(name: str, graphs: list[nx.Graph], *, seed: int, dataset: str) -
             if isinstance(backend, VectorBackend):
                 backend.features(graph)
             else:
-                encoding = backend.encode(graph)
+                encoding = backend.encode(graph, budget=budget)
                 try:
                     counted = backend.bits(encoding)
                     bits_entropy.append(counted.entropy_bits)
@@ -194,7 +230,11 @@ def run_backend(name: str, graphs: list[nx.Graph], *, seed: int, dataset: str) -
         "realised_p50": statistics.median(bits_realised) if bits_realised else None,
     }
     f3_graphs = graphs[:F3_GRAPHS]
-    record["f3_invariant_of_50"] = f"{_f3(backend, f3_graphs, seed)}/{len(f3_graphs)}"
+    invariant, skipped = _f3(backend, f3_graphs, seed, budget)
+    record["f3_invariant_of_50"] = f"{invariant}/{len(f3_graphs)}"
+    # Never omitted. Without it a 0/50 cannot be told apart from a harness that
+    # failed to call the backend at all -- which is how a wrong F3 shipped once.
+    record["f3_skipped"] = skipped
     return record
 
 
@@ -210,6 +250,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n-graphs", type=int, default=200)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", required=True)
+    parser.add_argument(
+        "--unbudgeted-reference",
+        action="store_true",
+        help=(
+            "run isalgraph_* with timeout_s=None. Needed where the C++ engine is "
+            "absent, since timeout_s is cpp-only and the backend refuses a budget "
+            "it cannot enforce rather than dropping it. Recorded in the JSON."
+        ),
+    )
     args = parser.parse_args(argv)
 
     cohort = datasets.load(args.dataset)
@@ -229,7 +278,13 @@ def main(argv: list[str] | None = None) -> int:
         "backends": {},
     }
     for name in names:
-        result["backends"][name] = run_backend(name, graphs, seed=args.seed, dataset=args.dataset)
+        result["backends"][name] = run_backend(
+            name,
+            graphs,
+            seed=args.seed,
+            dataset=args.dataset,
+            unbudgeted_reference=args.unbudgeted_reference,
+        )
 
     with open(args.out, "w", encoding="utf-8") as handle:
         json.dump(result, handle, indent=2, sort_keys=True)
@@ -242,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{name:18s} ok={rec['n_encoded']:4d} failed={rec['n_failed']:3d} "
             f"p50={ms.get('p50', float('nan')):8.3f}ms F3={rec['f3_invariant_of_50']}"
+            + (f"  SKIPPED={rec['f3_skipped']}" if rec.get("f3_skipped") else "")
         )
     print(f"\nwrote {args.out}")
     return 0

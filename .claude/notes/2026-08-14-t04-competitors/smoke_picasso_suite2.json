@@ -1,0 +1,254 @@
+{
+  "backends": {
+    "adjacency": {
+      "available": true,
+      "backend": "adjacency",
+      "bits": {
+        "entropy_p50": 66.0,
+        "realised_p50": 72.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "0/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 1.1619017459452152,
+        "p50": 0.10283291339874268,
+        "p90": 0.2124551683664322
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "graph6": {
+      "available": true,
+      "backend": "graph6",
+      "bits": {
+        "entropy_p50": 72.0,
+        "realised_p50": 96.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "0/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.660615973174572,
+        "p50": 0.14717201702296734,
+        "p90": 0.24349335581064224
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "isalgraph_pruned": {
+      "available": true,
+      "backend": "isalgraph_pruned",
+      "bits": {
+        "entropy_p50": 72.90827503317318,
+        "realised_p50": 184.0
+      },
+      "budget": "timeout_s=None -- UNBUDGETED, engine cannot enforce one",
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 649.8583685606718,
+        "p50": 17.598134465515614,
+        "p90": 118.73135389760137
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "min_dfs": {
+      "available": true,
+      "backend": "min_dfs",
+      "bits": {
+        "entropy_p50": 96.0,
+        "realised_p50": 392.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 33.29538367688656,
+        "p50": 1.0335610713809729,
+        "p90": 2.6981020346283913
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "nauty_graph6": {
+      "available": true,
+      "backend": "nauty_graph6",
+      "bits": {
+        "entropy_p50": 72.0,
+        "realised_p50": 96.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 5.050064064562321,
+        "p50": 0.4856835585087538,
+        "p90": 1.0642828419804573
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "size_null": {
+      "available": true,
+      "backend": "size_null",
+      "bits": {
+        "entropy_p50": null,
+        "realised_p50": null
+      },
+      "capabilities": [
+        "baseline",
+        "handles_disconnected"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.020925886929035187,
+        "p50": 0.006655463948845863,
+        "p90": 0.008366070687770844
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "sparse6": {
+      "available": true,
+      "backend": "sparse6",
+      "bits": {
+        "entropy_p50": 78.0,
+        "realised_p50": 112.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "0/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.26552705094218254,
+        "p50": 0.09823404252529144,
+        "p90": 0.1570410095155239
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "sparse6_nauty": {
+      "available": true,
+      "backend": "sparse6_nauty",
+      "bits": {
+        "entropy_p50": 78.0,
+        "realised_p50": 112.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "handles_disconnected",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 1.22903473675251,
+        "p50": 0.4584556445479393,
+        "p90": 0.9507490321993828
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "wl_subtree": {
+      "available": true,
+      "backend": "wl_subtree",
+      "bits": {
+        "entropy_p50": null,
+        "realised_p50": null
+      },
+      "capabilities": [
+        "canonical",
+        "handles_disconnected"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "fit_s": 0.008061017841100693,
+      "ms_per_graph": {
+        "max": 0.07821712642908096,
+        "p50": 0.03969832323491573,
+        "p90": 0.057347118854522705
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    }
+  },
+  "header": {
+    "dataset": "grec",
+    "isalgraph_build_hash": "",
+    "isalgraph_engine": "python",
+    "n_graphs_requested": 200,
+    "packages": {
+      "grakel": "absent",
+      "networkx": "3.6.1",
+      "numpy": "2.4.6",
+      "pynauty": "2.8.8.1",
+      "rapidfuzz": "3.14.5"
+    },
+    "platform": "Linux-6.4.0-150600.23.103-default-x86_64-with-glibc2.38",
+    "processor": "x86_64",
+    "python": "3.11.15",
+    "registered_backends": [
+      "adjacency",
+      "agm_cam",
+      "graph6",
+      "isalgraph_canonical",
+      "isalgraph_pruned",
+      "min_dfs",
+      "nauty_graph6",
+      "size_null",
+      "sparse6",
+      "sparse6_nauty",
+      "wl_subtree"
+    ],
+    "seed": 42
+  },
+  "n_graphs_drawn": 200,
+  "suite": "suite2"
+}
