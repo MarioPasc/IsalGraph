@@ -99,6 +99,11 @@ from isalgraph.errors import BackendUnavailableError
 if TYPE_CHECKING:
     import networkx as nx
 
+    # Untyped third party; only ever a return annotation.  Importing it here
+    # keeps ``grakel`` out of the runtime import path, which the subpackage's
+    # dependency contract requires.
+    from grakel import Graph as GrakelGraph
+
 #: **Frozen.**  Refinement rounds.  ``grakel(n_iter=WL_ROUNDS)`` is the same
 #: kernel.  Do not tune this on a correlation with GED.
 WL_ROUNDS = 2
@@ -280,15 +285,26 @@ def grakel_available() -> bool:
     return True
 
 
-def _to_grakel(graph: nx.Graph) -> Any:
-    """One ``grakel.Graph`` with a single constant vertex label."""
+def _to_grakel(graph: nx.Graph) -> GrakelGraph:
+    """One ``grakel.Graph`` with a single constant vertex label.
+
+    The **edge-dictionary** form, not an edge list: ``grakel.Graph`` reads an
+    empty edge list as an empty adjacency matrix and dies with
+    ``IndexError: tuple index out of range``, so an edgeless or
+    isolated-vertex graph could not be converted at all.  The dictionary
+    form carries the vertex set explicitly and handles both.
+    """
     from grakel import Graph
 
-    edges: list[tuple[Any, Any]] = []
+    adjacency: dict[Any, dict[Any, float]] = {v: {} for v in graph.nodes()}
     for u, v in graph.edges():
-        edges.append((u, v))
-        edges.append((v, u))
-    return Graph(edges, node_labels=dict.fromkeys(graph.nodes(), BASE_COLOUR))
+        adjacency[u][v] = 1.0
+        adjacency[v][u] = 1.0
+    return Graph(
+        adjacency,
+        node_labels=dict.fromkeys(graph.nodes(), BASE_COLOUR),
+        graph_format="all",
+    )
 
 
 def grakel_gram(graphs: Sequence[nx.Graph], *, h: int = WL_ROUNDS) -> list[list[float]]:
