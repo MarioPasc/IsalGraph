@@ -581,18 +581,6 @@ def test_nauty_realised_bits_are_the_emitted_bytes() -> None:
         assert counted.entropy_bits == 6.0 * len(encoding.wire)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "DEFECT, found here and FIXED BY THE ORCHESTRATOR on the integration "
-        "side after this worktree was cut. bits.py::_packed_bits computes "
-        "8*ceil(T/16) for T = n(n-1)/2, where T-04-design.md 4.2 specifies "
-        "8*ceil(n(n-1)/16) = 8*ceil(T/8). The shipped value is about half the "
-        "payload it is supposed to store -- 8 bits for a 15-bit triangle at "
-        "n=6, 2384 for 4753 at n=98 -- which halves the adjacency and agm_cam "
-        "Claim A realised-bits baseline. This test asserts the CORRECT value "
-        "and flips to XPASS at merge."
-    ),
-)
 def test_agm_realised_bits_match_the_frozen_formula() -> None:
     """``8*ceil(n(n-1)/16)``, and never below the payload it stores."""
     import math
