@@ -478,6 +478,51 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-15, amendment 13 — two PI decisions taken at finalisation. §7.5 leaves this ticket, and
+  T-03's `ub_matrix` defect is accepted rather than repaired.**
+
+  **(a) §7.5 is deferred in full to T-06. PI decision 2026-08-15.** §7 asserts its five deliverables
+  are "computable once the matrices exist; no extra cluster time". That is true of §7.1–§7.4 and
+  **false of §7.5**, which needs `ρ(Lev, ·)` and therefore a canonical string per Suite-2 graph.
+  Measured at finalisation: `data/eval/canonical_strings/` and `data/eval/levenshtein_matrices/`
+  hold **five datasets only** — `iam_letter_{low,med,high}`, `linux`, `aids` — and **every one of
+  them is a Suite-1 cohort capped at `n ≤ 12`**. The six new Suite-2 cohorts have never been
+  canonicalised at all.
+
+  The method was never the obstacle: **D14 is already locked** and fixes the whole protocol — 300 s
+  canonicalisation timeout, **greedy-min fallback** for a censored graph (never a drop), affected
+  pairs flagged, censoring rate reported per symmetry stratum, and a complete-case sensitivity arm
+  beside the primary. What was open was *ownership*, and the board settles it: T-06 is
+  **"full recompute — all experiments, C++ engine, new cohorts, new statistics"** and depends on
+  T-05. Canonicalising the six new cohorts inside T-05 would duplicate T-06's stated deliverable.
+
+  > **So T-05 closes with §7.5 unstarted and named**, not silently dropped. §8 acceptance criterion 7
+  > is therefore met for §7.1–§7.4 only, and that is a deliberate, recorded reduction of this
+  > ticket's scope rather than an unmet criterion.
+  >
+  > **Recorded for T-06, because it is free information it would otherwise have to rediscover:** the
+  > five existing Levenshtein matrices **join cleanly to the Suite-2 files** — orchestrator-verified,
+  > `linux` and the three Letter cohorts are element-wise identical in `graph_ids`, and Suite-1
+  > `aids` (769) is a **strict subset** of `aids_graphedx` (819), joinable on `graph_ids` and never
+  > positionally. So T-06 inherits five of ten datasets already done and owes six.
+
+  **(b) T-03's `ub_matrix` is accepted as a documented limitation. PI decision 2026-08-15 — no
+  repair.** T-03's default `--ub-options "--threads 1"` left `IPFP` on GEDLIB's `--randomness REAL`,
+  so **74–82 % of its upper-bound values change between runs** (amendment 6). The blast radius is
+  bounded and was verified rather than argued: `ub_matrix == ged_matrix` on **all 234,258 certified
+  AIDS and 3,870 certified LINUX pairs**, so the exposure is **exactly the 61,084 D11 censored
+  interval upper ends** — 61,038 AIDS and 46 LINUX — and nothing else.
+
+  Repair was costed at hours under the frozen `PSEUDO` string and **declined**: the intervals remain
+  valid bounds, and T-03 is a closed ticket whose artifact T-05 should not rewrite.
+
+  > **What this obliges, and it is not optional.** The manuscript must state that the **upper ends of
+  > the D11 censored intervals are heuristic and run-dependent**, so a reader re-running T-03's
+  > reproduction script will not reproduce them. The lower ends (`BRANCH_FAST`) are unaffected and
+  > were 5/5 identical across reruns. Left unstated this is precisely the reproducibility failure
+  > **R3.5a** already objected to; stated, it is a disclosed property of a censored interval.
+  > **`review-close` must carry this into the limitations text, not merely into a notes file.**
+
 - **2026-08-15, amendment 12 — the §7 analysis rules that were still under-specified, frozen before
   the analysis runs. Two are references to rules already frozen elsewhere; one is new and is mine.**
 
