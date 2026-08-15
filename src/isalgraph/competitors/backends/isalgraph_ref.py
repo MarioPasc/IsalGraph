@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 from isalgraph.competitors.base import Budget, Capability, Encoding, ReprBackend
 from isalgraph.competitors.registry import register_backend
-from isalgraph.errors import SuiteScopeError
+from isalgraph.errors import BackendError, SuiteScopeError
 
 #: Sigma = {N, n, P, p, V, v, C, c, W}.  Fixed, and the fixedness is an
 #: argument the paper makes against min-DFS's O(n^2) alphabet.
@@ -83,6 +83,35 @@ class _IsalGraphBackend(ReprBackend):
 
         return call
 
+    def _check_budget_enforceable(self, timeout: float | None, engine: str | None) -> None:
+        """Refuse a timeout the active engine cannot honour.
+
+        ``timeout_s`` is a ``cpp``-only parameter: the pure-Python reference has
+        no interruption point, so the C++ path raises ``BackendError`` when
+        asked for one.  Two wrong answers are available here and both are taken
+        elsewhere in the literature -- drop the timeout silently and run
+        unbounded, or catch and report a spurious failure.  The first turns a
+        2 s budget into an unbounded Suite-2 run whose bit counts are then
+        quoted as if budgeted; the second invents a ceiling that is not real.
+
+        So: state it.  A budget that cannot be enforced refuses, exactly as a
+        budget that runs out refuses.  Pass ``Budget(timeout_s=None)`` to opt
+        out deliberately -- which is what the language-matched Fig. 2 timing
+        does, since it runs small graphs where no budget is needed.
+        """
+        import isalgraph
+
+        if timeout is None:
+            return
+        effective = engine or isalgraph.engine()
+        if effective != "cpp":
+            raise BackendError(
+                f"{self.name!r} was asked for a {timeout} s budget but the active "
+                f"engine is {effective!r}, which has no interruption point and "
+                f"cannot enforce one. Build the C++ extension, or pass "
+                f"Budget(timeout_s=None) to run unbounded on purpose"
+            )
+
     def _check_scope(self, graph: nx.Graph) -> None:
         if Capability.SUITE1_ONLY not in self.capabilities:
             return
@@ -116,9 +145,13 @@ class _IsalGraphBackend(ReprBackend):
             CanonicalizationTimeoutError: when the budget runs out.  A
                 recorded failure, never a degraded string.
             SuiteScopeError: for ``isalgraph_canonical`` above Suite 1.
+            BackendError: when a finite budget is requested but the active
+                engine cannot enforce it.  See
+                :meth:`_check_budget_enforceable`.
         """
         self._check_scope(graph)
         timeout = DEFAULT_TIMEOUT_S if budget is None else budget.timeout_s
+        self._check_budget_enforceable(timeout, engine)
         text = self._encoder(backend=engine)(_to_sparse_graph(graph), timeout)
         return Encoding(
             backend=self.name,

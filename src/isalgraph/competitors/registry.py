@@ -104,13 +104,28 @@ def get_backend(name: str, **kwargs: object) -> AnyBackend:
     _ensure_imported(name, _LAZY_MODULES, _BACKENDS)
     if name not in _BACKENDS:
         if name in _LAZY_MODULES:
-            # The module exists but failed to import: its dependency is absent.
+            module = _LAZY_MODULES[name]
             try:
-                importlib.import_module(_LAZY_MODULES[name])
+                importlib.import_module(module)
             except ImportError as exc:
+                # Two very different faults arrive here as the same exception,
+                # and conflating them sends the reader hunting for a missing
+                # package that is installed. `No module named '<module>'` means
+                # the backend module itself is absent -- in a git worktree that
+                # means the editable install redirected `isalgraph` to the main
+                # checkout, so the file you just wrote is not the file that ran.
+                missing = getattr(exc, "name", "") or ""
+                if missing == module or missing.startswith(f"{module}."):
+                    raise BackendNotFoundError(
+                        f"competitor backend {name!r} maps to {module!r}, which does "
+                        f"not exist. If you are in a git worktree, `import isalgraph` "
+                        f"resolves to the MAIN checkout unless sitecustomize.py drops "
+                        f"the ScikitBuildRedirectingFinder -- your file is not the one "
+                        f"being imported"
+                    ) from exc
                 raise BackendUnavailableError(
-                    f"competitor backend {name!r} requires a dependency that is not "
-                    f"installed: {exc}"
+                    f"competitor backend {name!r} requires {missing or 'a dependency'}, "
+                    f"which is not installed: {exc}"
                 ) from exc
         raise BackendNotFoundError(
             f"competitor backend {name!r} is not registered (known: {sorted(_BACKENDS)})"

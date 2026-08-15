@@ -31,6 +31,75 @@ the folder and the design note describe **one** installation; do not re-open it.
 
 ---
 
+## 0.5 🔴 STEP 0 — make your worktree importable, before anything else
+
+**Your worktree cannot import its own code until you do this.** Not a style point: without
+it, every command you run silently executes the **main checkout's** source, and the files
+you are about to write do not exist there.
+
+`isalgraph-cpp` carries a **scikit-build-core editable install** whose
+`ScikitBuildRedirectingFinder` sits in `sys.meta_path` and hard-maps `isalgraph` to
+`/home/mpascual/research/code/IsalGraph/src`. A meta-path finder outranks `sys.path`, so
+**neither `PYTHONPATH` nor `sys.path.insert` overrides it** — both were measured on
+2026-08-15 and both failed. The finder must be removed from `sys.meta_path`.
+
+Run this in your worktree root, first thing:
+
+```bash
+cat > sitecustomize.py <<'EOF'
+"""Make `import isalgraph` resolve to THIS worktree, not the main checkout."""
+
+import os
+import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.meta_path[:] = [
+    f for f in sys.meta_path if type(f).__name__ != "ScikitBuildRedirectingFinder"
+]
+_SRC = os.path.join(_HERE, "src")
+if _SRC in sys.path:
+    sys.path.remove(_SRC)
+sys.path.insert(0, _SRC)
+EOF
+
+cat > wtpy <<'EOF'
+#!/usr/bin/env bash
+# Worktree python. Use this EVERYWHERE instead of the bare interpreter.
+_WT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$_WT${PYTHONPATH:+:$PYTHONPATH}"
+exec "$HOME/.conda/envs/isalgraph-cpp/bin/python" "$@"
+EOF
+chmod +x wtpy
+
+# Verify. The path printed MUST be inside your worktree.
+./wtpy -c "import isalgraph; print(isalgraph.__file__); print(isalgraph.engine())"
+```
+
+**From then on `./wtpy` replaces `$PY` in every command**, including `pytest`, `ruff` and
+`mypy`. Where your brief says `$PY -m pytest ...`, run `./wtpy -m pytest ...`.
+
+**Do not commit `sitecustomize.py` or `wtpy`.** They are worktree-local scaffolding and must
+not reach the merge. Add both to `.git/info/exclude` in your worktree, and check
+`git status --porcelain` before your final commit.
+
+**`engine()` will read `"python"` in your worktree, and that is correct.** Removing the
+finder also removes the compiled `.so`, which lives in site-packages. It costs you nothing:
+every backend in this wave is pure Python and none of them calls the engine. It does mean:
+
+- **Do not run `isalgraph_pruned` or `isalgraph_canonical`** in your worktree. They now
+  raise `BackendError` rather than pretend, because `timeout_s` is a `cpp`-only parameter
+  and the Python reference has no interruption point. That is the orchestrator's arm and it
+  is timed in place, alone, in wave 2.
+- **Label every timing you report "pure-Python, single-threaded".** Your brief already
+  requires this; the shim makes it structurally true.
+- Restrict `--backends` in your smoke runs to your own backends.
+
+If you see `BackendNotFoundError: ... maps to '<module>', which does not exist. If you are
+in a git worktree ...`, the shim is missing or `./wtpy` was not used. That message exists
+because this exact failure was hit while preparing the wave.
+
+---
+
 ## 1. What exists already, and is yours to use but not to edit
 
 Everything below is **committed and read-only to you**. Report defects; do not fix them.
