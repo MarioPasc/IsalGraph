@@ -365,6 +365,42 @@ def test_isalgraph_pruned_has_no_suite_restriction() -> None:
     assert Capability.SUITE1_ONLY not in backend.capabilities
 
 
+def test_a_suite1_only_backend_may_be_measured_on_suite2_but_not_printed() -> None:
+    """Criteria 5 and 9 pull in opposite directions, and the split is deliberate.
+
+    AGM has to *run* on GREC and AIDS-IAM or its 76 % / 82 % ceiling cannot be
+    measured at all (criterion 5).  What criterion 9 forbids is a printed row
+    computed from whichever graphs happened to finish, because those bit counts
+    are conditioned on tractability.  So the per-graph refusal stays and the
+    row-level guard sits above it.
+    """
+    from isalgraph.competitors.base import table_scope_error
+
+    suite1_only = frozenset({Capability.SUITE1_ONLY})
+    assert table_scope_error(suite1_only, "suite1", "agm_cam") is None
+    reason = table_scope_error(suite1_only, "suite2", "agm_cam")
+    assert reason is not None
+    assert "biased" in reason
+    # A backend without the capability is unaffected on either suite.
+    assert table_scope_error(frozenset(), "suite2", "graph6") is None
+
+
+def test_the_grid_refuses_a_suite1_only_row_on_a_suite2_dataset() -> None:
+    if "agm_cam" not in registered_backends():
+        pytest.skip("agm backend not merged yet")
+    from isalgraph.competitors.grid import measure_cell
+
+    graphs = [fixtures.to_networkx(fixtures.ALL_FIXTURES[k]) for k in fixtures.CONNECTED_FIXTURES]
+    cell = measure_cell("agm_cam", "levenshtein", graphs, seed=42, suite="suite2")
+    assert not cell.applicable
+    assert cell.reason is not None
+    assert "SUITE1_ONLY" in cell.reason
+    # Pooled samples carry no single suite, so the guard stands down and the
+    # backend is judged on its measured F1 instead.
+    pooled = measure_cell("agm_cam", "levenshtein", graphs, seed=42, suite=None)
+    assert pooled.applicable
+
+
 def test_a_budget_the_engine_cannot_enforce_is_refused_not_dropped() -> None:
     """`timeout_s` is cpp-only; the Python reference has no interruption point.
 

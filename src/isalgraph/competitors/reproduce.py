@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     import networkx as nx
 
 from isalgraph.competitors import datasets, fixtures
-from isalgraph.competitors.base import VectorBackend
+from isalgraph.competitors.base import VectorBackend, table_scope_error
 from isalgraph.competitors.ged_reference import load_ged
 from isalgraph.competitors.registry import (
     get_backend,
@@ -434,6 +434,10 @@ def corrected_table(
         for name in available_backends():
             try:
                 backend = get_backend(name)
+                scope = table_scope_error(backend.capabilities, cohort.suite, name)
+                if scope is not None:
+                    row[name] = {"status": "refused", "reason": scope}
+                    continue
                 if isinstance(backend, VectorBackend):
                     backend.fit([cohort.graphs[i] for i in indices])
                     feats = {i: dict(backend.features(cohort.graphs[i])) for i in indices}

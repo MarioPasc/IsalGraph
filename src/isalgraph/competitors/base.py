@@ -30,9 +30,6 @@ from isalgraph.errors import BitCountUndefined, NotReversible
 if TYPE_CHECKING:
     import networkx as nx
 
-if TYPE_CHECKING:
-    pass
-
 #: What a metric reads out of an encoding.  Declared per metric so the grid
 #: can reject an impossible cell before computing it.
 Consumes = Literal["symbols", "text", "frame", "features", "order"]
@@ -297,6 +294,42 @@ class VectorBackend(ABC):
         return f"<{type(self).__name__} {self.name!r}>"
 
 
+def table_scope_error(
+    capabilities: frozenset[Capability], suite: str, backend_name: str
+) -> str | None:
+    """Why *backend_name* may not contribute a printed row for *suite*, or ``None``.
+
+    **Measuring a ceiling and printing a column are different acts, and only
+    the second is forbidden.**  ``agm_cam`` has to *run* on GREC and AIDS-IAM
+    or its 76 % / 82 % ceiling cannot be measured at all -- that is acceptance
+    criterion 5.  What criterion 9 forbids is a Claim-A or Claim-B row computed
+    from whichever graphs happened to finish, because those bit counts are
+    conditioned on tractability and the sample is biased in exactly the
+    direction that flatters the method.
+
+    So the per-graph refusal stays (a ``SUITE1_ONLY`` backend raises
+    :class:`~isalgraph.errors.SuiteScopeError` above its scope, and the
+    failures are counted), and this guard sits one level up, at the point
+    where a row would be printed.
+
+    Args:
+        capabilities: the backend's declared capabilities.
+        suite: ``"suite1"`` or ``"suite2"``.
+        backend_name: for the message.
+
+    Returns:
+        A reason string when the row must be refused, else ``None``.
+    """
+    if suite == "suite2" and Capability.SUITE1_ONLY in capabilities:
+        return (
+            f"{backend_name!r} is SUITE1_ONLY: it may be run on Suite 2 to measure its "
+            f"ceiling, but it may not contribute a printed row there. The column would "
+            f"be conditioned on the graphs fast enough to finish, which is a biased "
+            f"sample. See design criteria 5 and 9"
+        )
+    return None
+
+
 #: What a metric compares: an :class:`Encoding` for every serialisation, or a
 #: fitted feature multiset for the one :class:`VectorBackend`.
 Comparable = Encoding | Mapping[str, int]
@@ -351,4 +384,5 @@ __all__ = [
     "PositionalFrame",
     "ReprBackend",
     "VectorBackend",
+    "table_scope_error",
 ]

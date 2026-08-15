@@ -44,6 +44,7 @@ from isalgraph.competitors.base import (
     Encoding,
     ReprBackend,
     VectorBackend,
+    table_scope_error,
 )
 from isalgraph.competitors.registry import (
     AnyBackend,
@@ -144,8 +145,17 @@ def measure_cell(
     graphs: list[nx.Graph],
     *,
     seed: int,
+    suite: str | None = None,
 ) -> Cell:
-    """Measure one cell.  Never raises on a backend or metric failure."""
+    """Measure one cell.  Never raises on a backend or metric failure.
+
+    Args:
+        suite: ``"suite1"`` / ``"suite2"`` when every graph comes from one
+            named dataset, so a printed row can be refused where it would be
+            conditioned on tractability.  ``None`` for a pooled sample, where
+            a ``SUITE1_ONLY`` backend simply drives F1 below 1.0 and is
+            excluded from selection on the measurement itself.
+    """
     cell = Cell(backend=backend_name, metric=metric_name)
     try:
         backend = get_backend(backend_name)
@@ -154,6 +164,13 @@ def measure_cell(
         cell.applicable = False
         cell.reason = f"{type(exc).__name__}: {exc}"
         return cell
+
+    if suite is not None:
+        scope = table_scope_error(backend.capabilities, suite, backend_name)
+        if scope is not None:
+            cell.applicable = False
+            cell.reason = scope
+            return cell
 
     ok, reason = _applicable(backend, metric)
     if not ok:
@@ -194,9 +211,7 @@ def measure_cell(
     return cell
 
 
-def _f3_cell(
-    backend: AnyBackend, metric: AnyMetric, graphs: list[nx.Graph], seed: int
-) -> str:
+def _f3_cell(backend: AnyBackend, metric: AnyMetric, graphs: list[nx.Graph], seed: int) -> str:
     """Distance from a graph to a genuinely relabelled copy of itself must be 0."""
     rng = random.Random(seed)
     invariant = 0
@@ -206,9 +221,7 @@ def _f3_cell(
             if isinstance(backend, VectorBackend):
                 backend.fit([graph, *copies])
                 base = dict(backend.features(graph))
-                distances = [
-                    metric.distance(base, dict(backend.features(c))) for c in copies
-                ]
+                distances = [metric.distance(base, dict(backend.features(c))) for c in copies]
             else:
                 base_enc = backend.encode(graph)
                 distances = [
@@ -287,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         cohort = datasets.load(args.dataset)
         graphs = [cohort.graphs[i] for i in cohort.sample(k, seed=args.seed)]
         sample_desc = {"kind": "dryrun", "dataset": args.dataset, "k": k}
+        sample_suite: str | None = cohort.suite
     elif args.sample.startswith("stratified-"):
         k = int(args.sample.split("-")[1])
         picked = datasets.stratified_sample(datasets.ALL_DATASETS, k, seed=args.seed)
@@ -296,12 +310,19 @@ def main(argv: list[str] | None = None) -> int:
             "k": k,
             "per_dataset": {d: len(v) for d, v in picked.items()},
         }
+        # Pooled across both suites, so there is no single suite to refuse a
+        # row for; a SUITE1_ONLY backend shows up as F1 < 1.0 instead.
+        sample_suite = None
     else:
         parser.error(f"unknown --sample {args.sample!r}")
 
     backends = available_backends(include_baseline=True)
     metrics = available_metrics()
-    cells = [measure_cell(b, m, graphs, seed=args.seed) for b in backends for m in metrics]
+    cells = [
+        measure_cell(b, m, graphs, seed=args.seed, suite=sample_suite)
+        for b in backends
+        for m in metrics
+    ]
 
     payload = {
         "sample": sample_desc,
