@@ -478,6 +478,50 @@ I halt and escalate rather than proceed if:
 
 ## Changelog
 
+- **2026-08-15, amendment 15 — three `ubs`/`mutagenicity` chunks hit the 12 h wallclock and were
+  resumed, not recomputed. 0.84 % of the dataset, and the failure mode is the one the design
+  planned for.**
+
+  Array 2005391 completed 16 of its 19 chunks and **TIMEOUT at exactly 12:00:06 on chunks 5, 9 and
+  10**, so its `afterok` merge (2005392) became permanently unsatisfiable. This is the *third*
+  wallclock overrun in this ticket, but unlike amendment 11's it is not a design fault: these tasks
+  ran at the correct `--workers 1` and simply drew slow shards.
+
+  **The `TERM` trap did its job.** Each of the three flushed its checkpoint, so the shard set was:
+
+  | chunk | owned pairs | checkpointed | remaining |
+  |---|---:|---:|---:|
+  | c0005 | 429,410 | 400,000 | **29,410** |
+  | c0009 | 429,410 | 400,000 | **29,410** |
+  | c0010 | 429,410 | 420,000 | **9,410** |
+  | | | | **68,230 of 8,158,780 = 0.84 %** |
+
+  **Recomputing the three chunks whole would have cost ~36 core-h to redo 1.22 M pairs already
+  correct.** Resuming costs ~2.05 h at the rate those chunks actually achieved (43,200 s / 400,000
+  pairs = **108 ms/pair**).
+
+  > **Why one task and not a three-task array.** The residuals are ~53, ~53 and ~17 minutes. As an
+  > array that is three tasks **all under SCBI's two-hour floor** — precisely the pattern
+  > soporte@scbi.uma.es wrote to this account about on 2026-08-07. Run sequentially in one task it
+  > is ~2.05 h and clears the floor by construction. `slurm/approx_ged/worker_resume_chunks.sh`
+  > delegates to `worker_range.sh` rather than reimplementing it, because resume identity is a
+  > **fingerprint over the chunk's pair set** (`_load_checkpoint` refuses a checkpoint written for a
+  > different set rather than corrupting the shard), so `ROLE`/`KEY`/`N_CHUNKS` must match the
+  > original submission exactly. Jobs: resume **2010228**, merge **2010229** (`afterok`).
+
+  **Provenance records `10752df3`, the original run's commit, not the resuming checkout's HEAD.**
+  `git diff 10752df3..HEAD` touches `ged_exact_runner.py`, `ged_backends.py`,
+  `ged_merge_shards.py`, `ged_pair_index.py`, `worker_range.sh` and `_env.sh` in **zero lines** —
+  every commit since adds analysis or manifest modules the runner never imports. So that sha names
+  the code that produced every value in the file, which is what the field is for; passing HEAD would
+  name a run that never happened. **The fact of the resume lives here, in the changelog, which is
+  where a reader looks for it.**
+
+  **What made this safe rather than a silent hole**: `ged_merge_shards` raises `MergeError` on any
+  pair no shard covers instead of writing `inf`. So an incomplete resume fails loudly at the merge.
+  The design's decision to make a missing shard loud is what turns a wallclock overrun into a
+  bounded delay rather than a matrix with 68,230 quiet gaps in it.
+
 - **2026-08-15, amendment 14 — measured for T-06, not for T-05: exhaustive canonicalisation at
   Suite-2 sizes censors at a rate D14 does not anticipate, and D14's timeout cannot be enforced the
   obvious way.** Handoff artifact produced while §7.5 was being deferred; `scratchpad`-free, the
