@@ -1,0 +1,1166 @@
+{
+  "rows": [
+    {
+      "budget": 200000,
+      "dataset": "iam_letter_low",
+      "exact": 1180,
+      "exact_rate": 1.0,
+      "expected_rate": 1.0,
+      "failures": [],
+      "median_ms": 0.0,
+      "n_bar": 4.07,
+      "n_failed": 0,
+      "n_graphs": 1180,
+      "n_max": 7
+    },
+    {
+      "budget": 200000,
+      "dataset": "iam_letter_med",
+      "exact": 1253,
+      "exact_rate": 1.0,
+      "expected_rate": 1.0,
+      "failures": [],
+      "median_ms": 0.0,
+      "n_bar": 4.11,
+      "n_failed": 0,
+      "n_graphs": 1253,
+      "n_max": 8
+    },
+    {
+      "budget": 200000,
+      "dataset": "iam_letter_high",
+      "exact": 2059,
+      "exact_rate": 1.0,
+      "expected_rate": 1.0,
+      "failures": [],
+      "median_ms": 0.0,
+      "n_bar": 4.58,
+      "n_failed": 0,
+      "n_graphs": 2059,
+      "n_max": 9
+    },
+    {
+      "budget": 200000,
+      "dataset": "linux",
+      "exact": 89,
+      "exact_rate": 1.0,
+      "expected_rate": 1.0,
+      "failures": [],
+      "median_ms": 4.5,
+      "n_bar": 8.71,
+      "n_failed": 0,
+      "n_graphs": 89,
+      "n_max": 10
+    },
+    {
+      "budget": 200000,
+      "dataset": "aids",
+      "exact": 766,
+      "exact_rate": 0.9961,
+      "expected_rate": 0.996,
+      "failures": [
+        {
+          "graph_id": "aids_train_0049",
+          "index": 43,
+          "n_edges": 11,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "aids_train_0378",
+          "index": 319,
+          "n_edges": 12,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "aids_train_0465",
+          "index": 394,
+          "n_edges": 11,
+          "n_nodes": 12
+        }
+      ],
+      "median_ms": 21.9,
+      "n_bar": 10.56,
+      "n_failed": 3,
+      "n_graphs": 769,
+      "n_max": 12
+    },
+    {
+      "budget": 100000,
+      "dataset": "grec",
+      "exact": 304,
+      "exact_rate": 0.76,
+      "expected_rate": 0.76,
+      "failures": [
+        {
+          "graph_id": "image3_42",
+          "index": 14,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image3_47",
+          "index": 15,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image11_13",
+          "index": 39,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_22",
+          "index": 40,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_38",
+          "index": 41,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_4",
+          "index": 42,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_42",
+          "index": 43,
+          "n_edges": 22,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "image11_46",
+          "index": 44,
+          "n_edges": 22,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "image11_50",
+          "index": 45,
+          "n_edges": 22,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "image12_45",
+          "index": 50,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image12_47",
+          "index": 51,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image12_48",
+          "index": 52,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image17_49",
+          "index": 77,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_14",
+          "index": 78,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_16",
+          "index": 79,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_18",
+          "index": 80,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_19",
+          "index": 81,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_21",
+          "index": 82,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_39",
+          "index": 83,
+          "n_edges": 19,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_4",
+          "index": 84,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image20_39",
+          "index": 93,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_45",
+          "index": 94,
+          "n_edges": 19,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image20_48",
+          "index": 95,
+          "n_edges": 19,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image3_45",
+          "index": 116,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image11_2",
+          "index": 133,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_21",
+          "index": 134,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_25",
+          "index": 135,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_27",
+          "index": 136,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_28",
+          "index": 137,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_32",
+          "index": 138,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_39",
+          "index": 139,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_47",
+          "index": 140,
+          "n_edges": 22,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "image11_6",
+          "index": 141,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image12_42",
+          "index": 147,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image12_44",
+          "index": 148,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image14_39",
+          "index": 163,
+          "n_edges": 15,
+          "n_nodes": 14
+        },
+        {
+          "graph_id": "image14_48",
+          "index": 166,
+          "n_edges": 15,
+          "n_nodes": 14
+        },
+        {
+          "graph_id": "image17_41",
+          "index": 175,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image17_44",
+          "index": 176,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_11",
+          "index": 177,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_15",
+          "index": 178,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_25",
+          "index": 179,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_29",
+          "index": 180,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_30",
+          "index": 181,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_31",
+          "index": 182,
+          "n_edges": 19,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_40",
+          "index": 183,
+          "n_edges": 19,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_8",
+          "index": 186,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image20_32",
+          "index": 195,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_33",
+          "index": 196,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_36",
+          "index": 197,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image3_41",
+          "index": 235,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image3_43",
+          "index": 236,
+          "n_edges": 28,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "image3_46",
+          "index": 237,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image3_49",
+          "index": 238,
+          "n_edges": 27,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "image11_1",
+          "index": 268,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_10",
+          "index": 269,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_15",
+          "index": 270,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_16",
+          "index": 271,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_17",
+          "index": 272,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_19",
+          "index": 273,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_24",
+          "index": 274,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image11_3",
+          "index": 275,
+          "n_edges": 18,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image11_31",
+          "index": 276,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_33",
+          "index": 277,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_34",
+          "index": 278,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_35",
+          "index": 279,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_40",
+          "index": 280,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image11_44",
+          "index": 281,
+          "n_edges": 22,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "image11_8",
+          "index": 282,
+          "n_edges": 16,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image12_46",
+          "index": 295,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image12_49",
+          "index": 296,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "image12_50",
+          "index": 297,
+          "n_edges": 17,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image14_42",
+          "index": 318,
+          "n_edges": 15,
+          "n_nodes": 14
+        },
+        {
+          "graph_id": "image17_42",
+          "index": 340,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image17_43",
+          "index": 341,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image17_45",
+          "index": 342,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image17_46",
+          "index": 343,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image17_50",
+          "index": 344,
+          "n_edges": 21,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_1",
+          "index": 345,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image18_10",
+          "index": 346,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image18_12",
+          "index": 347,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_13",
+          "index": 348,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_17",
+          "index": 349,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_2",
+          "index": 350,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image18_23",
+          "index": 351,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_24",
+          "index": 352,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_26",
+          "index": 353,
+          "n_edges": 17,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "image18_33",
+          "index": 354,
+          "n_edges": 19,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_35",
+          "index": 355,
+          "n_edges": 19,
+          "n_nodes": 17
+        },
+        {
+          "graph_id": "image18_6",
+          "index": 360,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image18_9",
+          "index": 361,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image20_31",
+          "index": 376,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_34",
+          "index": 377,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_35",
+          "index": 378,
+          "n_edges": 29,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "image20_41",
+          "index": 379,
+          "n_edges": 19,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "image20_44",
+          "index": 380,
+          "n_edges": 19,
+          "n_nodes": 16
+        }
+      ],
+      "median_ms": 35.2,
+      "n_bar": 11.54,
+      "n_failed": 96,
+      "n_graphs": 400,
+      "n_max": 24
+    },
+    {
+      "budget": 100000,
+      "dataset": "aids_iam",
+      "exact": 321,
+      "exact_rate": 0.8025,
+      "expected_rate": 0.82,
+      "failures": [
+        {
+          "graph_id": "15905",
+          "index": 0,
+          "n_edges": 16,
+          "n_nodes": 15
+        },
+        {
+          "graph_id": "17964",
+          "index": 1,
+          "n_edges": 20,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "21376",
+          "index": 2,
+          "n_edges": 20,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "10830",
+          "index": 3,
+          "n_edges": 25,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "20078",
+          "index": 4,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "27115",
+          "index": 5,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "1602",
+          "index": 6,
+          "n_edges": 47,
+          "n_nodes": 44
+        },
+        {
+          "graph_id": "27137",
+          "index": 54,
+          "n_edges": 11,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "14362",
+          "index": 55,
+          "n_edges": 20,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "23402",
+          "index": 56,
+          "n_edges": 19,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "17875",
+          "index": 57,
+          "n_edges": 23,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "30122",
+          "index": 58,
+          "n_edges": 22,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "21558",
+          "index": 59,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "24818",
+          "index": 60,
+          "n_edges": 35,
+          "n_nodes": 34
+        },
+        {
+          "graph_id": "28793",
+          "index": 61,
+          "n_edges": 41,
+          "n_nodes": 39
+        },
+        {
+          "graph_id": "35136",
+          "index": 62,
+          "n_edges": 57,
+          "n_nodes": 54
+        },
+        {
+          "graph_id": "1612",
+          "index": 63,
+          "n_edges": 62,
+          "n_nodes": 57
+        },
+        {
+          "graph_id": "1203",
+          "index": 92,
+          "n_edges": 12,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "5665",
+          "index": 102,
+          "n_edges": 17,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "11888",
+          "index": 103,
+          "n_edges": 19,
+          "n_nodes": 18
+        },
+        {
+          "graph_id": "22530",
+          "index": 104,
+          "n_edges": 20,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "12677",
+          "index": 105,
+          "n_edges": 21,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "12671",
+          "index": 106,
+          "n_edges": 24,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "31634",
+          "index": 107,
+          "n_edges": 22,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "38188",
+          "index": 108,
+          "n_edges": 24,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "19049",
+          "index": 109,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "21379",
+          "index": 110,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "22526",
+          "index": 111,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "11059",
+          "index": 112,
+          "n_edges": 26,
+          "n_nodes": 25
+        },
+        {
+          "graph_id": "33132",
+          "index": 113,
+          "n_edges": 30,
+          "n_nodes": 27
+        },
+        {
+          "graph_id": "10934",
+          "index": 114,
+          "n_edges": 30,
+          "n_nodes": 29
+        },
+        {
+          "graph_id": "27116",
+          "index": 115,
+          "n_edges": 33,
+          "n_nodes": 32
+        },
+        {
+          "graph_id": "15478",
+          "index": 116,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "28795",
+          "index": 117,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "27415",
+          "index": 118,
+          "n_edges": 35,
+          "n_nodes": 34
+        },
+        {
+          "graph_id": "35135",
+          "index": 119,
+          "n_edges": 37,
+          "n_nodes": 36
+        },
+        {
+          "graph_id": "27935",
+          "index": 120,
+          "n_edges": 42,
+          "n_nodes": 41
+        },
+        {
+          "graph_id": "42153",
+          "index": 121,
+          "n_edges": 52,
+          "n_nodes": 46
+        },
+        {
+          "graph_id": "15923",
+          "index": 122,
+          "n_edges": 52,
+          "n_nodes": 47
+        },
+        {
+          "graph_id": "42160",
+          "index": 123,
+          "n_edges": 53,
+          "n_nodes": 47
+        },
+        {
+          "graph_id": "1555",
+          "index": 124,
+          "n_edges": 55,
+          "n_nodes": 50
+        },
+        {
+          "graph_id": "42363",
+          "index": 125,
+          "n_edges": 55,
+          "n_nodes": 52
+        },
+        {
+          "graph_id": "1613",
+          "index": 126,
+          "n_edges": 62,
+          "n_nodes": 56
+        },
+        {
+          "graph_id": "18093",
+          "index": 185,
+          "n_edges": 12,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "19153",
+          "index": 195,
+          "n_edges": 18,
+          "n_nodes": 16
+        },
+        {
+          "graph_id": "23236",
+          "index": 196,
+          "n_edges": 20,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "39262",
+          "index": 197,
+          "n_edges": 21,
+          "n_nodes": 19
+        },
+        {
+          "graph_id": "20032",
+          "index": 198,
+          "n_edges": 23,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "22206",
+          "index": 199,
+          "n_edges": 21,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "22528",
+          "index": 200,
+          "n_edges": 21,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "30121",
+          "index": 201,
+          "n_edges": 21,
+          "n_nodes": 20
+        },
+        {
+          "graph_id": "30123",
+          "index": 202,
+          "n_edges": 22,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "31639",
+          "index": 203,
+          "n_edges": 22,
+          "n_nodes": 21
+        },
+        {
+          "graph_id": "20089",
+          "index": 204,
+          "n_edges": 23,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "21378",
+          "index": 205,
+          "n_edges": 23,
+          "n_nodes": 22
+        },
+        {
+          "graph_id": "20076",
+          "index": 206,
+          "n_edges": 24,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "21684",
+          "index": 207,
+          "n_edges": 25,
+          "n_nodes": 23
+        },
+        {
+          "graph_id": "23403",
+          "index": 208,
+          "n_edges": 26,
+          "n_nodes": 24
+        },
+        {
+          "graph_id": "20074",
+          "index": 209,
+          "n_edges": 27,
+          "n_nodes": 26
+        },
+        {
+          "graph_id": "35463",
+          "index": 210,
+          "n_edges": 28,
+          "n_nodes": 26
+        },
+        {
+          "graph_id": "41804",
+          "index": 211,
+          "n_edges": 30,
+          "n_nodes": 28
+        },
+        {
+          "graph_id": "27117",
+          "index": 212,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "28300",
+          "index": 213,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "28794",
+          "index": 214,
+          "n_edges": 34,
+          "n_nodes": 33
+        },
+        {
+          "graph_id": "2554",
+          "index": 215,
+          "n_edges": 35,
+          "n_nodes": 34
+        },
+        {
+          "graph_id": "29128",
+          "index": 216,
+          "n_edges": 38,
+          "n_nodes": 36
+        },
+        {
+          "graph_id": "31438",
+          "index": 217,
+          "n_edges": 46,
+          "n_nodes": 44
+        },
+        {
+          "graph_id": "358",
+          "index": 218,
+          "n_edges": 51,
+          "n_nodes": 46
+        },
+        {
+          "graph_id": "42157",
+          "index": 219,
+          "n_edges": 53,
+          "n_nodes": 47
+        },
+        {
+          "graph_id": "18844",
+          "index": 220,
+          "n_edges": 51,
+          "n_nodes": 49
+        },
+        {
+          "graph_id": "28549",
+          "index": 221,
+          "n_edges": 59,
+          "n_nodes": 54
+        },
+        {
+          "graph_id": "2952",
+          "index": 222,
+          "n_edges": 59,
+          "n_nodes": 54
+        },
+        {
+          "graph_id": "2343",
+          "index": 223,
+          "n_edges": 61,
+          "n_nodes": 56
+        },
+        {
+          "graph_id": "41583",
+          "index": 224,
+          "n_edges": 80,
+          "n_nodes": 73
+        },
+        {
+          "graph_id": "3943",
+          "index": 347,
+          "n_edges": 11,
+          "n_nodes": 11
+        },
+        {
+          "graph_id": "4148",
+          "index": 348,
+          "n_edges": 10,
+          "n_nodes": 11
+        },
+        {
+          "graph_id": "26336",
+          "index": 390,
+          "n_edges": 11,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "27136",
+          "index": 394,
+          "n_edges": 11,
+          "n_nodes": 12
+        },
+        {
+          "graph_id": "28164",
+          "index": 399,
+          "n_edges": 12,
+          "n_nodes": 12
+        }
+      ],
+      "median_ms": 22.2,
+      "n_bar": 14.01,
+      "n_failed": 79,
+      "n_graphs": 400,
+      "n_max": 73
+    }
+  ]
+}

@@ -1,0 +1,392 @@
+{
+  "mode": "artefacts",
+  "running_example": {
+    "adjacency": {
+      "expected": [
+        "101101000100011",
+        "101001000100011"
+      ],
+      "got": [
+        "101101000100011",
+        "101001000100011"
+      ],
+      "status": "pass"
+    },
+    "agm_cam": {
+      "expected": [
+        "000001110011110",
+        "000001011111000"
+      ],
+      "got": [
+        "000001110011110",
+        "000001011111000"
+      ],
+      "status": "pass"
+    },
+    "graph6": {
+      "expected": [
+        "ElCW",
+        "EhCW"
+      ],
+      "got": [
+        "ElCW",
+        "EhCW"
+      ],
+      "status": "pass"
+    },
+    "nauty_graph6": {
+      "expected": [
+        "E@ro",
+        "E@po"
+      ],
+      "got": [
+        "E@ro",
+        "E@po"
+      ],
+      "status": "pass"
+    },
+    "sparse6": {
+      "expected": [
+        "EaWIzR",
+        "EaYms"
+      ],
+      "got": [
+        "EaWIzR",
+        "EaYms"
+      ],
+      "status": "pass",
+      "wire_expected": [
+        ":EaWIzR",
+        ":EaYms"
+      ],
+      "wire_got": [
+        ":EaWIzR",
+        ":EaYms"
+      ]
+    }
+  },
+  "suite1_replay": {
+    "datasets": {
+      "aids": {
+        "adjacency_columnwise_shipped": {
+          "note": "the frozen convention; no prior value to match",
+          "rho": 0.8166657122011886,
+          "status": "reported"
+        },
+        "adjacency_rowmajor_scout": {
+          "delta": 0.0,
+          "expected": 0.8155499905733052,
+          "got": 0.8155499905733052,
+          "status": "pass"
+        },
+        "graph6": {
+          "delta": 0.0,
+          "expected": 0.4847793706880771,
+          "got": 0.4847793706880771,
+          "status": "pass"
+        },
+        "isalgraph_canonical": {
+          "delta": 0.0,
+          "expected": 0.32750689960727897,
+          "got": 0.32750689960727897,
+          "status": "pass"
+        },
+        "isalgraph_pruned": {
+          "delta": 0.0,
+          "expected": 0.32877854128024325,
+          "got": 0.32877854128024325,
+          "status": "pass"
+        },
+        "min_dfs": {
+          "delta": 0.0,
+          "expected": 0.6130781019994905,
+          "got": 0.6130781019994905,
+          "status": "pass"
+        },
+        "n_pairs": 16181,
+        "nauty_graph6": {
+          "delta": 0.0,
+          "expected": 0.48223713438341714,
+          "got": 0.48223713438341714,
+          "status": "pass"
+        },
+        "sparse6": {
+          "delta": 0.0,
+          "expected": 0.540332406468137,
+          "got": 0.540332406468137,
+          "status": "pass"
+        }
+      },
+      "iam_letter_high": {
+        "adjacency_columnwise_shipped": {
+          "note": "the frozen convention; no prior value to match",
+          "rho": 0.8391537328968298,
+          "status": "reported"
+        },
+        "adjacency_rowmajor_scout": {
+          "delta": 0.0,
+          "expected": 0.8389822927191897,
+          "got": 0.8389822927191897,
+          "status": "pass"
+        },
+        "agm_cam": {
+          "delta": 0.0,
+          "expected": 0.891580082883944,
+          "got": 0.891580082883944,
+          "status": "pass"
+        },
+        "graph6": {
+          "delta": 0.0,
+          "expected": 0.6890286515921515,
+          "got": 0.6890286515921515,
+          "status": "pass"
+        },
+        "isalgraph_canonical": {
+          "delta": 0.0,
+          "expected": 0.7181163289408329,
+          "got": 0.7181163289408329,
+          "status": "pass"
+        },
+        "isalgraph_pruned": {
+          "delta": 0.0,
+          "expected": 0.7035285391176009,
+          "got": 0.7035285391176009,
+          "status": "pass"
+        },
+        "min_dfs": {
+          "delta": 0.0,
+          "expected": 0.8460555773409209,
+          "got": 0.8460555773409209,
+          "status": "pass"
+        },
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "delta": 0.0,
+          "expected": 0.6546921179372178,
+          "got": 0.6546921179372178,
+          "status": "pass"
+        },
+        "sparse6": {
+          "delta": 0.0,
+          "expected": 0.6855437526672155,
+          "got": 0.6855437526672155,
+          "status": "pass"
+        }
+      },
+      "iam_letter_low": {
+        "adjacency_columnwise_shipped": {
+          "note": "the frozen convention; no prior value to match",
+          "rho": 0.8790424455447572,
+          "status": "reported"
+        },
+        "adjacency_rowmajor_scout": {
+          "delta": 0.0,
+          "expected": 0.859061145529523,
+          "got": 0.859061145529523,
+          "status": "pass"
+        },
+        "agm_cam": {
+          "delta": 0.0,
+          "expected": 0.9105466907441038,
+          "got": 0.9105466907441038,
+          "status": "pass"
+        },
+        "graph6": {
+          "delta": 0.0,
+          "expected": 0.6465739364674112,
+          "got": 0.6465739364674112,
+          "status": "pass"
+        },
+        "isalgraph_canonical": {
+          "delta": 0.0,
+          "expected": 0.9269276490607578,
+          "got": 0.9269276490607578,
+          "status": "pass"
+        },
+        "isalgraph_pruned": {
+          "delta": 0.0,
+          "expected": 0.9279403236793772,
+          "got": 0.9279403236793772,
+          "status": "pass"
+        },
+        "min_dfs": {
+          "delta": 0.0,
+          "expected": 0.9759609195700096,
+          "got": 0.9759609195700096,
+          "status": "pass"
+        },
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "delta": 0.0,
+          "expected": 0.6333305690010276,
+          "got": 0.6333305690010276,
+          "status": "pass"
+        },
+        "sparse6": {
+          "delta": 0.0,
+          "expected": 0.7171051104910957,
+          "got": 0.7171051104910957,
+          "status": "pass"
+        }
+      },
+      "iam_letter_med": {
+        "adjacency_columnwise_shipped": {
+          "note": "the frozen convention; no prior value to match",
+          "rho": 0.8861652742744814,
+          "status": "reported"
+        },
+        "adjacency_rowmajor_scout": {
+          "delta": 0.0,
+          "expected": 0.8571764715843369,
+          "got": 0.8571764715843369,
+          "status": "pass"
+        },
+        "agm_cam": {
+          "delta": 0.0,
+          "expected": 0.920002767613528,
+          "got": 0.920002767613528,
+          "status": "pass"
+        },
+        "graph6": {
+          "delta": 0.0,
+          "expected": 0.6967377640098644,
+          "got": 0.6967377640098644,
+          "status": "pass"
+        },
+        "isalgraph_canonical": {
+          "delta": 0.0,
+          "expected": 0.9122467040484186,
+          "got": 0.9122467040484186,
+          "status": "pass"
+        },
+        "isalgraph_pruned": {
+          "delta": 0.0,
+          "expected": 0.9194649015834241,
+          "got": 0.9194649015834241,
+          "status": "pass"
+        },
+        "min_dfs": {
+          "delta": 0.0,
+          "expected": 0.969033286320925,
+          "got": 0.969033286320925,
+          "status": "pass"
+        },
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "delta": 0.0,
+          "expected": 0.6667156198205687,
+          "got": 0.6667156198205687,
+          "status": "pass"
+        },
+        "sparse6": {
+          "delta": 0.0,
+          "expected": 0.7462909125214248,
+          "got": 0.7462909125214248,
+          "status": "pass"
+        }
+      },
+      "linux": {
+        "adjacency_columnwise_shipped": {
+          "note": "the frozen convention; no prior value to match",
+          "rho": 0.7365330429462102,
+          "status": "reported"
+        },
+        "adjacency_rowmajor_scout": {
+          "delta": 0.0,
+          "expected": 0.753965526811864,
+          "got": 0.753965526811864,
+          "status": "pass"
+        },
+        "agm_cam": {
+          "delta": 0.0,
+          "expected": 0.7978927968123181,
+          "got": 0.7978927968123181,
+          "status": "pass"
+        },
+        "graph6": {
+          "delta": 0.0,
+          "expected": 0.506804869393732,
+          "got": 0.506804869393732,
+          "status": "pass"
+        },
+        "isalgraph_canonical": {
+          "delta": 0.0,
+          "expected": 0.4358375715324884,
+          "got": 0.4358375715324884,
+          "status": "pass"
+        },
+        "isalgraph_pruned": {
+          "delta": 0.0,
+          "expected": 0.47418760744910005,
+          "got": 0.47418760744910005,
+          "status": "pass"
+        },
+        "min_dfs": {
+          "delta": 0.0,
+          "expected": 0.6529445858778118,
+          "got": 0.6529445858778118,
+          "status": "pass"
+        },
+        "n_pairs": 3870,
+        "nauty_graph6": {
+          "delta": 0.0,
+          "expected": 0.5377682908900365,
+          "got": 0.5377682908900365,
+          "status": "pass"
+        },
+        "sparse6": {
+          "delta": 0.0,
+          "expected": 0.5586591291877968,
+          "got": 0.5586591291877968,
+          "status": "pass"
+        }
+      }
+    },
+    "status": "pass"
+  },
+  "witness": {
+    "agm_cam": {
+      "expected": [
+        "000111111011100",
+        "001101110111100"
+      ],
+      "got": [
+        "000111111011100",
+        "001101110111100"
+      ],
+      "separates": true,
+      "status": "pass"
+    },
+    "nauty_graph6": {
+      "expected": [
+        "Es\\o",
+        "E{Sw"
+      ],
+      "got": [
+        "Es\\o",
+        "E{Sw"
+      ],
+      "separates": true,
+      "status": "pass"
+    },
+    "wl_subtree": {
+      "distance": 0.0,
+      "expected": 0.0,
+      "note": "1-WL cannot separate two 3-regular graphs on six vertices at any h",
+      "status": "pass"
+    }
+  },
+  "wl_identity": {
+    "expected": {
+      "1": 2.0,
+      "2": 5.830951894845301,
+      "3": 7.211102550927978
+    },
+    "measured": {
+      "1": 2.0,
+      "2": 5.830951894845301,
+      "3": 7.211102550927978
+    },
+    "status": "pass"
+  }
+}

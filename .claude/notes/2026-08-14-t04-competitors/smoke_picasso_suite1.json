@@ -1,0 +1,307 @@
+{
+  "backends": {
+    "adjacency": {
+      "available": true,
+      "backend": "adjacency",
+      "bits": {
+        "entropy_p50": 6.0,
+        "realised_p50": 8.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "6/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 1.029597595334053,
+        "p50": 0.04320358857512474,
+        "p90": 0.07047317922115326
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "agm_cam": {
+      "available": true,
+      "backend": "agm_cam",
+      "bits": {
+        "entropy_p50": 6.0,
+        "realised_p50": 8.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "handles_disconnected",
+        "positional_frame",
+        "reversible",
+        "suite1_only"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.7197870872914791,
+        "p50": 0.05534454248845577,
+        "p90": 0.23961486294865608
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "graph6": {
+      "available": true,
+      "backend": "graph6",
+      "bits": {
+        "entropy_p50": 12.0,
+        "realised_p50": 16.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "6/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.5337758921086788,
+        "p50": 0.06479653529822826,
+        "p90": 0.08200714364647865
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "isalgraph_canonical": {
+      "available": true,
+      "backend": "isalgraph_canonical",
+      "bits": {
+        "entropy_p50": 12.679700005769249,
+        "realised_p50": 32.0
+      },
+      "budget": "timeout_s=None -- UNBUDGETED, engine cannot enforce one",
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "reversible",
+        "suite1_only"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 6.10986677929759,
+        "p50": 0.3789395559579134,
+        "p90": 1.9274447113275528
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "isalgraph_pruned": {
+      "available": true,
+      "backend": "isalgraph_pruned",
+      "bits": {
+        "entropy_p50": 12.679700005769249,
+        "realised_p50": 32.0
+      },
+      "budget": "timeout_s=None -- UNBUDGETED, engine cannot enforce one",
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 2.8478712774813175,
+        "p50": 0.431673601269722,
+        "p90": 1.0601133108139038
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "min_dfs": {
+      "available": true,
+      "backend": "min_dfs",
+      "bits": {
+        "entropy_p50": 12.0,
+        "realised_p50": 88.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.4761680029332638,
+        "p50": 0.056801363825798035,
+        "p90": 0.132004264742136
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "nauty_graph6": {
+      "available": true,
+      "backend": "nauty_graph6",
+      "bits": {
+        "entropy_p50": 12.0,
+        "realised_p50": 16.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "handles_disconnected",
+        "positional_frame",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.5083712749183178,
+        "p50": 0.15528849326074123,
+        "p90": 0.22068805992603302
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "size_null": {
+      "available": true,
+      "backend": "size_null",
+      "bits": {
+        "entropy_p50": null,
+        "realised_p50": null
+      },
+      "capabilities": [
+        "baseline",
+        "handles_disconnected"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.02072099596261978,
+        "p50": 0.005880603566765785,
+        "p90": 0.006715767085552216
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "sparse6": {
+      "available": true,
+      "backend": "sparse6",
+      "bits": {
+        "entropy_p50": 18.0,
+        "realised_p50": 32.0
+      },
+      "capabilities": [
+        "handles_disconnected",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "6/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.31125079840421677,
+        "p50": 0.0543384812772274,
+        "p90": 0.06676698103547096
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "sparse6_nauty": {
+      "available": true,
+      "backend": "sparse6_nauty",
+      "bits": {
+        "entropy_p50": 18.0,
+        "realised_p50": 32.0
+      },
+      "capabilities": [
+        "canonical",
+        "complete_invariant",
+        "handles_disconnected",
+        "reversible"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "ms_per_graph": {
+        "max": 0.41805021464824677,
+        "p50": 0.17882534302771091,
+        "p90": 0.24902960285544395
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    },
+    "wl_subtree": {
+      "available": true,
+      "backend": "wl_subtree",
+      "bits": {
+        "entropy_p50": null,
+        "realised_p50": null
+      },
+      "capabilities": [
+        "canonical",
+        "handles_disconnected"
+      ],
+      "f3_invariant_of_50": "50/50",
+      "f3_skipped": 0,
+      "failures": [],
+      "fit_s": 0.003853163681924343,
+      "ms_per_graph": {
+        "max": 0.03917887806892395,
+        "p50": 0.016748905181884766,
+        "p90": 0.02270517870783806
+      },
+      "n_encoded": 200,
+      "n_failed": 0,
+      "n_failures_recorded": 0
+    }
+  },
+  "header": {
+    "dataset": "iam_letter_low",
+    "isalgraph_build_hash": "",
+    "isalgraph_engine": "python",
+    "n_graphs_requested": 200,
+    "packages": {
+      "grakel": "absent",
+      "networkx": "3.6.1",
+      "numpy": "2.4.6",
+      "pynauty": "2.8.8.1",
+      "rapidfuzz": "3.14.5"
+    },
+    "platform": "Linux-6.4.0-150600.23.103-default-x86_64-with-glibc2.38",
+    "processor": "x86_64",
+    "python": "3.11.15",
+    "registered_backends": [
+      "adjacency",
+      "agm_cam",
+      "graph6",
+      "isalgraph_canonical",
+      "isalgraph_pruned",
+      "min_dfs",
+      "nauty_graph6",
+      "size_null",
+      "sparse6",
+      "sparse6_nauty",
+      "wl_subtree"
+    ],
+    "seed": 42
+  },
+  "n_graphs_drawn": 200,
+  "suite": "suite1"
+}

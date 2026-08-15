@@ -1250,6 +1250,118 @@ def gate_attribution(primary_slope: float, arm_slope: float) -> dict[str, Any]:
     }
 
 
+#: Slope roles in report order, smallest graphs first. The middle role is not
+#: a size band -- it is what §7.1 calls the datasets that neither cap at
+#: ``n <= 10`` nor span enough ``n`` to carry an unconfounded slope.
+SLOPE_ROLE_ORDER: tuple[str, ...] = (
+    "small-n constraint only",
+    "intermediate",
+    "unconfounded",
+)
+
+
+def _monotonicity_counterexample(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """Name the dataset that breaks a monotone fall of the ratio in mean size.
+
+    Returns the **largest** violation rather than the first, so the reported
+    counter-example is the one a reader would pick out of the table.
+
+    Parameters
+    ----------
+    rows
+        Gate-attribution rows with finite ratios, ascending in ``mean_nodes``.
+
+    Returns
+    -------
+    dict or None
+        The offending dataset, the dataset it sits above, and the rise between
+        them; ``None`` when the fall is monotone.
+    """
+    violations = [
+        {
+            "dataset": current["dataset"],
+            "mean_nodes": current["mean_nodes"],
+            "ratio": current["ratio"],
+            "exceeds_dataset": previous["dataset"],
+            "exceeds_dataset_mean_nodes": previous["mean_nodes"],
+            "exceeds_dataset_ratio": previous["ratio"],
+            "rise": current["ratio"] - previous["ratio"],
+        }
+        for previous, current in zip(rows, rows[1:], strict=False)
+        if current["ratio"] > previous["ratio"]
+    ]
+    if not violations:
+        return None
+    return max(violations, key=lambda entry: entry["rise"])
+
+
+def _ratio_range_by_role(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Summarise the gate ratio as a range within each slope role.
+
+    A range is the honest presentation when the ratio is not monotone in mean
+    graph size: the grouping is by the role §7.1 already assigns each dataset,
+    not by a size cut invented here.
+
+    Parameters
+    ----------
+    rows
+        Gate-attribution rows with finite ratios.
+
+    Returns
+    -------
+    list of dict
+        One entry per populated role, in :data:`SLOPE_ROLE_ORDER`.
+    """
+    out: list[dict[str, Any]] = []
+    seen = {row["slope_role"] for row in rows}
+    order = [*SLOPE_ROLE_ORDER, *sorted(seen - set(SLOPE_ROLE_ORDER))]
+    for role in order:
+        members = [row for row in rows if row["slope_role"] == role]
+        if not members:
+            continue
+        lowest = min(members, key=lambda row: row["ratio"])
+        highest = max(members, key=lambda row: row["ratio"])
+        out.append(
+            {
+                "slope_role": role,
+                "n_datasets": len(members),
+                "datasets": [row["dataset"] for row in members],
+                "min_ratio": lowest["ratio"],
+                "min_ratio_dataset": lowest["dataset"],
+                "max_ratio": highest["ratio"],
+                "max_ratio_dataset": highest["dataset"],
+                "mean_nodes_min": min(row["mean_nodes"] for row in members),
+                "mean_nodes_max": max(row["mean_nodes"] for row in members),
+                "gate_share_at_min_ratio": 1.0 - 1.0 / lowest["ratio"],
+                "gate_share_at_max_ratio": 1.0 - 1.0 / highest["ratio"],
+            }
+        )
+    return out
+
+
+def _roles_disjoint(by_role: Sequence[Mapping[str, Any]], low: str, high: str) -> bool:
+    """Return True when two roles' ratio ranges do not overlap.
+
+    Parameters
+    ----------
+    by_role
+        Output of :func:`_ratio_range_by_role`.
+    low
+        The role expected to hold the lower ratios.
+    high
+        The role expected to hold the higher ratios.
+
+    Returns
+    -------
+    bool
+        True when ``low``'s maximum is strictly below ``high``'s minimum.
+    """
+    index = {entry["slope_role"]: entry for entry in by_role}
+    if low not in index or high not in index:
+        return False
+    return bool(index[low]["max_ratio"] < index[high]["min_ratio"])
+
+
 def gate_attribution_summary(
     per_dataset: Mapping[str, Any],
     datasets: Sequence[str],
@@ -1285,7 +1397,8 @@ def gate_attribution_summary(
         for d in datasets
     ]
     rows.sort(key=lambda row: row["mean_nodes"])
-    ratios = [row["ratio"] for row in rows if math.isfinite(row["ratio"])]
+    finite_rows = [row for row in rows if math.isfinite(row["ratio"])]
+    ratios = [row["ratio"] for row in finite_rows]
     n_fired = sum(1 for row in rows if row["fired"])
     monotone = all(a >= b for a, b in zip(ratios, ratios[1:], strict=False))
     summary: dict[str, Any] = {
@@ -1294,6 +1407,8 @@ def gate_attribution_summary(
         "fired_in_all": n_fired == len(rows) and len(rows) > 0,
         "rows_by_mean_nodes": rows,
         "ratio_falls_monotonically_with_mean_nodes": bool(monotone and len(ratios) > 1),
+        "monotonicity_counterexample": _monotonicity_counterexample(finite_rows),
+        "by_slope_role": _ratio_range_by_role(finite_rows),
         "trend_is_fitted": False,
         "trend_note": (
             "Descriptive only. At most ten points, and provenance moves with mean graph size "
@@ -1305,8 +1420,10 @@ def gate_attribution_summary(
             "quantifies the cost of the frozen gate; it does not reopen it."
         ),
     }
+    summary["small_n_and_unconfounded_ranges_disjoint"] = _roles_disjoint(
+        summary["by_slope_role"], low="unconfounded", high="small-n constraint only"
+    )
     if ratios:
-        finite_rows = [row for row in rows if math.isfinite(row["ratio"])]
         smallest = min(finite_rows, key=lambda row: row["ratio"])
         largest = max(finite_rows, key=lambda row: row["ratio"])
         summary["max_ratio"] = largest["ratio"]
@@ -2369,6 +2486,113 @@ def write_report(results: Mapping[str, Any], out_dir: Path) -> Path:
     return _write_report_body(lines, results, out_dir)
 
 
+#: Wording reserved for a ratio that really is monotone in mean graph size.
+#: A test asserts it never appears when the monotonicity flag is False, which
+#: is what stops the ordered-sequence claim outliving the data that supported
+#: it.
+MONOTONE_PHRASE: str = "falls monotonically as mean graph size rises"
+
+
+def _report_gate_pattern(gate: Mapping[str, Any]) -> list[str]:
+    """Render §7.1c verdict points 2 and 3, in a form true of the data.
+
+    The gate ratio was monotone in mean graph size on the eight-dataset cohort
+    and is **not** on the full ten, so the pattern is reported as a **range
+    within each slope role** rather than as an ordered sequence. The range form
+    is true either way; the monotone sentence is emitted only when the flag
+    says so, and the counter-example is named when it does not.
+
+    Parameters
+    ----------
+    gate
+        The ``gate_attribution`` summary block.
+
+    Returns
+    -------
+    list of str
+        Markdown lines for points 2 and 3, or an empty list when no dataset
+        produced an interpretable ratio.
+    """
+    by_role = list(gate.get("by_slope_role", []))
+    if not by_role:
+        return []
+    lines: list[str] = []
+    add = lines.append
+    monotone = bool(gate.get("ratio_falls_monotonically_with_mean_nodes"))
+    counterexample = gate.get("monotonicity_counterexample")
+
+    add(
+        "**2. The gate's share of the widening is much larger on small graphs than at the sizes "
+        "AE.1 disputes.** Ratio range within each slope role, which is the grouping §7.1 already "
+        "assigns and not a size cut invented here:"
+    )
+    add("")
+    lines += _table(
+        ["slope role", "datasets", "mean n range", "ratio range", "gate's share of the widening"],
+        [
+            [
+                entry["slope_role"],
+                str(entry["n_datasets"]),
+                f"{entry['mean_nodes_min']:.2f}--{entry['mean_nodes_max']:.2f}",
+                f"**{entry['min_ratio']:.2f}x** (`{entry['min_ratio_dataset']}`) -- "
+                f"**{entry['max_ratio']:.2f}x** (`{entry['max_ratio_dataset']}`)",
+                f"{100 * entry['gate_share_at_min_ratio']:.0f} % -- "
+                f"{100 * entry['gate_share_at_max_ratio']:.0f} %",
+            ]
+            for entry in by_role
+        ],
+    )
+    index = {entry["slope_role"]: entry for entry in by_role}
+    small = index.get("small-n constraint only")
+    large = index.get("unconfounded")
+    if small and large and gate.get("small_n_and_unconfounded_ranges_disjoint"):
+        add(
+            f"**The two ranges do not overlap**: every `small-n constraint only` dataset sits at "
+            f"{small['min_ratio']:.2f}x or above, and every `unconfounded` dataset at "
+            f"{large['max_ratio']:.2f}x or below. So the claim survives without any appeal to a "
+            "trend: the frozen gate accounts for "
+            f"{100 * small['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * small['gate_share_at_max_ratio']:.0f} % of the widening on the small-`n` "
+            f"cohorts and {100 * large['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * large['gate_share_at_max_ratio']:.0f} % on the four datasets that span the "
+            "disputed size range."
+        )
+        add("")
+    if monotone:
+        add(
+            f"Across the cohort the ratio {MONOTONE_PHRASE}, from "
+            f"{gate['max_ratio']:.2f}x on `{gate['max_ratio_dataset']}` "
+            f"(mean n = {gate['max_ratio_mean_nodes']:.2f}) to {gate['min_ratio']:.2f}x on "
+            f"`{gate['min_ratio_dataset']}` (mean n = {gate['min_ratio_mean_nodes']:.2f})."
+        )
+        add("")
+    elif counterexample:
+        add(
+            "> **The relationship is NOT monotone in mean `n`, and it is not described here as a "
+            f"trend.** `{counterexample['dataset']}` is the counter-example: at mean n = "
+            f"{counterexample['mean_nodes']:.2f} its ratio is "
+            f"{counterexample['ratio']:.2f}x, **above** `{counterexample['exceeds_dataset']}`'s "
+            f"{counterexample['exceeds_dataset_ratio']:.2f}x at the smaller mean n = "
+            f"{counterexample['exceeds_dataset_mean_nodes']:.2f}. The **grouped ranges** above are "
+            "therefore the claim; an ordered fall in `n` is not."
+        )
+        add("")
+    if large:
+        add(
+            "**3. The implication is unchanged, and it is the AE.1-relevant part: at the "
+            "unconfounded sizes a better upper bound buys only about "
+            f"{100 * large['gate_share_at_min_ratio']:.0f}--"
+            f"{100 * large['gate_share_at_max_ratio']:.0f} % off the primary slope, so **most of "
+            "the widening there is not attributable to the frozen gate and would survive replacing "
+            "`BIPARTITE`.** The large-`n` looseness is substantially a property of the LB/UB gap "
+            "itself. A better upper bound narrows the bracket everywhere, but it does not remove "
+            "the size effect, and §7.1's first reading -- *the bracket widens because the "
+            "reference degrades* -- survives the sensitivity arm at the sizes that matter."
+        )
+        add("")
+    return lines
+
+
 def _report_s71(results: Mapping[str, Any]) -> list[str]:
     """Render §7.1 -- bracket width against node count."""
     datasets = list(results["datasets"])
@@ -2525,35 +2749,9 @@ def _report_s71(results: Mapping[str, Any]) -> list[str]:
         "therefore attributable to the frozen gate's choice of upper bound."
     )
     add("")
-    if gate.get("ratio_falls_monotonically_with_mean_nodes") and "max_ratio" in gate:
-        add(
-            "**2. But the ratio falls monotonically as mean graph size rises -- from "
-            f"{gate['max_ratio']:.1f}x on `{gate['max_ratio_dataset']}` "
-            f"(mean n = {gate['max_ratio_mean_nodes']:.2f}) to "
-            f"{gate['min_ratio']:.1f}x on `{gate['min_ratio_dataset']}` "
-            f"(mean n = {gate['min_ratio_mean_nodes']:.2f}) -- so the gate's contribution is "
-            "proportionally largest exactly where it matters least.** On the smallest graphs the "
-            "bracket is already well resolved and the gate accounts for roughly "
-            f"{100 * gate['gate_share_at_max_ratio']:.0f} % of the widening; at "
-            f"mean n = {gate['min_ratio_mean_nodes']:.2f} it accounts for about "
-            f"{100 * gate['gate_share_at_min_ratio']:.0f} %. "
-            f"**At the large-`n` end, where AE.1 actually bites, replacing `BIPARTITE` with the "
-            f"arm would buy only about {100 * gate['gate_share_at_min_ratio']:.0f} % off the "
-            "slope: most of that widening is not attributable to the gate and would survive the "
-            "substitution.**"
-        )
-        add("")
-        add(
-            "**3. The honest reading, and the one a reviewer will reach anyway: the large-`n` "
-            "looseness is substantially a property of the LB/UB gap itself, not of the frozen "
-            "choice of upper bound.** A better upper bound narrows the bracket everywhere, but it "
-            "does not remove the size trend, and the share it could remove shrinks as graphs "
-            "grow. §7.1's first reading -- *the bracket widens because the reference degrades* -- "
-            "therefore survives the sensitivity arm at the sizes that matter."
-        )
-        add("")
+    lines += _report_gate_pattern(gate)
     add(
-        "**4. Confound, stated in one line: the fall of the ratio in mean `n` is measured across "
+        "**4. Confound, stated in one line: the ratio's behaviour across sizes is measured over "
         f"the same {gate['n_datasets']} datasets whose provenance moves with size, so it carries "
         "the same confound §7.1f's pooled curve carries.** " + gate["trend_note"]
     )

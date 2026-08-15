@@ -37,10 +37,35 @@ cert = pynauty.certificate(pg)       # bytes; equal iff isomorphic
 grp  = pynauty.autgrp(pg)            # generators, orbits, |Aut| as (mantissa, exponent)
 ```
 
-> **`canon_label` returns the inverse of what you probably want.** It gives, for each new position,
+> ## ⚠ CORRECTED 2026-08-15 by T-04 — wrong on both halves; the inversion itself is real
+>
+> **The inversion is real and the fix is right**: `canon_label` gives, for each new position, the
+> old vertex, so relabelling needs `pos = {old: new for new, old in enumerate(lab)}`. Everything
+> below about *that* stands. The two claims about its **symptom** and its **guard** do not.
+>
+> **1. The inverted labelling does not "pass an invariance test". It fails F3 loudly.** Because
+> `lab_{G^τ}` depends on `τ`, the wrong-direction image is `G^{τ π_G⁻¹ τ}`, which varies with the
+> relabelling. Measured by track B on the fixtures (15/19/5/13 distinct codes) and by the
+> orchestrator independently: **non-invariant on every connected trial**, 22/22 at `n = 8`.
+>
+> **2. `nx.is_isomorphic(G, relabelled)` cannot catch it, ever.** Any bijective relabelling of a
+> graph is isomorphic to it *by construction*, so the assertion is vacuous for this fault. Measured:
+> **`True` on 100 % of deliberately inverted cases.** It also costs 6.7 ms at `n = 96` against
+> 0.33 ms for the relabelling itself — a 20× tax on a step whose published cost is 0.042–0.351 ms.
+>
+> **What this changes**: the inversion is a *loud* failure, not a silent one, so the risk this file
+> and [README](README.md) §6 item 2 flag as the second-quietest trap is **not quiet at all**. The
+> prescribed guard should be an unconditional `O(n+m)` bijection-and-edge-count check, which
+> actually *proves* the relabelling is a permutation of the right graph; `nx.is_isomorphic` is worth
+> keeping only for a different fault — a wrong networkx-label → pynauty-index map.
+>
+> **What survives**: the inversion formula, the from-source build, `pynauty.autgrp` for `|Aut(G)|`,
+> the certificate caveat, and every measured number in this file.
+
+> ~~**`canon_label` returns the inverse of what you probably want.** It gives, for each new position,
 > the old vertex. To relabel you need `pos = {old: new for new, old in enumerate(lab)}`. Getting
 > this backwards produces a *different but still deterministic* labelling — it will pass an
-> invariance test and be wrong. Assert `nx.is_isomorphic(G, relabelled)` on every encode.
+> invariance test and be wrong. Assert `nx.is_isomorphic(G, relabelled)` on every encode.~~
 
 ---
 
@@ -199,8 +224,13 @@ this file measures how much that mattered: separation moves 1.00 → 0.83, and i
 - File-count budget: the pynauty build tree is small next to GEDLIB (hundreds, not tens of
   thousands of files) so the `fscratch` inode quota in CLAUDE.md is not at risk here. Delete
   `src/nauty2_8_8/` build artefacts anyway.
-- **Assert `nx.is_isomorphic(G, relabelled)` on every encode.** The `canon_label` inversion trap in
-  §1 produces a deterministic wrong answer that passes F3.
+- ~~**Assert `nx.is_isomorphic(G, relabelled)` on every encode.** The `canon_label` inversion trap in
+  §1 produces a deterministic wrong answer that passes F3.~~
+  **CORRECTED 2026-08-15 by T-04 — see the block in §1.** The inverted labelling **fails F3**, and
+  `nx.is_isomorphic` **cannot catch it**: any bijective relabelling is isomorphic by construction,
+  so the assertion was `True` on 100 % of inverted cases. Assert an `O(n+m)` bijection-and-edge-count
+  check instead, which proves the relabelling is a permutation of the right graph; keep
+  `nx.is_isomorphic` only for a wrong networkx-label → pynauty-index map.
 - Reuse `pynauty.autgrp` to get `|Aut(G)|` — [corrections](../corrections.md) §5 / T-13 needs it for
   the complexity section's worst case, and it is free once this backend exists.
 - `pynauty.certificate()` is *not* a substitute for the graph6 route in a comparison table: it is a

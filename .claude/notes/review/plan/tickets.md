@@ -52,6 +52,35 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 > D6's *metric* argument is unaffected. Full record: `.claude/notes/review/tasks/T-03-design.md`
 > amendment 4.
 
+> ⚠ **T-04 CLOSED 2026-08-15 and corrected five plan files. Read this before quoting any ρ.**
+>
+> 1. **`competitors/README` §4.1 and §4.2 are SUPERSEDED.** They are a composite of **three
+>    different 200-graph draws** — most rows from `real_size_null.py`, AGM from `real_suite1.py`, WL
+>    from `real_wl.py` — and differ from the folder's own `real_suite1.out` by up to **0.074**. Quote
+>    `.claude/notes/2026-08-14-t04-competitors/corrected_rho_table.json` instead: one script, one
+>    draw, one convention, eleven rows, both views. **Inherits: T-04a, T-06, T-17, T-20.**
+> 2. **IsalGraph clears the size null on ONE of five datasets, not two.** Letter MED's `+0.007`
+>    becomes `−0.044` on a different draw — a margin an order of magnitude below the between-draw
+>    variability finding 14 already records. **The "two of five" claim was never robust to the draw.**
+>    **Graph-level bootstrap CIs are now a precondition for printing any ρ.** Inherits: **T-02**,
+>    T-06, T-20.
+> 3. **README §4.2's "min-DFS wins every column" does not survive.** On the single-draw equal-`n`
+>    table `isalgraph_canonical` takes Letter LOW (0.9987 vs 0.9956) and WL takes AIDS (0.4332 vs
+>    0.3993). Inherits: T-17, T-20.
+> 4. **finding 12 is refuted: grakel has no off-by-one.** `n_iter = k ≡ h = k`. The error was in our
+>    own `scratch/backends.py::wl_features`. `wl_kernel_computer.py`'s `n_iter = 5` is **`h = 5`**,
+>    not `h = 4`, and §4.1's WL row moves (Letter LOW 0.895 → 0.7792). Inherits: **T-06**.
+> 5. **`nauty.md` §1 and README §6 trap 2 are wrong on both halves.** An inverted `canon_label`
+>    **fails F3 loudly**, and `nx.is_isomorphic` **can never catch it** — any bijective relabelling is
+>    isomorphic by construction. The trap is loud, and the prescribed guard is vacuous.
+> 6. **`competitors/README` §4.3's sparse6 column is 6 bits high on every row** (the `':'`), and its
+>    **five Suite-2 rows are not exactly reproducible** — the raw IAM GXL tree is gone from this
+>    workstation and the recovered `.npz` enumerates differently. The five **Suite-1** rows are
+>    full-cohort and remain exact.
+> 7. **`graph6.md` §7's `convert_node_labels_to_integers(ordering="sorted")` does not pin the
+>    labelling** — 290/300 disagreement with a sorted rebuild, and it made graph6 and sparse6
+>    serialise *different* labellings.
+
 > ⚠ **T-04 was scouted 2026-08-13 on the REAL cohort and several of its premises are wrong.**
 > Every competitor was installed and run against Suite 1's **certified exact GED** (T-03) and
 > Suite 2's IAM GXL. Evidence: **one file per competitor in
@@ -98,7 +127,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 | ~~**T-01**~~ | ~~Data lock — audit tables, cohorts, merge splits, port surviving scripts into `tests/`~~ → **DONE 2026-08-13.** Re-derived, not ported: 15 of 16 scripts were gone and Suite 2 had no loader. `iam_gxl_loader.py` + `cohort_audit.py` + **34 tests**. **Suite 1 reproduces `export_graphs.py` exactly** (3,897,911 pairs). **Suite 2 = 16,370 graphs / 21,710,892 pairs / `n_max` 98** — COIL-DEL corrected 7,200 → **3,900** (decision 27). Nine of ten rows and all three discard ratios reproduced exactly. Four findings: the **size-biased discard is cohort-wide** (Letter 1.23–1.32×); **LINUX is unlabelled**, settling E6; the **density convention** matters (up to 27 %); **I-05 closed** at 1.19× | — | **done** | — | [data](data.md) §1, §7, [T-01 design](../tasks/T-01-design.md) |
 | ~~**T-02**~~ | ~~Statistics lock — graph-level bootstrap, Mantel, pair-accounting ladder, and the frozen confirmatory family with its cardinality~~ → **DONE 2026-08-13.** Family enumerated and frozen at **`N_max = 197`** in three fixed-sequence families — F0 calibration gate 5, F1 bracket gate 10, F2 primary 182 — BH-FDR q = 0.05 within each; `N_actual = 182 − 15k − 8d`. **Four defects fixed in the locked protocol**: §9's exact-regime omnibus contradicted §4; two gates sat inside the family they gate; the labels row made the cardinality indeterminate; **D15 validated a 7.72 % subsample by drawing 94.4 % of a smaller dataset**. **D13 promoted to confirmatory**; ρ(Lev, UB) gets no primary rows. Raised **T-27** | T-01 | **done** | — | [preregistration](preregistration.md), [T-02 design](../tasks/T-02-design.md), [statistics](statistics.md) §12 |
 | ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
-| **T-04** | **Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS**. **Scouted 2026-08-13** — every backend built and measured in scratchpad; **one file per competitor now in [competitors/](competitors/)**, and the twelve findings in its §4 change the plan before any code lands | — | **2–5** (was 3–8) | **P0** | **[competitors/README](competitors/README.md) first**, then [competitors](competitors.md) |
+| ~~**T-04**~~ | ~~**Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS**~~ → **DONE 2026-08-15.** **Eleven backends, 6 metrics, 383 tests**, 9,510 lines; ruff + `mypy --strict` clean; full suite **2,106 passed / 321 skipped**. **The reproduction gate closed bit-for-bit**: replaying each scout script's `Random(42)` stream reproduces `real_suite1.json` on **all 5 datasets × 8 rows at delta `0.00e+00`**. Oracles: AGM **327 graphs / 0 mismatches** vs the lex-min over all `n!`; min-DFS distinct codes **1/2/6/21/112** = OEIS A001349, **0 collisions**; budget **24/400 Mutagenicity, 0 elsewhere**. `pynauty` **builds from source under gcc 12.2.0 on Picasso**, byte-identical output (stop-condition 2 closed). **Five plan files corrected — see the header warning.** Carries: **the corrected ρ table supersedes `competitors/README` §4.1/§4.2**; **IsalGraph clears the size null on 1 of 5, not 2**; **bootstrap CIs are now a precondition for any printed ρ** | — | **done** | — | [T-04 design](../tasks/T-04-design.md), [article notes](../tasks/T-04-article-notes.md), [wave](../../2026-08-14-t04-competitors/summary.md) |
 | **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix.** F3 and the separation ratio already have synthetic priors ([competitors/README](competitors/README.md) §3); T-04a is what makes them real | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3, [competitors/README](competitors/README.md) |
 | **T-05** | **Bounded GED via GEDLIB** — wire the **bounds T-27 selects** (not `BRANCH_FAST` + `IPFP` by default), pass the validation gates, run the **calibration ladder**, then all **21,710,892** Suite-2 pairs (≈ 0.57 core-h) | ~~T-01~~, ~~T-03~~, **T-27** | 5–10 | **P0** | [approx_ged](approx_ged.md), [gedlib](gedlib.md), [exact_ged](exact_ged.md) §4 |
 | **T-06** | **Full recompute** — all experiments, C++ engine, new cohorts, competitor columns, new statistics | T-02…T-05 | 10–14 | **P0** | [statistics](statistics.md), [data](data.md), [competitors](competitors.md), [labels](labels.md) |

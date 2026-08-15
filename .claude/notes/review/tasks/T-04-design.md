@@ -25,10 +25,10 @@ predicted, and two of them change the design.**
 | Item | Plan says | Measured 2026-08-14 | Consequence |
 |---|---|---|---|
 | **`pynauty`** | `competitors/README` §"Environment": `pynauty 2.8.8.1` | **absent from `isalgraph-cpp`**; the only copy on this machine is in the **`isalhg`** env | ⚠ **The scout's evidence was produced in a different interpreter than the shipped code will run in.** `scratch/backends.py:133` shells out to `isalgraph-cpp` for IsalGraph strings, which is the tell. `pynauty==2.8.8.1` must be installed into `isalgraph-cpp` **and** built on Picasso |
-| **`grakel`** | `README` §"Environment": **0.1.8** | **0.1.10** in `isalgraph-cpp` | the `n_iter` off-by-one (finding 12) was verified against 0.1.8. **Re-verify `grakel(n_iter=3) ≡ ours(h=2) = 5.830952` under 0.1.10** before any WL number is quoted |
-| **`wl_kernel_computer.py`** | E10: "WL kernel computed, never reported" | exists at `benchmarks/real_data/eval_setup/wl_kernel_computer.py`, **`n_iter = 5` by default**, `normalize=False`, consumed by `eval_setup.py::wl_n_iter` | ⚠ **grakel `n_iter = 5` is our `h = 4`.** The folder selects **`h = 2`**, and measures `h = 3` strictly worse than `h = 2` on all five datasets. The repo's existing default is **two refinement rounds past the selected one**. Finding 12 made concrete: reconcile, do not re-quote |
+| **`grakel`** | `README` §"Environment": **0.1.8** | ~~**0.1.10** in `isalgraph-cpp`~~ **superseded 2026-08-15**: `GraKeL-0.1.10.dist-info` **and** a stale `grakel.__version__ == '0.1.8'` string. The scout and this ticket are on **the same installation**; the "different grakel" hazard dissolves | the off-by-one is **not** a version problem. Measured: **`grakel(n_iter=k) ≡ h = k`**, no off-by-one at all. Finding 12 is wrong — see [WAVE0-FINDINGS](../../2026-08-14-t04-competitors/WAVE0-FINDINGS.md) W0-1 |
+| **`wl_kernel_computer.py`** | E10: "WL kernel computed, never reported" | exists at `benchmarks/real_data/eval_setup/wl_kernel_computer.py`, **`n_iter = 5` by default**, `normalize=False`, consumed by `eval_setup.py::wl_n_iter` | ⚠ **grakel `n_iter = 5` is our `h = 5`** *(corrected 2026-08-15; the row previously said `h = 4`)*. The folder selects **`h = 2`**, so the repo's existing default is **three** refinement rounds past the selected one, not two. Finding 12 made concrete: reconcile, do not re-quote |
 | `src/isalgraph/competitors/` | — | **does not exist** | greenfield; no merge risk against existing source |
-| Suite-1 exported graphs | `data/exported/<ds>.npz` | **present**, 5 files + `manifest.json` | the reproduction gate has its input |
+| Suite-1 exported graphs | `data/exported/<ds>.npz` | **present**, 5 files + `manifest.json`, under `ROOT = /media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data` — the path is relative to the **scout's `ROOT`**, not to the repo | the reproduction gate has its input |
 | T-03 certified exact GED | `extended_merged_exact_ged/computed/<ds>.npz` | **present** under `…/results/exact_ged` | ρ reproduction is possible without recomputing GED |
 | `rapidfuzz` | not mentioned | **3.14.5 installed**; `Levenshtein.distance(("0-1","1-2","2-0"), ("0-1","2-0")) == 1` (symbol level), `== 4` at character level; `Hamming.distance` **raises `ValueError`** on unequal lengths | **decides §2.2**: symbol-level edit distance needs no new dependency and no interning, and Hamming's raise is exactly the F1-undefined signal |
 | `python-Levenshtein` 0.27.4, `networkx` 3.6.1, `numpy` 1.26.4, engine | — | present; **`isalgraph.engine() == "cpp"`**, `build_hash 298fc1188bf1b051` | reference arm runs on the engine |
@@ -276,6 +276,14 @@ produce the *same bit sequence* for the same labelling, and a test asserts
 `adjacency.symbols == unpack(graph6.wire payload)` bit for bit on a fixture set. That assertion is
 what keeps `competitors/README` §2's four-member-family argument true in code rather than in prose.
 
+> **Column-wise is the correct order and it was verified, not assumed** *(2026-08-15)*. graph6
+> `'ElCW'` unpacks to `101101000100011`, the column-wise triangle of the running example;
+> `scratch/agm_cam.py::_code_from_perm` walks `for k in 1..n-1: for j in 0..k-1`, also column-wise.
+> **The scout's `scratch/backends.py:70` is row-major and says so in its own docstring**, which is
+> where the literals previously quoted in §8 (`'101001000100111'`) came from. Those literals were
+> wrong, not the convention; they are corrected. Switching to column-wise moves the adjacency ρ row
+> by at most ±0.023 and flips no ordering. PI-signed.
+
 **AGM takes the minimum; FFSM takes the maximum.** They are mirror images. The convention is stated
 once in `agm.py`'s module docstring and in the paper, or the numbers are unreproducible
 ([agm](../plan/competitors/agm.md) §1).
@@ -302,7 +310,13 @@ once in `agm.py`'s module docstring and in the paper, or the numbers are unrepro
 > **Never `len(text) * 8`.** `'101001…'` is a debugging view. Counting it as 8 bits per character
 > inflates the adjacency matrix 8× and hands us a baseline we beat for free
 > ([adjacency-matrix](../plan/competitors/adjacency-matrix.md) §7). A dedicated test asserts
-> `adjacency.bits(e).realised_bits < len(e.text)` on every fixture.
+> `realised_bits < 8 · len(e.text)` and `entropy_bits ≤ realised_bits < entropy_bits + 8` on every
+> fixture — see §8 criterion 4 and its 2026-08-15 amendment.
+>
+> **`8·⌈n(n−1)/16⌉` is `8·⌈T/8⌉`, i.e. `T` bits packed into whole bytes**, because `n(n−1) = 2T`.
+> Reading the 16 as a word size and computing `8·⌈T/16⌉` halves every adjacency and AGM realised
+> count — 8 bits for a 15-bit triangle at `n = 6`, 2,384 where 4,760 is right at `n = 98`. That is
+> what the first implementation did; track A caught it.
 
 ### 4.3 Budgets and the failure policy
 
@@ -484,19 +498,39 @@ every one of these itself; an agent's log is not evidence.
 1. **The shipped module reproduces the evidence base.** `python -m isalgraph.competitors.reproduce
    --out repro.json` reproduces, from `src/`, on the same seeds and samples:
    - the **running-example** strings — `graph6 'ElCW'`, `nauty→graph6 'E@ro'`, `sparse6 ':EaWIzR'`,
-     `adjacency '101001000100111'`, `AGM '000001110011110'`, min-DFS
-     `(0,1)(1,2)(2,0)(2,3)(3,4)(4,5)(5,2)`, and their `H = G − (0,3)` counterparts — **exactly**;
+     `adjacency '101101000100011'`, `AGM '000001110011110'`, min-DFS
+     `(0,1)(1,2)(2,0)(2,3)(3,4)(4,5)(5,2)`, and their `H = G − (0,3)` counterparts
+     (`'EhCW'`, `'E@po'`, `':EaYms'`, `'101001000100011'`, `'000001011111000'`) — **exactly**;
    - the **K₃,₃ / prism** witness: `wl_subtree` distance **0.0000**, every other backend non-zero,
      with `nauty 'Es\o'` vs `'E{Sw'` and `AGM '000111111011100'` vs `'001101110111100'`;
-   - **`grakel(n_iter=3) ≡ ours(h=2) = 5.830952`** under grakel **0.1.10**;
+   - **`grakel(n_iter=2) ≡ ours(h=2) = 5.830952`** *(corrected 2026-08-15 — there is no off-by-one;
+     `grakel(n_iter=3) = 7.211103 = ours(h=3)`)*;
    - the **F3 real-cohort** column of `competitors/README` §3, per dataset, **exactly**;
    - the **Claim A** median entropy bits and the **% IsalGraph strictly shorter** tables of §4.3,
      all ten datasets, **exactly**;
-   - the **ρ** tables of §4.1 and §4.2 on the seed-42 200-graph samples, to `1e-12`.
+   - **ρ: two halves, and they are different obligations** *(amended 2026-08-15, PI-signed)*.
 
-   > These are deterministic given the same seed and sample. **A mismatch is not a tolerance
-   > question — it is a behaviour change, and it stops the ticket** (§9). ρ moving 0.07 between two
-   > *independent* draws (finding 14) is not licence for a tolerance on the *same* draw.
+     **1a — provenance.** `reproduce.py --mode artefacts` replays each scout script's own
+     `Random(42)` stream and asserts against that script's **raw artefact**, not against the
+     README table: `real_suite1.out`/`.json` (adjacency · graph6 · sparse6 · nauty · AGM · min-DFS ·
+     IsalGraph), `real_size_null.json` (the null and its ρ columns, all-pairs and equal-`n`),
+     `real_wl.json` (WL). To **`1e-9`**. Replaying `real_suite1.py` means consuming the 50-graph F3
+     draw and all 5 × 50 × 20 `shuffled_copy(rng)` calls before the ρ draw — the stream, not just
+     the seed. *Already demonstrated on Letter LOW in wave 0: every ρ row to four decimals, F3
+     `4/50 · 4/50 · 50/50 · 4/50 · 50/50`, Claim A `6.0 · 12.0 · 24.0 · 12.0 · 12.7`.*
+
+     **1b — the corrected table.** `reproduce.py --mode table` recomputes §4.1 and §4.2 **once**,
+     from one script, on **one** seed-42 200-graph draw per dataset, under the frozen conventions:
+     **column-wise** adjacency and the **shared-vocabulary** WL at `h = 2`. That output — not the
+     scout's — is what T-06, T-17 and T-20 quote, and `review-close` rewrites §4.1/§4.2 from it
+     with a provenance line.
+
+   > 1a is deterministic and **a mismatch stops the ticket** (§9.1). 1b is a *new measurement* and
+   > has no prior value to match; its obligation is that one script, one draw and one convention
+   > produced every cell. **README §4.1 as printed is neither**: wave 0 established it is a
+   > composite of three draws — most rows from `real_size_null.py`, AGM from `real_suite1.py`, WL
+   > from `real_wl.py` — differing from `real_suite1.out` by up to **0.074**. It is superseded by
+   > 1b, and no ticket may quote it after this one closes.
 
 2. **Validation oracles pass, and they are tests, not scripts.**
    `$PY -m pytest tests/unit/test_min_dfs.py tests/unit/test_agm_cam.py -q`
@@ -514,8 +548,21 @@ every one of these itself; an agent's log is not evidence.
    four-member-family claim is executable.
 
 4. **No fabricated bit count and no 8× inflation.** `wl_subtree.bits()` and `size_null.bits()` raise
-   `BitCountUndefined`; `adjacency.bits(e).realised_bits < len(e.text)` on every fixture; no module
-   under `metrics/` or `bits.py` references `.text` except `levenshtein_char`.
+   `BitCountUndefined`; no module under `metrics/` or `bits.py` references `.text` except
+   `levenshtein_char`; and on every fixture
+
+   ```
+   entropy_bits  <=  realised_bits  <  entropy_bits + 8        # byte padding, nothing more
+   realised_bits  <  8 * len(e.text)                            # the 8x trap, refuted
+   ```
+
+   > **Amended 2026-08-15.** This criterion previously read
+   > `adjacency.bits(e).realised_bits < len(e.text)`, which **contradicts §4.2's own formula
+   > and was never satisfiable**: `8·⌈n(n−1)/16⌉ = 8·⌈T/8⌉ ≥ T = len(text)`, since packing
+   > `T` bits into whole bytes cannot use fewer than `T` bits. It appeared to pass only
+   > because `bits.py` had halved the count — track A found the defect, and fixing it
+   > surfaced the criterion's own error. The 8× trap is a comparison against
+   > `8 · len(text)`, not against `len(text)`.
 
 5. **The dependency contract holds.** `import isalgraph.competitors` succeeds with `networkx`,
    `pynauty`, `grakel` and `rapidfuzz` all uninstalled; each absent dependency raises
@@ -558,8 +605,14 @@ options, and say what has already been ruled out.
 2. **`pynauty` fails to build on Picasso.** Takes `nauty_graph6`, `sparse6_nauty` and AGM's orbit
    pruning down together, and changes `k` in `N_actual = 182 − 15k − 8d`. Do not re-open bliss /
    Traces (cut, decision S-g, and the counter-case expired) without the PI.
-3. **`grakel` 0.1.10 does not reproduce `ours(h=2) = 5.830952`.** The E10 reconciliation becomes a
-   version-pinning job, and every existing WL number is suspect.
+3. ~~**`grakel` 0.1.10 does not reproduce `ours(h=2) = 5.830952`.**~~ **Fired and resolved
+   2026-08-15.** `ours(h=2) = 5.830952` reproduces; the *mapping* did not. There is no grakel
+   off-by-one — `n_iter = k` is `h = k`, from `weisfeiler_lehman.py:109` and confirmed by
+   arithmetic. The off-by-one lived in `scratch/backends.py::wl_features`, which compresses colours
+   **per graph, per round**, so rounds ≥ 2 are not comparable across graphs. PI decision: adopt the
+   shared-vocabulary WL, restate the row (Letter LOW 0.895 → 0.779), rewrite finding 12.
+   **Remaining trip-wire**: the shared-vocabulary WL and `grakel` must agree to `1e-9` on every
+   fixture and on all five datasets. If they ever diverge, stop.
 4. **A backend needs a third-party dependency not already in the environment.** Vendor nothing —
    three gSpan/DFS-code repositories were tested and all three rejected.
 5. **Any pressure to change the preregistered comparator sets, `N_max`, or the reduction rule.**
@@ -602,3 +655,24 @@ from 2–3 days to ~1 by doing the hard part; what remains is integration plus t
   wave grouped by shared trap rather than seven one-per-competitor (§6); `size_null` is a registered
   backend, against `competitors/README` §6's advice, and is hard-excluded from the confirmatory
   family (§3.1).
+
+- **2026-08-15** — **amendment 1, before any agent started.** Wave 0 measured three of this note's
+  own premises to be wrong. Full evidence:
+  [`WAVE0-FINDINGS.md`](../../2026-08-14-t04-competitors/WAVE0-FINDINGS.md). Three PI decisions,
+  all signed the same day:
+
+  1. **The grakel off-by-one does not exist** (§0 row, §8 criterion 1, §9 condition 3). `n_iter = k`
+     is `h = k`; the off-by-one was in the scout's own `wl_features`, which compresses colours per
+     graph per round. Adopt the shared-vocabulary WL and restate README §4.1's WL row
+     (Letter LOW 0.895 → 0.779, MED 0.869 → 0.775, AIDS 0.459 → 0.471). `wl_kernel_computer.py`'s
+     `n_iter = 5` is `h = 5`, not `h = 4`.
+  2. **The adjacency reading order stays column-wise; the quoted literals were row-major** (§4.1,
+     §8 criterion 1). graph6's payload and AGM's own code both confirm column-wise. Costs ±0.023 on
+     the adjacency ρ row and flips nothing.
+  3. **README §4.1 is a composite of three 200-graph draws and is superseded** (§8 criterion 1).
+     The gate splits into **1a provenance** — replay each scout script's stream, assert against its
+     raw artefact, which already passes — and **1b the corrected table**, one script, one draw, the
+     frozen conventions. 1b is what downstream tickets quote.
+
+  Nothing here changes a stated conclusion: min-DFS still beats IsalGraph on all five Suite-1
+  datasets, the size null still dominates, and IsalGraph still clears it on Letter LOW and MED only.

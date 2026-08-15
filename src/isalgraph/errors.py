@@ -17,9 +17,19 @@ Layout::
     |   |-- CanonicalizationTimeoutError  (also RuntimeError)
     |   +-- EncodingStuckError            (also RuntimeError)
     |-- BackendError                      (also RuntimeError)
-    +-- VizError
-        |-- VizBackendNotFoundError
-        +-- VizBackendUnavailableError
+    |-- VizError
+    |   |-- VizBackendNotFoundError
+    |   +-- VizBackendUnavailableError
+    +-- CompetitorError
+        |-- BackendUnavailableError       (also ImportError)
+        |-- BackendNotFoundError          (also KeyError)
+        |-- BudgetExceeded                (also RuntimeError)
+        |   |-- AGMBudgetExceeded
+        |   +-- MinDfsBudgetExceeded
+        |-- BitCountUndefined             (also TypeError)
+        |-- DistanceUndefined             (also ValueError)
+        |-- NotReversible                 (also TypeError)
+        +-- SuiteScopeError               (also ValueError)
 
 **Why the builtin mixins.** The pure-Python reference implementation raises
 plain builtins -- ``ValueError`` for an unreachable start node, ``RuntimeError``
@@ -124,6 +134,76 @@ class VizBackendUnavailableError(VizError):
     """Raised when a registered drawing backend's third-party library is missing."""
 
 
+# ----------------------------------------------------------------------
+# Competitor representations (isalgraph.competitors)
+# ----------------------------------------------------------------------
+
+
+class CompetitorError(IsalGraphError):
+    """Base exception for the ``isalgraph.competitors`` subpackage."""
+
+
+class BackendUnavailableError(CompetitorError, ImportError):
+    """Raised when a competitor backend's third-party library is absent.
+
+    Mirrors ``BackendError``'s contract for the C++ engine: a missing
+    optional dependency is an error, never a silent degrade to a different
+    representation.  ``ImportError`` is mixed in so callers who already
+    guard optional imports catch it without knowing about this hierarchy.
+    """
+
+
+class BackendNotFoundError(CompetitorError, KeyError):
+    """Raised when a competitor backend or metric name is not registered."""
+
+
+class BudgetExceeded(CompetitorError, RuntimeError):
+    """Raised when a bounded search exhausts its budget.
+
+    Carries no result.  A budget that runs out must never return an
+    incumbent: doing so would put a non-canonical code into a column
+    headed canonical, which is the error the pool exists to expose.
+    """
+
+
+class AGMBudgetExceeded(BudgetExceeded):
+    """Raised when the AGM canonical-code search exhausts its node budget."""
+
+
+class MinDfsBudgetExceeded(BudgetExceeded):
+    """Raised when the minimum-DFS-code search exhausts its projection budget.
+
+    The budget is on *memory*, not time: the construction holds every
+    embedding realising the current minimal prefix, and that set is
+    worst-case exponential in the number of ties.
+    """
+
+
+class BitCountUndefined(CompetitorError, TypeError):
+    """Raised when a bit count is requested from a representation that has none.
+
+    A feature-vector "bit cost" would measure the choice of container
+    rather than the encoding, so the correct answer is an empty cell with
+    a printed reason.
+    """
+
+
+class DistanceUndefined(CompetitorError, ValueError):
+    """Raised when a metric is not defined on the pair it was given.
+
+    This is a **result**, not a defect: which cells of the
+    (representation x distance) grid are undefined is the measurement.
+    """
+
+
+class NotReversible(CompetitorError, TypeError):
+    """Raised when ``decode`` is called on a representation that discards structure."""
+
+
+class SuiteScopeError(CompetitorError, ValueError):
+    """Raised when a backend is asked for a graph outside its declared suite scope."""
+
+
 __all__ = [
     "IsalGraphError",
     "CapacityError",
@@ -137,4 +217,14 @@ __all__ = [
     "VizError",
     "VizBackendNotFoundError",
     "VizBackendUnavailableError",
+    "CompetitorError",
+    "BackendUnavailableError",
+    "BackendNotFoundError",
+    "BudgetExceeded",
+    "AGMBudgetExceeded",
+    "MinDfsBudgetExceeded",
+    "BitCountUndefined",
+    "DistanceUndefined",
+    "NotReversible",
+    "SuiteScopeError",
 ]

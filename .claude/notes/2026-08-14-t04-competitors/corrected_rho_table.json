@@ -1,0 +1,254 @@
+{
+  "corrected_table": {
+    "convention": {
+      "adjacency": "strict upper triangle, COLUMN-WISE",
+      "distance": "symbol-level Levenshtein; WL uses its kernel distance",
+      "sample": "one seed-42 200-graph draw per dataset",
+      "wl": "shared vocabulary, h = 2 (grakel n_iter = 2)"
+    },
+    "datasets": {
+      "aids": {
+        "adjacency": {
+          "all_pairs": 0.7563736303096379,
+          "equal_n": 0.15707456236412956
+        },
+        "agm_cam": {
+          "error": "AGMBudgetExceeded: AGM canonical code: budget of 200000 search nodes exhausted on a graph with n=12, m=12. The incumbent is NOT canonical and is deliberately not returned",
+          "status": "failed"
+        },
+        "graph6": {
+          "all_pairs": 0.42287563823806584,
+          "equal_n": 0.12499982659294705
+        },
+        "isalgraph_canonical": {
+          "all_pairs": 0.2894146916932952,
+          "equal_n": 0.18587422644859095
+        },
+        "isalgraph_pruned": {
+          "all_pairs": 0.25612607962654793,
+          "equal_n": 0.21873383381965816
+        },
+        "min_dfs": {
+          "all_pairs": 0.5328453652154315,
+          "equal_n": 0.39931812661521743
+        },
+        "n_equal_n_pairs": 4495,
+        "n_pairs": 15634,
+        "nauty_graph6": {
+          "all_pairs": 0.42461365302243653,
+          "equal_n": 0.1374755789796713
+        },
+        "size_null": {
+          "all_pairs": 0.78440879746939,
+          "equal_n": null
+        },
+        "sparse6": {
+          "all_pairs": 0.4812540450239891,
+          "equal_n": 0.15371307217290936
+        },
+        "sparse6_nauty": {
+          "all_pairs": 0.2659752948060812,
+          "equal_n": 0.15728407967430835
+        },
+        "wl_subtree": {
+          "all_pairs": 0.3991808975834018,
+          "equal_n": 0.43324947956122106
+        }
+      },
+      "iam_letter_high": {
+        "adjacency": {
+          "all_pairs": 0.8201085146401454,
+          "equal_n": 0.365418144150968
+        },
+        "agm_cam": {
+          "all_pairs": 0.8921476740698563,
+          "equal_n": 0.7596967173751097
+        },
+        "graph6": {
+          "all_pairs": 0.6478560524675672,
+          "equal_n": 0.4069932650721766
+        },
+        "isalgraph_canonical": {
+          "all_pairs": 0.7082675008895905,
+          "equal_n": 0.695262061252437
+        },
+        "isalgraph_pruned": {
+          "all_pairs": 0.6969065916034879,
+          "equal_n": 0.6165679517758189
+        },
+        "min_dfs": {
+          "all_pairs": 0.8347171538394584,
+          "equal_n": 0.7738992137623093
+        },
+        "n_equal_n_pairs": 4855,
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "all_pairs": 0.6309003030963228,
+          "equal_n": 0.6802800066135861
+        },
+        "size_null": {
+          "all_pairs": 0.9173898266821815,
+          "equal_n": null
+        },
+        "sparse6": {
+          "all_pairs": 0.6634778192347905,
+          "equal_n": 0.43773565961483973
+        },
+        "sparse6_nauty": {
+          "all_pairs": 0.5385623970644667,
+          "equal_n": 0.5702665404373569
+        },
+        "wl_subtree": {
+          "all_pairs": 0.5689617477376848,
+          "equal_n": 0.6963747706612207
+        }
+      },
+      "iam_letter_low": {
+        "adjacency": {
+          "all_pairs": 0.8881814966618148,
+          "equal_n": 0.6067036593791676
+        },
+        "agm_cam": {
+          "all_pairs": 0.9175513921611059,
+          "equal_n": 0.9943987423315259
+        },
+        "graph6": {
+          "all_pairs": 0.6913950004112531,
+          "equal_n": 0.538909365074679
+        },
+        "isalgraph_canonical": {
+          "all_pairs": 0.9350833946487191,
+          "equal_n": 0.9987409661747594
+        },
+        "isalgraph_pruned": {
+          "all_pairs": 0.9252960214361131,
+          "equal_n": 0.9805595942304465
+        },
+        "min_dfs": {
+          "all_pairs": 0.971964016675794,
+          "equal_n": 0.9955723627840983
+        },
+        "n_equal_n_pairs": 4552,
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "all_pairs": 0.6771511376715332,
+          "equal_n": 0.9737003349736094
+        },
+        "size_null": {
+          "all_pairs": 0.8990791903163676,
+          "equal_n": null
+        },
+        "sparse6": {
+          "all_pairs": 0.74757266392263,
+          "equal_n": 0.5587708306979985
+        },
+        "sparse6_nauty": {
+          "all_pairs": 0.6380295896102649,
+          "equal_n": 0.9805837837454363
+        },
+        "wl_subtree": {
+          "all_pairs": 0.7791650345092075,
+          "equal_n": 0.979701334810339
+        }
+      },
+      "iam_letter_med": {
+        "adjacency": {
+          "all_pairs": 0.8767007709397208,
+          "equal_n": 0.5208562183575784
+        },
+        "agm_cam": {
+          "all_pairs": 0.9203903243411058,
+          "equal_n": 0.9896367642519991
+        },
+        "graph6": {
+          "all_pairs": 0.6521545943399207,
+          "equal_n": 0.4481683901236409
+        },
+        "isalgraph_canonical": {
+          "all_pairs": 0.8829006672659314,
+          "equal_n": 0.907288658516991
+        },
+        "isalgraph_pruned": {
+          "all_pairs": 0.8749928902397204,
+          "equal_n": 0.9105063696429888
+        },
+        "min_dfs": {
+          "all_pairs": 0.939523059171109,
+          "equal_n": 0.9268337714025457
+        },
+        "n_equal_n_pairs": 4764,
+        "n_pairs": 19900,
+        "nauty_graph6": {
+          "all_pairs": 0.6460896140210605,
+          "equal_n": 0.9519884624331628
+        },
+        "size_null": {
+          "all_pairs": 0.9189791703415424,
+          "equal_n": null
+        },
+        "sparse6": {
+          "all_pairs": 0.6787219599447987,
+          "equal_n": 0.4635071313385088
+        },
+        "sparse6_nauty": {
+          "all_pairs": 0.6078712432835922,
+          "equal_n": 0.9491584845050622
+        },
+        "wl_subtree": {
+          "all_pairs": 0.7551417338798805,
+          "equal_n": 0.9503185123840033
+        }
+      },
+      "linux": {
+        "adjacency": {
+          "all_pairs": 0.7365330429462102,
+          "equal_n": 0.23616915143306802
+        },
+        "agm_cam": {
+          "all_pairs": 0.7978927968123181,
+          "equal_n": 0.6825817457187076
+        },
+        "graph6": {
+          "all_pairs": 0.506804869393732,
+          "equal_n": 0.2861955571851637
+        },
+        "isalgraph_canonical": {
+          "all_pairs": 0.4358375715324884,
+          "equal_n": 0.3492426503772438
+        },
+        "isalgraph_pruned": {
+          "all_pairs": 0.47418760744910005,
+          "equal_n": 0.3971708757801319
+        },
+        "min_dfs": {
+          "all_pairs": 0.6529445858778118,
+          "equal_n": 0.5403758426753615
+        },
+        "n_equal_n_pairs": 987,
+        "n_pairs": 3870,
+        "nauty_graph6": {
+          "all_pairs": 0.5377682908900365,
+          "equal_n": 0.2605478956805426
+        },
+        "size_null": {
+          "all_pairs": 0.7133929803035389,
+          "equal_n": null
+        },
+        "sparse6": {
+          "all_pairs": 0.5586591291877968,
+          "equal_n": 0.25531739700363026
+        },
+        "sparse6_nauty": {
+          "all_pairs": 0.4042101876643347,
+          "equal_n": 0.3147479748718188
+        },
+        "wl_subtree": {
+          "all_pairs": 0.5664958431164759,
+          "equal_n": 0.6713198327420659
+        }
+      }
+    },
+    "supersedes": "competitors/README.md 4.1 and 4.2, a three-draw composite"
+  },
+  "mode": "table"
+}

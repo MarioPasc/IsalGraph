@@ -182,7 +182,12 @@ and edgeless graphs, a deterministic length, and a decode that is `O(n²)` with 
 
 - `ReprBackend.encode` → `nx.to_graph6_bytes(G, header=False).decode().strip()`. **Strip the
   trailing newline**; `to_graph6_bytes` appends one and it silently costs 8 realised bits per graph.
-- Normalise node labels first (`nx.convert_node_labels_to_integers(G, ordering="sorted")`) so the
+- ~~Normalise node labels first (`nx.convert_node_labels_to_integers(G, ordering="sorted")`)~~
+  **CORRECTED 2026-08-15 by T-04: that call does not pin the labelling.** It renames node *values*
+  and leaves insertion order alone, and `to_graph6_bytes` re-derives its labelling from insertion
+  order. Measured: it disagrees with a genuine sorted rebuild on **290 of 300** scrambled graphs,
+  and it made `graph6` and `sparse6` serialise *different* labellings. **Rebuild the graph** with
+  `add_nodes_from(sorted(g.nodes()))` then `add_edges_from(g.edges())`. Normalise first so the
   backend is deterministic **on a given input labelling**. That is determinism, not invariance.
 - `n > 62` uses the 4-byte `N(n)` form. Suite 2 tops out at 98, so **this branch is live** —
   test it. `networkx` handles it; the closed-form length above does not.

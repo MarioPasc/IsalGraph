@@ -364,8 +364,8 @@ def test_gate_attribution_summary_orders_by_mean_nodes_and_detects_monotone() ->
 def test_gate_attribution_summary_detects_a_non_monotone_cohort() -> None:
     """A cohort whose ratio does not fall monotonically is reported as such.
 
-    This is the branch the full ten-dataset run may take, and the report must
-    not claim a monotone fall that the data does not show.
+    This is the branch the full ten-dataset run takes, and the report must not
+    claim a monotone fall that the data does not show.
     """
     per_dataset = {
         "a": _fake_dataset(4.0, 2.0, 1.0),
@@ -374,6 +374,115 @@ def test_gate_attribution_summary_detects_a_non_monotone_cohort() -> None:
     }
     summary = aga.gate_attribution_summary(per_dataset, ["a", "b", "c"])
     assert summary["ratio_falls_monotonically_with_mean_nodes"] is False
+    counterexample = summary["monotonicity_counterexample"]
+    assert counterexample is not None
+    assert counterexample["dataset"] == "b"
+    assert counterexample["exceeds_dataset"] == "a"
+
+
+def test_monotonicity_counterexample_is_none_when_monotone() -> None:
+    """A monotone cohort has no counter-example to name."""
+    per_dataset = {
+        "a": _fake_dataset(4.0, 8.0, 1.0),
+        "b": _fake_dataset(12.0, 2.0, 1.0),
+        "c": _fake_dataset(30.0, 1.5, 1.0),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, ["a", "b", "c"])
+    assert summary["ratio_falls_monotonically_with_mean_nodes"] is True
+    assert summary["monotonicity_counterexample"] is None
+
+
+def test_monotonicity_counterexample_reports_the_largest_violation() -> None:
+    """With several violations the largest rise is the one named."""
+    per_dataset = {
+        "a": _fake_dataset(4.0, 5.0, 1.0),
+        "b": _fake_dataset(8.0, 5.5, 1.0),  # small rise
+        "c": _fake_dataset(12.0, 2.0, 1.0),
+        "d": _fake_dataset(30.0, 6.0, 1.0),  # large rise
+    }
+    summary = aga.gate_attribution_summary(per_dataset, ["a", "b", "c", "d"])
+    assert summary["monotonicity_counterexample"]["dataset"] == "d"
+
+
+def _role_dataset(mean_nodes: float, primary: float, arm: float, role: str) -> dict[str, object]:
+    """Build a per-dataset block carrying an explicit slope role."""
+    block = _fake_dataset(mean_nodes, primary, arm)
+    block["slope_role"] = role
+    return block
+
+
+def test_gate_ratio_range_is_grouped_by_slope_role() -> None:
+    """The range form groups by the role §7.1 assigns, in report order."""
+    per_dataset = {
+        "small_a": _role_dataset(4.07, 8.20, 1.0, "small-n constraint only"),
+        "small_b": _role_dataset(8.71, 2.70, 1.0, "small-n constraint only"),
+        "mid": _role_dataset(11.03, 2.28, 1.0, "intermediate"),
+        "big_a": _role_dataset(14.02, 2.06, 1.0, "unconfounded"),
+        "big_b": _role_dataset(31.68, 1.54, 1.0, "unconfounded"),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, list(per_dataset))
+    by_role = summary["by_slope_role"]
+    assert [entry["slope_role"] for entry in by_role] == list(aga.SLOPE_ROLE_ORDER)
+    small, _, large = by_role
+    assert small["min_ratio"] == pytest.approx(2.70)
+    assert small["max_ratio"] == pytest.approx(8.20)
+    assert small["min_ratio_dataset"] == "small_b"
+    assert large["min_ratio"] == pytest.approx(1.54)
+    assert large["max_ratio"] == pytest.approx(2.06)
+    assert summary["small_n_and_unconfounded_ranges_disjoint"] is True
+    assert large["gate_share_at_min_ratio"] == pytest.approx(1.0 - 1.0 / 1.54)
+
+
+def test_gate_ratio_ranges_can_overlap_and_are_reported_as_such() -> None:
+    """Overlapping role ranges must not be claimed as disjoint."""
+    per_dataset = {
+        "small": _role_dataset(4.0, 2.0, 1.0, "small-n constraint only"),
+        "big": _role_dataset(30.0, 3.0, 1.0, "unconfounded"),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, list(per_dataset))
+    assert summary["small_n_and_unconfounded_ranges_disjoint"] is False
+
+
+def test_non_monotone_cohort_prints_the_range_form_and_never_the_sequence_form() -> None:
+    """The report drops the ordered-sequence claim when the data loses it.
+
+    This is the guard that matters: the eight-dataset cohort was monotone and
+    the ten-dataset cohort is not, so the sequence wording must be gated on the
+    flag rather than on what an earlier run happened to show.
+    """
+    per_dataset = {
+        "small": _role_dataset(4.07, 8.20, 1.0, "small-n constraint only"),
+        "coil": _role_dataset(21.54, 1.66, 1.0, "unconfounded"),
+        "mutag": _role_dataset(28.53, 1.87, 1.0, "unconfounded"),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, list(per_dataset))
+    assert summary["ratio_falls_monotonically_with_mean_nodes"] is False
+    rendered = "\n".join(aga._report_gate_pattern(summary))
+    assert aga.MONOTONE_PHRASE not in rendered
+    assert "NOT monotone" in rendered
+    assert "`mutag` is the counter-example" in rendered
+    assert "ratio range" in rendered
+    assert "would survive replacing" in rendered
+    assert "1.66x" in rendered and "8.20x" in rendered
+
+
+def test_monotone_cohort_still_prints_the_sequence_sentence() -> None:
+    """The monotone branch keeps its stronger wording when it is earned."""
+    per_dataset = {
+        "small": _role_dataset(4.0, 8.0, 1.0, "small-n constraint only"),
+        "big": _role_dataset(30.0, 1.5, 1.0, "unconfounded"),
+    }
+    summary = aga.gate_attribution_summary(per_dataset, list(per_dataset))
+    rendered = "\n".join(aga._report_gate_pattern(summary))
+    assert aga.MONOTONE_PHRASE in rendered
+    assert "NOT monotone" not in rendered
+
+
+def test_gate_pattern_is_empty_without_any_interpretable_ratio() -> None:
+    """No ratio, no points 2 and 3 -- rather than a section built on nan."""
+    per_dataset = {"a": _role_dataset(4.0, 1.0, 0.0, "unconfounded")}
+    summary = aga.gate_attribution_summary(per_dataset, ["a"])
+    assert aga._report_gate_pattern(summary) == []
 
 
 def test_gate_attribution_summary_reports_a_rule_that_did_not_fire() -> None:

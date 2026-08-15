@@ -26,12 +26,44 @@ K = WeisfeilerLehman(n_iter=3, base_graph_kernel=VertexHistogram,
                      normalize=False).fit_transform(graphs)
 ```
 
-> **One trap, and it changes every number.** `grakel`'s `n_iter = k` runs **`k` rounds counting the
+> ## ⚠ CORRECTED 2026-08-15 by T-04 — there is no off-by-one, and the trap was ours
+>
+> The block below asserts that `grakel`'s `n_iter = k` refines `k − 1` times. **It does not.**
+> From the source — `grakel/kernels/weisfeiler_lehman.py:109` sets `self._n_iter = self.n_iter + 1`
+> and the loop is `for i in range(1, self._n_iter)` — `n_iter = k` runs **`k` refinements plus the
+> base histogram**, so **`grakel(n_iter = k) ≡ ours(h = k)`**. Confirmed independently by
+> arithmetic: at `n_iter = 1`, `K(G,G) = 62 = 36` (base, six identical labels) `+ 26` (degree
+> histogram `5² + 1²`).
+>
+> | | `k` = 1 | 2 | 3 |
+> |---|---:|---:|---:|
+> | `grakel(n_iter=k)` | 2.000000 | **5.830952** | 7.211103 |
+> | a shared-vocabulary WL at `h = k` | 2.000000 | **5.830952** | 7.211103 |
+>
+> **Where the off-by-one actually lived.** `scratch/backends.py::wl_features` compresses colours to
+> small integers **per graph, per round** (lines 109–110) and builds the next round's signature from
+> those compressed labels. The table comes from one graph's own signature set, so **features from
+> rounds ≥ 2 are not comparable across graphs** — trap 3 of [README](README.md) §6, committed by the
+> file that documents it. That implementation produced §4.1's WL row.
+>
+> **What this changes**: the frozen `h = 2` means **`n_iter = 2`**, not 3.
+> `benchmarks/real_data/eval_setup/wl_kernel_computer.py`'s `n_iter = 5` is **`h = 5`** — *three*
+> refinement rounds past the selected one, not two. §4.1's WL row moves: Letter LOW
+> **0.895 → 0.7792**, MED **0.869 → 0.7746**, HIGH 0.580 → 0.5674, LINUX 0.573 → 0.5665, AIDS
+> 0.459 → **0.4714**. Inherited by **T-06**.
+>
+> **What survives**: everything else in this file. WL's incompleteness, the `K₃,₃`/prism witness at
+> `d = 0.0000`, `normalize=False`, the per-dataset fit, and the choice of `h = 2` are all unaffected
+> — and `h = 2` is now supported *without* touching ρ, since T-04 measured that `h = 5` separates
+> **zero** additional pairs (`frac(d = 0)` identical at both). Evidence:
+> `.claude/notes/2026-08-14-t04-competitors/WAVE0-FINDINGS.md` W0-1.
+
+> ~~**One trap, and it changes every number.** `grakel`'s `n_iter = k` runs **`k` rounds counting the
 > base histogram as round 0**, i.e. it refines `k − 1` times. Our own implementation's `h` counts
 > refinements. Measured on the running example, `grakel(n_iter=3)` and `ours(h=2)` agree to
 > **5.830952 exactly**, while `ours(h=3)` gives 6.928203. **Fix `h` once, in one place, and state it
 > in the paper caption.** The manuscript's existing WL numbers (E10) must be checked against
-> whichever convention produced them before they are re-quoted.
+> whichever convention produced them before they are re-quoted.~~
 
 Two independent implementations agreeing to machine precision is worth the 40 lines: it makes the WL
 row auditable without a third-party version pin.
