@@ -659,6 +659,26 @@ def test_sparse6_nauty_reports_unavailable_without_agent_a() -> None:
 
 
 @pytest.mark.skipif(not _sparse6_available(), reason="agent A's sparse6.py is not in this worktree")
+def test_sparse6_serialise_matches_the_frozen_signature() -> None:
+    """The cross-edge is resolved by ``cast``; a cast can hide a mismatch.
+
+    CONTRACTS.md §4 freezes ``serialise(graph: nx.Graph) -> Encoding`` as a
+    module-level function, so the conformance is asserted rather than
+    assumed.
+    """
+    import inspect
+
+    from isalgraph.competitors.base import Encoding
+
+    serialise = nauty_module._sparse6_serialise()
+    signature = inspect.signature(serialise)
+    assert len(signature.parameters) == 1
+    encoding = serialise(_graph("running_example"))
+    assert isinstance(encoding, Encoding)
+    assert encoding.backend == "sparse6"
+
+
+@pytest.mark.skipif(not _sparse6_available(), reason="agent A's sparse6.py is not in this worktree")
 def test_sparse6_nauty_is_canonical() -> None:
     backend = get_repr_backend("sparse6_nauty")
     rng = random.Random(42)

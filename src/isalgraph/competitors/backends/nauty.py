@@ -70,7 +70,10 @@ isomorphism assertions only.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any
+import importlib
+from collections.abc import Callable
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -93,7 +96,7 @@ GRAPH6_ALPHABET_SIZE = 64
 SPARSE6_ALPHABET_SIZE = 64
 
 
-def _pynauty() -> Any:
+def _pynauty() -> ModuleType:
     """Import ``pynauty`` lazily.
 
     Third-party imports live inside function bodies so that
@@ -101,7 +104,22 @@ def _pynauty() -> Any:
     """
     import pynauty
 
-    return pynauty
+    module: ModuleType = pynauty
+    return module
+
+
+def _sparse6_serialise() -> Callable[[nx.Graph], Encoding]:
+    """Resolve agent A's ``sparse6.serialise``, CONTRACTS.md §4's one cross-edge.
+
+    Reached through :func:`importlib.import_module` and a ``cast`` rather
+    than a ``from ... import``, because in an isolated wave-1 worktree agent
+    A's module does not exist and a static import makes ``mypy --strict``
+    fail on a file that is correct.  The cast writes out the frozen
+    signature, and ``test_competitors_canonical.py`` asserts the real
+    function matches it once the branches merge.
+    """
+    module = importlib.import_module("isalgraph.competitors.backends.sparse6")
+    return cast("Callable[[nx.Graph], Encoding]", module.serialise)
 
 
 def _to_pynauty(graph: nx.Graph) -> tuple[Any, list[Any]]:
@@ -367,9 +385,7 @@ class Sparse6NautyBackend(ReprBackend):
         isolated wave-1 worktree.  Only invocation fails there, and it fails
         with a diagnosis.
         """
-        from isalgraph.competitors.backends.sparse6 import serialise
-
-        encoding = serialise(canonical_relabel(graph, verify=self.verify))
+        encoding = _sparse6_serialise()(canonical_relabel(graph, verify=self.verify))
         return dataclasses.replace(encoding, backend=self.name)
 
     def decode(self, encoding: Encoding) -> nx.Graph:
@@ -393,7 +409,7 @@ class Sparse6NautyBackend(ReprBackend):
             import networkx  # noqa: F401
             import pynauty  # noqa: F401
 
-            from isalgraph.competitors.backends import sparse6  # noqa: F401
+            importlib.import_module("isalgraph.competitors.backends.sparse6")
         except ImportError:
             return False
         return True
