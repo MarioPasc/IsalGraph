@@ -267,12 +267,38 @@ def test_size_null_and_wl_have_no_bit_count() -> None:
 
 @pytest.mark.parametrize("name", sorted(fixtures.CONNECTED_FIXTURES))
 def test_no_eightfold_inflation_on_the_adjacency_matrix(name: str) -> None:
-    """Counting '1010...' at eight bits per character inflates it 8x."""
+    """Counting '1010...' at eight bits per character inflates it 8x.
+
+    The comparison is against ``8 * len(text)``, not ``len(text)``.  Design
+    criterion 4 originally said the latter, which contradicts its own formula:
+    ``8*ceil(n(n-1)/16) == 8*ceil(T/8) >= T == len(text)``, because packing T
+    bits into whole bytes cannot use fewer than T bits.  Amended 2026-08-15.
+    """
     if "adjacency" not in registered_backends():
         pytest.skip("adjacency backend not merged yet")
     backend = get_repr_backend("adjacency")
     encoding = backend.encode(fixtures.to_networkx(fixtures.ALL_FIXTURES[name]))
-    assert backend.bits(encoding).realised_bits < len(encoding.text)
+    counted = backend.bits(encoding)
+    assert counted.realised_bits < 8 * len(encoding.text)
+    # Byte padding and nothing more.
+    assert counted.entropy_bits <= counted.realised_bits < counted.entropy_bits + 8
+
+
+def test_adjacency_realised_bits_pack_the_triangle_into_bytes() -> None:
+    """`8*ceil(n(n-1)/16)`, which is `8*ceil(T/8)` -- T bits in whole bytes.
+
+    A regression guard for the halving defect track A found: reading the 16 as
+    a word size gives 8 bits for a 15-bit triangle at n=6.
+    """
+    if "adjacency" not in registered_backends():
+        pytest.skip("adjacency backend not merged yet")
+    import math
+
+    backend = get_repr_backend("adjacency")
+    for n in (2, 6, 12, 28):
+        counted = backend.bits(backend.encode(nx.complete_graph(n)))
+        assert counted.realised_bits == 8 * math.ceil(n * (n - 1) / 16)
+        assert counted.entropy_bits == n * (n - 1) // 2
 
 
 def test_bits_refuses_a_backend_it_has_no_row_for() -> None:

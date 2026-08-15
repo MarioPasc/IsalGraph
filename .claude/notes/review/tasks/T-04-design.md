@@ -310,7 +310,13 @@ once in `agm.py`'s module docstring and in the paper, or the numbers are unrepro
 > **Never `len(text) * 8`.** `'101001…'` is a debugging view. Counting it as 8 bits per character
 > inflates the adjacency matrix 8× and hands us a baseline we beat for free
 > ([adjacency-matrix](../plan/competitors/adjacency-matrix.md) §7). A dedicated test asserts
-> `adjacency.bits(e).realised_bits < len(e.text)` on every fixture.
+> `realised_bits < 8 · len(e.text)` and `entropy_bits ≤ realised_bits < entropy_bits + 8` on every
+> fixture — see §8 criterion 4 and its 2026-08-15 amendment.
+>
+> **`8·⌈n(n−1)/16⌉` is `8·⌈T/8⌉`, i.e. `T` bits packed into whole bytes**, because `n(n−1) = 2T`.
+> Reading the 16 as a word size and computing `8·⌈T/16⌉` halves every adjacency and AGM realised
+> count — 8 bits for a 15-bit triangle at `n = 6`, 2,384 where 4,760 is right at `n = 98`. That is
+> what the first implementation did; track A caught it.
 
 ### 4.3 Budgets and the failure policy
 
@@ -542,8 +548,21 @@ every one of these itself; an agent's log is not evidence.
    four-member-family claim is executable.
 
 4. **No fabricated bit count and no 8× inflation.** `wl_subtree.bits()` and `size_null.bits()` raise
-   `BitCountUndefined`; `adjacency.bits(e).realised_bits < len(e.text)` on every fixture; no module
-   under `metrics/` or `bits.py` references `.text` except `levenshtein_char`.
+   `BitCountUndefined`; no module under `metrics/` or `bits.py` references `.text` except
+   `levenshtein_char`; and on every fixture
+
+   ```
+   entropy_bits  <=  realised_bits  <  entropy_bits + 8        # byte padding, nothing more
+   realised_bits  <  8 * len(e.text)                            # the 8x trap, refuted
+   ```
+
+   > **Amended 2026-08-15.** This criterion previously read
+   > `adjacency.bits(e).realised_bits < len(e.text)`, which **contradicts §4.2's own formula
+   > and was never satisfiable**: `8·⌈n(n−1)/16⌉ = 8·⌈T/8⌉ ≥ T = len(text)`, since packing
+   > `T` bits into whole bytes cannot use fewer than `T` bits. It appeared to pass only
+   > because `bits.py` had halved the count — track A found the defect, and fixing it
+   > surfaced the criterion's own error. The 8× trap is a comparison against
+   > `8 · len(text)`, not against `len(text)`.
 
 5. **The dependency contract holds.** `import isalgraph.competitors` succeeds with `networkx`,
    `pynauty`, `grakel` and `rapidfuzz` all uninstalled; each absent dependency raises

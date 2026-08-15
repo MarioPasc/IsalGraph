@@ -36,14 +36,21 @@ _INFLATED = frozenset({"min_dfs"})
 _UNDEFINED = frozenset({"wl_subtree", "size_null"})
 
 
-def _packed_bits(n_bits: int, word: int = 16) -> int:
-    """Bits used when ``n_bits`` raw bits are packed into whole words.
+def _packed_bits(n_bits: int) -> int:
+    """Bits used when ``n_bits`` raw bits are packed into whole bytes.
 
-    The adjacency triangle is stored as bytes, padded to a two-byte word --
-    ``8 * ceil(n(n-1)/16)`` -- which is what ``adjacency-matrix.md`` §7
-    specifies and what keeps the count honest against graph6's byte cost.
+    The frozen formula for the adjacency triangle is ``8 * ceil(n(n-1)/16)``.
+    Since ``n(n-1) = 2T`` for a triangle of ``T = n(n-1)/2`` bits, that is
+    ``8 * ceil(T/8)`` -- **T bits packed into bytes**, and nothing else.
+
+    The first draft read the formula's denominator as a word size and computed
+    ``8 * ceil(T/16)``, halving every adjacency and AGM realised count: 8 bits
+    for a 15-bit triangle at ``n = 6``, 2,384 where 4,760 is right at
+    ``n = 98``.  ``entropy_bits`` was unaffected, so Claim A's headline table
+    never moved -- but the realised-bytes column, which is the one a
+    practitioner actually stores, was wrong by 2x.  Found by track A, 2026-08-15.
     """
-    return 8 * math.ceil(n_bits / word)
+    return 8 * math.ceil(n_bits / 8)
 
 
 def count(encoding: Encoding) -> BitCount:
