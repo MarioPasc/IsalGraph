@@ -67,7 +67,28 @@ plan file, or any peer's module. `sitecustomize.py` and `wtpy` are in the worktr
 | **7** | `pytest -k "identity_code or reading_order or family"` | AGM at the identity == `'101101000100011'` and == graph6's unpacked payload | exact on both literals and on all seven fixtures; the cross-backend form vs A's `adjacency.symbols` **skips** (module absent), closed by the orchestrator at merge | **PASS** (cross-backend deferred) |
 | **8** | `python -m isalgraph.competitors.smoke --backends nauty_graph6,sparse6_nauty,agm_cam --dataset iam_letter_low --n-graphs 200 --seed 42 --out smoke_B.json` | green | green; `sparse6_nauty` UNAVAILABLE by design in an isolated worktree. JSON below | **PASS** |
 | **9** | Picasso loginexa | `pynauty` imports from a from-source gcc 12.2.0 build | **not run by me — orchestrator's** | **OPEN** |
-| **10** | `pytest <both files> -q`; `ruff check src/ tests/`; `mypy --strict src/isalgraph/` | all pass, both clean | **122 selected: 116 passed, 5 skipped, 1 xfailed**; ruff `All checks passed!`; mypy `Success: no issues found in 64 source files` | **PASS** |
+| **10** | `pytest <both files> -q`; `ruff check src/ tests/`; `mypy --strict src/isalgraph/` | all pass, both clean | `122 collected` → **117 passed, 4 skipped, 1 xfailed in 271.46 s**; ruff `All checks passed!`; mypy `Success: no issues found in 64 source files` | **PASS** |
+
+The full run, verbatim:
+
+```
+$ ./wtpy -m pytest tests/unit/test_competitors_canonical.py tests/unit/test_agm_cam.py -q
+collected 122 items
+tests/unit/test_competitors_canonical.py ........................s...... [ 25%]
+........................................x.........sss...........         [ 77%]
+tests/unit/test_agm_cam.py ...........................                   [100%]
+============ 117 passed, 4 skipped, 1 xfailed in 271.46s (0:04:31) =============
+```
+
+The 4 skips are the cross-backend cells that need a peer's module (one `adjacency`, three
+`sparse6_nauty`); the 1 xfail is the `bits.py` defect report of §4.3. Nothing is skipped for
+missing data — all ten cohorts are on this workstation.
+
+**The K₃,₃ / prism contrast, checked directly** because criterion 2 leans on it: 1-WL assigns
+**one** colour class to both graphs (3-regular, same order, so refinement never starts and no
+number of rounds fixes it), giving identical feature multisets and kernel distance exactly
+`0.0000`; `agm_cam`, `nauty_graph6` and `pynauty.certificate` all separate them.
+`|Aut(K₃,₃)| = 72`, `|Aut(prism)| = 12`.
 
 ### Criterion 5 in full — the ceiling, at the frozen budgets
 
