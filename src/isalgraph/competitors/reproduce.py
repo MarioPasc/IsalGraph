@@ -78,9 +78,20 @@ ARTEFACT_TOL = 1e-9
 RUNNING_EXAMPLE_EXPECTED: dict[str, tuple[str, str]] = {
     "adjacency": ("101101000100011", "101001000100011"),
     "graph6": ("ElCW", "EhCW"),
-    "sparse6": (":EaWIzR", ":EaYms"),
+    # The ':' is framing, not payload, so it is EXCLUDED from `symbols` and
+    # RETAINED in `wire` (CONTRACTS §9, design §4.1). Both halves are asserted:
+    # see RUNNING_EXAMPLE_WIRE_EXPECTED.
+    "sparse6": ("EaWIzR", "EaYms"),
     "nauty_graph6": ("E@ro", "E@po"),
     "agm_cam": ("000001110011110", "000001011111000"),
+}
+
+#: The emitted bytes, where they differ from the symbol sequence.  sparse6 is
+#: the only case: its ``':'`` prefix is counted in ``realised_bits`` and not in
+#: ``entropy_bits``, and asserting only one of the two would let the convention
+#: drift in whichever direction nobody checked.
+RUNNING_EXAMPLE_WIRE_EXPECTED: dict[str, tuple[bytes, bytes]] = {
+    "sparse6": (b":EaWIzR", b":EaYms"),
 }
 
 #: K33 vs the triangular prism.  Every canonical backend separates them;
@@ -162,14 +173,23 @@ def check_running_example() -> dict[str, Any]:
             backend = get_repr_backend(name)
             got_g = "".join(backend.encode(graph_g).symbols)
             got_h = "".join(backend.encode(graph_h).symbols)
+            wire_g = backend.encode(graph_g).wire
+            wire_h = backend.encode(graph_h).wire
         except Exception as exc:  # noqa: BLE001 - an absent backend is a reportable state
             out[name] = {"status": "unavailable", "error": f"{type(exc).__name__}: {exc}"}
             continue
-        out[name] = {
+        record: dict[str, Any] = {
             "status": "pass" if (got_g, got_h) == (want_g, want_h) else "FAIL",
             "expected": [want_g, want_h],
             "got": [got_g, got_h],
         }
+        want_wire = RUNNING_EXAMPLE_WIRE_EXPECTED.get(name)
+        if want_wire is not None:
+            record["wire_expected"] = [w.decode() for w in want_wire]
+            record["wire_got"] = [w.decode() if w else None for w in (wire_g, wire_h)]
+            if (wire_g, wire_h) != want_wire:
+                record["status"] = "FAIL"
+        out[name] = record
     return out
 
 
