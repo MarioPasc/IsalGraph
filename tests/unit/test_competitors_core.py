@@ -71,12 +71,31 @@ def guard(name, *a, **k):
         raise ImportError("blocked: " + name)
     return _real(name, *a, **k)
 builtins.__import__ = guard
+
 import isalgraph.competitors as C
-assert C.registered_backends() is not None
-assert C.available_backends() == (), C.available_backends()
-import isalgraph
-assert "competitors" not in sys.modules["isalgraph"].__dict__ or True
-print("OK", sorted(C.registered_backends()))
+from isalgraph.errors import CompetitorError
+
+# The import itself must succeed with every optional library gone.
+names = C.registered_backends()
+assert names, "no backend registered at all"
+
+# And every registered name must resolve to EITHER a usable backend OR a
+# BackendUnavailableError -- never a bare ImportError leaking out of a method
+# after get_backend has already told the caller the backend was fine.
+for name in names:
+    try:
+        C.get_backend(name)
+    except CompetitorError:
+        pass
+    except ImportError as exc:
+        raise SystemExit("bare ImportError for %r: %s" % (name, exc))
+
+# `available` must mean `usable`: anything still listed here claims to need
+# none of the blocked libraries, and must be able to prove it.
+for name in C.available_backends(include_baseline=True):
+    backend = C.get_backend(name)
+    assert backend.name == name
+print("OK", sorted(C.available_backends(include_baseline=True)))
 """
 
 

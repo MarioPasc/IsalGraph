@@ -403,6 +403,27 @@ class MinDfsBackend(ReprBackend):
             out.add_edge(int(i), int(j))
         return out
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """``networkx`` is a genuine runtime dependency here, not just a type.
+
+        ``encode`` calls ``nx.is_connected``: the DFS code is undefined on a
+        disconnected graph and refusing it is part of the contract.  Without
+        this the backend reported itself available with ``networkx`` absent
+        and then raised a bare ``ImportError`` from inside ``encode`` -- the
+        wrong exception, from the wrong place, after the caller had already
+        been told the backend was usable.  A missing dependency must surface
+        as ``BackendUnavailableError`` **on request**.
+
+        ``wl_subtree`` deliberately does *not* override this: it needs no
+        ``networkx`` at all and reporting itself available is honest.
+        """
+        try:
+            import networkx  # noqa: F401
+        except ImportError:
+            return False
+        return True
+
 
 register_backend("min_dfs", MinDfsBackend)
 
