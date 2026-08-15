@@ -167,9 +167,31 @@ def test_agm_on_the_identity_permutation_is_the_column_wise_triangle() -> None:
         ("running_example", RUNNING_EXAMPLE_IDENTITY_TRIANGLE),
         ("running_example_minus_edge", MINUS_EDGE_IDENTITY_TRIANGLE),
     ):
-        graph = _graph(name)
-        adjacency, n = agm_module._adjacency_sets(graph)
-        assert agm_module._code_from_perm(adjacency, list(range(n))) == expected
+        assert agm_module.identity_code(_graph(name)) == expected
+
+
+def test_identity_code_pins_the_labelling_against_insertion_order() -> None:
+    """The labelling is pinned by rebuilding, not by renaming.
+
+    ``nx.convert_node_labels_to_integers(ordering="sorted")`` renames node
+    values and leaves insertion order alone; ``to_graph6_bytes`` re-derives
+    its labelling from insertion order, so the two disagree on almost every
+    scrambled graph.  ``identity_code`` therefore rebuilds, and a graph
+    carrying the same labels in a scrambled insertion order must give the
+    same answer.
+    """
+    graph = _graph("running_example")
+    scrambled = nx.Graph()
+    scrambled.add_nodes_from([4, 1, 5, 0, 3, 2])
+    scrambled.add_edges_from(sorted(graph.edges(), reverse=True))
+    assert list(scrambled.nodes()) != sorted(scrambled.nodes())
+    assert agm_module.identity_code(scrambled) == RUNNING_EXAMPLE_IDENTITY_TRIANGLE
+    # And the unpinned reading really is order-dependent, so the pinning is
+    # doing work rather than restating what networkx already guarantees.
+    adjacency, n = agm_module._adjacency_sets(scrambled)
+    assert agm_module._code_from_perm(adjacency, list(range(n))) != (
+        RUNNING_EXAMPLE_IDENTITY_TRIANGLE
+    )
 
 
 def test_agm_identity_code_equals_the_graph6_payload_of_the_same_labelling() -> None:
@@ -183,11 +205,12 @@ def test_agm_identity_code_equals_the_graph6_payload_of_the_same_labelling() -> 
     for name in fixtures.ALL_FIXTURES:
         graph = _graph(name)
         n = graph.number_of_nodes()
-        adjacency, _n = agm_module._adjacency_sets(graph)
-        identity = agm_module._code_from_perm(adjacency, list(range(n)))
-        wire = nx.to_graph6_bytes(graph, header=False).strip()
+        pinned = nx.Graph()
+        pinned.add_nodes_from(sorted(graph.nodes()))
+        pinned.add_edges_from(graph.edges())
+        wire = nx.to_graph6_bytes(pinned, header=False).strip()
         payload = "".join(nauty_module.graph6_payload_bits(wire, n))
-        assert identity == payload, name
+        assert agm_module.identity_code(graph) == payload, name
 
 
 def test_agm_frame_pairs_match_the_code_order() -> None:
@@ -238,12 +261,10 @@ def test_agm_agrees_with_agent_a_adjacency() -> None:
     )
     del adjacency_backend
     backend = get_repr_backend("adjacency")
+    rng = random.Random(42)
     for name in fixtures.ALL_FIXTURES:
-        graph = _graph(name)
-        n = graph.number_of_nodes()
-        adjacency, _n = agm_module._adjacency_sets(graph)
-        identity = agm_module._code_from_perm(adjacency, list(range(n)))
-        assert "".join(backend.encode(graph).symbols) == identity, name
+        for graph in (_graph(name), fixtures.shuffled_copy(_graph(name), rng)):
+            assert "".join(backend.encode(graph).symbols) == agm_module.identity_code(graph), name
 
 
 # ==========================================================================
@@ -562,22 +583,28 @@ def test_nauty_realised_bits_are_the_emitted_bytes() -> None:
 
 @pytest.mark.xfail(
     reason=(
-        "DEFECT REPORT, not a fix. bits.py::_packed_bits computes "
-        "8*ceil(n(n-1)/2 / 16) where T-04-design.md 4.2 specifies "
-        "8*ceil(n(n-1)/16). The shipped value is about half the payload it is "
-        "supposed to store -- 2384 realised bits for a 4753-bit payload at n=98 "
-        "-- which halves the adjacency and agm_cam Claim A baseline. bits.py is "
-        "the orchestrator's file: reported, not edited."
+        "DEFECT, found here and FIXED BY THE ORCHESTRATOR on the integration "
+        "side after this worktree was cut. bits.py::_packed_bits computes "
+        "8*ceil(T/16) for T = n(n-1)/2, where T-04-design.md 4.2 specifies "
+        "8*ceil(n(n-1)/16) = 8*ceil(T/8). The shipped value is about half the "
+        "payload it is supposed to store -- 8 bits for a 15-bit triangle at "
+        "n=6, 2384 for 4753 at n=98 -- which halves the adjacency and agm_cam "
+        "Claim A realised-bits baseline. This test asserts the CORRECT value "
+        "and flips to XPASS at merge."
     ),
 )
-def test_agm_realised_bits_cannot_be_below_the_payload() -> None:
-    """A lossless packing cannot store ``k`` bits in fewer than ``k`` bits."""
+def test_agm_realised_bits_match_the_frozen_formula() -> None:
+    """``8*ceil(n(n-1)/16)``, and never below the payload it stores."""
+    import math
+
     for name in fixtures.ALL_FIXTURES:
         graph = _graph(name)
+        n = graph.number_of_nodes()
         backend = get_repr_backend("agm_cam")
-        encoding = backend.encode(graph)
-        counted = backend.bits(encoding)
-        assert counted.realised_bits >= counted.entropy_bits, name
+        counted = backend.bits(backend.encode(graph))
+        assert counted.realised_bits == 8 * math.ceil(n * (n - 1) / 16), name
+        assert counted.entropy_bits <= counted.realised_bits, name
+        assert counted.realised_bits < counted.entropy_bits + 8, name
 
 
 def test_bits_module_is_the_only_producer() -> None:

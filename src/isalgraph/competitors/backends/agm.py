@@ -119,10 +119,43 @@ ALPHABET_SIZE = 2
 
 
 def _adjacency_sets(graph: nx.Graph) -> tuple[list[set[int]], int]:
-    """Neighbour sets on ``0..n-1``, in the graph's own node order."""
+    """Neighbour sets on ``0..n-1``, in the graph's own node order.
+
+    **Deliberately not normalised.**  The canonical code is a minimum over
+    every permutation, so it does not depend on this order at all -- but the
+    greedy incumbent and therefore the *number of search nodes expanded* do,
+    and the frozen 200k/100k budgets are the values behind published failure
+    rates.  Normalising here would move them.  :func:`identity_code` is the
+    one place order is pinned, because that is the one place it is observed.
+    """
     nodes = list(graph.nodes())
     index = {v: i for i, v in enumerate(nodes)}
     return [{index[w] for w in graph.neighbors(v)} for v in nodes], len(nodes)
+
+
+def identity_code(graph: nx.Graph) -> str:
+    """The code at the **identity** permutation, on the pinned labelling.
+
+    This is AGM's contribution to the reading-order identity: it must equal
+    ``adjacency.symbols`` and graph6's unpacked payload for the same graph,
+    bit for bit (CONTRACTS.md §9).  It is not canonical and is not what
+    ``encode`` returns; it exists so the family identity is executable.
+
+    The labelling is pinned by **rebuilding** the graph with nodes added in
+    ascending order.  ``nx.convert_node_labels_to_integers(ordering=
+    "sorted")`` does *not* do this -- it renames values and leaves insertion
+    order alone, and ``to_graph6_bytes`` re-derives its labelling from
+    insertion order, so the two disagree on 290 of 300 scrambled graphs
+    (measured in wave 1 by track A and by the orchestrator independently).
+    ``graph6.md`` §7 prescribes the broken call; this does not use it.
+    """
+    import networkx as nx
+
+    pinned = nx.Graph()
+    pinned.add_nodes_from(sorted(graph.nodes()))
+    pinned.add_edges_from(graph.edges())
+    adjacency, n = _adjacency_sets(pinned)
+    return _code_from_perm(adjacency, list(range(n)))
 
 
 def _code_from_perm(adjacency: list[set[int]], perm: list[int]) -> str:
@@ -341,5 +374,6 @@ __all__ = [
     "AGMBackend",
     "agm_canonical_code",
     "code_to_graph",
+    "identity_code",
     "upper_triangle_pairs",
 ]
