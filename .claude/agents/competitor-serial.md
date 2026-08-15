@@ -127,9 +127,16 @@ Numbered; each names the command that proves it. Put the command output in your 
 
    | | `G` | `H` |
    |---|---|---|
-   | `adjacency` | `'101001000100111'` | `'100001000100111'` |
+   | `adjacency` | `'101101000100011'` | `'101001000100011'` |
    | `graph6` | `'ElCW'` | `'EhCW'` |
    | `sparse6` | `':EaWIzR'` (7 bytes) | `':EaYms'` (6 bytes) |
+
+   > **Corrected 2026-08-15, PI-signed.** This table previously quoted
+   > `'101001000100111'` / `'100001000100111'`, which are the **row-major** triangle — the order
+   > `scratch/backends.py:70` used, and not the frozen one. The column-wise values above are the
+   > ones that satisfy criterion 6: `'ElCW'` unpacks to `l=101101`, `C=000100`, `W=011000`, whose
+   > first 15 bits are exactly `'101101000100011'`. If your adjacency disagrees with graph6's
+   > unpacked payload, your reading order is wrong — that is the whole point of criterion 6.
 
 2. **F3 on the real cohort**, 50 graphs × 20 relabellings, seed 42, per Suite-1 dataset: all three
    land in **0–6 / 50**, and specifically `graph6` gives Letter LOW **4/50** · MED **2/50** ·

@@ -130,11 +130,25 @@ WL is not a serialisation. It has `distance(a, b)` and **no `encode() -> str` an
 > print the reason.** `VectorBackend` has no `bits()` method, so this is unreachable rather than
 > merely forbidden — keep it that way.
 
-> 🔴 **`grakel`'s `n_iter = k` runs `k` rounds counting the base histogram as round 0** — it refines
-> `k − 1` times. Our `h` counts refinements. So **`grakel(n_iter=3) ≡ ours(h=2)`**, verified at
-> **5.830952 exactly** on the running example. Fix `h` once, in one place, and record it.
+> 🔴 **There is no off-by-one. Corrected 2026-08-15, PI-signed — do not re-derive this.**
+> `grakel`'s `n_iter = k` runs the base histogram **plus `k` refinements**, so
+> **`grakel(n_iter=k) ≡ ours(h=k)`**. From the source: `weisfeiler_lehman.py:109` sets
+> `self._n_iter = self.n_iter + 1` and the loop is `for i in range(1, self._n_iter)`. Confirmed by
+> arithmetic — at `n_iter=1`, `K(G,G) = 62 = 36` (base, six identical labels) `+ 26` (degree
+> histogram `5² + 1²`). Measured on the running example: `grakel(n_iter=2) = 5.830952`,
+> `grakel(n_iter=3) = 7.211103`.
+>
+> 🔴 **The off-by-one was ours, and it is the thing you must not port.**
+> `scratch/backends.py::wl_features` compresses colours to small integers **per graph, per round**
+> (lines 109–110) and builds the next round's signature from those compressed labels. The table is
+> built from one graph's own signature set, so **features from rounds ≥ 2 are not comparable across
+> graphs** — README §6 item 3's trap, committed by the file that documents it. That implementation
+> produced README §4.1's WL row. A correct WL moves it: Letter LOW **0.895 → 0.7792**,
+> MED **0.869 → 0.7746**, HIGH 0.580 → 0.5674, LINUX 0.573 → 0.5665, AIDS 0.459 → **0.4714**.
+> Those are the numbers your backend must produce, and both of your implementations must agree on
+> them to `1e-9`.
 
-**Frozen**: `h = 2` (⇒ `grakel n_iter = 3`), `normalize=False`, **fitted per dataset**.
+**Frozen**: `h = 2` (⇒ `grakel n_iter = 2`), `normalize=False`, **fitted per dataset**.
 
 - **`h = 2`, and do not tune it.** `h = 3` is below `h = 2` on all five datasets. Tuning `h` on ρ
   would be selecting a baseline on the outcome — the same error `competitors.md` §3.4 forbids for our
@@ -157,17 +171,19 @@ WL is not a serialisation. It has `distance(a, b)` and **no `encode() -> str` an
 ### E10 reconciliation — report, do not edit
 
 `benchmarks/real_data/eval_setup/wl_kernel_computer.py` already exists and defaults to
-**`n_iter = 5`**, consumed by `eval_setup.py::wl_n_iter`. Under grakel's convention that is
-**`h = 4`** — **two refinement rounds past the `h = 2` this ticket freezes**, and past the `h = 3`
-already measured strictly worse on all five datasets.
+**`n_iter = 5`**, consumed by `eval_setup.py::wl_n_iter`. Under the corrected convention that is
+**`h = 5`** — **three refinement rounds past the `h = 2` this ticket freezes**, and past the `h = 3`
+already measured strictly worse on all five datasets. *(Corrected 2026-08-15; it previously read
+`h = 4`.)*
 
 **Measure the gap and report it. Do not edit that file** — it is outside your ownership and its
 consumers belong to T-06. Your work log must state, with numbers, what changes between `h = 2` and
-`h = 4` on a fixture, so the orchestrator can route it.
+`h = 5` on a fixture, so the orchestrator can route it.
 
-**The environment differs from the folder's record**: it says `grakel 0.1.8`; `isalgraph-cpp` has
-**0.1.10**. Re-verify the `5.830952` identity under 0.1.10 **before** any WL number is quoted. If it
-does not hold, **stop and escalate** — every existing WL number becomes suspect.
+**The environment question is closed.** `isalgraph-cpp` carries `GraKeL-0.1.10.dist-info` with a
+stale `grakel.__version__ == '0.1.8'` string, so the folder's "0.1.8" and the design note's "0.1.10"
+are **the same installation**. Do not re-open it. Do re-verify `5.830952` on your own fixture before
+quoting any WL number.
 
 ---
 
@@ -180,7 +196,10 @@ Numbered; each names the command that proves it. Put the command output in your 
    give **1 distinct code**. WL at `h = 3` gives **10** non-zero features for `G` and **13** for
    `H = G − (0,3)`.
 
-2. **`grakel(n_iter=3) ≡ ours(h=2) = 5.830952`** under grakel **0.1.10**, exactly.
+2. **`grakel(n_iter=2) ≡ ours(h=2) = 5.830952`** exactly, and `grakel(n_iter=3) ≡ ours(h=3) =
+   7.211103`. *(Corrected 2026-08-15 — the brief previously said `n_iter=3`; see the block above.)*
+   Additionally: your two implementations agree to `1e-9` on ρ over all five Suite-1 datasets at
+   `h = 2` and `h = 3`, giving `0.7792 / 0.7746 / 0.5674 / 0.5665 / 0.4714` at `h = 2`.
 
 3. **min-DFS V1 — exhaustive brute force.** Agrees with the lexicographic minimum over **every valid
    DFS traversal** on all **30** connected isomorphism classes with `n ≤ 5` (1, 2, 6, 21 at
@@ -205,10 +224,14 @@ Numbered; each names the command that proves it. Put the command output in your 
    Ship it as a **shared unit-test fixture**: WL distance 0, every other backend non-zero. It is a
    two-line regression test that would catch a broken canonical backend instantly.
 
-8. **WL's incompleteness on the real cohort** reproduces: over the certified-exact pairs of the
-   200-graph sample, `frac(d_WL = 0)` equals `frac(GED = 0)` **exactly** on all three Letter sets
-   (0 false zeros), and gives **≈ 1** false-zero pair on LINUX and **≈ 6** on AIDS. **Report both
-   halves.**
+8. **WL's incompleteness on the real cohort.** Over the certified-exact pairs of the 200-graph
+   sample, report `frac(d_WL = 0)` against `frac(GED = 0)`: the scout measured 0 false zeros on all
+   three Letter sets, **≈ 1** on LINUX and **≈ 6** on AIDS. **Report both halves.**
+   ⚠ *Those figures came from the defective `wl_features` (see the corrected block above), so treat
+   them as a prior, not a target.* A false-zero count that moves under the correct WL is a
+   **finding to report, not a number to tune towards** — put it in your log and let the
+   orchestrator route it. The one part that cannot move is K₃,₃ / prism: 1-WL cannot separate two
+   3-regular graphs on six vertices under any convention.
 
 9. **min-DFS budget behaviour**: at `max_projections = 50_000`, **24 / 400** Mutagenicity graphs
    raise `MinDfsBudgetExceeded` and **zero** elsewhere in the cohort. The validation suite (3–5)
