@@ -2579,7 +2579,7 @@ def _report_gate_pattern(gate: Mapping[str, Any]) -> list[str]:
         add("")
     if large:
         add(
-            "**3. The implication is unchanged, and it is the AE.1-relevant part: at the "
+            "**3. The implication is unchanged, and it is the AE.1-relevant part.** At the "
             "unconfounded sizes a better upper bound buys only about "
             f"{100 * large['gate_share_at_min_ratio']:.0f}--"
             f"{100 * large['gate_share_at_max_ratio']:.0f} % off the primary slope, so **most of "
