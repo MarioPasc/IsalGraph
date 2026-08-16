@@ -185,7 +185,7 @@ One file per `(suite, dataset, representation)`:
 | `graph_ids` | `<U16` | `(G,)` | **in cohort order**, identical to the cohort file's `graph_ids` |
 | `node_counts` | `int32` | `(G,)` | carried through from the cohort — **the distance track gets `n` from here and never opens a cohort file**, which is what keeps the two ownership sets disjoint |
 | `edge_counts` | `int32` | `(G,)` | carried through from the cohort |
-| `encoding` | `<U…` (object-free) | `(G,)` | the encoded **symbol sequence**, joined by `metadata.symbol_sep`; `''` when `status != "ok"` |
+| `encoding` | `<U…` (object-free) | `(G,)` | the encoded **symbol sequence**, joined by `metadata.symbol_sep`; `''` only when `status == "error"` — see §3.2 |
 | `length` | `int32` | `(G,)` | **the SYMBOL count** (`Encoding.length`), not `len(encoding)`; `-1` when not encoded |
 | `error_kind` | `<U32` | `(G,)` | exception class name when `status == "error"`, else `''` — see §3.1 |
 
@@ -213,6 +213,53 @@ edits for one deleted tuple — the twofold error `competitors/base.py` warns ab
 distance over the resulting **list of symbols**; otherwise over the characters. `rapidfuzz`'s
 Levenshtein accepts any sequence of hashables, so this costs nothing. **Never re-encode through the
 registry** — that would need the cohort and would break the ownership partition.
+
+> ## ⚠ CORRECTED 2026-08-16 — `encoding` is ALWAYS the symbol join, never `Encoding.text`
+>
+> Found **independently by both the encoding and the distance tracks**, and verified by the
+> orchestrator. `sparse6` and `sparse6_nauty` carry a leading **`':'` format marker in
+> `Encoding.text` that is not a symbol**. Measured: `path_graph(4)` → `length = 3`,
+> `len(text) = 4`; `cycle_graph(11)` → 11 vs 12; and `len(text) − len(symbols) == 1` on **every** row
+> of 50 real graphs for both backends, `0` for graph6 / nauty_graph6 / adjacency / agm_cam /
+> isalgraph_pruned. Their symbols *are* single characters, so the original rule assigned
+> `symbol_sep = ""` and `encoding = Encoding.text` — under which the invariant this section requires
+> a test to assert, `length == len(encoding)`, **fails on row 0**.
+>
+> **Frozen: `encoding = symbol_sep.join(str(s) for s in Encoding.symbols)` in BOTH branches.** It
+> coincides with `Encoding.text` everywhere except sparse6, where it drops the `':'`. `length ==
+> len(encoding.split(sep))` then holds universally.
+>
+> **This is not a new convention — it is the one already frozen.** T-04's article notes §3 record the
+> `sparse6` Claim-A column as *"6 bits high on every row — it counted the `':'`, which the frozen
+> convention treats as framing, not payload."* Storing the symbol join makes the schema agree with
+> the bit convention instead of contradicting it.
+>
+> **Cost, stated in `metadata.notes` of every affected file**: the stored sparse6 string needs a
+> `':'` prepended before `nx.from_sparse6_bytes` will read it. Distance consumers are unaffected —
+> they split, never decode — and a constant prefix present in both operands shifts neither
+> Levenshtein nor an equal-length test, so no distance changes.
+
+### 3.2 A censored row is NOT an empty row
+
+The original §3 said `encoding` is `''` whenever `status != "ok"`, which **contradicts the D14
+invariant** in the same section (`status == "censored"` ⟹ `encoding != ''`). D14 wins: a censored
+graph is retained **with its greedy-min fallback string**, which is the whole point of the decision.
+
+| `status` | `encoding` | `fallback_used` | `length` |
+|---|---|---|---|
+| `ok` | the symbol join | `False` | `>= 0` |
+| `censored` | **the greedy-min string** | `True` | `>= 0` |
+| `error` | `''` | `False` | `-1` |
+
+`fallback` is retired as a distinct value — it was never distinguishable from `censored`.
+
+### 3.3 The `.npz` string is not self-decodable — a constraint on any future schema change
+
+`decode()` for `graph6`, `sparse6`, `nauty_graph6` and `adjacency` reads `Encoding.wire` (bytes) or
+`Encoding.frame`, and §3 carries neither. So round-trip validation is tested as
+`backend.decode(backend.encode(G))` on real cohort graphs, with a **separate** test asserting the
+`.npz` string recovers the identical symbol sequence. **If a later ticket needs self-decodable
+files, `wire` has to enter the schema** — do not assume the stored string suffices.
 
 This keeps `levenshtein` (symbol-level, **primary**) and `levenshtein_char` (character-level,
 reported only where explicitly labelled) distinguishable downstream, which is the convention T-04
