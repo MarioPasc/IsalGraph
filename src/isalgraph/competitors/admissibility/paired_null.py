@@ -11,14 +11,20 @@ direction and conservative in the other.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 
 import numpy as np
+import numpy.typing as npt
 from scipy.stats import rankdata
 
 from isalgraph.competitors import datasets
-from isalgraph.competitors.registry import get_backend, get_metric
+from isalgraph.competitors.registry import get_metric, get_repr_backend
+from isalgraph.errors import IsalGraphError
+
+FloatArray = npt.NDArray[np.float64]
+IntArray = npt.NDArray[np.int_]
 
 ROOT = datasets.cohort_root()
 OUT = "/media/mpascual/Sandisk2TB/research/isalgraph/T-04a/paired_null_ci.json"
@@ -26,7 +32,7 @@ RESAMPLES = 2000
 SEED = 42
 
 
-def spearman(x: np.ndarray, y: np.ndarray) -> float:
+def spearman(x: FloatArray, y: FloatArray) -> float:
     if len(x) < 3:
         return float("nan")
     rx, ry = rankdata(x), rankdata(y)
@@ -36,7 +42,7 @@ def spearman(x: np.ndarray, y: np.ndarray) -> float:
     return float((rx * ry).sum() / d) if d else float("nan")
 
 
-def reference(ds: str, arm: str, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def reference(ds: str, arm: str, idx: IntArray) -> tuple[FloatArray, npt.NDArray[np.bool_]]:
     """Return (matrix, valid_mask) restricted to the draw."""
     if arm == "exact":
         p = os.path.join(
@@ -56,14 +62,15 @@ def run(ds: str, arm: str) -> dict[str, object] | None:
     cohort = datasets.load(ds)
     idx = np.array(cohort.sample(200, seed=SEED))
     graphs = [cohort.graphs[i] for i in idx]
-    backend, metric = get_backend("isalgraph_pruned"), get_metric("levenshtein")
+    backend, metric = get_repr_backend("isalgraph_pruned"), get_metric("levenshtein")
 
+    # A budget-exceeded graph is a datum, not a stop -- and the pairs it would
+    # have joined are dropped from BOTH arms, which is the whole point of this
+    # module: the null must see exactly the pairs its representation saw.
     enc: dict[int, object] = {}
     for k, g in enumerate(graphs):
-        try:
+        with contextlib.suppress(IsalGraphError):
             enc[k] = backend.encode(g)
-        except Exception:  # noqa: BLE001 -- a failure is a datum
-            pass
     order = np.array([g.number_of_nodes() for g in graphs])
     ref, valid = reference(ds, arm, idx)
 
