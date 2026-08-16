@@ -15,10 +15,10 @@ import os
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
+import numpy as np
+import pandas as pd
 
 from benchmarks.eval_visualizations.result_loader import (
     ALL_DATASETS,
