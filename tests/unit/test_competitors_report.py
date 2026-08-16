@@ -538,6 +538,35 @@ def test_f5_table_emits_both_views(tmp_path: Path) -> None:
     assert "**View: `equal_n`**" in text
 
 
+def _table_widths(markdown: str) -> list[int]:
+    """The cell count of every markdown table row, header rows included."""
+    return [
+        len(line.strip().strip("|").split("|"))
+        for line in markdown.splitlines()
+        if line.startswith("|")
+    ]
+
+
+@pytest.mark.parametrize("view_name", ["all_pairs", "equal_n"])
+def test_f5_table_rows_are_not_split_by_an_unescaped_pipe(tmp_path: Path, view_name: str) -> None:
+    """A cell holding ``|n1 - n2|`` would silently add columns to its row."""
+    text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
+    block = text.split(f"**View: `{view_name}`**")[1].split("**View")[0]
+    widths = _table_widths(block)
+    assert widths, block
+    assert len(set(widths)) == 1, widths
+
+
+def test_selection_md_rows_are_not_split_by_an_unescaped_pipe(
+    grid: dict[str, Any], tmp_path: Path
+) -> None:
+    text = render_selection_md(grid, tmp_path / "grid.json")
+    for block in text.split("\n\n"):
+        widths = _table_widths(block)
+        if widths:
+            assert len(set(widths)) == 1, block
+
+
 def test_f5_table_marks_the_best_value_per_column(tmp_path: Path) -> None:
     text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
     assert "**0.925**" in text

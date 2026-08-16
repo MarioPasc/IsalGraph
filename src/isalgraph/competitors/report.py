@@ -667,6 +667,7 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
                 best[ref] = max(values)
 
         body: list[list[str]] = []
+        absences: dict[str, str] = {}
         for name in rows_order:
             metric_names = {
                 str(_as_mapping(tables[ref].get(name)).get("metric"))
@@ -675,7 +676,8 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
             }
             distance = f"`{sorted(metric_names)[0]}`" if metric_names else "--"
             if name == SIZE_NULL:
-                distance = "`|n1 - n2|` (size null)"
+                # The pipes of |n1 - n2| would split the markdown cell.
+                distance = "`abs(n1 - n2)` (size null)"
             row = [f"`{name}`", distance]
             for ref in references:
                 entry = _as_mapping(tables[ref].get(name))
@@ -683,7 +685,9 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
                 null_rho = _as_float(_as_mapping(tables[ref].get(SIZE_NULL)).get("rho"))
                 if rho is None:
                     reason = entry.get("reason")
-                    row.extend([f"-- ({_md_escape(str(reason))})" if reason else "--", "--", "--"])
+                    if reason:
+                        absences[name] = str(reason)
+                    row.extend(["--", "--", "--"])
                     continue
                 delta = "--" if null_rho is None else f"{rho - null_rho:+.3f}"
                 row.extend(
@@ -697,6 +701,15 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
 
         lines.extend([f"**View: `{view}`**", ""])
         lines.extend(_md_table(header, body))
+        if absences:
+            grouped_reasons: dict[str, list[str]] = {}
+            for name, reason in absences.items():
+                grouped_reasons.setdefault(reason, []).append(name)
+            lines.append("")
+            lines.extend(
+                f"`--` for {', '.join(f'`{n}`' for n in names)}: {_md_escape(reason)}."
+                for reason, names in grouped_reasons.items()
+            )
 
         pair_counts = []
         for ref in references:
