@@ -441,16 +441,65 @@ size-dependence.** So a conclusion drawn from the LB arm alone is not a conclusi
 
 ### What does NOT change, and why
 
-**B1a's pair population stays as frozen: all pairs.** Three reasons, and the first is decisive:
+**B1a's pair population stays as frozen: all pairs** — but *not* for the reason first given here.
 
-- **B1a is a *difference* of two correlations against the *same* reference.** A size component
-  inflating both arms partly cancels; it does not invalidate the comparison *between*
-  representations, which is what B1a tests.
+> ## ⚠ CORRECTED 2026-08-16 — the cancellation argument was WRONG. The conclusion survives on
+> the other two reasons; what B1a may be **claimed to show** does not.
+>
+> This section originally led with: *"B1a is a difference of two correlations against the same
+> reference, so a size component inflating both arms partly cancels."* **That is false, and it was
+> the load-bearing half.** Refuted by the T-04a session, analytically and empirically, and the
+> refutation holds.
+>
+> **Analytically**: a correlation is **not additive in its components**, so there is no offset to
+> cancel. Spearman is rank-based, so for strictly monotone `f`, `ρ(X, f(|Δn|)) = ρ(X, |Δn|)`
+> *exactly*. With `R ≈ f(|Δn|)` — and `ρ(|Δn|, LB)` is **0.96–0.998** — it follows that
+> `ρ(X,R) − ρ(Y,R) ≈ ρ(X,|Δn|) − ρ(Y,|Δn|)`. The difference does not *remove* the size
+> channel; it makes the test almost entirely **about** it, reweighted by each representation's own
+> size-sensitivity — which is exactly the axis B1a compares.
+>
+> **Empirically**, from `corrected_rho_table.json`, Kendall τ between the all-pairs ranking and the
+> equal-`n` ranking. **Under a pure additive offset τ would be 1.00 with zero inversions:**
+>
+> | dataset | reps | τ(all-pairs, equal-`n`) | inversions vs `isalgraph_pruned` |
+> |---|---:|---:|---:|
+> | AIDS | 9 | **−0.111** | 6 |
+> | LINUX | 10 | 0.067 | 4 |
+> | Letter MED | 10 | 0.111 | 5 |
+> | Letter HIGH | 10 | 0.200 | 3 |
+> | Letter LOW | 10 | 0.467 | 2 |
+>
+> Representations **cross** rather than shift together: `adjacency` 0.756 → 0.157 and `nauty_graph6`
+> 0.425 → 0.137 on AIDS; `nauty_graph6` 0.646 → **0.952** on Letter MED. And this is measured against
+> **exact** GED (size-dependence 0.71–0.92); B1a's reference is the **LB** at 0.96–0.998, so the
+> effect there is **larger**, not smaller.
+>
+> **The inversions cut both ways** — on Letter LOW the equal-`n` view lifts `agm_cam`
+> (0.918 → 0.994) and `sparse6_nauty` (0.638 → 0.981) *above* IsalGraph. This is not a view that
+> flatters us.
+
+**The two surviving reasons, which are sufficient:**
+
 - **Moving a frozen family's population after seeing a measurement is what pre-registration exists to
   prevent.** The measurement is F5-blind — `ρ(|Δn|, LB)` never touches Levenshtein — so a change
   would be *defensible*, but "defensible" is a lower bar than "not required".
-- The equal-`n` view **is computed and reported prominently regardless**, as the pre-declared
-  companion. It costs a mask over matrices we already hold.
+- The equal-`n` view **is computed and reported regardless**, at the cost of a mask over matrices we
+  already hold.
 
-**The all-pairs view is reported with this confound stated in the text**, rather than quietly
-replaced by the view that flatters the structural claim.
+### 9.1 What the refutation DOES change — three claim-scoping rules, frozen
+
+The finding does not change what B1a is **computed on**. It changes what B1a may be **claimed to
+show**, and that is a constraint on T-20 as much as on T-06.
+
+1. **B1a all-pairs may NOT be reported as "which representation is the better GED proxy."** It is
+   *which representation better tracks the reference, whose dominant component at these sizes is
+   graph size*. **That sentence goes in the text, beside the table.**
+2. **The equal-`n` companion is not a robustness check.** A robustness check returning τ = −0.111
+   against the primary confirms nothing. **Both views get equal prominence, and where they disagree,
+   the disagreement IS the result** — not a footnote, and never an average of the two.
+3. **If Claim B rests on B1a's all-pairs outcome and the companion inverts it, that is the finding**
+   and it is reported as such. Written down **now, before the family runs**, so the framing cannot be
+   drafted around whichever view survives.
+
+Neither view is the true one. They answer different questions, and the paper states which question
+each answers.
