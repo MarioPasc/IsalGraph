@@ -219,6 +219,7 @@ def _empty_record(metric: str | None, reason: str) -> dict[str, Any]:
         "n_pairs": 0,
         "n_undefined": 0,
         "zero_frac": None,
+        "size_null_on_my_pairs": None,
         "reason": reason,
     }
 
@@ -249,17 +250,44 @@ def rho_record(
     pairs: list[tuple[int, int]],
     geds: list[float],
     index: ResampleIndex,
+    whole_view_null: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One cell of one view: rho, its p-value, and its graph-level interval.
 
     Pairs whose distance is undefined are counted and excluded; pairs naming
     a graph this backend could not encode are excluded without being counted
     as undefined, since the count they belong in is ``n_unencodable``.
+
+    **The cell also carries its own null.**  ``size_null_on_my_pairs`` is
+    ``rho(|n1 - n2|, GED)`` recomputed on *exactly the pairs this cell used*,
+    and it is the only valid subtrahend for a difference.  The row-level
+    ``size_null`` is computed on the cohort's whole pair set, so on any
+    dataset where this representation lost graphs the two are correlations
+    over different samples and ``rho - size_null`` is not a comparison.
+
+    The gap is not academic and it does not point in a safe direction.  On
+    Mutagenicity the 2.0 s canonicalisation budget censors 14 of 200 graphs,
+    and they are **not missing at random**: measured, the censored graphs
+    average 75.8 nodes (max 97) against 25.4 (max 48) for the kept ones --
+    every censored graph is larger than every kept one.  Removing them
+    collapses the spread of ``|n1 - n2|`` from sd 16.4 to 8.0 and so makes
+    the cohort *easier for the null*, while leaving the representation's own
+    rho untouched at 0.832.  The null falls from 0.754 to 0.636, and the
+    margin moves from +0.078 to +0.196 purely through which pairs the
+    baseline saw.  That is D14's censoring bias landing inside the baseline
+    rather than inside the arm -- the direction nobody checks, and it lands
+    on the one dataset where IsalGraph wins Claim A outright.
+
+    Both nulls are emitted.  The cohort-level one is what a standalone null
+    column should print; the restricted one is what a difference must use.
+    Neither silently replaces the other, because a reader needs to see that
+    they differ and by how much.
     """
     metric = get_metric(metric_name)
     distances: list[float] = []
     values: list[float] = []
     positions: list[tuple[int, int]] = []
+    size_diffs: list[float] = []
     undefined = 0
     for (a, b), ged in zip(pairs, geds, strict=True):
         if a not in encoded or b not in encoded:
@@ -270,6 +298,7 @@ def rho_record(
         distances.append(float(metric.distance(encoded[a], encoded[b])))
         values.append(ged)
         positions.append((draw.position[a], draw.position[b]))
+        size_diffs.append(float(abs(draw.n_nodes[a] - draw.n_nodes[b])))
 
     if len(distances) < 3:
         record = _empty_record(metric_name, "fewer than three defined pairs")
@@ -301,6 +330,51 @@ def rho_record(
         "n_pairs": len(distances),
         "n_undefined": undefined,
         "zero_frac": sum(d == 0.0 for d in distances) / len(distances),
+        "size_null_on_my_pairs": _restricted_null(
+            size_diffs, values, positions, index, whole_view_null
+        ),
+        "reason": None,
+    }
+
+
+def _restricted_null(
+    size_diffs: list[float],
+    values: list[float],
+    positions: list[tuple[int, int]],
+    index: ResampleIndex,
+    whole_view_null: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """``rho(|n1 - n2|, GED)`` on one cell's own pair set.
+
+    The only valid subtrahend for ``rho - null``.  It is computed on the same
+    resample indices as everything else in this dataset and view, so a
+    difference taken against it is paired.
+
+    Args:
+        whole_view_null: the row-level null, when the caller knows this cell
+            kept every pair of the view.  A cell's pair set is a subset of
+            the view's, so equal counts imply the *same* pairs and the two
+            nulls are then the same number -- reusing it saves a second
+            bootstrap on the great majority of cells, which lose nothing.
+    """
+    if whole_view_null is not None and whole_view_null.get("n_pairs") == len(size_diffs):
+        return {
+            "rho": whole_view_null["rho"],
+            "p": whole_view_null["p"],
+            "ci": whole_view_null["ci"],
+            "n_pairs": len(size_diffs),
+            "reason": whole_view_null["reason"],
+        }
+    constant = _constant_reason(size_diffs, values, SIZE_NULL)
+    if constant is not None:
+        return {"rho": None, "p": None, "ci": None, "n_pairs": len(size_diffs), "reason": constant}
+    rho, p = spearman(size_diffs, values)
+    ci = graph_bootstrap_ci(size_diffs, values, positions, index)
+    return {
+        "rho": rho,
+        "p": p,
+        "ci": None if ci is None else [ci[0], ci[1]],
+        "n_pairs": len(size_diffs),
         "reason": None,
     }
 
@@ -322,10 +396,17 @@ def dataset_record(
         mask = _view_mask(draw, pairs, view)
         view_pairs = [pair for pair, keep in zip(pairs, mask, strict=True) if keep]
         view_geds = [ged for ged, keep in zip(geds, mask, strict=True) if keep]
-        row: dict[str, Any] = {
-            SIZE_NULL: rho_record(
-                SIZE_NULL, SIZE_NULL, draw, encodings[SIZE_NULL], view_pairs, view_geds, index
-            )
+        null_cell = rho_record(
+            SIZE_NULL, SIZE_NULL, draw, encodings[SIZE_NULL], view_pairs, view_geds, index
+        )
+        row: dict[str, Any] = {SIZE_NULL: null_cell}
+        # The null over the whole view, for cells that kept every pair.
+        whole_view_null = {
+            "rho": null_cell["rho"],
+            "p": null_cell["p"],
+            "ci": null_cell["ci"],
+            "n_pairs": null_cell["n_pairs"],
+            "reason": null_cell["reason"],
         }
         for backend_name in sorted(primary):
             if backend_name == SIZE_NULL:
@@ -354,6 +435,7 @@ def dataset_record(
                 view_pairs,
                 view_geds,
                 index,
+                whole_view_null,
             )
         views[view] = row
 
@@ -490,10 +572,18 @@ def _print_summary(payload: dict[str, Any]) -> None:
                 if cell["rho"] is None:
                     print(f"  {name:20s} ---   {cell['reason']}")
                     continue
-                gap = "" if null is None else f"   vs null {cell['rho'] - null:+.4f}"
+                # The difference is taken against THIS cell's own null, never
+                # against the cohort-level one, which is a correlation over a
+                # different sample whenever this cell lost graphs.
+                own = cell.get("size_null_on_my_pairs") or {}
+                own_rho = own.get("rho")
+                gap = "" if own_rho is None else f"   vs null {cell['rho'] - own_rho:+.4f}"
+                drift = ""
+                if own_rho is not None and null is not None and abs(own_rho - null) > 5e-4:
+                    drift = f"  [null {null:.4f}->{own_rho:.4f} on its pairs]"
                 ci = cell["ci"]
                 span = "" if ci is None else f"  CI [{ci[0]:.4f}, {ci[1]:.4f}]"
-                print(f"  {name:20s} {cell['rho']:>8.4f}{gap}{span}  n={cell['n_pairs']}")
+                print(f"  {name:20s} {cell['rho']:>8.4f}{gap}{span}  n={cell['n_pairs']}{drift}")
 
 
 def main(argv: list[str] | None = None) -> int:

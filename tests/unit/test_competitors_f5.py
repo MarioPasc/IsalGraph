@@ -43,6 +43,7 @@ from isalgraph.competitors.bootstrap import (  # noqa: E402
     graph_bootstrap_ci,
     make_resample_index,
 )
+from isalgraph.competitors.f5 import SIZE_NULL  # noqa: E402
 from isalgraph.competitors.ged_reference import GEDReferenceError, load_bounds  # noqa: E402
 from isalgraph.errors import (  # noqa: E402
     BudgetExceeded,
@@ -383,6 +384,7 @@ def test_a_null_primary_distance_is_a_printed_absence(cohort_root: str, grid_fil
             "n_pairs",
             "n_undefined",
             "zero_frac",
+            "size_null_on_my_pairs",
             "reason",
         }
 
@@ -433,7 +435,17 @@ def test_the_record_carries_the_contract_fields(cohort_root: str, grid_file: str
     assert record["reference"] == "exact"
     assert record["suite"] == "suite1"
     cell = record["views"]["all_pairs"]["adjacency"]
-    for field in ("metric", "rho", "p", "ci", "n_pairs", "n_undefined", "zero_frac", "reason"):
+    for field in (
+        "metric",
+        "rho",
+        "p",
+        "ci",
+        "n_pairs",
+        "n_undefined",
+        "zero_frac",
+        "size_null_on_my_pairs",
+        "reason",
+    ):
         assert field in cell
     assert cell["ci"] is None or len(cell["ci"]) == 2
 
@@ -475,6 +487,66 @@ def test_a_suite1_only_representation_gets_no_printed_suite2_row(
         # None, not 0: the representation was never attempted here, and a 0
         # would assert that every graph encoded.
         assert payload["results"][key]["n_unencodable"]["isalgraph_canonical"] is None
+
+
+def test_a_size_correlated_failure_moves_the_null_and_the_restricted_one_is_used(
+    cohort_root: str, grid_file: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The null must be recomputed on the pairs the representation kept.
+
+    A backend that fails on the largest graphs leaves a cohort with less
+    spread in ``|n1 - n2|``, which makes the remaining pairs *easier for the
+    null* while the representation's own rho is untouched -- it was always
+    on its own subset. Subtracting the cohort-level null from it is then a
+    difference of two correlations over two different samples.
+
+    The direction matters: censoring by a wall clock removes the largest
+    graphs, so the bias inflates the apparent margin over the null. On
+    Mutagenicity, measured, this is worth +0.118 of margin.
+
+    Here the fixture drops the two 5-node graphs, the largest in the
+    synthetic cohort.
+    """
+    real = registry.get_backend
+
+    def flaky(name: str, **kwargs: object) -> object:
+        backend = real(name, **kwargs)
+        if name != "adjacency":
+            return backend
+        inner = backend.encode
+
+        def encode(graph: object, **inner_kwargs: object) -> object:
+            if graph.number_of_nodes() == max(NODE_COUNTS):  # type: ignore[attr-defined]
+                raise CanonicalizationTimeoutError("synthetic, size-correlated")
+            return inner(graph, **inner_kwargs)
+
+        backend.encode = encode  # type: ignore[method-assign]
+        return backend
+
+    monkeypatch.setattr(f5, "get_backend", flaky)
+    payload = f5.run(grid_file, names=("linux",), n_graphs=6, seed=42, resamples=50)
+    row = payload["results"]["linux"]["views"]["all_pairs"]
+
+    cell = row["adjacency"]
+    cohort_null = row[SIZE_NULL]["rho"]
+    own = cell["size_null_on_my_pairs"]
+
+    # The representation lost the two largest graphs, so its pair set is a
+    # strict subset and its null is a different number.
+    assert payload["results"]["linux"]["n_unencodable"]["adjacency"] == 2
+    assert cell["n_pairs"] < row[SIZE_NULL]["n_pairs"]
+    assert own["n_pairs"] == cell["n_pairs"]
+    assert own["rho"] != cohort_null
+
+    # Both are present. Neither silently replaces the other.
+    assert cohort_null is not None
+    assert own["rho"] is not None
+
+    # A representation that lost nothing has the two agreeing exactly, so the
+    # extra field is inert wherever there is no censoring.
+    intact = row[SIZE_NULL]
+    assert intact["size_null_on_my_pairs"]["rho"] == pytest.approx(intact["rho"])
+    assert intact["size_null_on_my_pairs"]["n_pairs"] == intact["n_pairs"]
 
 
 def test_the_grids_null_size_null_entry_does_not_delete_the_null_row(
