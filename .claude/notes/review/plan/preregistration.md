@@ -62,7 +62,25 @@ Per Suite-1 dataset, on the pairs where both quantities exist:
 **Pre-declared branch** ([approx_ged](approx_ged.md) §3): the approximation is **not** a validated
 stand-in at a dataset if its BH-adjusted CI excludes 0 **and** `|point estimate| > 0.05`. If it fails
 on a **majority (≥ 3) of the five**, the exact-GED results become primary, F1 and F2's
-approximate-regime rows are reported **descriptively only**, and N_actual drops accordingly.
+approximate-regime rows are reported **descriptively only**, and N_actual drops by the **81 cells**
+enumerated in **§5.3**.
+
+> ### "BH-adjusted CI" — given a definition, 2026-08-16
+>
+> The phrase appears in §2 and §3 and **is not a standard object**: BH adjusts *p-values*, while a
+> percentile bootstrap interval carries **no multiplicity control at all**. Taken literally the gate
+> was unimplementable, and any implementation would have been an undocumented choice.
+>
+> **Frozen: it means the FCR-adjusted interval** of Benjamini & Yekutieli, *"False Discovery
+> Rate–Adjusted Multiple Confidence Intervals for Selected Parameters"*, **JASA 100(469):71–81,
+> 2005**. After BH selects `R` of `m` hypotheses in the family, intervals for the selected parameters
+> are constructed at coverage `1 − Rq/m`, which controls the **false coverage-statement rate** at
+> `q`. It is the standard object the phrase must mean, it is citable, and it is the correct
+> counterpart to BH for interval-based decisions.
+>
+> **The gate still requires BOTH conditions** — the FCR-adjusted CI excludes 0 **and**
+> `|point estimate| > 0.05`. Widening the interval makes the gate *harder* to trip, which is the
+> conservative direction.
 
 ---
 
@@ -157,8 +175,28 @@ the discrepancy is reported** — coefficient arithmetic over three interacting 
 exactly where a silent double-count hides.
 
 ```
-N_actual(F2) = 182 − 15·k − 8·d − c            (applied in that order; see §5.2)
+N_actual(F2) = 182 − 15·k − 8·d + k·d − c      (applied in that order; see §5.2)
 ```
+
+> ## ⚠ CORRECTED 2026-08-16 — the closed form omitted the `+ k·d` term and **under-reported
+> `N_actual`**, which is the anti-conservative direction. Found by T-06's stats track, verified by
+> the orchestrator, before any p-value existed.
+>
+> `k` removes a representation's B1a cell on **every one of the 10** Suite-2 datasets. `d` removes the
+> B1a cell of **every one of the 7** comparators on an uninformative dataset. For each pair
+> `(k-excluded representation R, uninformative dataset D)` the cell `(B1a, R, D)` sits in **both**
+> removal sets — `k·d` cells, charged twice. Stage 2's true net removal is `(8 − k)` per uninformative
+> dataset, not 8.
+>
+> **`k·d` is the complete overlap, and there is no second one**: `A1` is untouched by either term
+> (`k` keeps Claim A because a bit count needs no distance; `d` removes only 7 B1a + 1 B3a), `B1e` is
+> indexed by Suite-1 datasets so `d` cannot reach it, and `B3a` carries no representation index so `k`
+> cannot reach it.
+>
+> Worked example, `k = 1`, `d = 2`: the old closed form printed `151 − c`; the enumeration gives
+> `153 − c`. **A smaller BH denominator lowers the burden on every surviving test** — precisely the
+> failure §5.1 rejects the per-representation `s` term for. `N_max` and the frozen cell set are
+> unchanged; this corrects an arithmetic identity used as a printed check, not the protocol.
 
 | Symbol | Meaning | Range |
 |---|---|---|
@@ -217,9 +255,32 @@ charging is the conservative reading and it is the one that matches what was mea
       whose representation fails the >= 99 % criterion on that dataset
 ```
 
-A cell already removed by `k` or by `d` is **not** counted again in `c`. This is why `N_actual` is
+A cell already removed by `k` or by `d` is **not** counted again in `c`, **and a cell removed by both
+`k` and `d` is charged once, not twice** — the `+ k·d` correction in §5. This is why `N_actual` is
 defined by enumeration: with `k`, `d` and `c` interacting on a shared cell set, the closed form is a
-check, not a definition.
+check, not a definition. The runner prints both, emits
+`discrepancy = enumeration − closed_form`, and names the double-charged cells.
+
+### 5.3 Stage 0 — what F0's majority branch removes, frozen 2026-08-16
+
+§2 says only that if F0 fails on **≥ 3 of 5** Suite-1 datasets *"the exact-GED results become primary,
+F1 and F2's approximate-regime rows are reported descriptively only, and N_actual drops
+accordingly."* **"Accordingly" was never given a coefficient.** Frozen now, before F0 runs:
+
+> **If F0's majority branch fires, the approximate regime leaves the confirmatory family**: the
+> **81** approximate-regime cells — **B1a (70) + B2 (1) + B3a (10)** — are demoted to descriptive.
+> The family becomes the **101** exact-regime and Claim-A cells: A1 (60) + A2 (1) + B1e (35) +
+> B3e (5).
+>
+> **`d` is then not applied at all.** F1 tests the bracket *within* the approximate regime; once that
+> regime is descriptive, F1 is descriptive too and removes nothing from a family that no longer
+> contains its rows. Applying `d` after a demotion would charge the same cells twice — the same
+> defect §5's `+ k·d` correction fixes.
+>
+> **`k` then removes only 5 cells** per excluded representation (its B1e rows), not 15, because the
+> 10 B1a rows are already gone. Closed form on this branch: `N_actual = 101 − 5·k − c`.
+
+Stage 0 precedes `k`, so the full precedence is **F0-demotion → `k` → `d` → `c`**.
 
 **Budget provenance — a measured completion rate from another ticket is not an `c` determination.**
 T-04 and T-04a measure encodability at each **backend's own configured budget** (`agm_cam` raises
@@ -290,4 +351,5 @@ parameters resolved by pre-declared rules:
 |---|---|---|
 | 2026-08-13 | Initial freeze, N_max = 197 across three families | none |
 | **2026-08-16** | **§5 reduction rule gains a fourth term, and §5.2 gives the three terms an explicit precedence.** `N_actual(F2) = 182 − 15k − 8d − c`, with `c` defined in the new §5.1 and `N_actual` **defined by enumeration** with the closed form as a printed check. **Why**: the rule as frozen had no case for a representation computable on some datasets and not others — [competitors/README](competitors/README.md) **finding 6**, assigned to "T-02's owner" and unowned since. Without it T-06 would either print a column conditioned on tractability or reduce the denominator by an unwritten rule. **`N_max` is unchanged at 182 / 197** — this adds a reduction term, not a test. The criterion is a per-dataset completion rate, never a correlation, so the reduction stays F5-blind (decision 24) | **none.** T-06 had not begun computing; no distance matrix, no ρ and no p-value existed under either version |
-| **2026-08-16** (same day, superseding the entry above **before any computation**) | **`s` (per-representation, −20) is REPLACED by `c` (per-cell).** Raised by the T-04a session against the first draft and **verified against the sources**. Three defects: (i) **the arithmetic over-charged.** `agm_cam` completes at **100 %** on Letter ×3 and LINUX (finding 5), so a per-representation gate deleted ~10 cells it does deliver — and under-counting `N_actual` is the **anti-conservative** direction, lowering the BH burden on every surviving test. (ii) **the citation was wrong** — the hole is finding **6**; finding **4** is the sparse6 `m/n` inversion. (iii) `k` and `s` were both ranged 0–6 although Claim B has **seven** comparators. Also added: the precedence rule preventing `k`/`d`/`c` double-counting, the exemption of the IsalGraph arm (governed by D14, not by `c`), and the statement that another ticket's completion rate at its **own** budget is not a `c` determination | **none.** No cell of F2 had been computed under either version |
+| **2026-08-16** (third entry, all before any computation) | **Three defects in the reduction machinery, found by T-06's stats track while implementing it and verified by the orchestrator.** (i) **The closed form omitted `+ k·d`** and so **under-reported `N_actual`** — the anti-conservative direction, the same failure mode §5.1 rejects `s` for. `k` removes a representation's B1a cell on all 10 Suite-2 datasets while `d` removes all 7 comparators' B1a cells on an uninformative dataset; the `k·d` intersection was charged twice. Corrected in §5, with a proof that `k·d` is the *complete* overlap. (ii) **§2/§3's "BH-adjusted CI" had no definition** — BH adjusts p-values, a percentile interval has no multiplicity control, so the gate was unimplementable as written. Frozen as the **FCR-adjusted interval** (Benjamini & Yekutieli, JASA 100(469):71–81, 2005) at coverage `1 − Rq/m`; both gate conditions unchanged. (iii) **F0's majority branch had no coefficient** — "N_actual drops accordingly" is now the explicit **81 cells** (B1a 70 + B2 1 + B3a 10) in the new **§5.3**, with `d` not applied on that branch and `k` charging 5 rather than 15. **`N_max` and the frozen cell set are unchanged throughout**; these correct an arithmetic identity and two undefined terms | **none.** No cell of F2 had been computed |
+| **2026-08-16** (same day, superseding the `s` entry above **before any computation**) | **`s` (per-representation, −20) is REPLACED by `c` (per-cell).** Raised by the T-04a session against the first draft and **verified against the sources**. Three defects: (i) **the arithmetic over-charged.** `agm_cam` completes at **100 %** on Letter ×3 and LINUX (finding 5), so a per-representation gate deleted ~10 cells it does deliver — and under-counting `N_actual` is the **anti-conservative** direction, lowering the BH burden on every surviving test. (ii) **the citation was wrong** — the hole is finding **6**; finding **4** is the sparse6 `m/n` inversion. (iii) `k` and `s` were both ranged 0–6 although Claim B has **seven** comparators. Also added: the precedence rule preventing `k`/`d`/`c` double-counting, the exemption of the IsalGraph arm (governed by D14, not by `c`), and the statement that another ticket's completion rate at its **own** budget is not a `c` determination | **none.** No cell of F2 had been computed under either version |
