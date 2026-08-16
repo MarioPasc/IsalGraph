@@ -116,6 +116,17 @@ class ReportError(Exception):
     """A malformed or unreadable input to the reporter."""
 
 
+class IncompleteComparatorSetError(ReportError):
+    """A Claim-B comparator is missing from the grid's ``primary_distance``.
+
+    preregistration section 5 distinguishes three cases, and this one is the
+    third: a representation that is not computable *at all* loses its Claim-A
+    rows as well, and is recorded separately from ``k``.  The reporter refuses to
+    guess which case an absent comparator is, because the answer moves the FDR
+    denominator by 10 rows.
+    """
+
+
 # --------------------------------------------------------------------------- #
 # scalar coercion -- every input field is JSON and may legitimately be null
 # --------------------------------------------------------------------------- #
@@ -303,12 +314,28 @@ def primary_distances(grid: Mapping[str, Any]) -> dict[str, str | None]:
 def compute_k_members(primary: Mapping[str, str | None]) -> list[str]:
     """The comparators with no admissible distance on any suite.
 
-    A comparator absent from ``primary_distance`` altogether is treated as
-    having no admissible distance: the grid never produced one for it, so no
-    Claim-B row can be run.  ``selection.md`` flags the absence explicitly rather
-    than letting it pass as a measured null.
+    Args:
+        primary: The grid's ``primary_distance`` block.
+
+    Returns:
+        The comparators whose entry is an explicit ``null``.
+
+    Raises:
+        IncompleteComparatorSetError: A comparator is absent from the block
+            entirely.  That is a computability failure rather than a distance
+            failure, it is charged separately from ``k``, and guessing would
+            understate the charge by 10 rows.
     """
-    return [name for name in CLAIM_B_COMPARATORS if primary.get(name) is None]
+    missing = [name for name in CLAIM_B_COMPARATORS if name not in primary]
+    if missing:
+        raise IncompleteComparatorSetError(
+            f"{', '.join(missing)} "
+            f"{'is' if len(missing) == 1 else 'are'} in CLAIM_B_COMPARATORS but absent from the "
+            "grid's primary_distance. That is a computability failure, not a distance failure, "
+            "and preregistration section 5 charges it separately (-25, not -15). Re-run the grid "
+            "with the backend available, or amend section 5 before reporting k."
+        )
+    return [name for name in CLAIM_B_COMPARATORS if primary[name] is None]
 
 
 def compute_partial(

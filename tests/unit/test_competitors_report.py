@@ -18,7 +18,9 @@ import pytest
 from isalgraph.competitors.report import (
     CELL_COLUMNS,
     CLAIM_B_COMPARATORS,
+    IncompleteComparatorSetError,
     build_k_payload,
+    compute_k_members,
     failing_criteria,
     main,
     recompute_primary,
@@ -146,7 +148,7 @@ def _grid_payload() -> dict[str, Any]:
             {"candidate": False, "excluded_because": "baseline backend (Capability.BASELINE)"}
         )
 
-    # adjacency is deliberately ABSENT from primary_distance below.
+    # adjacency: a comparator whose every candidate fails, so an explicit null.
     find("adjacency", "hamming").update({"f1_defined_frac": 0.55})
     find("adjacency", "levenshtein").update({"f3_invariant": "44/50"})
 
@@ -154,6 +156,7 @@ def _grid_payload() -> dict[str, Any]:
         "graph6": "levenshtein",
         "sparse6": None,
         "nauty_graph6": "levenshtein",
+        "adjacency": None,
         "agm_cam": "levenshtein",
         "min_dfs": "levenshtein",
         "wl_subtree": "levenshtein",
@@ -318,9 +321,52 @@ def test_non_comparator_without_a_distance_does_not_raise_k(grid: dict[str, Any]
     assert "isalgraph_canonical" not in payload["k_members"]
 
 
-def test_comparator_absent_from_primary_distance_counts_into_k(grid: dict[str, Any]) -> None:
-    assert "adjacency" not in grid["primary_distance"]
-    assert "adjacency" in build_k_payload(grid)["k_members"]
+def test_a_comparator_absent_from_primary_distance_aborts(grid: dict[str, Any]) -> None:
+    """The third preregistration case: not computable at all, charged -25 not -15.
+
+    Rolling an absent comparator into ``k`` would undercharge it by 10 rows and
+    mislabel a computability failure as a distance failure, so the reporter
+    refuses to produce a number rather than guessing which case it is.
+    """
+    del grid["primary_distance"]["nauty_graph6"]
+    with pytest.raises(IncompleteComparatorSetError) as excinfo:
+        build_k_payload(grid)
+    message = str(excinfo.value)
+    assert "nauty_graph6" in message
+    assert "-25, not -15" in message
+
+
+def test_the_abort_never_increments_k(grid: dict[str, Any]) -> None:
+    before = build_k_payload(grid)
+    assert before["k"] == 2
+    del grid["primary_distance"]["nauty_graph6"]
+    with pytest.raises(IncompleteComparatorSetError):
+        compute_k_members(grid["primary_distance"])
+    with pytest.raises(IncompleteComparatorSetError):
+        build_k_payload(grid)
+    # no k.json is producible from an incomplete comparator set
+    grid["primary_distance"]["nauty_graph6"] = "levenshtein"
+    assert build_k_payload(grid)["k"] == 2
+
+
+def test_an_absent_non_comparator_does_not_abort(grid: dict[str, Any]) -> None:
+    del grid["primary_distance"]["isalgraph_canonical"]
+    payload = build_k_payload(grid)
+    assert payload["k"] == 2
+    assert "isalgraph_canonical" not in payload["k_members"]
+
+
+def test_the_cli_aborts_on_an_incomplete_comparator_set(
+    tmp_path: Path, grid: dict[str, Any]
+) -> None:
+    del grid["primary_distance"]["nauty_graph6"]
+    path = tmp_path / "incomplete.json"
+    path.write_text(json.dumps(grid), encoding="utf-8")
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--grid", str(path), "--out-dir", str(out)])
+    assert excinfo.value.code != 0
+    assert not (out / "k.json").exists()
 
 
 def test_comparator_set_is_reported_verbatim(grid: dict[str, Any]) -> None:
@@ -489,8 +535,11 @@ def test_selection_md_names_the_failing_criterion_of_every_candidate(
 def test_selection_md_marks_a_representation_absent_from_the_grid(
     grid: dict[str, Any], tmp_path: Path
 ) -> None:
+    """An absent *non*-comparator still renders distinctly from a measured null."""
+    del grid["primary_distance"]["isalgraph_canonical"]
     text = render_selection_md(grid, tmp_path / "grid.json")
     assert "*absent from grid*" in text
+    assert "**none admissible**" in text
 
 
 def test_selection_md_reports_every_representation(grid: dict[str, Any], tmp_path: Path) -> None:
