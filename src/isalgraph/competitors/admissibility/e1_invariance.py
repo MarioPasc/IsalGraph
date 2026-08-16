@@ -881,8 +881,27 @@ def paired_comparisons(draw: str, per_graph: dict[str, dict[int, float]]) -> lis
 # --------------------------------------------------------------------------
 
 
-def _resolve_metrics(grid_path: str, backends: Sequence[str]) -> dict[str, tuple[str, bool]]:
-    """``{backend: (metric, is_fallback)}`` from the grid's primary block."""
+def _resolve_metrics(
+    grid_path: str, backends: Sequence[str], *, override: str | None = None
+) -> dict[str, tuple[str, bool]]:
+    """``{backend: (metric, is_fallback)}`` from the grid's primary block.
+
+    Args:
+        grid_path: ``grid_200.json``.
+        backends: representations to resolve.
+        override: force every backend onto one distance.  **Supplementary
+            only.**  The protocol fixes :data:`FALLBACK_METRIC` where the grid
+            admitted none, and the main run must be produced without this; it
+            exists so the sensitivity of psi to that choice is reproducible
+            from committed code rather than from a scratch script.  The record
+            carries ``metric_override`` whenever it is set.
+
+    Returns:
+        The mapping.  Under an override every entry is marked a fallback,
+        because none of them is the grid's selection.
+    """
+    if override is not None:
+        return {name: (override, True) for name in backends}
     primary = common.primary_distances(grid_path)
     out: dict[str, tuple[str, bool]] = {}
     for name in backends:
@@ -915,6 +934,7 @@ def run_e1(
     resamples: int = common.RESAMPLES,
     seed: int = common.SEED,
     quick: bool = False,
+    metric_override: str | None = None,
 ) -> dict[str, Any]:
     """Run E1 and return its record.
 
@@ -931,15 +951,18 @@ def run_e1(
         resamples: bootstrap replicates.
         seed: the single seed for every draw, relabelling and resample.
         quick: development mode; recorded in the output.
+        metric_override: supplementary sensitivity run; see
+            :func:`_resolve_metrics`.  ``None`` for the protocol run.
 
     Returns:
         The record :func:`common.write_result` serialises.
     """
     started = time.perf_counter()
     names = tuple(backends) if backends else registry.available_backends()
-    metrics = _resolve_metrics(grid_path, names)
+    metrics = _resolve_metrics(grid_path, names, override=metric_override)
     record: dict[str, Any] = {
         "quick": quick,
+        "metric_override": metric_override,
         "parts": parts,
         "backends": list(names),
         "metric_per_backend": {k: {"metric": m, "fallback": f} for k, (m, f) in metrics.items()},
@@ -1035,6 +1058,13 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--backends", nargs="*", default=None)
     parser.add_argument("--datasets", nargs="*", default=None)
     parser.add_argument("--quick", action="store_true", help="development-sized run")
+    parser.add_argument(
+        "--metric-override",
+        default=None,
+        help="SUPPLEMENTARY: force every backend onto one distance, to measure "
+        "how much psi depends on the fallback the protocol fixed. Never the "
+        "protocol run; the record carries metric_override",
+    )
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
 
@@ -1058,6 +1088,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "dataset_names": args.datasets,
         "parts": args.parts,
         "quick": args.quick,
+        "metric_override": args.metric_override,
     }
     if args.quick:
         kwargs.update(

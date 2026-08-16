@@ -508,6 +508,37 @@ def test_the_grid_supplies_the_primary_distance_and_levenshtein_stands_in(tmp_pa
     assert resolved["nauty_graph6"] == ("levenshtein", False)
 
 
+def test_a_metric_override_marks_every_row_a_fallback(tmp_path) -> None:  # noqa: ANN001
+    """The supplementary run cannot be mistaken for the grid's selection."""
+    path = _grid_file(tmp_path, {"graph6": None, "nauty_graph6": "levenshtein"})
+    resolved = e1._resolve_metrics(path, ["graph6", "nauty_graph6"], override="padded_hamming")
+    assert resolved == {
+        "graph6": ("padded_hamming", True),
+        "nauty_graph6": ("padded_hamming", True),
+    }
+
+
+def test_psi_under_padded_hamming_is_larger_than_under_levenshtein() -> None:
+    """The fallback the protocol fixed is the *conservative* one, measurably.
+
+    Edit distance between two graphs of different order is dominated by the
+    length difference, which inflates the denominator and deflates ``psi``.
+    ``padded_hamming`` aligns on the positional frame instead and charges only
+    cell disagreements.  Both are legitimate readings of the same failure; the
+    protocol's choice understates it, so no result rests on picking the
+    flattering metric.
+    """
+    graphs = [
+        fixtures.to_networkx(fixtures.ALL_FIXTURES[name])
+        for name in ("running_example", "running_example_minus_edge", "k33", "prism")
+    ]
+    cohort = e1.build_cohort("frames", graphs, relabellings=12, seed=common.SEED)
+    edit, _ = e1.cohort_psi("adjacency", "levenshtein", cohort=cohort, resamples=64)
+    positional, _ = e1.cohort_psi("adjacency", "padded_hamming", cohort=cohort, resamples=64)
+    assert edit.psi is not None and positional.psi is not None
+    assert positional.psi > edit.psi
+
+
 def test_run_e1_part_a_only_needs_no_cohort(tmp_path) -> None:  # noqa: ANN001
     """Part A is a decision procedure over the atlas and touches no dataset."""
     path = _grid_file(tmp_path, {"graph6": None})
