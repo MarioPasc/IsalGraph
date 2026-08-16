@@ -386,3 +386,71 @@ I halt and bring a **diagnosed** problem with costed options, rather than procee
 | Date | Entry |
 |---|---|
 | 2026-08-16 | Opened. Plan read; state measured (§1). PI decided items 2–4 of §2; item 1 deferred to the §1.6 probe. Two plan claims corrected by measurement: the IAM GXL tree is **present**, and both canonical forms are **verified complete invariants** that agree on only 13.8 % of classes |
+
+---
+
+## 9. Inherited finding, 2026-08-16 — the Suite-2 reference is size-dominated
+
+Reported by the T-04a session; recorded here because it bears on **70 of F2's 182 cells** (B1a).
+
+**Measured** (T-04a, seed-42 200-graph draw per dataset), `ρ(|n₁−n₂|, bound)`:
+
+| | GREC | AIDS-IAM | COIL-DEL | Mutagenicity | Protein |
+|---|---:|---:|---:|---:|---:|
+| **LB** (`BRANCH_FAST`) | 0.9803 | 0.9600 | **0.9978** | 0.9876 | 0.9699 |
+| **UB** (`BIPARTITE`) | 0.7061 | 0.7117 | 0.7362 | 0.7538 | 0.4596 |
+
+**Against ground truth**, on the four cohorts T-05's `PROVENANCE` certifies identical between suites,
+same certified pairs:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX |
+|---|---:|---:|---:|---:|
+| ρ(\|Δn\|, **UB**) | 0.7482 | 0.7363 | 0.7080 | 0.3479 |
+| ρ(\|Δn\|, **exact**) | 0.9139 | 0.9146 | 0.9195 | 0.7134 |
+| ρ(\|Δn\|, **LB**) | 0.9804 | 0.9740 | 0.9224 | 0.8838 |
+
+### How this must be stated, and how it must not
+
+**Not "the lower bound is broken."** `|n₁−n₂|` *is itself a valid lower bound on GED under D6* —
+every surplus node costs one insertion — so a lower-bound method correlating with size is
+mechanically expected, and `BRANCH_FAST` is a proven bound that T-27 selected on measurement over
+3.8 M certified pairs. Writing it as a defect reads as an attack on decision 11, which it is not.
+
+**And not "the size channel is an artefact of the bound" either.** `ρ(|Δn|, exact)` is **0.91–0.92**
+on the three Letter sets. **The truth is size-dominated too.** The size channel is a real component
+of GED at these sizes, not something the bracket invented.
+
+**What the measurement does establish**, and it is narrower than either of those: `UB < exact < LB`
+in **4 of 4** — the bracket holds, but each arm's size-dependence is biased in a **fixed direction**,
+the LB overstating and the UB understating, and **neither reproduces the truth's own
+size-dependence.** So a conclusion drawn from the LB arm alone is not a conclusion about GED.
+
+### Three consequences
+
+1. **`approx_ged.md` §4's no-interpolation rule gains a measurement.** Its current justification is an
+   argument from ignorance — *"we do not know where in the bracket the truth lies"*. It is now
+   stronger: the two arms disagree **systematically**, not merely noisily, so a midpoint would
+   inherit both biases with the direction unknown. → propagate at close; **T-20**.
+2. **`d` is likely to come in high.** F1's statistic is `ρ(Lev, LB) − ρ(Lev, UB)`, and the two
+   references differ this much in what they correlate with. **§7 stop-and-ask condition 5 (`d ≥ 5`)
+   is now a live expectation rather than a remote one**, and each uninformative dataset removes 8 F2
+   cells.
+3. **The equal-`n` view is where the structural claim is defensible on Suite 2** — it removes the
+   size channel from both sides at once. This was already load-bearing in §4.1 on T-04's finding 1;
+   this measurement is independent support.
+
+### What does NOT change, and why
+
+**B1a's pair population stays as frozen: all pairs.** Three reasons, and the first is decisive:
+
+- **B1a is a *difference* of two correlations against the *same* reference.** A size component
+  inflating both arms partly cancels; it does not invalidate the comparison *between*
+  representations, which is what B1a tests.
+- **Moving a frozen family's population after seeing a measurement is what pre-registration exists to
+  prevent.** The measurement is F5-blind — `ρ(|Δn|, LB)` never touches Levenshtein — so a change
+  would be *defensible*, but "defensible" is a lower bar than "not required".
+- The equal-`n` view **is computed and reported prominently regardless**, as the pre-declared
+  companion. It costs a mask over matrices we already hold.
+
+**The all-pairs view is reported with this confound stated in the text**, rather than quietly
+replaced by the view that flatters the structural claim.
