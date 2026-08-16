@@ -1,0 +1,3257 @@
+{
+  "budget_s": 30.0,
+  "n_per_dataset": 15,
+  "seed": 42,
+  "datasets": {
+    "iam_letter_low": {
+      "n_graphs": 1180,
+      "n_range": [
+        2,
+        7
+      ],
+      "sampled_n_range": [
+        3,
+        6
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0008626039999999335,
+          "max_s": 0.0012692710000001828,
+          "mean_len": 4.8
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0008334110000001171,
+          "max_s": 0.0011403270000001076,
+          "mean_len": 4.8
+        }
+      },
+      "rows": [
+        {
+          "index": 100,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009267940000000641,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 100,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.001015714000000001,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 104,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0010233539999999763,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 104,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0008334110000001171,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 110,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0008823229999999072,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 110,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0008235679999999412,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 236,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008626039999999335,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 236,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008698719999999938,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 506,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0010851619999998618,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 506,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0011207950000000633,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 513,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0010251770000000437,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 513,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009938000000000446,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 619,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008394009999999064,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 619,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.000807978000000098,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 764,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008256810000000225,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 764,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0006615389999999888,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 818,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008161359999998563,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 818,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008306909999999945,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 846,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0007738989999999113,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 846,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006861400000000017,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 866,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006000139999999821,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 866,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006484120000000981,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 897,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 3.921199999989966e-05,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 897,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.001116626000000176,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 903,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0012692710000001828,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 903,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0011403270000001076,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1005,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006688580000000499,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1005,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006598799999999461,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1148,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009084900000000395,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1148,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.000863265000000002,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "iam_letter_med": {
+      "n_graphs": 1253,
+      "n_range": [
+        2,
+        8
+      ],
+      "sampled_n_range": [
+        2,
+        6
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0007943049999999952,
+          "max_s": 0.001264731000000019,
+          "mean_len": 4.066666666666666
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0008041169999999376,
+          "max_s": 0.0012822649999999491,
+          "mean_len": 4.066666666666666
+        }
+      },
+      "rows": [
+        {
+          "index": 79,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006194299999999764,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 79,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006641339999999829,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 114,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006950889999999266,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 114,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.000673986999999987,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 206,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0006948020000001609,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 206,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008041169999999376,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 282,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0012564279999998096,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 282,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0012822649999999491,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 345,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007143750000000448,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 345,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008282539999999727,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 444,
+          "encoder": "pruned",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0005159100000000638,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 444,
+          "encoder": "canonical",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0006083500000000353,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 549,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009109830000000319,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 549,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009687320000000277,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 558,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009968310000001424,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 558,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009881970000000795,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 689,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.001264731000000019,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 689,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0012515280000000573,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 788,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008451760000001141,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 788,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007703369999999543,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 877,
+          "encoder": "pruned",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.00067113799999996,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 877,
+          "encoder": "canonical",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0006267680000000553,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 948,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0007451149999999629,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 948,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006977710000000137,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1032,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.001017269999999959,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1032,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009726850000000287,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1069,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007943049999999952,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1069,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007939599999999825,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1104,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009487239999999009,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1104,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009638109999998701,
+          "length": 6,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "iam_letter_high": {
+      "n_graphs": 2059,
+      "n_range": [
+        2,
+        9
+      ],
+      "sampled_n_range": [
+        2,
+        7
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0009921899999998374,
+          "max_s": 0.0018113899999998573,
+          "mean_len": 5.6
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.0008460960000000739,
+          "max_s": 0.0021654989999999597,
+          "mean_len": 5.6
+        }
+      },
+      "rows": [
+        {
+          "index": 156,
+          "encoder": "pruned",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0007081570000000426,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 156,
+          "encoder": "canonical",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0005616349999999493,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 389,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008699139999999161,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 389,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008460960000000739,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 668,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009921899999998374,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 668,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 4,
+          "seconds": 0.0009498840000001785,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 751,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 6,
+          "seconds": 0.001606714000000009,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 751,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 6,
+          "seconds": 0.0016224230000001505,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 760,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 7,
+          "seconds": 0.0018113899999998573,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 760,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 7,
+          "seconds": 0.0021654989999999597,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 842,
+          "encoder": "pruned",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0006171520000000097,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 842,
+          "encoder": "canonical",
+          "n": 2,
+          "m": 1,
+          "seconds": 0.0006602840000000665,
+          "length": 1,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 953,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 3,
+          "seconds": 0.0010024570000000121,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 953,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 3,
+          "seconds": 0.0008298959999999411,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 965,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0007448509999998798,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 965,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006099319999999242,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1397,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 6,
+          "seconds": 0.0011889739999999538,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1397,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 6,
+          "seconds": 0.0013967720000001016,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1520,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 6,
+          "seconds": 0.0014247170000001308,
+          "length": 9,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1520,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 6,
+          "seconds": 0.0015890410000000132,
+          "length": 9,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1525,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0011453550000000146,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1525,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 5,
+          "seconds": 0.0010799989999998871,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1636,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0007248220000000138,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1636,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 2,
+          "seconds": 0.0006753169999997866,
+          "length": 2,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1859,
+          "encoder": "pruned",
+          "n": 3,
+          "m": 3,
+          "seconds": 0.000699967000000079,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1859,
+          "encoder": "canonical",
+          "n": 3,
+          "m": 3,
+          "seconds": 0.0007848239999999063,
+          "length": 5,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1888,
+          "encoder": "pruned",
+          "n": 5,
+          "m": 5,
+          "seconds": 0.0012255110000001235,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1888,
+          "encoder": "canonical",
+          "n": 5,
+          "m": 5,
+          "seconds": 0.0010989869999999957,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1983,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007452980000000053,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1983,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008322069999999737,
+          "length": 3,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "linux": {
+      "n_graphs": 89,
+      "n_range": [
+        4,
+        10
+      ],
+      "sampled_n_range": [
+        8,
+        10
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.003070303999999968,
+          "max_s": 0.0049084919999999865,
+          "mean_len": 13.6
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.004235494000000006,
+          "max_s": 0.01347249000000006,
+          "mean_len": 13.466666666666667
+        }
+      },
+      "rows": [
+        {
+          "index": 12,
+          "encoder": "pruned",
+          "n": 8,
+          "m": 8,
+          "seconds": 0.0021415459999998276,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 12,
+          "encoder": "canonical",
+          "n": 8,
+          "m": 8,
+          "seconds": 0.002648317000000011,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 17,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.003567081999999999,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 17,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.005705695999999927,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 20,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.0021354000000000095,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 20,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.002686783000000137,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 23,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.0028450980000001014,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 23,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.0029726850000000304,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 31,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.0034737639999999903,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 31,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.006142185000000078,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 33,
+          "encoder": "pruned",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0018555849999999374,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 33,
+          "encoder": "canonical",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0021676420000000807,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 54,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.003070303999999968,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 54,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.004331110999999943,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 58,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.0024346539999999806,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 58,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.006075417999999999,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 63,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.0028908830000000663,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 63,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.003481094999999934,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 64,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.0032715300000001335,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 64,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.0035046559999998284,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 67,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.0033362900000000195,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 67,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.004415446999999961,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 73,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.003265762000000061,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 73,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.004276952999999972,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 82,
+          "encoder": "pruned",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0023044610000000354,
+          "length": 9,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 82,
+          "encoder": "canonical",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0035886229999999575,
+          "length": 9,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 84,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.0036068639999999874,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 84,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.004235494000000006,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 87,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.0049084919999999865,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 87,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.01347249000000006,
+          "length": 10,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "aids_graphedx": {
+      "n_graphs": 819,
+      "n_range": [
+        2,
+        20
+      ],
+      "sampled_n_range": [
+        9,
+        20
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.004016469999999828,
+          "max_s": 0.022962762999999997,
+          "mean_len": 22.0
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.006450609999999912,
+          "max_s": 0.09949792600000007,
+          "mean_len": 20.933333333333334
+        }
+      },
+      "rows": [
+        {
+          "index": 29,
+          "encoder": "pruned",
+          "n": 20,
+          "m": 21,
+          "seconds": 0.019700571,
+          "length": 39,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 29,
+          "encoder": "canonical",
+          "n": 20,
+          "m": 21,
+          "seconds": 0.09889647899999998,
+          "length": 35,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 64,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.0033109399999999845,
+          "length": 18,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 64,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.003938793999999968,
+          "length": 18,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 92,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.004016469999999828,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 92,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.007406355000000087,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 112,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.0029550809999998595,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 112,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.0035024880000000813,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 198,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.003572737000000048,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 198,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.004683047000000107,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 355,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 11,
+          "seconds": 0.003598946000000103,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 355,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 11,
+          "seconds": 0.00449344500000004,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 382,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.003657591000000071,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 382,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.004824959999999878,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 460,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.0028200270000000582,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 460,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.0030239000000000793,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 463,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.00366990300000003,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 463,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.005231287000000195,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 469,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.0053896720000001785,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 469,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.008167393000000023,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 519,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 12,
+          "seconds": 0.005021849000000023,
+          "length": 25,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 519,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 12,
+          "seconds": 0.006450609999999912,
+          "length": 24,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 530,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.005519719999999895,
+          "length": 25,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 530,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.010999677999999902,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 541,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.005788531000000097,
+          "length": 25,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 541,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.01086916299999996,
+          "length": 24,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 624,
+          "encoder": "pruned",
+          "n": 20,
+          "m": 21,
+          "seconds": 0.022962762999999997,
+          "length": 44,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 624,
+          "encoder": "canonical",
+          "n": 20,
+          "m": 21,
+          "seconds": 0.09949792600000007,
+          "length": 40,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 695,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.006372910999999926,
+          "length": 24,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 695,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.01227563900000006,
+          "length": 22,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "grec": {
+      "n_graphs": 650,
+      "n_range": [
+        4,
+        24
+      ],
+      "sampled_n_range": [
+        4,
+        18
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.003581067000000049,
+          "max_s": 0.015449703000000037,
+          "mean_len": 20.8
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.005175192999999911,
+          "max_s": 0.03156675099999995,
+          "mean_len": 20.133333333333333
+        }
+      },
+      "rows": [
+        {
+          "index": 22,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0008150959999999596,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 22,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 3,
+          "seconds": 0.0007488370000000577,
+          "length": 4,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 37,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 4,
+          "seconds": 0.0009715940000001311,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 37,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 4,
+          "seconds": 0.0008819279999998653,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 81,
+          "encoder": "pruned",
+          "n": 18,
+          "m": 19,
+          "seconds": 0.015449703000000037,
+          "length": 35,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 81,
+          "encoder": "canonical",
+          "n": 18,
+          "m": 19,
+          "seconds": 0.03026023599999994,
+          "length": 33,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 149,
+          "encoder": "pruned",
+          "n": 6,
+          "m": 6,
+          "seconds": 0.001472184000000043,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 149,
+          "encoder": "canonical",
+          "n": 6,
+          "m": 6,
+          "seconds": 0.0013895440000000203,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 180,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.0028273530000000324,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 180,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.00363770699999999,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 189,
+          "encoder": "pruned",
+          "n": 14,
+          "m": 15,
+          "seconds": 0.009257238999999862,
+          "length": 30,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 189,
+          "encoder": "canonical",
+          "n": 14,
+          "m": 15,
+          "seconds": 0.013116924999999835,
+          "length": 30,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 280,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.006030283000000081,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 280,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.00809660000000001,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 327,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 8,
+          "seconds": 0.0018446459999998943,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 327,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 8,
+          "seconds": 0.002378909000000151,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 360,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.0027426660000000602,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 360,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 10,
+          "seconds": 0.004171358999999875,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 427,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.003581067000000049,
+          "length": 18,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 427,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 10,
+          "seconds": 0.004351062000000017,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 509,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.00024113500000000343,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 509,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.005175192999999911,
+          "length": 15,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 525,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.0059642489999998105,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 525,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.012116526000000016,
+          "length": 21,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 542,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.006380372999999828,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 542,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.009139342999999966,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 548,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.006161063000000189,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 548,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.008271262000000057,
+          "length": 26,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 590,
+          "encoder": "pruned",
+          "n": 17,
+          "m": 19,
+          "seconds": 0.01435620999999987,
+          "length": 37,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 590,
+          "encoder": "canonical",
+          "n": 17,
+          "m": 19,
+          "seconds": 0.03156675099999995,
+          "length": 35,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "aids_iam": {
+      "n_graphs": 1811,
+      "n_range": [
+        2,
+        85
+      ],
+      "sampled_n_range": [
+        8,
+        13
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.003650912000000117,
+          "max_s": 0.0065630979999999894,
+          "mean_len": 17.733333333333334
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.005458415999999966,
+          "max_s": 0.01772460499999995,
+          "mean_len": 17.266666666666666
+        }
+      },
+      "rows": [
+        {
+          "index": 274,
+          "encoder": "pruned",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0017834979999999945,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 274,
+          "encoder": "canonical",
+          "n": 8,
+          "m": 7,
+          "seconds": 0.0018614949999999908,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 290,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.002974794000000003,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 290,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.005458415999999966,
+          "length": 16,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 300,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.002884144000000033,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 300,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 9,
+          "seconds": 0.004181310999999965,
+          "length": 14,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 432,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.005615566999999988,
+          "length": 21,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 432,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.00806806800000004,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 689,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 11,
+          "seconds": 0.003650912000000117,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 689,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 11,
+          "seconds": 0.006246617000000176,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 806,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 12,
+          "seconds": 0.004423024999999914,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 806,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 12,
+          "seconds": 0.0062916479999999275,
+          "length": 22,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 830,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.0056616499999999625,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 830,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.009500704999999998,
+          "length": 18,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 895,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 11,
+          "seconds": 0.004293923000000088,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 895,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 11,
+          "seconds": 0.004302510000000037,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 897,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.005298545000000043,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 897,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 12,
+          "seconds": 0.009749374000000088,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 902,
+          "encoder": "pruned",
+          "n": 13,
+          "m": 14,
+          "seconds": 0.0065630979999999894,
+          "length": 25,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 902,
+          "encoder": "canonical",
+          "n": 13,
+          "m": 14,
+          "seconds": 0.01772460499999995,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1252,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.002349484000000013,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1252,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.002889334000000021,
+          "length": 11,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1257,
+          "encoder": "pruned",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.0024965610000000638,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1257,
+          "encoder": "canonical",
+          "n": 9,
+          "m": 8,
+          "seconds": 0.00284662400000002,
+          "length": 12,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1289,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.002955151999999961,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1289,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 9,
+          "seconds": 0.005123997999999963,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1622,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.0035056689999999335,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1622,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.003733004999999956,
+          "length": 17,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1691,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.005379677999999943,
+          "length": 25,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1691,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 13,
+          "seconds": 0.009356356000000066,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "coil_del": {
+      "n_graphs": 3900,
+      "n_range": [
+        3,
+        77
+      ],
+      "sampled_n_range": [
+        4,
+        59
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.01820923699999999,
+          "max_s": 0.578946212,
+          "mean_len": 126.4
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 7,
+          "errors": 0,
+          "median_s": 0.11656540199999998,
+          "max_s": 7.3749304129999995,
+          "mean_len": 44.875
+        }
+      },
+      "rows": [
+        {
+          "index": 309,
+          "encoder": "pruned",
+          "n": 24,
+          "m": 63,
+          "seconds": 0.04279836999999986,
+          "length": 157,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 309,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032205867999892
+        },
+        {
+          "index": 375,
+          "encoder": "pruned",
+          "n": 59,
+          "m": 165,
+          "seconds": 0.578946212,
+          "length": 497,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 375,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.03048798000009
+        },
+        {
+          "index": 1016,
+          "encoder": "pruned",
+          "n": 24,
+          "m": 63,
+          "seconds": 0.03902641100000004,
+          "length": 153,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1016,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.01351663000014
+        },
+        {
+          "index": 1025,
+          "encoder": "pruned",
+          "n": 28,
+          "m": 72,
+          "seconds": 0.06444524100000004,
+          "length": 179,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1025,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.031854245000204
+        },
+        {
+          "index": 1033,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 12,
+          "seconds": 0.0019500389999997925,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1033,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 12,
+          "seconds": 0.005544816000000008,
+          "length": 19,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1061,
+          "encoder": "pruned",
+          "n": 19,
+          "m": 47,
+          "seconds": 0.027889819000000093,
+          "length": 115,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1061,
+          "encoder": "canonical",
+          "n": 19,
+          "m": 47,
+          "seconds": 3.531159713,
+          "length": 97,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1750,
+          "encoder": "pruned",
+          "n": 12,
+          "m": 29,
+          "seconds": 0.013633580999999895,
+          "length": 61,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1750,
+          "encoder": "canonical",
+          "n": 12,
+          "m": 29,
+          "seconds": 0.8759380219999999,
+          "length": 55,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1777,
+          "encoder": "pruned",
+          "n": 8,
+          "m": 16,
+          "seconds": 0.006987344999999978,
+          "length": 28,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1777,
+          "encoder": "canonical",
+          "n": 8,
+          "m": 16,
+          "seconds": 0.023999745000000017,
+          "length": 28,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2719,
+          "encoder": "pruned",
+          "n": 25,
+          "m": 64,
+          "seconds": 0.002782228000000053,
+          "length": 155,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2719,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.030706096999893
+        },
+        {
+          "index": 2791,
+          "encoder": "pruned",
+          "n": 18,
+          "m": 46,
+          "seconds": 0.01820923699999999,
+          "length": 107,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2791,
+          "encoder": "canonical",
+          "n": 18,
+          "m": 46,
+          "seconds": 7.3749304129999995,
+          "length": 92,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2871,
+          "encoder": "pruned",
+          "n": 4,
+          "m": 5,
+          "seconds": 0.000995261000000136,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2871,
+          "encoder": "canonical",
+          "n": 4,
+          "m": 5,
+          "seconds": 0.0010279820000000939,
+          "length": 8,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2972,
+          "encoder": "pruned",
+          "n": 33,
+          "m": 85,
+          "seconds": 0.09238456500000014,
+          "length": 221,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2972,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.03166628000008
+        },
+        {
+          "index": 3030,
+          "encoder": "pruned",
+          "n": 22,
+          "m": 54,
+          "seconds": 0.042417791999999954,
+          "length": 127,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3030,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032086503000073
+        },
+        {
+          "index": 3073,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 13,
+          "seconds": 0.002588242000000074,
+          "length": 23,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3073,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 13,
+          "seconds": 0.007536586000000067,
+          "length": 21,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3770,
+          "encoder": "pruned",
+          "n": 10,
+          "m": 22,
+          "seconds": 0.007200654999999889,
+          "length": 42,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3770,
+          "encoder": "canonical",
+          "n": 10,
+          "m": 22,
+          "seconds": 0.11656540199999998,
+          "length": 39,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "mutagenicity": {
+      "n_graphs": 4040,
+      "n_range": [
+        4,
+        98
+      ],
+      "sampled_n_range": [
+        7,
+        74
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.12589062199999979,
+          "max_s": 28.329499148,
+          "mean_len": 74.53333333333333
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 3,
+          "errors": 0,
+          "median_s": 1.4716818569999999,
+          "max_s": 24.144399432,
+          "mean_len": 42.333333333333336
+        }
+      },
+      "rows": [
+        {
+          "index": 78,
+          "encoder": "pruned",
+          "n": 51,
+          "m": 54,
+          "seconds": 3.796600511,
+          "length": 121,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 78,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.002066213000035
+        },
+        {
+          "index": 341,
+          "encoder": "pruned",
+          "n": 35,
+          "m": 36,
+          "seconds": 0.835612574,
+          "length": 69,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 341,
+          "encoder": "canonical",
+          "n": 35,
+          "m": 36,
+          "seconds": 24.144399432,
+          "length": 57,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 382,
+          "encoder": "pruned",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.0036540819999999474,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 382,
+          "encoder": "canonical",
+          "n": 11,
+          "m": 10,
+          "seconds": 0.006103597999999932,
+          "length": 13,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 565,
+          "encoder": "pruned",
+          "n": 22,
+          "m": 22,
+          "seconds": 0.07941992399999998,
+          "length": 37,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 565,
+          "encoder": "canonical",
+          "n": 22,
+          "m": 22,
+          "seconds": 0.470195291,
+          "length": 32,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1244,
+          "encoder": "pruned",
+          "n": 74,
+          "m": 80,
+          "seconds": 28.329499148,
+          "length": 233,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1244,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.002899279999838
+        },
+        {
+          "index": 1741,
+          "encoder": "pruned",
+          "n": 34,
+          "m": 35,
+          "seconds": 0.8350374199999999,
+          "length": 72,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1741,
+          "encoder": "canonical",
+          "n": 34,
+          "m": 35,
+          "seconds": 9.960047282,
+          "length": 56,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1984,
+          "encoder": "pruned",
+          "n": 17,
+          "m": 18,
+          "seconds": 0.014319042999999976,
+          "length": 35,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 1984,
+          "encoder": "canonical",
+          "n": 17,
+          "m": 18,
+          "seconds": 0.138958342,
+          "length": 27,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2356,
+          "encoder": "pruned",
+          "n": 7,
+          "m": 6,
+          "seconds": 0.0014390060000000204,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2356,
+          "encoder": "canonical",
+          "n": 7,
+          "m": 6,
+          "seconds": 0.0016698390000000618,
+          "length": 7,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2529,
+          "encoder": "pruned",
+          "n": 28,
+          "m": 28,
+          "seconds": 0.865008818,
+          "length": 46,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2529,
+          "encoder": "canonical",
+          "n": 28,
+          "m": 28,
+          "seconds": 1.4716818569999999,
+          "length": 42,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2538,
+          "encoder": "pruned",
+          "n": 64,
+          "m": 68,
+          "seconds": 2.737560195,
+          "length": 173,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2538,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.031850398000188
+        },
+        {
+          "index": 2623,
+          "encoder": "pruned",
+          "n": 35,
+          "m": 39,
+          "seconds": 0.12589062199999979,
+          "length": 90,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2623,
+          "encoder": "canonical",
+          "n": 35,
+          "m": 39,
+          "seconds": 2.3099692870000004,
+          "length": 76,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2673,
+          "encoder": "pruned",
+          "n": 15,
+          "m": 14,
+          "seconds": 0.011295127999999988,
+          "length": 20,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2673,
+          "encoder": "canonical",
+          "n": 15,
+          "m": 14,
+          "seconds": 0.09900170200000002,
+          "length": 18,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2898,
+          "encoder": "pruned",
+          "n": 35,
+          "m": 39,
+          "seconds": 0.10773349799999998,
+          "length": 85,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 2898,
+          "encoder": "canonical",
+          "n": 35,
+          "m": 39,
+          "seconds": 2.328987511,
+          "length": 76,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3054,
+          "encoder": "pruned",
+          "n": 17,
+          "m": 17,
+          "seconds": 0.014454658000000009,
+          "length": 27,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3054,
+          "encoder": "canonical",
+          "n": 17,
+          "m": 17,
+          "seconds": 0.05660325899999985,
+          "length": 24,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3060,
+          "encoder": "pruned",
+          "n": 35,
+          "m": 40,
+          "seconds": 0.13246016100000002,
+          "length": 90,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 3060,
+          "encoder": "canonical",
+          "n": 35,
+          "m": 40,
+          "seconds": 2.325064365,
+          "length": 80,
+          "engine": "cpp",
+          "killed": false
+        }
+      ]
+    },
+    "protein": {
+      "n_graphs": 569,
+      "n_range": [
+        2,
+        96
+      ],
+      "sampled_n_range": [
+        23,
+        50
+      ],
+      "summary": {
+        "pruned": {
+          "n": 15,
+          "killed": 0,
+          "errors": 0,
+          "median_s": 0.30520733999999994,
+          "max_s": 1.9459869610000002,
+          "mean_len": 193.26666666666668
+        },
+        "canonical": {
+          "n": 15,
+          "killed": 10,
+          "errors": 0,
+          "median_s": 2.071058,
+          "max_s": 21.848142949,
+          "mean_len": 98.2
+        }
+      },
+      "rows": [
+        {
+          "index": 12,
+          "encoder": "pruned",
+          "n": 47,
+          "m": 95,
+          "seconds": 0.8849577150000001,
+          "length": 257,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 12,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.031624440000087
+        },
+        {
+          "index": 85,
+          "encoder": "pruned",
+          "n": 34,
+          "m": 73,
+          "seconds": 0.289564237,
+          "length": 179,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 85,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032035336000263
+        },
+        {
+          "index": 94,
+          "encoder": "pruned",
+          "n": 46,
+          "m": 93,
+          "seconds": 0.44550161499999996,
+          "length": 255,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 94,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032176207000248
+        },
+        {
+          "index": 166,
+          "encoder": "pruned",
+          "n": 44,
+          "m": 92,
+          "seconds": 1.170139142,
+          "length": 243,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 166,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032244410999738
+        },
+        {
+          "index": 194,
+          "encoder": "pruned",
+          "n": 42,
+          "m": 90,
+          "seconds": 0.7848782740000001,
+          "length": 237,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 194,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032187209999847
+        },
+        {
+          "index": 237,
+          "encoder": "pruned",
+          "n": 29,
+          "m": 41,
+          "seconds": 0.07096453799999991,
+          "length": 104,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 237,
+          "encoder": "canonical",
+          "n": 29,
+          "m": 41,
+          "seconds": 2.071058,
+          "length": 88,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 250,
+          "encoder": "pruned",
+          "n": 42,
+          "m": 95,
+          "seconds": 0.3895134949999999,
+          "length": 241,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 250,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.031594829999904
+        },
+        {
+          "index": 274,
+          "encoder": "pruned",
+          "n": 23,
+          "m": 52,
+          "seconds": 0.057528405000000005,
+          "length": 129,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 274,
+          "encoder": "canonical",
+          "n": 23,
+          "m": 52,
+          "seconds": 21.848142949,
+          "length": 108,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 324,
+          "encoder": "pruned",
+          "n": 25,
+          "m": 47,
+          "seconds": 0.06997683200000004,
+          "length": 117,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 324,
+          "encoder": "canonical",
+          "n": 25,
+          "m": 47,
+          "seconds": 3.7529616069999996,
+          "length": 105,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 332,
+          "encoder": "pruned",
+          "n": 39,
+          "m": 79,
+          "seconds": 0.14594409400000008,
+          "length": 217,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 332,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.032153303000086
+        },
+        {
+          "index": 344,
+          "encoder": "pruned",
+          "n": 24,
+          "m": 38,
+          "seconds": 0.16440529599999998,
+          "length": 102,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 344,
+          "encoder": "canonical",
+          "n": 24,
+          "m": 38,
+          "seconds": 1.0102080990000002,
+          "length": 87,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 515,
+          "encoder": "pruned",
+          "n": 40,
+          "m": 66,
+          "seconds": 0.1718420089999999,
+          "length": 196,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 515,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.01237594400027
+        },
+        {
+          "index": 543,
+          "encoder": "pruned",
+          "n": 50,
+          "m": 89,
+          "seconds": 1.9459869610000002,
+          "length": 250,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 543,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.028628603000016
+        },
+        {
+          "index": 552,
+          "encoder": "pruned",
+          "n": 26,
+          "m": 45,
+          "seconds": 0.30520733999999994,
+          "length": 117,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 552,
+          "encoder": "canonical",
+          "n": 26,
+          "m": 45,
+          "seconds": 1.2988551700000002,
+          "length": 103,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 563,
+          "encoder": "pruned",
+          "n": 45,
+          "m": 97,
+          "seconds": 0.37369708200000007,
+          "length": 255,
+          "engine": "cpp",
+          "killed": false
+        },
+        {
+          "index": 563,
+          "encoder": "canonical",
+          "killed": true,
+          "seconds": 30.0,
+          "wall": 30.030282450999948
+        }
+      ]
+    }
+  }
+}

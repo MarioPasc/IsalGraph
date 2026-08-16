@@ -1,0 +1,56 @@
+{
+  "seed": 42,
+  "engine": {
+    "engine": "cpp",
+    "build_info": {
+      "build_hash": "298fc1188bf1b051",
+      "ndebug": "1",
+      "avx512f": "0",
+      "fma": "1",
+      "avx2": "1",
+      "isa_level": "x86-64-v3",
+      "cplusplus": "201703",
+      "compiler": "gcc 12.2.0",
+      "engine": "cpp"
+    }
+  },
+  "completeness": {
+    "n_classes": 995,
+    "per_n": {
+      "2": 1,
+      "3": 2,
+      "4": 6,
+      "5": 21,
+      "6": 112,
+      "7": 853
+    },
+    "pruned": {
+      "distinct_strings": 995,
+      "isomorphism_classes": 995,
+      "n_collisions": 0,
+      "n_invariance_failures": 0,
+      "n_errors": 0,
+      "complete_invariant": true,
+      "collision_detail": [],
+      "invariance_failure_detail": [],
+      "error_detail": []
+    },
+    "exhaustive": {
+      "distinct_strings": 995,
+      "isomorphism_classes": 995,
+      "n_collisions": 0,
+      "n_invariance_failures": 0,
+      "n_errors": 0,
+      "complete_invariant": true,
+      "collision_detail": [],
+      "invariance_failure_detail": [],
+      "error_detail": []
+    },
+    "agreement": {
+      "identical": 137,
+      "different": 858,
+      "pruned_longer": 558,
+      "total": 995
+    }
+  }
+}

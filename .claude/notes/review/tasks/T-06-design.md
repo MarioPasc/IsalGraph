@@ -66,6 +66,51 @@ undirected class.
 Artifact: `scratchpad/verify_canonical.json` — **to be promoted into `tests/` before close**, per
 [data](../plan/data.md) §6's rule that no measurement a decision rests on may live in a scratchpad.
 
+### 1.6 The reference arm, decided by measurement under the engine
+
+The PI declined to choose an arm on T-04's figures, because T-04's own reproduction header records
+its Picasso numbers as coming from a **pure-Python engine**. Re-measured 2026-08-16 with
+`engine() == "cpp"`, **15 uniformly random graphs per dataset, seed 42, each encode in its own
+subprocess killed at 30 s**:
+
+| dataset | `n` range | `pruned` median | `pruned` max | `pruned` killed | `canonical` median | `canonical` max | `canonical` killed |
+|---|---|---:|---:|---:|---:|---:|---:|
+| iam_letter_low | 2–7 | 0.86 ms | 1.27 ms | 0/15 | 0.83 ms | 1.14 ms | 0/15 |
+| iam_letter_med | 2–8 | 0.79 ms | 1.26 ms | 0/15 | 0.80 ms | 1.28 ms | 0/15 |
+| iam_letter_high | 2–9 | 0.99 ms | 1.81 ms | 0/15 | 0.85 ms | 2.17 ms | 0/15 |
+| linux | 4–10 | 3.07 ms | 4.91 ms | 0/15 | 4.24 ms | 13.5 ms | 0/15 |
+| aids_graphedx | 2–20 | 4.02 ms | 23.0 ms | 0/15 | 6.45 ms | 99.5 ms | 0/15 |
+| grec | 4–24 | 3.58 ms | 15.4 ms | 0/15 | 5.18 ms | 31.6 ms | 0/15 |
+| aids_iam | 2–85 | 3.65 ms | 6.56 ms | 0/15 | 5.46 ms | 17.7 ms | 0/15 |
+| **coil_del** | 3–77 | 18.2 ms | 0.58 s | **0/15** | 117 ms | 7.37 s | **7/15** |
+| **mutagenicity** | 4–98 | 126 ms | **28.3 s** | **0/15** | 1.47 s | 24.1 s | **3/15** |
+| **protein** | 2–96 | 305 ms | 1.95 s | **0/15** | 2.07 s | 21.8 s | **10/15** |
+
+**`pruned` completed 150 / 150. `canonical` was killed on 20 of 45** across the three largest
+datasets. **T-04's ceiling finding survives the engine** — it was not a pure-Python artefact, and the
+PI's challenge is answered in the direction T-04 claimed.
+
+**Decision (F-1): `isalgraph_pruned` is the reference arm on both suites.** It is the only variant
+computable across the cohort, so the choice is forced by measurement rather than taken for
+convenience — and it is the *less* flattering option, since T-04's equal-`n` table has `canonical`
+ahead on Letter LOW (0.9987 vs 0.9806) and HIGH (0.6953 vs 0.6166). `isalgraph_canonical` is
+retained as a **Suite-1-only descriptive arm**, reporting the pruned-vs-exhaustive gap that
+[preregistration](../plan/preregistration.md) §6 already labels exploratory.
+
+> **Two things this probe does NOT establish, and neither may be quoted as if it did.**
+> (a) **It is not a 300 s censoring rate.** 15 graphs at a 30 s budget bound the tail; they do not
+> measure it. Mutagenicity's `pruned` **maximum of 28.3 s** sits just under the probe budget, so a
+> 4,040-graph cohort will contain graphs that exceed it. The full-cohort rate at 300 s is what the
+> encoding campaign measures, and it is a D14 deliverable.
+> (b) **It is not a per-pair or per-graph cost for publication.** Fig. 2's timings must be
+> language-matched (`competitors/README` finding 11) and measured with no concurrent writer.
+
+**This corrects `competitors/README` finding 7b**, which reports `pruned` failing 24/400 on
+Mutagenicity and 4/400 on Protein and concludes *"an earlier note said `pruned` was fine to n = 98;
+on real graphs it is not."* Those failures are at a **2 s** budget. At 30 s the same encoder is
+0/150. **The finding is a statement about the budget, not about the encoder**, and the plan must not
+carry it as the latter.
+
 ### 1.4 Data — two plan claims corrected
 
 | Claim | Plan file | Measured 2026-08-16 |
@@ -76,6 +121,52 @@ Artifact: `scratchpad/verify_canonical.json` — **to be promoted into `tests/` 
 **The frozen cohort is `exported_suite2/`, not the GXL tree.** CSR edge lists, `graph_ids` aligned
 **index-for-index** with the `LB`/`UB` matrix rows, per-file `sha256`, `n_pairs_present =
 21,710,892`. T-06 loads from here and re-runs the GXL loader only for the reproduction check.
+
+### 1.4b 🔴 Two orchestrator sessions share one checkout, and every worktree reads it
+
+**Measured 2026-08-16, and it changes how the wave is built.**
+
+T-04a's session and this one were both operating in `/home/mpascual/research/code/IsalGraph`.
+T-04a ran `git switch main → ticket/T-04a` (reflog `HEAD@{2}`); this session did not observe it and
+committed its design note on top of T-04a's `7e96f4a`. Nothing was lost — `main` never moved from
+`f7ad283` — but the commit was misplaced.
+
+**Resolution**: T-06 works from a **dedicated worktree**,
+`/home/mpascual/research/code/IsalGraph-T06` on branch `ticket/T-06`, cut from `f7ad283`. The design
+commit was cherry-picked there (`8afa59e`). **The shared checkout is T-04a's; T-06 does not
+`git switch`, commit or edit in it.**
+
+**The consequence that actually matters.** Measured from the T-06 worktree:
+
+```
+isalgraph.__file__              -> /home/mpascual/research/code/IsalGraph/src/isalgraph/__init__.py
+isalgraph.competitors.__file__  -> /home/mpascual/research/code/IsalGraph/src/isalgraph/competitors/__init__.py
+```
+
+The `scikit-build-core` editable finder is **path-pinned to the checkout it was installed from**, so
+it outranks the worktree and `PYTHONPATH` alike. Every worktree agent therefore imports the *shared*
+checkout's `src/` — which is **T-04a's branch, carrying T-04a's in-flight edits to
+`src/isalgraph/competitors/`.**
+
+**Rules this forces on the wave, restated in every spawn prompt:**
+
+1. **No agent edits `src/isalgraph/` at all.** `competitors/` is T-04a's live territory.
+2. **No agent asserts a numeric value produced by a competitor backend.** Tests assert *API shape*
+   and invariants (`bits.count` returns both conventions; `distance` is symmetric and zero on
+   identical input), never a specific bit count or ρ — those can change under the agent with no error
+   raised.
+3. **No agent runs a production encoding campaign.** Agents build and validate machinery on
+   synthetic fixtures; **the orchestrator runs production after T-04a merges**, with the shared
+   checkout parked on a known commit.
+4. **No agent reports a timing.** Three concurrent agents on one workstation contaminate every
+   measurement. Timings are the orchestrator's, measured alone.
+5. **Every output file records `isalgraph.build_info()['build_hash']` and the producing checkout's
+   `git rev-parse HEAD`**, so a contaminated run is detectable afterwards rather than silently
+   believed.
+
+*Not* fixed by installing a second env from the T-06 worktree: that costs a C++ rebuild and a new
+environment to remove a hazard that disappears when T-04a merges, inside a 15-day window.
+**Detection beats isolation here — but the detection is not optional.**
 
 ### 1.5 What already exists, and must not be rebuilt
 
@@ -97,8 +188,8 @@ Artifact: `scratchpad/verify_canonical.json` — **to be promoted into `tests/` 
 
 | # | Question | Decision |
 |---|---|---|
-| **1** | Reference arm: `pruned` or `canonical`? | **Deferred pending §1.6's timing probe.** The premise behind "Suite 2 must use pruned" is `competitors/README` finding 5, whose source ticket recorded its figures under a **pure-Python engine**. Re-measuring with `engine() == 'cpp'` before choosing |
-| **2** | The frozen family has no term for a representation computable on one suite only | **New pre-declared term `s`.** `N_actual(F2) = 182 − 15k − 8d − 20s`. Entered in [preregistration](../plan/preregistration.md) §8 **before any p-value exists** |
+| **1** | Reference arm: `pruned` or `canonical`? | **RESOLVED by measurement (§1.6): `isalgraph_pruned` on both suites.** The PI required the premise be re-checked under the C++ engine before choosing. It was, and it holds |
+| **2** | The frozen family has no term for a representation computable on some datasets and not others | **New pre-declared term `c`, charged PER CELL.** `N_actual(F2) = 182 − 15k − 8d − c`, `N_actual` defined by enumeration. Entered in [preregistration](../plan/preregistration.md) §5.1/§5.2/§8 **before any p-value exists**. A first per-representation draft (`−20s`) was replaced the same day — see §2.3 |
 | **3** | Deadline | **No extension. 2026-08-31 stands.** A costed reduction is required *before* work starts — §4 |
 | **4** | Labels tier (S-d) | **Tiers 0–1 committed, Tier 2 DECLINED.** See §2.1 |
 
@@ -117,23 +208,47 @@ roles over 21,710,892 pairs ⇒ ≈ 713 core-h per role):
 core-h figure is corrected in place in `labels.md` at close** — leaving it would let a later ticket
 re-propose Tier 2 on a cost that is off by three orders of magnitude.
 
-### 2.2 The `s` term — exact statement, frozen before any p-value
+### 2.2 The `c` term — exact statement, frozen before any p-value
 
-> **`s` counts representations computable on Suite 1 but not on Suite 2.** Such a representation
-> **loses its 10 A1 rows and its 10 B1a rows** (Suite-2 datasets), and **keeps its 5 B1e rows and its
-> Suite-1 A1 rows**. Hence −20 per representation.
->
-> `N_actual(F2) = 182 − 15·k − 8·d − 20·s`
->
-> **Membership is decided by a pre-declared computability criterion, never by ρ**: a representation
-> is Suite-2-computable iff it completes on **≥ 99 % of the graphs of every Suite-2 dataset** under
-> the frozen per-graph budget. The threshold and the budget are fixed here, before the encoding
-> campaign runs.
+Full text and precedence: [preregistration](../plan/preregistration.md) §5.1–§5.2. In brief:
 
-**Expected members, on T-04's measured ceilings** (`agm_cam` 76 % GREC / 82 % AIDS-IAM;
-`isalgraph_canonical` unusable on Suite 2 — **pending §1.6's re-measurement under the engine**). The
-criterion is F5-blind: it reads a completion rate, not a correlation. This is the same
-justification decision 24 already accepts for `k`.
+> **`c` counts individual F2 cells, not representations.** A cell is `(row, representation,
+> dataset)` for `row ∈ {A1, B1e, B1a}`, removed iff its representation **fails the computability
+> criterion on that cell's dataset**: fewer than **99 %** of that dataset's graphs encode within the
+> frozen **300 s** per-graph budget.
+>
+> **`N_actual(F2)` is defined by enumerating the admissible cell set**, with
+> `182 − 15k − 8d − c` printed beside it as a check. Precedence `k → d → c`; a cell removed by an
+> earlier term is never charged again.
+
+The IsalGraph reference arm is **never charged to `c`** — D14 governs it, retaining a censored graph
+with its greedy-min string and reporting the rate. `wl_subtree` has no A1 cell, so a WL failure costs
+1 per dataset, not 2.
+
+### 2.3 That term was wrong when first frozen, and was corrected the same day
+
+The first draft charged **−20 per representation** (`s`). The T-04a session challenged it; the
+challenge was **verified against the sources and upheld**. Three defects, recorded because the
+correction is the kind a reviewer would otherwise find:
+
+1. **The arithmetic over-charged, in the anti-conservative direction.** `competitors/README` finding
+   5 measures `agm_cam` failing on **five** Suite-2 datasets (GREC 24 %, AIDS-IAM 18 %, COIL-DEL
+   46 %, Protein 90 %, Mutagenicity 98 %) and completing at **100 %** on Letter ×3 and LINUX. An
+   all-or-nothing gate deletes ~10 cells AGM does deliver — and **shrinking `N_actual` below what the
+   data forces lowers the BH burden on every surviving test**. That is the reduction a reviewer
+   attacks hardest, and it flatters us.
+2. **The citation was wrong.** The reduction-rule hole is `competitors/README` finding **6**; finding
+   **4** is the sparse6 `m/n` inversion. The "4" came from the *board header's* list, which numbers
+   differently. Verified in the source before correcting.
+3. **`k` and `s` were both ranged 0–6** although Claim B has **seven** comparators. `k` is now 0–7.
+
+Added with the fix: the `k → d → c` precedence rule (three terms over one shared cell set can
+double-count), the IsalGraph exemption, and the statement that **another ticket's completion rate at
+its own budget is not a `c` determination** — T-04/T-04a measure at each backend's native budget
+(`agm_cam` → `AGMBudgetExceeded`; `min_dfs` → `max_projections = 50,000`; `isalgraph_pruned` →
+`CanonicalizationTimeoutError` at **2 s**), not at 300 s.
+
+**No p-value existed under either version**, recorded in the §8 changelog as the rule requires.
 
 ---
 
@@ -218,7 +333,7 @@ between.
 | **F-6** | Seed | **42** everywhere |
 | **F-7** | D15 tiers | **As frozen in `statistics.md` §5**, not recomputed at execution time |
 | **F-8** | BH-FDR | Within each of F0, F1, F2 at **q = 0.05**; over **`N_actual`**; `N_max`, the exclusion list and a **BH-over-`N_max` sensitivity column** all printed |
-| **F-9** | `N_actual` | **`182 − 15k − 8d − 20s`** (§2.2) |
+| **F-9** | `N_actual` | **defined by enumeration of the admissible cell set**; closed form `182 − 15k − 8d − c` printed as a check; precedence `k → d → c`, no double-counting (`preregistration` §5.2) |
 | **F-10** | Bracket reporting | **No interpolation.** ρ against LB and UB separately; **absolute gap `UB − LB` leads**, relative width beside it with its denominator named |
 | **F-11** | Every printed ρ carries | its **graph-level bootstrap CI**, the **size null**, and its **enumeration window** |
 | **F-12** | Suite-2 join | on **`graph_ids`**, never positionally (`aids_graphedx` is 819 in Suite 2 against Suite 1's 769) |
