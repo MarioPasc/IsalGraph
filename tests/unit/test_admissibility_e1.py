@@ -129,9 +129,11 @@ def test_n_squared_family_is_invariant_exactly_on_the_complete_graphs(backend: s
     rows = e1.exhaustive_invariance(backend, "levenshtein", max_n=5)
     assert [row.n_nodes for row in rows] == [2, 3, 4, 5]
     for row in rows:
+        assert row.mode == "exhaustive"
         assert row.exhaustive
         assert row.n_settled == row.n_graphs
         assert row.n_invariant == 1, f"n={row.n_nodes} invariant set {row.invariant_graph6}"
+        assert row.n_no_counterexample is None
         assert row.invariant_set_is_complete_graph
 
 
@@ -195,6 +197,91 @@ def test_a_bound_sweep_reports_itself_as_not_exhaustive() -> None:
     for row in rows:
         if not row.exhaustive:
             assert row.invariant_set_is_complete_graph is False
+
+
+# --------------------------------------------------------------------------
+# Part A's declared exhaustive / sampled split
+# --------------------------------------------------------------------------
+
+
+def test_n_up_to_six_is_exhaustive_for_every_backend() -> None:
+    """The characterisation lives at n <= 6 and is never sampled."""
+    for name in registry.available_backends():
+        for n in range(2, e1.PART_A_ALWAYS_EXHAUSTIVE_MAX_N + 1):
+            mode, perms = e1.permutation_plan(n, name, exhaustive_n7=(), sample=8, seed=common.SEED)
+            assert mode == "exhaustive", f"{name} at n={n}"
+            assert len(perms) == math.factorial(n)
+
+
+def test_only_the_declared_backends_enumerate_n_seven() -> None:
+    """The split is a property of the protocol, not of the machine's speed."""
+    for name in e1.PART_A_EXHAUSTIVE_N7:
+        mode, perms = e1.permutation_plan(
+            7, name, exhaustive_n7=e1.PART_A_EXHAUSTIVE_N7, sample=200, seed=common.SEED
+        )
+        assert mode == "exhaustive"
+        assert len(perms) == 5040
+    for name in ("min_dfs", "agm_cam", "isalgraph_pruned", "wl_subtree"):
+        mode, perms = e1.permutation_plan(
+            7, name, exhaustive_n7=e1.PART_A_EXHAUSTIVE_N7, sample=200, seed=common.SEED
+        )
+        assert mode == "sampled"
+        assert len(perms) == 200
+        assert len(set(perms)) == 200, "the draw must be without replacement"
+        assert perms[0] == tuple(range(7)), "the identity is always the base"
+
+
+def test_the_permutation_sample_is_shared_by_every_graph_and_backend() -> None:
+    """Sampled cells stay comparable because they see the same permutations."""
+    first = e1.permutation_plan(7, "min_dfs", exhaustive_n7=(), sample=64, seed=common.SEED)[1]
+    second = e1.permutation_plan(7, "wl_subtree", exhaustive_n7=(), sample=64, seed=common.SEED)[1]
+    other_seed = e1.permutation_plan(7, "min_dfs", exhaustive_n7=(), sample=64, seed=7)[1]
+    assert first == second
+    assert first != other_seed
+
+
+def test_a_sampled_cell_never_claims_invariance() -> None:
+    """Sampling can fail to refute; it cannot decide.  The fields enforce it.
+
+    ``n_invariant`` is ``None`` under ``mode = "sampled"`` and
+    ``invariant_set_is_complete_graph`` is ``False``, so a downstream table
+    cannot print a sampled count in a column that means "invariant".  What the
+    cell *does* license is a rule-of-three bound on the chance that a random
+    relabelling breaks a graph the draw did not break.
+    """
+    rows = e1.exhaustive_invariance(
+        "adjacency",
+        "levenshtein",
+        max_n=5,
+        exhaustive_n7=(),
+        sample_n7=16,
+    )
+    # n <= 5 is below the always-exhaustive ceiling, so force the sampled path
+    # through permutation_plan directly and through a cell built on it.
+    mode, perms = e1.permutation_plan(7, "min_dfs", exhaustive_n7=(), sample=16, seed=common.SEED)
+    assert mode == "sampled"
+    assert all(row.mode == "exhaustive" for row in rows)
+
+    sampled = e1.exhaustive_invariance(
+        "adjacency", "levenshtein", max_n=7, exhaustive_n7=(), sample_n7=16
+    )
+    seven = next(row for row in sampled if row.n_nodes == 7)
+    assert seven.mode == "sampled"
+    assert seven.permutations_per_graph == 16
+    assert seven.sample_seed == common.SEED
+    assert seven.n_invariant is None
+    assert seven.n_no_counterexample is not None
+    assert seven.invariant_set_is_complete_graph is False
+    assert seven.exhaustive is False
+    assert seven.per_graph_non_invariance_upper == pytest.approx(common.rule_of_three(16))
+    assert len(perms) == 16
+
+
+def test_a_sample_at_least_as_large_as_n_factorial_is_exhaustive() -> None:
+    """Asking for more permutations than exist enumerates them, and says so."""
+    mode, perms = e1.permutation_plan(4, "min_dfs", exhaustive_n7=(), sample=100, seed=1)
+    assert mode == "exhaustive"
+    assert len(perms) == 24
 
 
 def test_invariant_certificates_are_readable_graph6_strings() -> None:

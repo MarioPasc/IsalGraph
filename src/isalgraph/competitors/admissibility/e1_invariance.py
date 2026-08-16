@@ -115,10 +115,32 @@ FALLBACK_METRIC = "levenshtein"
 
 #: Deterministic ceiling on Part A's deduplicated encodes per ``(backend, n)``.
 #: Machine-independent, unlike a wall-clock cap: the same run covers the same
-#: graphs everywhere.  ``n = 7`` needs 1,866,256, so this does not bind for any
-#: backend currently in the pool; a slower future one would report
-#: ``exhaustive = False`` and name how many graphs it settled.
+#: graphs everywhere.  A cell that hits it reports ``exhaustive = False`` and
+#: names how many graphs it settled.
 PART_A_MAX_ENCODES: int = 2_500_000
+
+#: **``n <= 6`` is exhaustive for every backend, always.**  142 graphs and at
+#: most 720 permutations each: that is where the characterisation lives and it
+#: is cheap for the whole pool.
+PART_A_ALWAYS_EXHAUSTIVE_MAX_N: int = 6
+
+#: The backends whose ``n = 7`` sweep is also exhaustive.  A full ``n = 7``
+#: sweep is 1,866,256 deduplicated encodes -- the number of labelled connected
+#: graphs on seven nodes -- and these five pay for it in about two minutes.
+#: Everything else is sampled at ``n = 7``; see :data:`PART_A_SAMPLE_N7`.
+#: Measured on this workstation, per full ``n = 7`` sweep: ``adjacency`` 0.1 s,
+#: ``graph6`` 0.2 s, ``sparse6`` 0.2 s (all three exit at the first witness),
+#: ``isalgraph_canonical`` 122 s, ``agm_cam`` 366 s, ``min_dfs`` ~5,000 s.
+PART_A_EXHAUSTIVE_N7: tuple[str, ...] = (
+    "adjacency",
+    "graph6",
+    "sparse6",
+    "nauty_graph6",
+    "sparse6_nauty",
+)
+
+#: Permutations per graph when ``n = 7`` is sampled rather than enumerated.
+PART_A_SAMPLE_N7: int = 200
 
 #: Fewer surviving pairs than this in a bootstrap replicate and it contributes
 #: no ``psi``.  Matches :data:`isalgraph.competitors.bootstrap.MIN_PAIRS`.
@@ -139,26 +161,47 @@ QUICK_DATASETS: tuple[str, ...] = ("iam_letter_low", "linux")
 
 @dataclass(frozen=True, slots=True)
 class ExhaustiveRow:
-    """Part A: one ``(backend, n)`` cell of the exhaustive characterisation.
+    """Part A: one ``(backend, n)`` cell.
+
+    **A sampled cell may never say "invariant".**  Enumerating every
+    permutation *decides* invariance; sampling 200 of 5,040 can only fail to
+    find a counterexample, which is a different and much weaker statement.  The
+    two are carried in **different fields** rather than in one field plus a
+    flag, so a reader or a downstream table cannot quote one as the other:
+    ``n_invariant`` is ``None`` under ``mode = "sampled"`` and
+    ``n_no_counterexample`` is ``None`` under ``mode = "exhaustive"``.
 
     Attributes:
         backend: registry key.
         metric: the distance whose zero defines invariance.
         n_nodes: order of the graphs in this cell.
         n_graphs: connected graphs on *n_nodes* nodes, up to isomorphism.
-        n_settled: graphs actually decided.  Below *n_graphs* only when
+        n_settled: graphs actually processed.  Below *n_graphs* only when
             :data:`PART_A_MAX_ENCODES` bound.
-        n_invariant: settled graphs invariant under **every** relabelling.
-        invariant_graph6: ``graph6`` certificate of each invariant graph, so a
-            reader can check the characterisation rather than believe it.
-        invariant_set_is_complete_graph: whether the invariant set is exactly
-            ``{K_n}``.  T-04's claim for the ``n^2`` family, re-verified here
-            independently of T-04's code.
-        exhaustive: every distinct labelled copy of every settled graph was
-            covered, or the graph was refuted by a witness.
+        mode: ``"exhaustive"`` -- every permutation enumerated, so the cell
+            decides invariance -- or ``"sampled"``.
+        permutations_per_graph: ``n!`` when exhaustive, the draw size when
+            sampled.
+        sample_seed: seed of the permutation draw, ``None`` when exhaustive.
+        n_invariant: **exhaustive only.** Graphs invariant under *every*
+            relabelling.  ``None`` when sampled.
+        n_no_counterexample: **sampled only.** Graphs for which no relabelling
+            in the draw moved the encoding.  ``None`` when exhaustive.
+        per_graph_non_invariance_upper: **sampled only.** Rule-of-three 95 %
+            upper bound, ``3/permutations_per_graph``, on the chance that a
+            random relabelling breaks a graph the draw did not break.
+        invariant_graph6: ``graph6`` certificate of each graph in whichever of
+            the two sets this cell measured, so a reader can check it.
+        invariant_set_is_complete_graph: whether the *decided* invariant set is
+            exactly ``{K_n}`` -- T-04's claim for the ``n^2`` family, verified
+            here independently of T-04's code.  **``False`` whenever the cell
+            is sampled or bound**, because neither decides a set.
+        exhaustive: ``mode == "exhaustive"`` and the encode ceiling did not
+            bind.
         encodes: deduplicated encodes actually performed.
         orbit_total: distinct labelled graphs covered by the sweeps that ran to
-            completion, i.e. ``sum n!/|Aut(G)|`` over the invariant graphs.
+            completion.  Under an exhaustive sweep of an invariant
+            representation this is ``sum_G n!/|Aut(G)|``, i.e. OEIS A001187.
         n_skipped: graphs the backend raised on.  A raise is never counted as
             non-invariance.
         seconds: wall clock.
@@ -169,7 +212,12 @@ class ExhaustiveRow:
     n_nodes: int
     n_graphs: int
     n_settled: int
-    n_invariant: int
+    mode: str
+    permutations_per_graph: int
+    sample_seed: int | None
+    n_invariant: int | None
+    n_no_counterexample: int | None
+    per_graph_non_invariance_upper: float | None
     invariant_graph6: tuple[str, ...]
     invariant_set_is_complete_graph: bool
     exhaustive: bool
@@ -380,14 +428,57 @@ def _graph6(graph: nx.Graph) -> str:
     return str(nx.to_graph6_bytes(graph, header=False).decode("ascii").strip())
 
 
+def permutation_plan(
+    n: int, backend_name: str, *, exhaustive_n7: Sequence[str], sample: int, seed: int
+) -> tuple[str, list[tuple[int, ...]]]:
+    """Which permutations this ``(backend, n)`` cell will use, and in what mode.
+
+    The rule is declared, not discovered at run time, so a cell's mode is a
+    property of the protocol rather than of how fast the machine happened to
+    be:
+
+    - ``n <= PART_A_ALWAYS_EXHAUSTIVE_MAX_N`` is exhaustive for **every**
+      backend.  That is where the characterisation lives.
+    - ``n = 7`` is exhaustive for the backends in *exhaustive_n7* and sampled
+      for the rest.
+
+    The sample is drawn once per ``n`` from ``random.Random(seed)`` and is
+    therefore the **same permutations for every graph and every backend**,
+    which keeps sampled cells comparable with one another.  The identity is
+    always first, so every graph has a base to compare against.
+
+    Args:
+        n: node count.
+        backend_name: registry key.
+        exhaustive_n7: backends whose ``n = 7`` sweep is enumerated in full.
+        sample: permutations per graph when sampled.
+        seed: seed of the permutation draw.
+
+    Returns:
+        ``(mode, permutations)`` with *mode* ``"exhaustive"`` or ``"sampled"``.
+    """
+    everything = list(itertools.permutations(range(n)))
+    if n <= PART_A_ALWAYS_EXHAUSTIVE_MAX_N or backend_name in exhaustive_n7:
+        return "exhaustive", everything
+    if sample >= len(everything):
+        return "exhaustive", everything
+    identity = tuple(range(n))
+    rng = random.Random(seed)
+    drawn = rng.sample(everything[1:], sample - 1)
+    return "sampled", [identity, *drawn]
+
+
 def exhaustive_invariance(
     backend_name: str,
     metric_name: str,
     *,
     max_n: int = common.EXHAUSTIVE_N_INVARIANCE,
     max_encodes: int = PART_A_MAX_ENCODES,
+    exhaustive_n7: Sequence[str] = PART_A_EXHAUSTIVE_N7,
+    sample_n7: int = PART_A_SAMPLE_N7,
+    seed: int = common.SEED,
 ) -> list[ExhaustiveRow]:
-    """Decide, per node count, exactly which connected graphs are invariant.
+    """Characterise, per node count, which connected graphs are invariant.
 
     Args:
         backend_name: registry key of the representation.
@@ -396,9 +487,14 @@ def exhaustive_invariance(
         max_n: largest node count, at most 7 (the atlas's range).
         max_encodes: deterministic ceiling on deduplicated encodes per node
             count.  A cell that hits it reports ``exhaustive = False``.
+        exhaustive_n7: backends whose ``n = 7`` sweep is enumerated in full.
+        sample_n7: permutations per graph for the rest at ``n = 7``.
+        seed: seed of the permutation draw.
 
     Returns:
-        One :class:`ExhaustiveRow` per node count in ``2..max_n``.
+        One :class:`ExhaustiveRow` per node count in ``2..max_n``.  A row whose
+        ``mode`` is ``"sampled"`` carries ``n_no_counterexample`` and **not**
+        ``n_invariant``; see :class:`ExhaustiveRow`.
 
     Raises:
         AdmissibilityError: if the atlas's per-``n`` counts are not
@@ -422,12 +518,26 @@ def exhaustive_invariance(
 
     code = _coder(backend_name)
     metric = registry.get_metric(metric_name)
-    return [
-        _exhaustive_row(
-            backend_name, metric_name, metric, code, n, by_n[n], max_encodes=max_encodes
+    rows: list[ExhaustiveRow] = []
+    for n in sorted(by_n):
+        mode, perms = permutation_plan(
+            n, backend_name, exhaustive_n7=exhaustive_n7, sample=sample_n7, seed=seed
         )
-        for n in sorted(by_n)
-    ]
+        rows.append(
+            _exhaustive_row(
+                backend_name,
+                metric_name,
+                metric,
+                code,
+                n,
+                by_n[n],
+                mode=mode,
+                perms=perms,
+                seed=seed,
+                max_encodes=max_encodes,
+            )
+        )
+    return rows
 
 
 def _orbit(graph: nx.Graph, perms: Sequence[Sequence[int]]) -> Iterator[nx.Graph]:
@@ -465,10 +575,12 @@ def _exhaustive_row(
     n: int,
     graphs: Sequence[nx.Graph],
     *,
+    mode: str,
+    perms: Sequence[Sequence[int]],
+    seed: int,
     max_encodes: int,
 ) -> ExhaustiveRow:
     """One ``(backend, n)`` cell.  See :func:`exhaustive_invariance`."""
-    perms = list(itertools.permutations(range(n)))
     started = time.perf_counter()
     invariant: list[str] = []
     encodes = 0
@@ -505,16 +617,26 @@ def _exhaustive_row(
             invariant.append(_graph6(graph))
 
     complete = {_graph6(g) for g in graphs if _is_complete(g)}
+    decided = mode == "exhaustive" and exhaustive
     return ExhaustiveRow(
         backend=backend_name,
         metric=metric_name,
         n_nodes=n,
         n_graphs=len(graphs),
         n_settled=settled,
-        n_invariant=len(invariant),
+        mode=mode,
+        permutations_per_graph=len(perms),
+        sample_seed=None if mode == "exhaustive" else seed,
+        # The two counts live in different fields on purpose: enumerating every
+        # permutation DECIDES invariance, sampling can only fail to refute it.
+        n_invariant=len(invariant) if mode == "exhaustive" else None,
+        n_no_counterexample=None if mode == "exhaustive" else len(invariant),
+        per_graph_non_invariance_upper=(
+            None if mode == "exhaustive" else common.rule_of_three(len(perms))
+        ),
         invariant_graph6=tuple(sorted(invariant)),
-        invariant_set_is_complete_graph=(exhaustive and set(invariant) == complete),
-        exhaustive=exhaustive,
+        invariant_set_is_complete_graph=(decided and set(invariant) == complete),
+        exhaustive=decided,
         encodes=encodes,
         orbit_total=orbit_total,
         n_skipped=skipped,
@@ -935,6 +1057,8 @@ def run_e1(
     seed: int = common.SEED,
     quick: bool = False,
     metric_override: str | None = None,
+    exhaustive_n7: Sequence[str] = PART_A_EXHAUSTIVE_N7,
+    sample_n7: int = PART_A_SAMPLE_N7,
 ) -> dict[str, Any]:
     """Run E1 and return its record.
 
@@ -953,6 +1077,8 @@ def run_e1(
         quick: development mode; recorded in the output.
         metric_override: supplementary sensitivity run; see
             :func:`_resolve_metrics`.  ``None`` for the protocol run.
+        exhaustive_n7: backends whose ``n = 7`` sweep is enumerated in full.
+        sample_n7: permutations per graph for the rest at ``n = 7``.
 
     Returns:
         The record :func:`common.write_result` serialises.
@@ -981,16 +1107,40 @@ def run_e1(
 
     if "A" in parts:
         record["atlas_counts_expected"] = {str(n): c for n, c in A001349.items() if n <= max_n}
+        record["part_a_policy"] = {
+            "always_exhaustive_max_n": PART_A_ALWAYS_EXHAUSTIVE_MAX_N,
+            "exhaustive_n7_backends": list(exhaustive_n7),
+            "sampled_permutations_per_graph": sample_n7,
+            "sample_seed": seed,
+            "rule": (
+                "n <= 6 is exhaustive for every backend. n = 7 is exhaustive only "
+                "for the listed backends; the rest draw the same seeded sample of "
+                "permutations. A sampled cell reports n_no_counterexample and a "
+                "rule-of-three bound -- it NEVER reports n_invariant, because "
+                "sampling cannot decide invariance"
+            ),
+        }
         rows_a: list[dict[str, Any]] = []
         for name in names:
             metric_name, _ = metrics[name]
             LOGGER.info("part A: %s under %s", name, metric_name)
-            for row in exhaustive_invariance(name, metric_name, max_n=max_n):
+            for row in exhaustive_invariance(
+                name,
+                metric_name,
+                max_n=max_n,
+                exhaustive_n7=exhaustive_n7,
+                sample_n7=sample_n7,
+                seed=seed,
+            ):
+                count = row.n_invariant if row.mode == "exhaustive" else row.n_no_counterexample
                 LOGGER.info(
-                    "  n=%d invariant %d/%d complete-only=%s encodes=%d %.1fs",
+                    "  n=%d %-10s %s %d/%d perms=%d complete-only=%s encodes=%d %.1fs",
                     row.n_nodes,
-                    row.n_invariant,
+                    row.mode,
+                    "invariant" if row.mode == "exhaustive" else "no-counterexample",
+                    count or 0,
                     row.n_settled,
+                    row.permutations_per_graph,
                     row.invariant_set_is_complete_graph,
                     row.encodes,
                     row.seconds,
@@ -1065,6 +1215,15 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         "how much psi depends on the fallback the protocol fixed. Never the "
         "protocol run; the record carries metric_override",
     )
+    parser.add_argument(
+        "--exhaustive-n7",
+        nargs="*",
+        default=None,
+        help="backends whose n=7 sweep is enumerated in full; the rest are "
+        f"sampled at {PART_A_SAMPLE_N7} permutations per graph. Default: "
+        f"{' '.join(PART_A_EXHAUSTIVE_N7)}",
+    )
+    parser.add_argument("--sample-n7", type=int, default=PART_A_SAMPLE_N7)
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
 
@@ -1089,7 +1248,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "parts": args.parts,
         "quick": args.quick,
         "metric_override": args.metric_override,
+        "sample_n7": args.sample_n7,
     }
+    if args.exhaustive_n7 is not None:
+        kwargs["exhaustive_n7"] = tuple(args.exhaustive_n7)
     if args.quick:
         kwargs.update(
             max_n=QUICK_MAX_N,
