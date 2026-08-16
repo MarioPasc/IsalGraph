@@ -169,6 +169,25 @@ def test_orbit_total_is_n_factorial_over_the_automorphism_group() -> None:
         assert canonical[3].encodes == 4
 
 
+def test_a_full_sweep_covers_every_labelled_connected_graph() -> None:
+    """``orbit_total`` reproduces OEIS A001187 -- the dedup skips nothing.
+
+    ``sum_G n!/|Aut(G)|`` over the connected graphs on ``n`` nodes up to
+    isomorphism *is* the number of **labelled** connected graphs on ``n``
+    nodes: 1, 4, 38, 728 for ``n = 2..5``.  A representation invariant on
+    every atlas graph therefore had to encode exactly that many distinct
+    labelled graphs.  If deduplication ever dropped a labelled copy the sum
+    would fall short, and this is the cheapest way to see it.
+    """
+    if not _have("nauty_graph6"):
+        pytest.skip("pynauty not installed")
+    labelled_connected = {2: 1, 3: 4, 4: 38, 5: 728}
+    for row in e1.exhaustive_invariance("nauty_graph6", "levenshtein", max_n=5):
+        assert row.n_invariant == row.n_graphs
+        assert row.orbit_total == labelled_connected[row.n_nodes]
+        assert row.encodes == labelled_connected[row.n_nodes]
+
+
 def test_a_bound_sweep_reports_itself_as_not_exhaustive() -> None:
     """Hitting the encode ceiling is declared, never silently truncated."""
     rows = e1.exhaustive_invariance("adjacency", "levenshtein", max_n=4, max_encodes=1)
