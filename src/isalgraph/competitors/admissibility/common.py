@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import statistics
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -162,14 +163,14 @@ def wilcoxon_paired(a: Sequence[float], b: Sequence[float]) -> dict[str, float |
         b: Second sample, same length and pairing as *a*.
 
     Returns:
-        ``statistic``, ``p``, ``n_nonzero`` and ``rank_biserial``.  ``p`` is
-        ``None`` when every pair is tied, which is the expected outcome when
-        two representations are both exactly invariant.
+        ``statistic``, ``p``, ``n_nonzero``, ``rank_biserial`` and the two
+        medians.  ``p`` is ``None`` when every pair is tied, which is the
+        expected outcome when two representations are both exactly invariant.
 
     Raises:
         ValueError: If the samples differ in length.
     """
-    from scipy.stats import wilcoxon
+    from scipy.stats import rankdata, wilcoxon
 
     if len(a) != len(b):
         raise ValueError(f"paired test needs equal lengths, got {len(a)} and {len(b)}")
@@ -178,15 +179,24 @@ def wilcoxon_paired(a: Sequence[float], b: Sequence[float]) -> dict[str, float |
     if not nonzero:
         return {"statistic": 0.0, "p": None, "n_nonzero": 0, "rank_biserial": 0.0}
     result = wilcoxon(nonzero, alternative="two-sided", zero_method="wilcox")
-    n = len(nonzero)
-    total = n * (n + 1) / 2
-    stat = float(result.statistic)
+
+    # scipy's two-sided `statistic` is min(W+, W-), which carries NO direction:
+    # deriving the effect size from it yields an unsigned magnitude that reads
+    # as though it were signed.  Rebuild W+ and W- from the signed ranks so the
+    # sign means what a reader will assume it means.
+    ranks = rankdata([abs(d) for d in nonzero])
+    w_pos = float(sum(r for r, d in zip(ranks, nonzero, strict=True) if d > 0))
+    w_neg = float(sum(r for r, d in zip(ranks, nonzero, strict=True) if d < 0))
+    total = w_pos + w_neg
     return {
-        "statistic": stat,
+        "statistic": float(result.statistic),
         "p": float(result.pvalue),
-        "n_nonzero": n,
-        # Matched-pairs rank-biserial: 1 - 2 W_min / total, in [-1, 1].
-        "rank_biserial": float(1.0 - 2.0 * stat / total) if total else 0.0,
+        "n_nonzero": len(nonzero),
+        # Matched-pairs rank-biserial, SIGNED: (W+ - W-) / (W+ + W-), in [-1, 1].
+        # Positive means `a` exceeds `b`.
+        "rank_biserial": float((w_pos - w_neg) / total) if total else 0.0,
+        "median_a": float(statistics.median(a)),
+        "median_b": float(statistics.median(b)),
     }
 
 

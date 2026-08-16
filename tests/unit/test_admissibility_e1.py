@@ -553,14 +553,16 @@ def test_paired_comparison_restricts_to_the_graphs_both_backends_encoded() -> No
     assert rows[0].n_paired == 4
 
 
-def test_rank_biserial_direction_must_be_read_from_the_medians() -> None:
-    """The effect size is a magnitude; the sign lives in the two medians.
+def test_rank_biserial_is_signed_and_agrees_with_the_medians() -> None:
+    """The effect size carries direction, and it agrees with the medians.
 
-    ``scipy.stats.wilcoxon`` returns ``min(W+, W-)`` under a two-sided
-    alternative, so ``common.wilcoxon_paired``'s ``1 - 2W/total`` is
-    non-negative whichever representation is worse.  The row therefore carries
-    both medians, and a reader must use them rather than the sign of the
-    effect size.
+    This test previously pinned the opposite: ``scipy.stats.wilcoxon`` returns
+    ``min(W+, W-)`` under a two-sided alternative, so an effect size derived
+    from it is a non-negative magnitude that *reads* as though it were signed.
+    E1 found that defect in ``common.wilcoxon_paired`` and documented it here.
+    The defect is now fixed -- the statistic is rebuilt from the signed ranks
+    as ``(W+ - W-) / (W+ + W-)`` -- so the test asserts the repaired contract:
+    the sign is real, and it points the same way the medians do.
     """
     positions = list(range(12))
     forward = e1.paired_comparisons(
@@ -577,7 +579,10 @@ def test_rank_biserial_direction_must_be_read_from_the_medians() -> None:
             "b": dict.fromkeys(positions, 0.0),
         },
     )[0]
-    assert forward.rank_biserial == backward.rank_biserial
+    # Antisymmetric under swapping the arms, rather than identical.
+    assert forward.rank_biserial == pytest.approx(-backward.rank_biserial)
+    assert forward.rank_biserial < 0 < backward.rank_biserial
+    # And the medians, which remain on the row, tell the same story.
     assert forward.median_psi_a < forward.median_psi_b
     assert backward.median_psi_a > backward.median_psi_b
 
