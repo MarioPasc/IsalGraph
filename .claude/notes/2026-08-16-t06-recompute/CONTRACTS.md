@@ -147,6 +147,8 @@ One file per `(suite, dataset, representation)`:
 | key | dtype | shape | meaning |
 |---|---|---|---|
 | `graph_ids` | `<U16` | `(G,)` | **in cohort order**, identical to the cohort file's `graph_ids` |
+| `node_counts` | `int32` | `(G,)` | carried through from the cohort — **the distance track gets `n` from here and never opens a cohort file**, which is what keeps the two ownership sets disjoint |
+| `edge_counts` | `int32` | `(G,)` | carried through from the cohort |
 | `encoding` | `<U…` (object-free) | `(G,)` | the encoded string; `''` when `status != "ok"` |
 | `length` | `int32` | `(G,)` | `len(encoding)`; `-1` when not encoded |
 | `entropy_bits` | `float64` | `(G,)` | `L·log2(alphabet_size)`; `nan` if `BitCountUndefined` |
