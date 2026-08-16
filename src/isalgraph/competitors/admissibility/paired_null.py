@@ -30,6 +30,10 @@ ROOT = datasets.cohort_root()
 OUT = "/media/mpascual/Sandisk2TB/research/isalgraph/T-04a/paired_null_ci.json"
 RESAMPLES = 2000
 SEED = 42
+#: The arm this module measures. Named in every record so a consumer never
+#: has to infer it from the statistic string.
+REPRESENTATION = "isalgraph_pruned"
+METRIC = "levenshtein"
 
 
 def spearman(x: FloatArray, y: FloatArray) -> float:
@@ -62,7 +66,7 @@ def run(ds: str, arm: str) -> dict[str, object] | None:
     cohort = datasets.load(ds)
     idx = np.array(cohort.sample(200, seed=SEED))
     graphs = [cohort.graphs[i] for i in idx]
-    backend, metric = get_repr_backend("isalgraph_pruned"), get_metric("levenshtein")
+    backend, metric = get_repr_backend(REPRESENTATION), get_metric(METRIC)
 
     # A budget-exceeded graph is a datum, not a stop -- and the pairs it would
     # have joined are dropped from BOTH arms, which is the whole point of this
@@ -105,6 +109,11 @@ def run(ds: str, arm: str) -> dict[str, object] | None:
     return {
         "dataset": ds,
         "arm": arm,
+        # Named explicitly: "rho(Lev, ref)" does not distinguish
+        # isalgraph_pruned from isalgraph_canonical, and a consumer that has
+        # to infer which arm a record belongs to will eventually infer wrong.
+        "representation": REPRESENTATION,
+        "metric": METRIC,
         "n_pairs": len(ged),
         "n_encoded": len(enc),
         "rho_lev": spearman(lev_a, ged_a),
@@ -135,7 +144,13 @@ if __name__ == "__main__":
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(
             {
-                "statistic": "rho(Lev,ref) - rho(|dn|,ref), paired graph-level bootstrap",
+                "statistic": (
+                    f"rho({METRIC} on {REPRESENTATION}, ref) - rho(|dn|, ref), "
+                    "paired graph-level bootstrap; both arms on the identical "
+                    "pair set and the identical resamples"
+                ),
+                "representation": REPRESENTATION,
+                "metric": METRIC,
                 "resamples": RESAMPLES,
                 "seed": SEED,
                 "records": out,
