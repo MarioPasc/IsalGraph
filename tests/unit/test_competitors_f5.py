@@ -477,6 +477,30 @@ def test_a_suite1_only_representation_gets_no_printed_suite2_row(
         assert payload["results"][key]["n_unencodable"]["isalgraph_canonical"] is None
 
 
+def test_the_grids_null_size_null_entry_does_not_delete_the_null_row(
+    cohort_root: str, tmp_path: Path
+) -> None:
+    """The real grid lists ``size_null`` with a null primary distance.
+
+    It must: CONTRACTS §4 forbids selecting a baseline as any representation's
+    primary distance.  But ``size_null`` is also the dedicated baseline row
+    every other row is judged against, so treating the grid's entry as an
+    ordinary representation overwrites that row with a printed absence and
+    deletes the null from the whole table -- silently, since a printed
+    absence is a legitimate value everywhere else.
+    """
+    path = tmp_path / "grid_with_null_baseline.json"
+    path.write_text(
+        json.dumps({"primary_distance": {"adjacency": "levenshtein", "size_null": None}}),
+        encoding="utf-8",
+    )
+    payload = f5.run(str(path), names=("linux",), n_graphs=6, seed=42, resamples=20)
+    null = payload["results"]["linux"]["views"]["all_pairs"]["size_null"]
+    assert null["rho"] is not None
+    assert null["metric"] == "size_null"
+    assert null["n_pairs"] == 15
+
+
 def test_a_core_engine_timeout_is_a_datum_not_a_crash(
     cohort_root: str, grid_file: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -328,6 +328,14 @@ def dataset_record(
             )
         }
         for backend_name in sorted(primary):
+            if backend_name == SIZE_NULL:
+                # The grid lists `size_null` with a null distance, because
+                # CONTRACTS 4 forbids selecting a baseline as anyone's primary
+                # distance.  Falling through would overwrite the null row
+                # computed above with a printed absence and delete the one
+                # column every other row is judged against.  It is the
+                # baseline, not a competitor, and it is emitted once.
+                continue
             metric_name = primary[backend_name]
             if metric_name is None:
                 row[backend_name] = _empty_record(
@@ -441,7 +449,7 @@ def run(
         encodings: dict[str, dict[int, Any]] = {}
         unencodable: dict[str, int | None] = {}
         errors: dict[str, dict[str, int]] = {}
-        for backend_name in [SIZE_NULL, *sorted(primary)]:
+        for backend_name in [SIZE_NULL, *(n for n in sorted(primary) if n != SIZE_NULL)]:
             skipped = backend_name != SIZE_NULL and (
                 primary.get(backend_name) is None or backend_name in scope_reasons
             )
