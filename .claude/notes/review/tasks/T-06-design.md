@@ -606,3 +606,62 @@ T-04a's F5 Suite-1 ρ values reproduce `corrected_rho_table.json` at **max |delt
 every shared cell — **two independently written pipelines, same seed-42 draw, bit-identical.**
 **T-06's distance driver is checked against that same target** and any disagreement is a defect in
 one of three implementations rather than a judgement call. Added as an acceptance criterion.
+
+---
+
+## 11. RESULT — the D14 censoring rate at the frozen 300 s budget, measured
+
+**The full Suite-2 cohort, `isalgraph_pruned`, 300 s per graph, killed subprocess, C++ engine
+(`build_hash 298fc1188bf1b051`), `src_commit 6c3e742`.** This is the measurement
+[statistics](../plan/statistics.md) D14 called *"a headline result of T-06, not a footnote"*, and it
+had never been made on the full cohort at the production budget.
+
+| dataset | graphs | **censored** | rate | median length | solver-seconds | max s |
+|---|---:|---:|---:|---:|---:|---:|
+| iam_letter_low | 1,180 | 0 | 0.00 % | 4 | 0.1 | 0.0 |
+| iam_letter_med | 1,253 | 0 | 0.00 % | 4 | 0.1 | 0.0 |
+| iam_letter_high | 2,059 | 0 | 0.00 % | 8 | 0.1 | 0.0 |
+| linux | 89 | 0 | 0.00 % | 13 | 0.0 | 0.0 |
+| aids_graphedx | 819 | 0 | 0.00 % | 19 | 0.1 | 0.0 |
+| grec | 650 | 0 | 0.00 % | 22 | 0.1 | 0.0 |
+| aids_iam | 1,811 | 0 | 0.00 % | 19 | 43.4 | 5.9 |
+| coil_del | 3,900 | 0 | 0.00 % | 115 | 2.7 | 0.0 |
+| **mutagenicity** | 4,040 | **101** | **2.50 %** | 54 | **37,381.7** | 300.0 |
+| protein | 569 | 0 | 0.00 % | 148 | 47.1 | 15.0 |
+| **TOTAL** | **16,370** | **101** | **0.62 %** | | ≈ **10.4 core-h** | |
+
+**Verified, not assumed**: every file's `graph_ids` matches the frozen cohort **element-wise**
+(asserted, not spot-checked), every `G` equals the cohort count, and the **D14 invariant holds on all
+ten datasets** — `status == "censored"` ⟹ `fallback_used` ∧ `encoding != ""` ∧ `length >= 0`. No
+censored graph left without its greedy-min string.
+
+### This corrects D14's premise, and D14 survives anyway
+
+D14 says censoring is *"a bulk property of two or three datasets, not a marginal tail"*, from T-05's
+probe: `protein` 5/10, `coil_del` 5/10, `mutagenicity` 1/10. **Measured at production settings:
+`protein` 0/569, `coil_del` 0/3,900, `mutagenicity` 101/4,040.**
+
+**This is not a contradiction of T-05 — it is a different configuration**, and both differences push
+the same way. T-05 probed **`canonical_string`** (exhaustive) at a **15 s** budget; production runs
+**`pruned_canonical_string`** at **300 s**. Either change alone would lower the rate. **What must not
+happen is D14's prediction being quoted as if it described the production encoder.**
+
+**D14's machinery is still required and still earns its place.** 101 graphs censor, and they are
+exactly the hard ones — Mutagenicity is the dataset `data.md` §4 already identifies as
+`|Aut|`-pathological (`n = 98`, density 0.021, *"does not finish in 5 minutes"* under the exhaustive
+encoder). Dropping them would remove the hardest cases from the very dataset that carries the
+scaling argument. The **complete-case sensitivity arm is not optional**: 101 of 4,040 graphs touch
+roughly **5 % of Mutagenicity's 8,158,780 pairs**, so the primary and sensitivity arms can differ
+materially there and nowhere else.
+
+### What may be said, and what may not
+
+- **May**: *"At a 300 s per-graph budget the pruned canonical encoder censors 2.50 % of Mutagenicity
+  and 0.00 % of the other nine datasets, 0.62 % cohort-wide."*
+- **May not**: any cohort-level censoring rate without naming Mutagenicity — the rate is **not** a
+  cohort property, it is one dataset.
+- **May not**: this as a rate for `canonical_string`, which is a different encoder, or at any other
+  budget.
+- **`seconds` is in-worker solver time at `--jobs 6`**, so it is a cost *floor*, not job consumption,
+  and it is not a publishable per-graph timing. Mutagenicity's 37,382 s ≈ **10.4 core-hours** is the
+  cohort's entire encoding cost to within rounding; every other dataset together is under 100 s.
