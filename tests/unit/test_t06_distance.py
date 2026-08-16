@@ -474,6 +474,59 @@ def test_a_row_with_status_error_is_undefined_off_the_diagonal(tmp_path: Path) -
     assert loaded.defined_mask[np.ix_([0, 1, 2], [0, 1, 2])].all()
 
 
+def test_the_generic_path_honours_is_defined_per_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A metric outside the cdist table still gets `nan` where it is undefined.
+
+    Every metric registered today is served by the cdist or the vector path,
+    so the per-pair loop would otherwise be untested until a future metric
+    reached it -- which is the point at which an undefined pair silently
+    reading 0.0 would first matter.
+    """
+    base = pytest.importorskip("isalgraph.competitors.base")
+    registry = pytest.importorskip("isalgraph.competitors.registry")
+
+    class FirstSymbolDistance(base.DistanceMetric):
+        """Undefined between two encodings whose first symbols differ."""
+
+        name = "t06_first_symbol"
+        consumes = "symbols"
+        is_pseudometric = True
+
+        def is_defined(self, a: object, b: object) -> bool:
+            if not a.symbols or not b.symbols:
+                return bool(a.symbols) == bool(b.symbols)
+            return a.symbols[0] == b.symbols[0]
+
+        def distance(self, a: object, b: object) -> float:
+            return float(abs(len(a.symbols) - len(b.symbols)))
+
+    monkeypatch.setitem(registry._METRICS, "t06_first_symbol", FirstSymbolDistance)
+    symbols = [("a", "a"), ("a", "b", "b"), ("b", "c"), ("b",)]
+    path = _write_encodings_npz(
+        tmp_path / "toy__rep.npz",
+        graph_ids=np.asarray(["g0", "g1", "g2", "g3"], dtype="<U16"),
+        node_counts=[2, 3, 2, 1],
+        edge_counts=[1, 2, 1, 0],
+        symbols=symbols,
+        separator="",
+        dataset="toy",
+        representation="rep",
+    )
+    _run(path, "t06_first_symbol", tmp_path / "out")
+    loaded = load_dense(tmp_path / "out" / "toy__rep__t06_first_symbol.npz")
+    assert loaded.defined_mask[0, 1] and loaded.defined_mask[2, 3]
+    assert not loaded.defined_mask[0, 2]
+    assert np.isnan(loaded.distance_matrix[0, 2])
+    assert loaded.distance_matrix[0, 1] == 1.0
+    assert np.array_equal(
+        loaded.distance_matrix[loaded.defined_mask],
+        np.array([0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]),
+    )
+    assert check_dense(loaded.distance_matrix, loaded.defined_mask).passed
+
+
 def test_a_metric_needing_a_frame_or_features_is_refused(tmp_path: Path) -> None:
     source = _synthetic_encodings(tmp_path)
     for metric in ("padded_hamming", "kernel"):
