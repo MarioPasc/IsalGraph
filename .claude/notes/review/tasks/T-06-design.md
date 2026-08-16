@@ -503,3 +503,74 @@ show**, and that is a constraint on T-20 as much as on T-06.
 
 Neither view is the true one. They answer different questions, and the paper states which question
 each answers.
+
+---
+
+## 10. ⚠ The size-null verdict INVERTS across the bracket on 5 of 5 Suite-2 datasets
+
+Reported by the T-04a session (F5 arm, 200-graph seed-42 draw per dataset, all-pairs, each null
+computed against **the same reference** as the representation). This supersedes the forecast in §9's
+consequence 2 and is the sharpest result the ticket has produced.
+
+`ρ(Lev, ·) − ρ(|Δn|, ·)`:
+
+| dataset | vs **LB** (`BRANCH_FAST`) | vs **UB** (`BIPARTITE`) | |
+|---|---:|---:|---|
+| GREC | −0.214 | **+0.122** | flips |
+| AIDS-IAM | −0.248 | **+0.027** | flips |
+| COIL-DEL | −0.082 | **+0.197** | flips |
+| Mutagenicity | −0.295 | **+0.078** | flips |
+| Protein | −0.233 | **+0.383** | flips |
+
+**Against the proven lower bound IsalGraph fails the size null on every Suite-2 dataset; against the
+proven upper bound it clears it on every one. GED lies between them, so neither answer is licensed.**
+
+### Why — and it is mechanical, not empirical
+
+`ρ(|Δn|, LB)` is **0.960–0.998** (§9). The lower bound very nearly *is* the size null, so
+`ρ(X, LB) ≈ ρ(X, |Δn|)` for **any** `X`, and the null's own score against LB is ≈ 1. **No
+representation can beat it. The comparison is degenerate by construction**, and a "failure" there is
+a statement about `BRANCH_FAST`, not about IsalGraph. `ρ(|Δn|, UB)` is 0.460–0.754, which leaves
+room. On Suite 1, where truth exists, `ρ(|Δn|, exact)` is **0.713–0.920 — between the two arms.**
+
+### Status of the evidence — read before quoting
+
+- On the **LB** side all five margins put the null outside IsalGraph's 95 % bootstrap CI.
+- On the **UB** side **four** of five do. **AIDS-IAM's +0.027 sits inside [0.636, 0.818] and is within
+  noise.** The honest form is *"4 of 5 flip with both ends individually significant; the fifth flips
+  within noise."*
+- ⚠ **This is a point-estimate-against-an-interval check, which is weaker than what D13 requires** —
+  a **paired bootstrap CI of the difference on shared resamples** (D7). T-04a explicitly declined to
+  synthesise that from these numbers, correctly. **Computing it is T-06's**, and it needs the real
+  Levenshtein matrices this ticket is producing.
+
+### Consequences
+
+1. **`d` is no longer a tail risk; plan for it to be large.** D13 tests `ρ(Lev, LB) − ρ(Lev, UB)`;
+   for IsalGraph that raw difference is **0.05–0.11**, straddling the pre-declared 0.05 threshold,
+   and the *comparative* conclusion inverts on 5/5. **Plan for the bracket to be declared
+   uninformative on most or all ten datasets, and treat a small `d` as the surprise.** At `d = 10`
+   the reduction is 80 cells. **`N_actual` must be re-forecast before the PI is shown the old
+   number**, and §7 stop-and-ask condition 5 (`d ≥ 5`) should be expected to fire rather than
+   guarded against.
+2. **This is the empirical core of the no-interpolation rule** — stronger than §9's bias table. A
+   midpoint would have produced a *single confident answer* to a question the data leaves open, on
+   all five datasets.
+3. **T-20 may write neither "IsalGraph clears the size null on the larger datasets" nor its
+   negation.** The sentence that survives: *against the proven lower bound it does not clear the null
+   on any Suite-2 dataset; against the proven upper bound it clears it on all five; and since GED
+   lies between them the comparison is undetermined at these sizes.* **That is a publishable and
+   honest result, and a better answer to AE.1 than a number would be** — AE.1 asks for the size
+   impact to be made clear, and "the reference degrades faster than the representation at these
+   sizes" is exactly that.
+
+**Suite 1 is unaffected**: exact GED, no bracket, IsalGraph clears the null on **1 of 5** (Letter LOW
++0.026; MED −0.044, HIGH −0.220, LINUX −0.239, AIDS −0.528) — reproducing T-04's corrected finding on
+an independently written pipeline.
+
+### A cross-validation gate this hands us for free
+
+T-04a's F5 Suite-1 ρ values reproduce `corrected_rho_table.json` at **max |delta| = 0.0000** across
+every shared cell — **two independently written pipelines, same seed-42 draw, bit-identical.**
+**T-06's distance driver is checked against that same target** and any disagreement is a defect in
+one of three implementations rather than a judgement call. Added as an acceptance criterion.
