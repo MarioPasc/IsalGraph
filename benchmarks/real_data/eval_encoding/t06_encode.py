@@ -49,6 +49,8 @@ import numpy as np
 from benchmarks.real_data.eval_encoding.t06_cohort import Cohort, load_cohort
 from benchmarks.real_data.eval_encoding.t06_encode_worker import (
     ISALGRAPH_ARMS,
+    error_family,
+    symbol_sep,
 )
 
 LOGGER = logging.getLogger(__name__)
