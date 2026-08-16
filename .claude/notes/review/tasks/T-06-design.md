@@ -86,6 +86,38 @@ subprocess killed at 30 s**:
 | **mutagenicity** | 4–98 | 126 ms | **28.3 s** | **0/15** | 1.47 s | 24.1 s | **3/15** |
 | **protein** | 2–96 | 305 ms | 1.95 s | **0/15** | 2.07 s | 21.8 s | **10/15** |
 
+> ## 🔴 RETRACTED 2026-08-16 (same day, by the production run) — **every absolute time in the table
+> above is inflated by cold-start warm-up and must not be quoted.** The kill counts are addressed
+> separately below.
+>
+> The probe encoded **one graph per subprocess**, so *every* measurement was a **first call** into the
+> C++ extension and paid one-time warm-up. The production driver encodes thousands per process and
+> pays it once.
+>
+> **Isolated on a single graph** (`coil_del` index 375, `n = 59`), all three producing the
+> **identical** 497-character string:
+>
+> | probe (1 graph / process) | re-timed, 1st call in process | production (amortised) |
+> |---:|---:|---:|
+> | **578.95 ms** | 19.39 ms | **4.95 ms** |
+>
+> And in the same re-timing process the *second* and *third* graphs took **0.70 ms** and **0.40 ms**
+> against production's **0.72 ms** and **0.43 ms** — agreeing to within 3 %. **Only the first call in
+> a process is inflated**, which is exactly the design of the probe.
+>
+> **What survives**: the strings — verified identical to the frozen `pruned_canonical_string`
+> reference on the largest COIL-DEL graphs and on the probe's three slowest, `match=True` throughout.
+> The probe was measuring the right computation, badly.
+>
+> **What does not**: every median and maximum in the table. `data.md` §4's encode-cost figures are
+> **not** superseded by it. **Quote the production `seconds` arrays instead**, which are amortised and
+> per-graph.
+>
+> **Lesson for Fig. 2**: a per-graph timing harness that spawns a process per graph measures
+> interpreter and engine start-up, not the encoder. This is the same shape as
+> `competitors/README` finding 11 (timings must be language-matched) — a measurement contaminated by
+> its own harness.
+
 **`pruned` completed 150 / 150. `canonical` was killed on 20 of 45** across the three largest
 datasets. **T-04's ceiling finding survives the engine** — it was not a pure-Python artefact, and the
 PI's challenge is answered in the direction T-04 claimed.
