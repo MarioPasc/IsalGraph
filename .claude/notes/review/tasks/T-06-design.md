@@ -665,3 +665,29 @@ materially there and nowhere else.
 - **`seconds` is in-worker solver time at `--jobs 6`**, so it is a cost *floor*, not job consumption,
   and it is not a publishable per-graph timing. Mutagenicity's 37,382 s ≈ **10.4 core-hours** is the
   cohort's entire encoding cost to within rounding; every other dataset together is under 100 s.
+
+### 11.1 F-1 re-verification — first attempt measured a scope guard, not a timeout
+
+The first re-check ran `isalgraph_canonical` through the competitors registry and returned
+`ok = 10 / 49 / 19` of 200 on protein / coil_del / mutagenicity. **Those are not timeouts.** Every
+failure is `error_kind = SuiteScopeError`, the split is exactly at the boundary (`n(ok) max = 12`,
+`n(err) min = 13`), and the counts equal `#{n <= 12}` in each sample precisely. Slowest surviving
+encode: **21 ms**.
+
+**The registry refuses `isalgraph_canonical` above `n = 12` by policy, before attempting an
+encode.** A completion rate measured through it is a property of that guard, not of the encoder —
+the same shape as the warm-up contamination it was sent to check, and the second harness-measures-
+itself error of the day.
+
+**This changes the F-1 question rather than answering it.** Two separable facts:
+
+1. **Is `canonical_string` fast enough on Suite-2 graphs?** Open — re-measured by `f1_verify.py`,
+   which calls `isalgraph.core.backends` directly and amortises warm-up across a band.
+2. **Would the packaged backend produce Suite-2 columns even if it were?** **No.** `SUITE1_ONLY` is a
+   frozen T-04 policy, not a performance outcome. Reversing it is a change to another closed
+   ticket's decision, not a T-06 measurement call — **so even a fast result does not by itself
+   reopen F-1; it would have to go to the PI.**
+
+**And it vindicates T-04a's insistence** that `SuiteScopeError` be reported as a separate `error_kind`
+from `AGMBudgetExceeded`. Summing them would have produced a "completion rate" here that was 100 %
+scope policy and 0 % budget, read as if it were the latter — and `c` would have been determined by it.
