@@ -760,12 +760,12 @@ def _print_report(cells: Sequence[Cell], f0: dict[str, dict[str, dict[str, Any]]
         )
 
     print(
-        f"\n{'backend':22s}{'metric':17s}{'F1':>7}{'F3':>9}{'F4=0':>7}"
+        f"\n{'backend':22s}{'metric':17s}{'F1':>7}{'F3(+skip)':>14}{'F4=0':>7}"
         f"{'ms/pair':>10}{'ms/pair n>=21':>15}  verdict"
     )
     for cell in cells:
         if not cell.applicable:
-            blank = f"{'':>7}{'':>9}{'':>7}{'':>10}{'':>15}"
+            blank = f"{'':>7}{'':>14}{'':>7}{'':>10}{'':>15}"
             print(f"{cell.backend:22s}{cell.metric:17s}{blank}  n/a: {cell.reason}")
             continue
         f3 = f"{cell.f3_invariant}" + (f"+{cell.f3_skipped}s" if cell.f3_skipped else "")
@@ -774,7 +774,7 @@ def _print_report(cells: Sequence[Cell], f0: dict[str, dict[str, dict[str, Any]]
         print(
             f"{cell.backend:22s}{cell.metric:17s}"
             f"{cell.f1_defined_frac if cell.f1_defined_frac is not None else 0:>7.3f}"
-            f"{f3:>9}"
+            f"{f3:>14}"
             f"{cell.f4_zero_mass if cell.f4_zero_mass is not None else 0:>7.3f}"
             f"{cell.f6_ms_per_pair if cell.f6_ms_per_pair is not None else 0:>10.4f}"
             f"{large:>15}  {verdict}"
