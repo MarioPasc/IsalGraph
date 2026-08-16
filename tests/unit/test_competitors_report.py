@@ -211,7 +211,14 @@ def _f5_payload() -> dict[str, Any]:
         return {
             "size_null": entry(null, ci_null),
             "graph6": entry(
-                g6, ci_g6, metric="levenshtein", n_undefined=0, zero_frac=0.01, reason=None
+                g6,
+                ci_g6,
+                metric="levenshtein",
+                n_undefined=0,
+                zero_frac=0.01,
+                reason=None,
+                # uncensored: the two nulls agree, so no annotation is printed
+                size_null_on_my_pairs=null,
             ),
             "sparse6": entry(
                 None, None, metric=None, reason="no admissible distance (T-04a selection)"
@@ -260,6 +267,104 @@ def _f5_payload() -> dict[str, Any]:
                 },
             },
         },
+    }
+
+
+def _f5_censored_payload() -> dict[str, Any]:
+    """Mutagenicity's real shape: two representations censored on different graphs.
+
+    ``isalgraph_pruned`` encodes 186/200 and its null on its own 17,205 pairs is
+    0.6363 against the all-pairs 0.7538; ``min_dfs`` is censored 14/200 on a
+    *different* 14 graphs and its restricted null is 0.6817.  A single
+    per-dataset null would be wrong for at least one of them.
+    """
+    return {
+        "protocol": "T-04a-F5",
+        "seed": 42,
+        "n_graphs": 200,
+        "bootstrap_resamples": 2000,
+        "results": {
+            "mutagenicity::ub": {
+                "dataset": "mutagenicity",
+                "suite": "suite2",
+                "reference": "ub",
+                "n_graphs": 200,
+                "n_unencodable": {"isalgraph_pruned": 14, "min_dfs": 14},
+                "views": {
+                    "all_pairs": {
+                        "size_null": {
+                            "rho": 0.7538,
+                            "p": 0.0,
+                            "ci": [0.7300, 0.7760],
+                            "n_pairs": 19900,
+                        },
+                        "isalgraph_pruned": {
+                            "rho": 0.8318,
+                            "p": 0.0,
+                            "ci": [0.8100, 0.8530],
+                            "n_pairs": 17205,
+                            "metric": "levenshtein",
+                            "size_null_on_my_pairs": 0.6363,
+                            "reason": None,
+                        },
+                        "min_dfs": {
+                            "rho": 0.7401,
+                            "p": 0.0,
+                            "ci": [0.7180, 0.7620],
+                            "n_pairs": 17205,
+                            "metric": "levenshtein",
+                            "size_null_on_my_pairs": 0.6817,
+                            "reason": None,
+                        },
+                        "graph6": {
+                            "rho": 0.7100,
+                            "p": 0.0,
+                            "ci": [0.6800, 0.7400],
+                            "n_pairs": 19900,
+                            "metric": "levenshtein",
+                            "reason": None,
+                        },
+                    }
+                },
+            }
+        },
+    }
+
+
+def _paired_payload() -> dict[str, Any]:
+    """The shape of ``paired_null_ci.json``, which names no representation."""
+    return {
+        "statistic": "rho(Lev,ref) - rho(|dn|,ref), paired graph-level bootstrap",
+        "resamples": 2000,
+        "seed": 42,
+        "records": [
+            {
+                "dataset": "iam_letter_low",
+                "arm": "exact",
+                "n_pairs": 19900,
+                "n_encoded": 200,
+                "rho_lev": 0.925296021436113,
+                "rho_null": 0.8990791903163676,
+                "paired_diff": 0.026216831119745376,
+                "ci_lo": 0.00832852179700783,
+                "ci_hi": 0.04634559090351528,
+                "excludes_zero": True,
+                "n_resamples_used": 2000,
+            },
+            {
+                "dataset": "iam_letter_high",
+                "arm": "exact",
+                "n_pairs": 19900,
+                "n_encoded": 200,
+                "rho_lev": 0.5,
+                "rho_null": 0.7205,
+                "paired_diff": -0.2205,
+                "ci_lo": -0.2599,
+                "ci_hi": -0.1825,
+                "excludes_zero": True,
+                "n_resamples_used": 2000,
+            },
+        ],
     }
 
 
@@ -585,6 +690,85 @@ def test_f5_table_emits_both_views(tmp_path: Path) -> None:
     text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
     assert "**View: `all_pairs`**" in text
     assert "**View: `equal_n`**" in text
+
+
+def test_the_difference_uses_the_restricted_null_not_the_row_level_one(tmp_path: Path) -> None:
+    """The whole point: a censored representation is differenced on its own pairs."""
+    text = render_f5_table_md(_f5_censored_payload(), tmp_path / "f5.json")
+    # 0.8318 - 0.6363 = +0.196 on its own pairs, NOT 0.8318 - 0.7538 = +0.078
+    assert "+0.196" in text
+    assert "+0.078" not in text
+
+
+def test_a_second_censored_row_uses_its_own_null(tmp_path: Path) -> None:
+    """The restricted null is per cell, never per dataset."""
+    text = render_f5_table_md(_f5_censored_payload(), tmp_path / "f5.json")
+    # min_dfs: 0.7401 - 0.6817 = +0.058, against isalgraph_pruned's null it would be +0.104
+    assert "+0.058" in text
+    assert "+0.104" not in text
+
+
+def test_a_divergent_null_is_printed_not_left_to_inference(tmp_path: Path) -> None:
+    text = render_f5_table_md(_f5_censored_payload(), tmp_path / "f5.json")
+    assert "[null 0.7538->0.6363 on its pairs]" in text
+    assert "[null 0.7538->0.6817 on its pairs]" in text
+
+
+def test_an_agreeing_null_is_not_annotated(tmp_path: Path) -> None:
+    """On an uncensored record the two nulls agree, so no noise is added.
+
+    Asserted over the table rows only: the legend documents the annotation
+    format and must keep saying so.
+    """
+    text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
+    rows = [line for line in text.splitlines() if line.startswith("|")]
+    assert rows
+    assert not any("on its pairs]" in line for line in rows)
+
+
+def test_a_missing_restricted_null_falls_back_and_says_so(tmp_path: Path) -> None:
+    payload = _f5_censored_payload()
+    row = payload["results"]["mutagenicity::ub"]["views"]["all_pairs"]["graph6"]
+    assert "size_null_on_my_pairs" not in row
+    text = render_f5_table_md(payload, tmp_path / "f5.json")
+    assert "all-pairs null; `size_null_on_my_pairs` absent" in text
+
+
+def test_the_row_level_size_null_is_still_printed(tmp_path: Path) -> None:
+    """Right as a standalone baseline, wrong only as a subtrahend."""
+    text = render_f5_table_md(_f5_censored_payload(), tmp_path / "f5.json")
+    assert "`size_null`" in text
+    assert "0.754" in text  # the all-pairs null, rendered in its own row
+
+
+def test_the_legend_does_not_claim_the_difference_ranks_with_rho(tmp_path: Path) -> None:
+    """The subtrahend now varies by row, so the old legend claim is false."""
+    text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
+    assert "ranks identically to rho" not in text.replace("**not** rank\nidentically", "")
+    assert "does **not** rank" in text
+
+
+def test_the_paired_null_section_is_the_stated_significance_test(tmp_path: Path) -> None:
+    text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json", _paired_payload())
+    assert "## Paired size-null differences" in text
+    assert "not the overlap of the marginal CIs" in text
+    assert "+0.0262" in text
+    assert "[+0.0083, +0.0463]" in text
+    assert "2 of 2 exclude zero. There is no undecided record." in text
+
+
+def test_the_paired_section_is_absent_without_the_flag(tmp_path: Path) -> None:
+    text = render_f5_table_md(_f5_payload(), tmp_path / "f5.json")
+    assert "## Paired size-null differences" not in text
+
+
+def test_k_json_makes_no_reference_to_f5(tmp_path: Path, grid_file: Path, f5_file: Path) -> None:
+    """k comes from the grid alone; F5 selects nothing and must not appear."""
+    out = tmp_path / "out"
+    write_report(grid_file, f5_file, out)
+    text = (out / "k.json").read_text(encoding="utf-8").lower()
+    for token in ("f5", "rho", "spearman", "correlation", "bootstrap", "null"):
+        assert token not in text, token
 
 
 def _table_widths(markdown: str) -> list[int]:

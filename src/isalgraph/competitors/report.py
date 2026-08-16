@@ -108,8 +108,22 @@ REFERENCE_ORDER: tuple[str, ...] = ("exact", "lb", "ub")
 #: F5 views, in report order.
 VIEW_ORDER: tuple[str, ...] = ("all_pairs", "equal_n")
 
-#: Row key of the size null inside an F5 view.
+#: Row key of the size null inside an F5 view.  This is the ALL-PAIRS baseline:
+#: it is the right thing to print on its own, and the wrong thing to subtract.
 SIZE_NULL: str = "size_null"
+
+#: Per-cell key holding the size null recomputed on that representation's own
+#: pairs.  A representation that cannot encode some graphs is scored on a subset
+#: of pairs, so the all-pairs null is not a valid subtrahend for it.  Measured on
+#: mutagenicity: isalgraph_pruned encodes 186/200 and its restricted null is
+#: 0.6363 against the all-pairs 0.7538, moving the margin from +0.078 to +0.196.
+#: min_dfs is censored on a *different* 14 graphs, so the restricted null is per
+#: cell and never per dataset.
+RESTRICTED_NULL: str = "size_null_on_my_pairs"
+
+#: Report the two nulls as divergent past this gap.  On an uncensored record they
+#: agree to within 1e-9, so the divergence is silent until a censored one.
+NULL_DIVERGENCE_TOLERANCE: float = 5e-4
 
 
 class ReportError(Exception):
@@ -618,6 +632,29 @@ def _fmt_rho(value: float | None, *, best: bool) -> str:
     return f"**{text}**" if best else text
 
 
+def _delta_cell(entry: Mapping[str, Any], row_null: float | None, *, is_null_row: bool) -> str:
+    """The ``rho - rho_null`` cell, differenced against the valid null.
+
+    The subtrahend is the null recomputed on this representation's own pairs.
+    Falling back to the all-pairs null is stated in the cell rather than left for
+    the reader to infer, and a divergence between the two is printed.
+    """
+    rho = _as_float(entry.get("rho"))
+    if rho is None:
+        return "--"
+    if is_null_row:
+        return "--" if row_null is None else f"{rho - row_null:+.3f}"
+    restricted = _as_float(entry.get(RESTRICTED_NULL))
+    if restricted is None:
+        if row_null is None:
+            return "--"
+        return f"{rho - row_null:+.3f} (all-pairs null; `{RESTRICTED_NULL}` absent)"
+    text = f"{rho - restricted:+.3f}"
+    if row_null is not None and abs(row_null - restricted) > NULL_DIVERGENCE_TOLERANCE:
+        text += f" [null {row_null:.4f}->{restricted:.4f} on its pairs]"
+    return text
+
+
 def _fmt_ci(ci: object) -> str:
     values = _as_sequence(ci)
     if len(values) != 2:
@@ -716,12 +753,11 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
                         absences[name] = str(reason)
                     row.extend(["--", "--", "--"])
                     continue
-                delta = "--" if null_rho is None else f"{rho - null_rho:+.3f}"
                 row.extend(
                     [
                         _fmt_rho(rho, best=best.get(ref) is not None and rho >= best[ref]),
                         _fmt_ci(entry.get("ci")),
-                        delta,
+                        _delta_cell(entry, null_rho, is_null_row=name == SIZE_NULL),
                     ]
                 )
             body.append(row)
@@ -762,7 +798,88 @@ def _dataset_section(dataset: str, records: Mapping[str, Mapping[str, Any]]) -> 
     return lines
 
 
-def render_f5_table_md(f5: Mapping[str, Any] | None, f5_path: Path | None) -> str:
+def render_paired_null_section(paired: Mapping[str, Any]) -> list[str]:
+    """The paired size-null bootstrap, reproduced from its own file.
+
+    The file carries no representation key, so its records are reported under
+    their own ``statistic`` string rather than attached to a row of the
+    correlation table.  Guessing which arm they score is the same class of silent
+    mislabelling the restricted null exists to prevent.
+    """
+    records = [r for r in _as_sequence(paired.get("records")) if isinstance(r, Mapping)]
+    lines = [
+        "## Paired size-null differences",
+        "",
+        "**This is the significance test for a size-null comparison**, not the overlap of the "
+        "marginal CIs above. Both arms sit on the identical pair set under shared resamples.",
+        "",
+        f"Statistic: `{_md_escape(str(paired.get('statistic', '?')))}`; "
+        f"{paired.get('resamples', '?')} resamples, seed {paired.get('seed', '?')}.",
+        "",
+        "The source file names no representation, so these records are reported as it states "
+        "them and are not joined onto the rows above.",
+        "",
+    ]
+    if not records:
+        lines.extend(["No records in the paired-null file.", ""])
+        return lines
+
+    body = []
+    for record in records:
+        diff = _as_float(record.get("paired_diff"))
+        lo, hi = _as_float(record.get("ci_lo")), _as_float(record.get("ci_hi"))
+        body.append(
+            [
+                f"`{record.get('dataset')}`",
+                str(record.get("arm", "--")),
+                str(_as_int(record.get("n_encoded")) or "--"),
+                str(_as_int(record.get("n_pairs")) or "--"),
+                "--" if (v := _as_float(record.get("rho_lev"))) is None else f"{v:.4f}",
+                "--" if (v := _as_float(record.get("rho_null"))) is None else f"{v:.4f}",
+                "--" if diff is None else f"**{diff:+.4f}**",
+                "--" if lo is None or hi is None else f"[{lo:+.4f}, {hi:+.4f}]",
+                "yes" if bool(record.get("excludes_zero")) else "no",
+            ]
+        )
+    lines.extend(
+        _md_table(
+            [
+                "Dataset",
+                "Arm",
+                "n encoded",
+                "n pairs",
+                "rho",
+                "rho null",
+                "Paired difference",
+                "95 % CI",
+                "Excludes zero",
+            ],
+            body,
+        )
+    )
+    positive = sum(1 for r in records if (_as_float(r.get("paired_diff")) or 0.0) > 0)
+    excluding = sum(1 for r in records if bool(r.get("excludes_zero")))
+    lines.extend(
+        [
+            "",
+            f"{positive} of {len(records)} records show a positive difference; "
+            f"{excluding} of {len(records)} exclude zero"
+            + (
+                ". There is no undecided record."
+                if excluding == len(records)
+                else f", so {len(records) - excluding} are undecided."
+            ),
+            "",
+        ]
+    )
+    return lines
+
+
+def render_f5_table_md(
+    f5: Mapping[str, Any] | None,
+    f5_path: Path | None,
+    paired: Mapping[str, Any] | None = None,
+) -> str:
     """The F5 correlation table, or a stated absence when no F5 JSON was given."""
     header = [
         "# T-04a -- F5 correlation against graph edit distance",
@@ -796,8 +913,26 @@ def render_f5_table_md(f5: Mapping[str, Any] | None, f5_path: Path | None) -> st
             "columns**. They are never averaged into a midpoint (approx_ged.md section 4).",
             "",
             "**Bold** marks the best rho in that column, the size null included -- a null that "
-            "wins its column is the finding. `rho - rho_null` ranks identically to rho within a "
-            "column, since the null is one number per column.",
+            "wins its column is the finding.",
+            "",
+            f"`rho - rho_null` is differenced against `{RESTRICTED_NULL}`: the size null "
+            "recomputed on **that representation's own pairs**. A representation that cannot "
+            "encode every graph is scored on a subset of the pairs, so differencing it against "
+            "the all-pairs null compares two different pair sets and is not a comparison. The "
+            "subtrahend therefore varies by row, and `rho - rho_null` does **not** rank "
+            "identically to rho within a column.",
+            "",
+            f"Where the two nulls differ by more than {NULL_DIVERGENCE_TOLERANCE:g} the cell "
+            "prints `[null <all-pairs> -> <restricted> on its pairs]`. On an uncensored record "
+            "they agree to within 1e-9, so the divergence is invisible until a censored one.",
+            "",
+            "The `size_null` row is the all-pairs baseline, printed for its own sake. It is the "
+            "right standalone reference and the wrong subtrahend.",
+            "",
+            "**Significance for a size-null comparison comes from the paired graph-level "
+            "bootstrap** (`paired_null_ci.json`), where both arms sit on the identical pair set "
+            "under shared resamples -- **never from whether the marginal CIs overlap**. The "
+            "overlap rule is conservative and gives the wrong answer here.",
             "",
         ]
     )
@@ -809,6 +944,8 @@ def render_f5_table_md(f5: Mapping[str, Any] | None, f5_path: Path | None) -> st
         return "\n".join(lines) + "\n"
     for dataset, records in grouped.items():
         lines.extend(_dataset_section(dataset, records))
+    if paired is not None:
+        lines.extend(render_paired_null_section(paired))
     return "\n".join(lines) + "\n"
 
 
@@ -836,10 +973,16 @@ def load_json(path: Path) -> JsonDict:
     return payload
 
 
-def write_report(grid_path: Path, f5_path: Path | None, out_dir: Path) -> JsonDict:
+def write_report(
+    grid_path: Path,
+    f5_path: Path | None,
+    out_dir: Path,
+    paired_path: Path | None = None,
+) -> JsonDict:
     """Write the four artifacts and return the ``k.json`` payload."""
     grid = load_json(grid_path)
     f5 = load_json(f5_path) if f5_path is not None else None
+    paired = load_json(paired_path) if paired_path is not None else None
     out_dir.mkdir(parents=True, exist_ok=True)
 
     n_cells = write_supplementary_csv(grid, out_dir / "supplementary_grid.csv")
@@ -851,7 +994,8 @@ def write_report(grid_path: Path, f5_path: Path | None, out_dir: Path) -> JsonDi
         json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8"
     )
     (out_dir / "f5_table.md").write_text(
-        render_f5_table_md(f5, None if f5_path is None else f5_path.resolve()), encoding="utf-8"
+        render_f5_table_md(f5, None if f5_path is None else f5_path.resolve(), paired),
+        encoding="utf-8",
     )
 
     _LOG.info("supplementary_grid.csv: %d cells", n_cells)
@@ -878,12 +1022,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--f5", type=Path, default=None, help="path to the F5 JSON; optional and descriptive"
     )
+    parser.add_argument(
+        "--paired-null-ci",
+        type=Path,
+        default=None,
+        help="path to paired_null_ci.json; the significance test for a size-null comparison",
+    )
     parser.add_argument("--out-dir", required=True, type=Path, help="directory for the artifacts")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
-        write_report(args.grid, args.f5, args.out_dir)
+        write_report(args.grid, args.f5, args.out_dir, args.paired_null_ci)
     except ReportError as exc:
         parser.error(str(exc))
     return 0
