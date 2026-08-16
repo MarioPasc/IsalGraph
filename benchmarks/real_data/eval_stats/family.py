@@ -16,23 +16,30 @@ F1      bracket gate (D13), per Suite-2 set    10
 F2      primary: Claims A and B                182
 ======  ==================================  =====
 
-``N_actual(F2)`` is **defined by enumerating the admissible cell set**, with the
-closed form ``182 - 15 k - 8 d - c`` printed beside it as a check. Where the two
-disagree the enumeration wins and the discrepancy is reported
-(``preregistration.md`` section 5).
+``N_actual(F2)`` is **defined by enumerating the admissible cell set**, with a
+closed form printed beside it as a check. Where the two disagree the enumeration
+wins and the discrepancy is reported (``preregistration.md`` section 5).
 
-.. warning::
+The precedence is **F0-demotion (stage 0) -> k -> d -> c**, and no cell removed
+by an earlier stage is ever charged again by a later one::
 
-   The closed form and the enumeration **do** disagree whenever ``k > 0`` and
-   ``d > 0``, by exactly ``k * d``. A representation excluded by ``k`` loses its
-   ten B1a cells including those on a dataset ``d`` also removes, and the closed
-   form charges each such cell twice. Section 5.2's precedence rule protects
-   ``c`` from double-charging and says nothing about the ``k``/``d`` overlap.
-   The over-charge makes the closed form report an ``N_actual`` **below** the
-   true admissible count, which is the anti-conservative direction --- the same
-   direction section 5.1 rejects the per-representation ``s`` term for. This
-   module reports the discrepancy on every run; see
-   :attr:`FamilyCardinality.discrepancy`.
+    ordinary branch:        N_actual = 182 - 15 k - 8 d + k d - c
+    F0 majority fired:      N_actual = 101 -  5 k        - c
+
+The ``+ k d`` term corrects an overlap the freeze originally missed: ``k``
+removes ``(B1a, R, D)`` for all ten Suite-2 datasets and ``d`` removes
+``(B1a, R', D)`` for all seven comparators, so the ``k d`` cells with ``R``
+excluded and ``D`` uninformative sit in both removal sets. That overlap is
+complete --- ``A1`` is untouched by either term, ``B1e`` is indexed by Suite-1
+datasets so ``d`` cannot reach it, and ``B3a`` carries no representation index
+so ``k`` cannot. Charging those cells twice reports an ``N_actual`` **below**
+the admissible count, which is the anti-conservative direction: it lowers the
+BH burden on every surviving test.
+
+The enumeration, the printed closed form,
+:attr:`FamilyCardinality.discrepancy` and :attr:`FamilyCardinality.double_charged`
+are kept even though the closed form is now correct. That machinery is what
+caught the defect, and it must survive to catch the next one.
 """
 
 from __future__ import annotations
@@ -67,6 +74,7 @@ __all__ = [
     "CLAIM_A_REPRESENTATIONS",
     "CLAIM_B_REPRESENTATIONS",
     "GATE_THRESHOLD",
+    "N_AFTER_F0_DEMOTION",
     "N_MAX_F2",
     "N_MAX_TOTAL",
     "SUITE1",
@@ -250,9 +258,10 @@ class ReductionInputs:
             per-graph budget. Suite is part of the key because Suite 1 and
             Suite 2 are different cohorts even where the name matches.
         f0_demotes_approximate: ``True`` when F0 fails on a majority of its
-            five tests, which makes every approximate-regime row descriptive.
-            The frozen closed form has **no term for this**; it is reported
-            separately.
+            five tests. Section 5.3, frozen 2026-08-16: the 81 approximate-regime
+            cells (B1a 70 + B2 1 + B3a 10) are demoted to descriptive, leaving
+            the 101 exact-regime and Claim-A cells; ``d`` is then **not applied
+            at all**, and ``k`` removes only its 5 B1e cells per representation.
     """
 
     excluded_representations: frozenset[str] = frozenset()
@@ -288,10 +297,10 @@ class FamilyCardinality:
         n_max: :data:`N_MAX_F2`.
         n_actual: The enumerated admissible cell count. **This is the
             definition.**
-        closed_form: ``182 - 15 k - 8 d - c`` with ``c`` the net count of cells
-            removed at stage 3.
+        closed_form: ``182 - 15 k - 8 d + k d - c``, or ``101 - 5 k - c`` when
+            F0's majority branch fired, with ``c`` the net stage-3 count.
         discrepancy: ``n_actual - closed_form``. Non-zero means the closed form
-            double-charged; the enumeration wins and this is reported.
+            mis-charged; the enumeration wins and this is reported.
         k: ``len(excluded_representations)``.
         d: ``len(uninformative_datasets)``.
         c: Net cells removed for non-computability, after ``k`` and ``d``.
@@ -317,6 +326,7 @@ class FamilyCardinality:
     removed_by_f0: tuple[Cell, ...]
     admissible: tuple[Cell, ...]
     double_charged: tuple[Cell, ...]
+    f0_demoted: bool = False
 
     @property
     def discrepancy(self) -> int:
@@ -329,7 +339,13 @@ class FamilyCardinality:
             "n_max": self.n_max,
             "n_actual": self.n_actual,
             "closed_form": self.closed_form,
-            "closed_form_expression": f"182 - 15*{self.k} - 8*{self.d} - {self.c}",
+            "closed_form_expression": (
+                f"101 - 5*{self.k} - {self.c}"
+                if self.f0_demoted
+                else f"182 - 15*{self.k} - 8*{self.d} + {self.k}*{self.d} - {self.c}"
+            ),
+            "f0_demoted": self.f0_demoted,
+            "d_applied": not self.f0_demoted,
             "discrepancy": self.discrepancy,
             "k": self.k,
             "d": self.d,
@@ -349,6 +365,33 @@ class FamilyCardinality:
         }
 
 
+#: F2 minus the 81 approximate-regime cells: A1 (60) + A2 (1) + B1e (35) + B3e (5).
+N_AFTER_F0_DEMOTION: int = 101
+
+
+def _closed_form(k: int, d: int, c: int, f0_demoted: bool) -> int:
+    """Return the printed closed-form check for ``N_actual``.
+
+    ``preregistration.md`` sections 5 and 5.3, both frozen 2026-08-16::
+
+        ordinary branch:    182 - 15 k - 8 d + k d - c
+        F0 majority fired:  101 -  5 k             - c
+
+    Args:
+        k: Representations excluded by ``competitors.md`` section 3.4.
+        d: Suite-2 datasets whose bracket F1 declares uninformative.
+        c: Net cells removed for non-computability, after the earlier stages.
+        f0_demoted: Whether F0's majority branch fired.
+
+    Returns:
+        The closed-form value. It is a **check**; the enumeration is the
+        definition.
+    """
+    if f0_demoted:
+        return N_AFTER_F0_DEMOTION - 5 * k - c
+    return N_MAX_F2 - 15 * k - 8 * d + k * d - c
+
+
 def _charged_to_c(cell: Cell, noncomputable: frozenset[tuple[str, str, str]]) -> bool:
     """Whether *cell* fails the computability criterion on its own dataset."""
     if cell.row not in _C_CHARGEABLE_ROWS:
@@ -361,18 +404,21 @@ def _charged_to_c(cell: Cell, noncomputable: frozenset[tuple[str, str, str]]) ->
 def admissible_cells(inputs: ReductionInputs) -> FamilyCardinality:
     """Apply the three reduction terms in their frozen precedence.
 
-    ``preregistration.md`` section 5.2::
+    ``preregistration.md`` sections 5.2 and 5.3::
 
-        1. k  removes a representation's 15 Claim-B cells (5 B1e + 10 B1a)
-        2. d  removes 8 cells per uninformative dataset   (7 B1a + 1 B3a)
-        3. c  removes, from what REMAINS, each (row, representation, dataset)
-              cell whose representation fails the >= 99 % criterion
+        0. F0  demotes the 81 approximate-regime cells (B1a 70 + B2 1 + B3a 10)
+               when its majority branch fires, leaving 101. d is then SKIPPED.
+        1. k   removes a representation's 15 Claim-B cells (5 B1e + 10 B1a),
+               or only its 5 B1e cells when stage 0 fired
+        2. d   removes 8 cells per uninformative dataset   (7 B1a + 1 B3a)
+        3. c   removes, from what REMAINS, each (row, representation, dataset)
+               cell whose representation fails the >= 99 % criterion
 
-    A cell already removed by an earlier term is never charged again. That
-    protection is written for ``c`` alone; stages 1 and 2 genuinely overlap on
-    the ``k * d`` B1a cells belonging to an excluded representation on an
-    uninformative dataset, and those cells are reported in
-    :attr:`FamilyCardinality.double_charged`.
+    No cell removed by an earlier stage is ever charged again. Stages 1 and 2
+    genuinely overlap on the ``k * d`` B1a cells belonging to an excluded
+    representation on an uninformative dataset; those are charged to ``k``,
+    reported in :attr:`FamilyCardinality.double_charged`, and accounted for by
+    the closed form's ``+ k d`` term.
 
     Args:
         inputs: The three reduction terms and F0's branch.
@@ -393,20 +439,38 @@ def admissible_cells(inputs: ReductionInputs) -> FamilyCardinality:
     by_f0: list[Cell] = []
     double: list[Cell] = []
 
+    if inputs.f0_demotes_approximate:
+        for cell in cells:
+            if cell.row in _APPROXIMATE_ROWS:
+                by_f0.append(cell)
+                removed.add(cell)
+
     for cell in cells:
-        if cell.row in _K_REMOVABLE_ROWS and cell.representation in inputs.excluded_representations:
+        hit = (
+            cell.row in _K_REMOVABLE_ROWS and cell.representation in inputs.excluded_representations
+        )
+        if hit and cell not in removed:
             by_k.append(cell)
             removed.add(cell)
 
-    for cell in cells:
-        hit = cell.row in _D_REMOVABLE_ROWS and cell.dataset in inputs.uninformative_datasets
-        if not hit:
-            continue
-        if cell in removed:
-            double.append(cell)
-            continue
-        by_d.append(cell)
-        removed.add(cell)
+    if not inputs.f0_demotes_approximate:
+        for cell in cells:
+            if (
+                cell.row not in _D_REMOVABLE_ROWS
+                or cell.dataset not in inputs.uninformative_datasets
+            ):
+                continue
+            if cell in removed:
+                double.append(cell)
+                continue
+            by_d.append(cell)
+            removed.add(cell)
+    elif inputs.uninformative_datasets:
+        LOGGER.info(
+            "F0's majority branch fired, so d = %d is not applied: F1 tests the bracket within "
+            "the approximate regime, which is now descriptive (preregistration.md section 5.3)",
+            len(inputs.uninformative_datasets),
+        )
 
     for cell in cells:
         if cell in removed or not _charged_to_c(cell, inputs.noncomputable):
@@ -414,16 +478,10 @@ def admissible_cells(inputs: ReductionInputs) -> FamilyCardinality:
         by_c.append(cell)
         removed.add(cell)
 
-    if inputs.f0_demotes_approximate:
-        for cell in cells:
-            if cell.row in _APPROXIMATE_ROWS and cell not in removed:
-                by_f0.append(cell)
-                removed.add(cell)
-
     admissible = tuple(cell for cell in cells if cell not in removed)
     k = len(inputs.excluded_representations)
     d = len(inputs.uninformative_datasets)
-    closed_form = N_MAX_F2 - 15 * k - 8 * d - len(by_c)
+    closed_form = _closed_form(k, d, len(by_c), inputs.f0_demotes_approximate)
 
     result = FamilyCardinality(
         n_max=N_MAX_F2,
@@ -438,12 +496,13 @@ def admissible_cells(inputs: ReductionInputs) -> FamilyCardinality:
         removed_by_f0=tuple(by_f0),
         admissible=admissible,
         double_charged=tuple(double),
+        f0_demoted=inputs.f0_demotes_approximate,
     )
     if result.discrepancy:
         LOGGER.warning(
             "N_actual enumeration (%d) disagrees with the closed form (%d) by %+d; "
-            "the enumeration wins (preregistration.md section 5). %d cells are removed by "
-            "both k and d and the closed form charges each twice.",
+            "the enumeration wins (preregistration.md section 5). %d cells sit in both the k "
+            "and d removal sets.",
             result.n_actual,
             result.closed_form,
             result.discrepancy,

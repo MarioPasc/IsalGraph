@@ -366,20 +366,24 @@ def test_n_actual_enumeration_and_closed_form(
 ) -> None:
     """The enumeration is the definition; the closed form is a printed check.
 
-    ``preregistration.md`` section 5 states that where the two disagree the
-    enumeration wins and the discrepancy is reported. They disagree by exactly
-    ``k * d``: the closed form charges ``k``'s ten B1a cells and ``d``'s seven
-    B1a cells without noticing that ``(B1a, excluded rep, uninformative
-    dataset)`` sits in both. That over-charge reports an ``N_actual`` *below*
-    the admissible count, which is the anti-conservative direction.
+    The ``+ k d`` term is what makes them agree. ``k`` removes ``(B1a, R, D)``
+    for all ten Suite-2 datasets and ``d`` removes ``(B1a, R', D)`` for all
+    seven comparators, so the ``k d`` cells with ``R`` excluded and ``D``
+    uninformative sit in **both** removal sets. Without the term the closed
+    form charges them twice and reports an ``N_actual`` *below* the admissible
+    count --- the anti-conservative direction, which lowers the BH burden on
+    every surviving test.
     """
     card = family.cardinality(
         excluded_representations=k, uninformative_datasets=d, noncomputable=c_triples
     )
     assert card.n_actual == len(card.admissible)
-    assert card.closed_form == 182 - 15 * len(k) - 8 * len(d) - card.c
-    assert card.discrepancy == len(k) * len(d)
+    assert card.closed_form == 182 - 15 * len(k) - 8 * len(d) + len(k) * len(d) - card.c
+    assert card.discrepancy == 0
     assert len(card.double_charged) == len(k) * len(d)
+    # The uncorrected closed form is the anti-conservative one.
+    naive = 182 - 15 * len(k) - 8 * len(d) - card.c
+    assert naive == card.n_actual - len(k) * len(d)
     # Every removal stage is disjoint from every other.
     stages = [card.removed_by_k, card.removed_by_d, card.removed_by_c, card.removed_by_f0]
     flat = [cell for stage in stages for cell in stage]
@@ -401,9 +405,11 @@ def test_a_cell_removed_by_two_terms_is_charged_once() -> None:
     assert len(card.removed_by_k) == 15
     assert len(card.removed_by_d) == 7
     assert card.n_actual == 182 - 15 - 7 == 160
-    assert card.closed_form == 182 - 15 - 8 == 159
-    assert card.discrepancy == 1
+    assert card.closed_form == 182 - 15 - 8 + 1 == 160
+    assert card.discrepancy == 0
     assert card.double_charged == (shared,)
+    # Without the +k*d term the check would have reported 159, one below truth.
+    assert 182 - 15 - 8 == 159
 
 
 def test_c_never_charges_a_cell_an_earlier_term_removed() -> None:
@@ -447,12 +453,74 @@ def test_c_never_charges_the_mrm_or_omnibus_rows() -> None:
     assert card.c == 60 + 70  # every A1 and every B1a
 
 
-def test_f0_demotion_is_reported_outside_the_closed_form() -> None:
-    """F0's majority branch has no coefficient in the frozen closed form."""
+def test_f0_demotion_leaves_the_101_exact_and_claim_a_cells() -> None:
+    """Section 5.3, frozen 2026-08-16: 81 approximate cells go, 101 remain."""
     card = family.cardinality(f0_demotes_approximate=True)
-    assert len(card.removed_by_f0) == 70 + 1 + 10
-    assert card.n_actual == 182 - 81 == 101
-    assert card.closed_form == 182  # the closed form cannot express this branch
+    assert len(card.removed_by_f0) == 70 + 1 + 10 == 81
+    assert card.n_actual == family.N_AFTER_F0_DEMOTION == 101
+    assert card.closed_form == 101
+    assert card.discrepancy == 0
+    assert {cell.row for cell in card.admissible} == {"A1", "A2", "B1e", "B3e"}
+    assert card.f0_demoted is True
+
+
+def test_f0_demotion_makes_d_inapplicable() -> None:
+    """Section 5.3: ``d`` is not applied once the approximate regime is descriptive.
+
+    F1 tests the bracket *within* that regime; applying ``d`` afterwards would
+    charge cells the demotion has already removed --- the same defect the
+    ``+ k d`` correction fixes.
+    """
+    demoted = family.cardinality(
+        uninformative_datasets=("coil_del", "mutagenicity", "grec"),
+        f0_demotes_approximate=True,
+    )
+    assert demoted.removed_by_d == ()
+    assert demoted.n_actual == 101
+    assert demoted.closed_form == 101
+    assert demoted.as_dict()["d_applied"] is False
+    # Without the demotion those three datasets would have cost 24 cells.
+    plain = family.cardinality(uninformative_datasets=("coil_del", "mutagenicity", "grec"))
+    assert plain.n_actual == 182 - 24
+
+
+@pytest.mark.parametrize(
+    ("k", "d", "c_triples"),
+    [
+        ((), (), ()),
+        (("min_dfs",), (), ()),
+        (("min_dfs",), ("coil_del", "grec"), ()),  # d must be ignored
+        (("min_dfs", "wl_subtree"), ("protein",), ()),
+        ((), (), (("suite1", "aids", "agm_cam"), ("suite2", "protein", "agm_cam"))),
+        (("agm_cam",), ("coil_del",), (("suite1", "aids", "agm_cam"),)),  # c after k
+    ],
+)
+def test_n_actual_on_the_f0_fired_branch(
+    k: tuple[str, ...],
+    d: tuple[str, ...],
+    c_triples: tuple[tuple[str, str, str], ...],
+) -> None:
+    """``N_actual = 101 - 5 k - c`` on the demoted branch, with ``d`` ignored.
+
+    ``k`` charges 5 rather than 15 because the ten B1a rows are already gone.
+    That falls out of the set arithmetic; it is not special-cased.
+    """
+    card = family.cardinality(
+        excluded_representations=k,
+        uninformative_datasets=d,
+        noncomputable=c_triples,
+        f0_demotes_approximate=True,
+    )
+    assert card.n_actual == len(card.admissible)
+    assert card.closed_form == 101 - 5 * len(k) - card.c
+    assert card.discrepancy == 0
+    assert card.removed_by_d == ()
+    assert len(card.removed_by_k) == 5 * len(k)
+    assert {cell.row for cell in card.removed_by_k} <= {"B1e"}
+    stages = [card.removed_by_f0, card.removed_by_k, card.removed_by_c]
+    flat = [cell for stage in stages for cell in stage]
+    assert len(flat) == len(set(flat))
+    assert len(flat) + card.n_actual == 182
 
 
 def test_reduction_inputs_reject_names_outside_the_freeze() -> None:
@@ -610,7 +678,8 @@ def test_f2_bh_uses_n_actual_and_prints_the_n_max_sensitivity() -> None:
     result = family.run_f2(p_values, inputs)
     assert result.bh_primary.m == card.n_actual == 160
     assert result.bh_sensitivity.m == 182
-    assert result.cardinality.discrepancy == 1
+    assert result.cardinality.discrepancy == 0
+    assert len(result.cardinality.double_charged) == 1
     with pytest.raises(family.FamilyError):
         family.run_f2({Cell("B1a", "suite2", "coil_del", "min_dfs"): 0.01}, inputs)
 
@@ -755,7 +824,12 @@ def test_mantel_permutes_graph_labels_jointly() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _write_distance_npz(path: Path, matrix: npt.NDArray[Any], graph_ids: Any, **extra: Any) -> Path:
+def _write_distance_npz(
+    path: Path,
+    matrix: npt.NDArray[Any],
+    graph_ids: npt.NDArray[Any],
+    **extra: npt.NDArray[Any],
+) -> Path:
     """Write a CONTRACTS.md section 4 distance file."""
     n = matrix.shape[0]
     payload: dict[str, Any] = {
@@ -794,16 +868,21 @@ def test_bundles_join_on_graph_ids_never_positionally(tmp_path: Path) -> None:
         np.array([[0.0, 1.0, 2.0], [1.0, 0.0, 3.0], [2.0, 3.0, 0.0]]),
         np.array(["g0", "g1", "g2"], dtype="<U8"),
     )
+    # Identifiers deliberately in a different order, a different dtype width,
+    # and with one graph the left file does not carry.
     right = _write_distance_npz(
         tmp_path / "right.npz",
-        np.array([[0.0, 9.0, 7.0], [9.0, 0.0, 5.0], [7.0, 5.0, 0.0]]),
-        np.array(["g2", "g0", "g9"], dtype="<U16"),
+        np.array([[0.0, 5.0, 7.0], [5.0, 0.0, 3.0], [7.0, 3.0, 0.0]]),
+        np.array(["g9", "g2", "g0"], dtype="<U16"),
     )
     a, b = matrices.align(matrices.load_matrix(left), matrices.load_matrix(right))
     np.testing.assert_array_equal(a.graph_ids, b.graph_ids)
     assert a.graph_ids.tolist() == ["g0", "g2"]
     assert a.matrix[0, 1] == 2.0  # g0 vs g2 in the left file
-    assert b.matrix[0, 1] == 7.0  # g0 vs g2 in the right file, positionally reversed
+    assert b.matrix[0, 1] == 3.0  # g0 vs g2 in the right file
+    # A positional join would have taken the right file's first two rows,
+    # g9 and g2, and read 5.0 here. That is the failure this test forbids.
+    assert b.matrix[0, 1] != 5.0
 
 
 # ---------------------------------------------------------------------------
