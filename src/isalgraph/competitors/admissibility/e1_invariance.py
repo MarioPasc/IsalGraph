@@ -86,7 +86,7 @@ import math
 import os
 import random
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -430,18 +430,21 @@ def exhaustive_invariance(
     ]
 
 
-def _orbit(graph: nx.Graph, perms: Sequence[Sequence[int]]) -> list[nx.Graph]:
+def _orbit(graph: nx.Graph, perms: Sequence[Sequence[int]]) -> Iterator[nx.Graph]:
     """Every **distinct** labelled copy of *graph*, one per orbit member.
 
     ``|orbit| = n!/|Aut(G)|``.  Deduplicating by the permuted edge set is exact
     -- two permutations with the same edge set produce the same labelled graph
     and therefore the same encoding -- so the saving costs no coverage.
+
+    Lazy on purpose: a representation that is not invariant is refuted by its
+    second encoding, and building all ``n!`` copies first would spend 5,040
+    graph constructions per graph to reach it.
     """
     import networkx as nx
 
     nodes = sorted(graph.nodes())
     seen: set[frozenset[tuple[int, int]]] = set()
-    out: list[nx.Graph] = []
     for perm in perms:
         mapping = {node: perm[i] for i, node in enumerate(nodes)}
         key = frozenset(_mapped_edges(graph, mapping))
@@ -451,8 +454,7 @@ def _orbit(graph: nx.Graph, perms: Sequence[Sequence[int]]) -> list[nx.Graph]:
         copy = nx.Graph()
         copy.add_nodes_from(sorted(mapping.values()))
         copy.add_edges_from(sorted(key))
-        out.append(copy)
-    return out
+        yield copy
 
 
 def _exhaustive_row(
@@ -480,10 +482,10 @@ def _exhaustive_row(
             exhaustive = False
             break
         settled += 1
-        orbit = _orbit(graph, perms)
         first: Comparable | None = None
         invariant_here = True
-        for copy in orbit:
+        covered = 0
+        for copy in _orbit(graph, perms):
             try:
                 other = code(copy)
             except Exception:  # noqa: BLE001 - a raise is "skipped", never a result
@@ -491,6 +493,7 @@ def _exhaustive_row(
                 invariant_here = False
                 break
             encodes += 1
+            covered += 1
             if first is None:
                 first = other
                 continue
@@ -498,7 +501,7 @@ def _exhaustive_row(
                 invariant_here = False
                 break
         if invariant_here:
-            orbit_total += len(orbit)
+            orbit_total += covered
             invariant.append(_graph6(graph))
 
     complete = {_graph6(g) for g in graphs if _is_complete(g)}
@@ -708,14 +711,14 @@ def cohort_psi(
     positions, bases, copies, skipped = _encode_cohort(code, cohort)
     k = len(positions)
 
-    if k < 2:
+    if k == 0:
         return (
             PsiRow(
                 backend=backend_name,
                 metric=metric_name,
                 metric_is_fallback=is_fallback,
                 draw=cohort.name,
-                n_graphs=k,
+                n_graphs=0,
                 n_skipped=skipped,
                 n_self_pairs=0,
                 n_invariant_self_pairs=0,
@@ -737,6 +740,9 @@ def cohort_psi(
         )
 
     # -- numerator: self-distances, one weight per graph --------------------
+    # Invariance is a **per-graph** property and needs no second graph, so it
+    # is measured whenever anything encoded.  Only psi needs a denominator and
+    # therefore a pair, and it is the only thing a one-graph draw withholds.
     self_mean: list[float] = []
     n_self = 0
     n_invariant = 0
