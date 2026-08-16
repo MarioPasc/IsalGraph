@@ -386,3 +386,120 @@ I halt and bring a **diagnosed** problem with costed options, rather than procee
 | Date | Entry |
 |---|---|
 | 2026-08-16 | Opened. Plan read; state measured (§1). PI decided items 2–4 of §2; item 1 deferred to the §1.6 probe. Two plan claims corrected by measurement: the IAM GXL tree is **present**, and both canonical forms are **verified complete invariants** that agree on only 13.8 % of classes |
+
+---
+
+## 9. Inherited finding, 2026-08-16 — the Suite-2 reference is size-dominated
+
+Reported by the T-04a session; recorded here because it bears on **70 of F2's 182 cells** (B1a).
+
+**Measured** (T-04a, seed-42 200-graph draw per dataset), `ρ(|n₁−n₂|, bound)`:
+
+| | GREC | AIDS-IAM | COIL-DEL | Mutagenicity | Protein |
+|---|---:|---:|---:|---:|---:|
+| **LB** (`BRANCH_FAST`) | 0.9803 | 0.9600 | **0.9978** | 0.9876 | 0.9699 |
+| **UB** (`BIPARTITE`) | 0.7061 | 0.7117 | 0.7362 | 0.7538 | 0.4596 |
+
+**Against ground truth**, on the four cohorts T-05's `PROVENANCE` certifies identical between suites,
+same certified pairs:
+
+| | Letter LOW | Letter MED | Letter HIGH | LINUX |
+|---|---:|---:|---:|---:|
+| ρ(\|Δn\|, **UB**) | 0.7482 | 0.7363 | 0.7080 | 0.3479 |
+| ρ(\|Δn\|, **exact**) | 0.9139 | 0.9146 | 0.9195 | 0.7134 |
+| ρ(\|Δn\|, **LB**) | 0.9804 | 0.9740 | 0.9224 | 0.8838 |
+
+### How this must be stated, and how it must not
+
+**Not "the lower bound is broken."** `|n₁−n₂|` *is itself a valid lower bound on GED under D6* —
+every surplus node costs one insertion — so a lower-bound method correlating with size is
+mechanically expected, and `BRANCH_FAST` is a proven bound that T-27 selected on measurement over
+3.8 M certified pairs. Writing it as a defect reads as an attack on decision 11, which it is not.
+
+**And not "the size channel is an artefact of the bound" either.** `ρ(|Δn|, exact)` is **0.91–0.92**
+on the three Letter sets. **The truth is size-dominated too.** The size channel is a real component
+of GED at these sizes, not something the bracket invented.
+
+**What the measurement does establish**, and it is narrower than either of those: `UB < exact < LB`
+in **4 of 4** — the bracket holds, but each arm's size-dependence is biased in a **fixed direction**,
+the LB overstating and the UB understating, and **neither reproduces the truth's own
+size-dependence.** So a conclusion drawn from the LB arm alone is not a conclusion about GED.
+
+### Three consequences
+
+1. **`approx_ged.md` §4's no-interpolation rule gains a measurement.** Its current justification is an
+   argument from ignorance — *"we do not know where in the bracket the truth lies"*. It is now
+   stronger: the two arms disagree **systematically**, not merely noisily, so a midpoint would
+   inherit both biases with the direction unknown. → propagate at close; **T-20**.
+2. **`d` is likely to come in high.** F1's statistic is `ρ(Lev, LB) − ρ(Lev, UB)`, and the two
+   references differ this much in what they correlate with. **§7 stop-and-ask condition 5 (`d ≥ 5`)
+   is now a live expectation rather than a remote one**, and each uninformative dataset removes 8 F2
+   cells.
+3. **The equal-`n` view is where the structural claim is defensible on Suite 2** — it removes the
+   size channel from both sides at once. This was already load-bearing in §4.1 on T-04's finding 1;
+   this measurement is independent support.
+
+### What does NOT change, and why
+
+**B1a's pair population stays as frozen: all pairs** — but *not* for the reason first given here.
+
+> ## ⚠ CORRECTED 2026-08-16 — the cancellation argument was WRONG. The conclusion survives on
+> the other two reasons; what B1a may be **claimed to show** does not.
+>
+> This section originally led with: *"B1a is a difference of two correlations against the same
+> reference, so a size component inflating both arms partly cancels."* **That is false, and it was
+> the load-bearing half.** Refuted by the T-04a session, analytically and empirically, and the
+> refutation holds.
+>
+> **Analytically**: a correlation is **not additive in its components**, so there is no offset to
+> cancel. Spearman is rank-based, so for strictly monotone `f`, `ρ(X, f(|Δn|)) = ρ(X, |Δn|)`
+> *exactly*. With `R ≈ f(|Δn|)` — and `ρ(|Δn|, LB)` is **0.96–0.998** — it follows that
+> `ρ(X,R) − ρ(Y,R) ≈ ρ(X,|Δn|) − ρ(Y,|Δn|)`. The difference does not *remove* the size
+> channel; it makes the test almost entirely **about** it, reweighted by each representation's own
+> size-sensitivity — which is exactly the axis B1a compares.
+>
+> **Empirically**, from `corrected_rho_table.json`, Kendall τ between the all-pairs ranking and the
+> equal-`n` ranking. **Under a pure additive offset τ would be 1.00 with zero inversions:**
+>
+> | dataset | reps | τ(all-pairs, equal-`n`) | inversions vs `isalgraph_pruned` |
+> |---|---:|---:|---:|
+> | AIDS | 9 | **−0.111** | 6 |
+> | LINUX | 10 | 0.067 | 4 |
+> | Letter MED | 10 | 0.111 | 5 |
+> | Letter HIGH | 10 | 0.200 | 3 |
+> | Letter LOW | 10 | 0.467 | 2 |
+>
+> Representations **cross** rather than shift together: `adjacency` 0.756 → 0.157 and `nauty_graph6`
+> 0.425 → 0.137 on AIDS; `nauty_graph6` 0.646 → **0.952** on Letter MED. And this is measured against
+> **exact** GED (size-dependence 0.71–0.92); B1a's reference is the **LB** at 0.96–0.998, so the
+> effect there is **larger**, not smaller.
+>
+> **The inversions cut both ways** — on Letter LOW the equal-`n` view lifts `agm_cam`
+> (0.918 → 0.994) and `sparse6_nauty` (0.638 → 0.981) *above* IsalGraph. This is not a view that
+> flatters us.
+
+**The two surviving reasons, which are sufficient:**
+
+- **Moving a frozen family's population after seeing a measurement is what pre-registration exists to
+  prevent.** The measurement is F5-blind — `ρ(|Δn|, LB)` never touches Levenshtein — so a change
+  would be *defensible*, but "defensible" is a lower bar than "not required".
+- The equal-`n` view **is computed and reported regardless**, at the cost of a mask over matrices we
+  already hold.
+
+### 9.1 What the refutation DOES change — three claim-scoping rules, frozen
+
+The finding does not change what B1a is **computed on**. It changes what B1a may be **claimed to
+show**, and that is a constraint on T-20 as much as on T-06.
+
+1. **B1a all-pairs may NOT be reported as "which representation is the better GED proxy."** It is
+   *which representation better tracks the reference, whose dominant component at these sizes is
+   graph size*. **That sentence goes in the text, beside the table.**
+2. **The equal-`n` companion is not a robustness check.** A robustness check returning τ = −0.111
+   against the primary confirms nothing. **Both views get equal prominence, and where they disagree,
+   the disagreement IS the result** — not a footnote, and never an average of the two.
+3. **If Claim B rests on B1a's all-pairs outcome and the companion inverts it, that is the finding**
+   and it is reported as such. Written down **now, before the family runs**, so the framing cannot be
+   drafted around whichever view survives.
+
+Neither view is the true one. They answer different questions, and the paper states which question
+each answers.
