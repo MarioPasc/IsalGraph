@@ -70,6 +70,7 @@ from isalgraph.competitors.base import (
     table_scope_error,
 )
 from isalgraph.competitors.registry import (
+    AnyBackend,
     AnyMetric,
     available_backends,
     available_metrics,
@@ -417,30 +418,45 @@ def _f3_from_cache(metric: AnyMetric, cache: F3Cache) -> tuple[str, int]:
 def measure_cell(
     backend_name: str,
     metric_name: str,
-    cache: EncodeCache,
-    f3cache: F3Cache,
+    cache: EncodeCache | Sequence[nx.Graph],
+    f3cache: F3Cache | None = None,
     *,
     seed: int,
     suite: str | None = None,
+    suites: Sequence[str] | None = None,
 ) -> Cell:
     """Measure one cell from pre-computed encodings.  Never raises.
 
     Args:
         backend_name: registry key of the representation.
         metric_name: registry key of the distance.
-        cache: :func:`encode_sample`'s output for *backend_name*.
-        f3cache: :func:`encode_f3`'s output for *backend_name*.
+        cache: :func:`encode_sample`'s output for *backend_name*.  A plain
+            graph sequence is also accepted, for a single ad-hoc cell; the
+            caches are then built on the spot, which re-encodes per call and
+            is why :func:`run_grid` does not do it.
+        f3cache: :func:`encode_f3`'s output for *backend_name*.  Required
+            unless *cache* is a graph sequence.
         seed: seed of the F2 triple sampler.
         suite: ``"suite1"``/``"suite2"`` when every graph comes from one
             named dataset, so a printed row can be refused where it would be
             conditioned on tractability.  ``None`` for a pooled sample, where
             a ``SUITE1_ONLY`` backend instead shows up as F0 < 1.0 on
             ``suite2`` and is charged there (design note §3.3).
+        suites: per-graph suite for the ad-hoc path.  Defaults to *suite*
+            repeated, or ``"suite1"``.
 
     Returns:
         The cell, with every measurable field filled in whether or not it is
         a candidate.
     """
+    if not isinstance(cache, EncodeCache):
+        graphs = list(cache)
+        per_graph = list(suites) if suites is not None else [suite or "suite1"] * len(graphs)
+        cache = encode_sample(backend_name, graphs, per_graph)
+        f3cache = encode_f3(backend_name, graphs[:F3_GRAPHS], seed=seed)
+    if f3cache is None:
+        f3cache = F3Cache(backend=backend_name)
+
     cell = Cell(backend=backend_name, metric=metric_name)
     if not cache.available:
         cell.applicable = False
@@ -461,6 +477,7 @@ def measure_cell(
     # anything is measured, so that it cannot depend on an outcome.
     candidate, candidate_reason = _candidate_status(cache.capabilities, metric)
     cell.candidate = candidate
+    cell.excluded_because = candidate_reason
 
     if suite is not None:
         scope = table_scope_error(cache.capabilities, suite, backend_name)
@@ -525,11 +542,11 @@ def measure_cell(
 
     cell.f3_invariant, cell.f3_skipped = _f3_from_cache(metric, f3cache)
 
-    _apply_selection_rule(cell, candidate_reason)
+    _apply_selection_rule(cell)
     return cell
 
 
-def _apply_selection_rule(cell: Cell, candidate_reason: str | None) -> None:
+def _apply_selection_rule(cell: Cell, backend: AnyBackend | None = None) -> None:
     """``competitors.md`` §3.4, fixed in advance and applied mechanically.
 
     An **ineligible** cell keeps the reason it is ineligible and is never
@@ -540,10 +557,20 @@ def _apply_selection_rule(cell: Cell, candidate_reason: str | None) -> None:
     **F6 is not consulted here.**  It is the tie-break in
     :func:`select_primary` and never a gate -- ``f6_over_advisory_limit`` is
     reported and does nothing.
+
+    Args:
+        cell: measured, with :attr:`Cell.candidate` and, when it is ``False``,
+            :attr:`Cell.excluded_because` already set by :func:`measure_cell`.
+        backend: optional, and then the ``Capability.BASELINE`` check is
+            applied here instead.  The candidate rule proper needs the
+            *metric* as well, so it lives in :func:`_candidate_status`; this
+            argument keeps the backend-only half callable on its own.
     """
+    if backend is not None and Capability.BASELINE in backend.capabilities:
+        cell.candidate = False
+        cell.excluded_because = BASELINE_EXCLUSION
     if not cell.candidate:
         cell.passes_selection = False
-        cell.excluded_because = candidate_reason
         return
     reasons = []
     if cell.f1_defined_frac is None or cell.f1_defined_frac < 1.0:
