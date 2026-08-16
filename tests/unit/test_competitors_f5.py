@@ -37,13 +37,20 @@ np = pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 pytest.importorskip("networkx")
 
-from isalgraph.competitors import datasets, f5, ged_reference  # noqa: E402
+from isalgraph.competitors import datasets, f5, ged_reference, registry  # noqa: E402
 from isalgraph.competitors.bootstrap import (  # noqa: E402
     BootstrapError,
     graph_bootstrap_ci,
     make_resample_index,
 )
 from isalgraph.competitors.ged_reference import GEDReferenceError, load_bounds  # noqa: E402
+from isalgraph.errors import (  # noqa: E402
+    BudgetExceeded,
+    CanonicalizationTimeoutError,
+    CompetitorError,
+    IsalGraphError,
+    SuiteScopeError,
+)
 
 # ----------------------------------------------------------------------
 # Synthetic cohort + reference, written under a temporary cohort root
@@ -468,6 +475,97 @@ def test_a_suite1_only_representation_gets_no_printed_suite2_row(
         # None, not 0: the representation was never attempted here, and a 0
         # would assert that every graph encoded.
         assert payload["results"][key]["n_unencodable"]["isalgraph_canonical"] is None
+
+
+def test_a_core_engine_timeout_is_a_datum_not_a_crash(
+    cohort_root: str, grid_file: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`CanonicalizationTimeoutError` must not take the run down.
+
+    It is an ``EncodingError``, so it descends from ``IsalGraphError`` but
+    **not** from ``CompetitorError``.  A guard written against
+    ``CompetitorError`` catches every competitor backend's own budget
+    exception and misses the core engine's wall clock -- which is the one
+    that fires on ``isalgraph_pruned``, the paper's own reference arm, on
+    Suite-2-sized graphs.  Small-graph demonstration runs never reach it.
+    """
+    assert issubclass(CanonicalizationTimeoutError, IsalGraphError)
+    assert not issubclass(CanonicalizationTimeoutError, CompetitorError)
+
+    real = registry.get_backend
+    victim = 2  # one graph of the six, chosen so pairs survive around it
+
+    def flaky(name: str, **kwargs: object) -> object:
+        backend = real(name, **kwargs)
+        if name != "adjacency":
+            return backend
+        inner = backend.encode
+
+        def encode(graph: object, **inner_kwargs: object) -> object:
+            if graph.number_of_nodes() == NODE_COUNTS[victim] and not getattr(
+                encode, "fired", False
+            ):
+                encode.fired = True  # type: ignore[attr-defined]
+                raise CanonicalizationTimeoutError("synthetic wall-clock budget")
+            return inner(graph, **inner_kwargs)
+
+        backend.encode = encode  # type: ignore[method-assign]
+        return backend
+
+    monkeypatch.setattr(f5, "get_backend", flaky)
+    payload = f5.run(grid_file, names=("linux",), n_graphs=6, seed=42, resamples=20)
+
+    record = payload["results"]["linux"]
+    assert record["n_unencodable"]["adjacency"] == 1
+    # The kind is recorded under its own name, never collapsed into one count.
+    assert record["encode_errors"]["adjacency"] == {"CanonicalizationTimeoutError": 1}
+
+    # The excluded graph is gone from this backend's pair set and from it
+    # alone: five graphs leave 10 pairs, against the size null's 15.
+    cell = record["views"]["all_pairs"]["adjacency"]
+    assert cell["rho"] is not None
+    assert cell["n_pairs"] == 10
+    assert record["views"]["all_pairs"]["size_null"]["n_pairs"] == 15
+    assert record["n_reference_pairs"] == 15
+
+
+def test_encode_draw_catches_the_whole_isalgraph_branch(cohort_root: str) -> None:
+    """Every leaf under ``IsalGraphError`` is a datum; a genuine bug is not."""
+    draw = f5.draw_for("linux", 6, 42)
+    for exc in (
+        CanonicalizationTimeoutError("wall clock"),
+        SuiteScopeError("declared refusal"),
+        BudgetExceeded("internal cap"),
+    ):
+        _, unencodable, errors = _encode_raising("adjacency", draw, exc)
+        assert unencodable == len(draw.indices)
+        assert errors == {type(exc).__name__: len(draw.indices)}
+
+    with pytest.raises(TypeError):
+        _encode_raising("adjacency", draw, TypeError("a bug in our own code"))
+
+
+def _encode_raising(
+    name: str, draw: f5.Draw, exc: BaseException
+) -> tuple[dict[int, object], int, dict[str, int]]:
+    """Run ``encode_draw`` with a backend whose ``encode`` always raises *exc*."""
+    real = registry.get_backend
+
+    def factory(backend_name: str, **kwargs: object) -> object:
+        backend = real(backend_name, **kwargs)
+
+        def encode(graph: object, **inner: object) -> object:
+            raise exc
+
+        backend.encode = encode  # type: ignore[method-assign]
+        return backend
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(f5, "get_backend", factory)
+    try:
+        return f5.encode_draw(name, draw)
+    finally:
+        monkey.undo()
 
 
 # ----------------------------------------------------------------------

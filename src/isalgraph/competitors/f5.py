@@ -57,7 +57,7 @@ from isalgraph.competitors.bootstrap import (
 )
 from isalgraph.competitors.ged_reference import load_bounds, load_ged
 from isalgraph.competitors.registry import available_backends, get_backend, get_metric
-from isalgraph.errors import CompetitorError
+from isalgraph.errors import IsalGraphError
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -119,8 +119,32 @@ def encode_draw(backend_name: str, draw: Draw) -> tuple[dict[int, Any], int, dic
     """Encode every sampled graph under *backend_name*.
 
     A graph the backend raises on is **excluded from that backend's pair set
-    and counted**, never silently substituted.  Both the count and the
-    exception names reach the record.
+    and counted**, never silently substituted.  A failure is a datum, not a
+    stop.  Both the count and the exception names reach the record.
+
+    **The catch is `IsalGraphError`, not `CompetitorError`, and the
+    difference is a whole crashed run.**  The two live on separate branches
+    of the hierarchy::
+
+        IsalGraphError
+        |-- CompetitorError   -- the backends' OWN caps: AGMBudgetExceeded,
+        |                        MinDfsBudgetExceeded, SuiteScopeError
+        `-- EncodingError
+            `-- CanonicalizationTimeoutError  -- the CORE ENGINE's wall clock
+
+    ``isalgraph_ref`` lets the core engine's timeout propagate unchanged, so
+    catching only ``CompetitorError`` misses it -- and misses it on
+    ``isalgraph_pruned``, the paper's own reference arm, on exactly the
+    Suite-2 draws the F5 arm exists to reach.  Small graphs never hit the
+    2.0 s budget, so a demonstration run on 40 Letter or GREC graphs does not
+    exercise this path at all.  ``IsalGraphError`` is the common base and is
+    still narrow enough that a ``TypeError`` in our own code propagates.
+
+    **The kinds are counted separately, never summed.**  An internal-cap
+    failure (``AGMBudgetExceeded``, ``MinDfsBudgetExceeded``) is a scope
+    decision; a wall-clock failure (``CanonicalizationTimeoutError``) is a
+    budget outcome; ``SuiteScopeError`` is a declared refusal.  T-06's
+    ``error_kind`` column reports them as separate columns for that reason.
 
     Returns:
         ``(encoded, n_unencodable, errors)``.  ``encoded`` is keyed by cohort
@@ -135,8 +159,14 @@ def encode_draw(backend_name: str, draw: Draw) -> tuple[dict[int, Any], int, dic
 
     if isinstance(backend, VectorBackend):
         # Fitted once over the whole draw: a per-batch vocabulary would make
-        # the distance matrix depend on batching order.
-        backend.fit(list(graphs.values()))
+        # the distance matrix depend on batching order.  This call is outside
+        # the per-graph loop and so was outside the per-graph guard; a raise
+        # here would take the whole run down for one representation.  It is a
+        # total failure for this backend, and it is reported as one.
+        try:
+            backend.fit(list(graphs.values()))
+        except IsalGraphError as exc:
+            return {}, len(graphs), {f"fit:{type(exc).__name__}": len(graphs)}
 
     for idx, graph in graphs.items():
         try:
@@ -144,7 +174,7 @@ def encode_draw(backend_name: str, draw: Draw) -> tuple[dict[int, Any], int, dic
                 encoded[idx] = backend.features(graph)
             else:
                 encoded[idx] = backend.encode(graph)
-        except CompetitorError as exc:
+        except IsalGraphError as exc:
             name = type(exc).__name__
             errors[name] = errors.get(name, 0) + 1
     return encoded, len(graphs) - len(encoded), errors
