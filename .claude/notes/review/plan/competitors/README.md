@@ -85,6 +85,19 @@ F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per data
 ρ = Spearman of Levenshtein against **certified exact GED**, 200-graph sample per dataset.
 **The ρ column below inherits §4.1's three-draw provenance — see the block there.**
 
+> ## ⚠ The "Primary distance" column is SUPERSEDED 2026-08-16 by T-04a, which ran the grid
+>
+> It was set by inspection during the scout. **Measured, `levenshtein` is the primary distance for
+> every admissible representation and `padded_hamming` is the primary distance for none.** Where both
+> passed F1–F4 the F6 tie-break went to `levenshtein` by **68×** on `nauty→graph6` (0.0010 vs 0.0704
+> ms/pair) and **8.6×** on AGM CAM. The rows below reading "padded Hamming" are wrong.
+>
+> *"none admissible"* for `graph6`, `sparse6` and `adjacency` **is confirmed** — F3 = 1/50 on the
+> frozen 200-graph draw. That gives **`k = 3`** for [preregistration](../preregistration.md) §5.
+>
+> Authority: `experiments/metric-admissibility/results/grid_200.json` on the external drive, and
+> [T-04a design](../../tasks/T-04a-design.md).
+
 | Representation | Reproducible? | F3 (real) | Complete invariant | Primary distance | ρ range, Suite 1 | Claim A bits | Ceiling |
 |---|---|---|---|---|---|---|---|
 | [graph6](graph6.md) | **trivial** (`networkx`) | **0–6 / 50** | no | *none admissible* | 0.46–0.69 | `6(1+⌈n(n−1)/12⌉)` | none |
@@ -369,8 +382,20 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
   §4.1 and §4.2 are Suite 1 only. **Mutagenicity is the row to watch**: it is the one dataset where
   IsalGraph wins Claim A outright, and whether it also clears the size null on ρ is unknown.
 - **Graph-level bootstrap CIs** on every ρ in §4.1 (D2). Finding 14 says they will be wide.
-- **Whether IsalGraph clears the size null anywhere in Suite 2.** Larger, sparser graphs are where
-  its `m`-scaling should help; nothing here settles it.
+- ~~**Whether IsalGraph clears the size null anywhere in Suite 2.**~~ **ANSWERED 2026-08-16 by T-04a,
+  and the answer is that the data does not determine it.** Against the **lower** bound
+  (`BRANCH_FAST`) IsalGraph fails the size null on **5 of 5** Suite-2 datasets (−0.082 to −0.295);
+  against the **upper** bound (`BIPARTITE`) it clears it on **5 of 5** (+0.027 to +0.383). Every one
+  of those ten differences excludes zero under a paired graph-level bootstrap. **The verdict flips
+  with the end of the bracket on all five datasets**, and GED lies between them.
+
+  The mechanism is measured: `ρ(|n₁−n₂|, LB)` is **0.960–0.998**, so the lower bound very nearly *is*
+  the size null and no representation can beat it — the comparison is degenerate by construction,
+  not a fact about IsalGraph. `ρ(|n₁−n₂|, UB)` is 0.460–0.754, and on Suite 1 where truth exists
+  `ρ(|n₁−n₂|, exact)` is 0.713–0.920, **between** the two arms. The bracket is valid; neither arm
+  alone is a stand-in for the truth. **This is the empirical case for
+  [approx_ged](../approx_ged.md) §4's no-interpolation rule** — a midpoint would have produced one
+  confident answer to a question the data leaves open, five times. **Inherits: T-06, T-20.**
 - **Whether AGM's GREC ceiling moves** under orbit pruning from `pynauty.autgrp`. It will move; it
   will not reach `n = 98`.
 - **The realised-bytes column** for every method — measured only for the running example.

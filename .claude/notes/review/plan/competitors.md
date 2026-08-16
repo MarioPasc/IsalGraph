@@ -146,6 +146,25 @@ Every attempted cell is reported in supplementary regardless of outcome, so the 
 auditable rather than asserted. **T-04a must close before any production distance matrix is
 computed** — it gates T-06.
 
+> ## ⚠ RESULT 2026-08-16 (T-04a). §3.4's rule as written is incomplete and was repaired before use.
+>
+> **A candidate distance must read the representation.** §3.2's table is the candidate set, and
+> `size_null` appears in none of its rows — but the rule as *implemented* ranged over every
+> registered metric. Measured on the frozen draw, `size_null` (`|n₁−n₂|`) passes F1 at 100 %, F2, F3
+> at **50/50** and F4 on **every** backend, and is **10.9× cheaper** than `levenshtein`, so "the
+> cheapest that passes F1–F4" would have named *count the nodes and subtract* the primary distance of
+> all eleven representations. `levenshtein_char` is a second instance, **3.4× cheaper** than
+> `levenshtein` for `isalgraph_pruned`.
+>
+> The rule now ranges over metrics with `consumes ∈ {symbols, frame, features}`. Every cell is still
+> measured and printed; ineligibility is recorded, not hidden. **`k = 3`**: `adjacency`, `graph6` and
+> `sparse6` have no admissible distance, each failing F3 at **1/50**.
+>
+> Also measured: **F1 and encodability are different axes and §3.3 conflated them.** A distance being
+> undefined on a pair is a property of the distance; a representation failing to encode a graph is a
+> property of the representation, and `preregistration.md` §5 charges them differently. They are now
+> reported separately as F0 and F1.
+
 ---
 
 ## 4. Three outcomes pre-committed as publishable
