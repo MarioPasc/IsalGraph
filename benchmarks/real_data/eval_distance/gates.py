@@ -106,9 +106,16 @@ def check_dense(distance_matrix: np.ndarray, defined_mask: np.ndarray) -> GateRe
             f"distance_matrix {distance_matrix.shape}"
         )
     n = int(distance_matrix.shape[0])
-    both = defined_mask & defined_mask.T
-    diff = np.abs(distance_matrix - distance_matrix.T)
-    asym = diff[both]
+    # Compare only where both orientations are defined AND finite: ``inf -
+    # inf`` is a NaN that would read as an asymmetry, and non-finiteness is
+    # already reported by its own property.
+    both = (
+        defined_mask
+        & defined_mask.T
+        & np.isfinite(distance_matrix)
+        & np.isfinite(distance_matrix.T)
+    )
+    asym = np.abs(distance_matrix[both] - distance_matrix.T[both])
     values = distance_matrix[defined_mask]
     diagonal = np.diagonal(distance_matrix)
     return GateReport(

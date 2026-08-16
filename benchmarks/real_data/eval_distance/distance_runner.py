@@ -100,6 +100,10 @@ class RunnerConfig:
             raising it is the orchestrator's call, not a worker's.
         symbol_sep: explicit symbol separator, or ``None`` to resolve it.
         suite: ``suite1``/``suite2`` override when the input metadata lacks it.
+        on_length_mismatch: ``"raise"`` (default) or ``"warn"`` when the
+            rebuilt symbol counts disagree with the file's ``length`` column.
+            See :func:`_assert_symbol_counts` for when ``"warn"`` is defensible
+            and when it is not.
     """
 
     encodings: Path
@@ -110,6 +114,7 @@ class RunnerConfig:
     jobs: int = 1
     symbol_sep: str | None = None
     suite: str | None = None
+    on_length_mismatch: str = "raise"
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,10 +129,11 @@ class RebuiltEncodings:
         lengths: symbol counts.
         invalid: ``True`` where the graph has no usable encoding.
         separator: the separator that was applied.
-        length_agrees: always ``True`` once :func:`rebuild_encodings` returns;
-            a disagreement with the file's ``length`` column is raised, not
-            recorded, because ``length`` is the declared ground truth for
-            sequence length and a mismatch means the split is wrong.
+        length_agrees: whether the rebuilt symbol counts match the file's
+            ``length`` column on every valid row.  ``False`` can only be
+            reached under ``on_length_mismatch="warn"``, and the flag is
+            written into the output metadata so the file carries its own
+            caveat.
     """
 
     encodings: list[Any]
@@ -192,7 +198,10 @@ def _alphabet_size(entropy_bits: float, n_symbols: int) -> int:
 
 
 def rebuild_encodings(
-    source: EncodingsFile, representation: str, separator: str
+    source: EncodingsFile,
+    representation: str,
+    separator: str,
+    on_length_mismatch: str = "raise",
 ) -> RebuiltEncodings:
     """Rebuild one :class:`Encoding` per graph from the stored arrays.
 
@@ -212,12 +221,14 @@ def rebuild_encodings(
         source: the loaded encodings file.
         representation: backend name, carried into ``Encoding.backend``.
         separator: as returned by :func:`resolve_symbol_separator`.
+        on_length_mismatch: ``"raise"`` or ``"warn"``.
 
     Returns:
         The rebuilt encodings and the bookkeeping the runner needs.
 
     Raises:
-        SchemaError: when the rebuilt symbol counts disagree with ``length``.
+        SchemaError: when the rebuilt symbol counts disagree with ``length``
+            and *on_length_mismatch* is ``"raise"``.
     """
     from isalgraph.competitors.base import Encoding
 
@@ -226,7 +237,9 @@ def rebuild_encodings(
     lengths = np.array([len(item) for item in symbols], dtype=np.int64)
     invalid = (source.status == "error") | (np.asarray(source.length, dtype=np.int64) < 0)
     declared = np.asarray(source.length, dtype=np.int64)
-    _assert_symbol_counts(lengths, declared, ~invalid, separator, source.path)
+    agrees = _assert_symbol_counts(
+        lengths, declared, ~invalid, separator, source.path, on_length_mismatch
+    )
     encodings = [
         Encoding(
             backend=representation,
@@ -245,7 +258,7 @@ def rebuild_encodings(
         lengths=lengths,
         invalid=invalid,
         separator=separator,
-        length_agrees=True,
+        length_agrees=agrees,
     )
 
 
@@ -255,24 +268,50 @@ def _assert_symbol_counts(
     valid: np.ndarray,
     separator: str,
     path: Path,
-) -> None:
-    """Raise unless the rebuilt symbol counts match the declared ones.
+    on_mismatch: str,
+) -> bool:
+    """Check the rebuilt symbol counts against the file's ``length`` column.
+
+    ``length`` is CONTRACTS §3.1's ground truth for sequence length, so a
+    disagreement means the split is wrong -- for ``min_dfs`` that is exactly
+    the fourfold edit-count error the convention exists to prevent, and it
+    produces a plausible number rather than an error.
+
+    ``"warn"`` exists for one measured case: ``sparse6`` and
+    ``sparse6_nauty`` carry the ``':'`` format marker in
+    :attr:`Encoding.text` but **not** in :attr:`Encoding.symbols`, so a
+    producer that follows §3.1 literally and stores ``text`` when
+    ``symbol_sep == ""`` emits ``len(encoding) == length + 1`` on every row.
+    A constant marker present in both operands shifts no edit distance and no
+    equal-length test, so tolerating it is sound *there*.  It is not sound in
+    general, which is why it is opt-in and why the flag is written into the
+    output metadata.
+
+    Returns:
+        Whether the counts agree everywhere.
 
     Raises:
-        SchemaError: naming the first offending row, its two counts and the
-            separator, so the diagnosis is one line rather than a hunt.
+        SchemaError: on a disagreement when *on_mismatch* is ``"raise"``, or
+            when *on_mismatch* is neither ``"raise"`` nor ``"warn"``.
     """
+    if on_mismatch not in ("raise", "warn"):
+        raise SchemaError(f"on_length_mismatch must be 'raise' or 'warn', got {on_mismatch!r}")
     disagree = valid & (rebuilt != declared)
     if not bool(disagree.any()):
-        return
+        return True
     first = int(np.flatnonzero(disagree)[0])
-    raise SchemaError(
+    message = (
         f"{path}: splitting on {separator!r} gives {int(rebuilt[first])} symbols for row "
         f"{first} but the file declares length {int(declared[first])} "
-        f"({int(disagree.sum())} of {int(valid.sum())} valid rows disagree). CONTRACTS §3.1 "
-        f"makes `length` the symbol count; a mismatch means the separator is wrong, which "
-        f"is the fourfold min_dfs edit-count error and produces a plausible number"
+        f"({int(disagree.sum())} of {int(valid.sum())} valid rows disagree)"
     )
+    if on_mismatch == "raise":
+        raise SchemaError(
+            f"{message}. CONTRACTS §3.1 makes `length` the symbol count; a mismatch means "
+            f"the separator is wrong. Pass --on-length-mismatch warn only once you know why"
+        )
+    logger.warning("%s; continuing under --on-length-mismatch warn", message)
+    return False
 
 
 def _check_metric_supported(metric_name: str, separator: str) -> Any:
@@ -483,7 +522,9 @@ def run(config: RunnerConfig) -> Path:
     source = load_encodings(config.encodings)
     suite, dataset, representation = _resolve_identity(source, config.encodings, config.suite)
     separator = resolve_symbol_separator(representation, source.metadata, config.symbol_sep)
-    rebuilt = rebuild_encodings(source, representation, separator)
+    rebuilt = rebuild_encodings(
+        source, representation, separator, on_length_mismatch=config.on_length_mismatch
+    )
     band = band_for(source.n_graphs, config.n_chunks, config.chunk_index)
     logger.info(
         "%s/%s [%s] metric=%s chunk %d/%d -> rows [%d, %d) of %d, separator=%r",
@@ -583,6 +624,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="separator splitting a stored encoding into symbols; '' means per character",
     )
     parser.add_argument("--suite", default=None, choices=("suite1", "suite2"))
+    parser.add_argument(
+        "--on-length-mismatch",
+        default="raise",
+        choices=("raise", "warn"),
+        help="what to do when the rebuilt symbol count disagrees with the file's `length`",
+    )
     parser.add_argument("--log-level", default="INFO")
     return parser
 
@@ -607,6 +654,7 @@ def main(argv: list[str] | None = None) -> int:
         jobs=args.jobs,
         symbol_sep=args.symbol_sep,
         suite=args.suite,
+        on_length_mismatch=args.on_length_mismatch,
     )
     try:
         out = run(config)
