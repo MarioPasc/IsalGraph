@@ -152,13 +152,43 @@ are all printed** (decision 24). The sensitivity column is a re-threshold of sto
 nothing, and it removes the only objection a reviewer can raise to reducing the denominator.
 
 ```
-N_actual(F2) = 182 − 15·k − 8·d
+N_actual(F2) = 182 − 15·k − 8·d − 20·s
 ```
 
 | Symbol | Meaning | Range |
 |---|---|---|
 | `k` | representations excluded by [competitors](competitors.md) §3.4 — **no** candidate distance passes F1 at 100 %, F2, F3 and F4 | 0–6 |
 | `d` | Suite-2 datasets whose bracket F1 declares uninformative | 0–10 |
+| **`s`** | **representations computable on Suite 1 but not on Suite 2** — added 2026-08-16, see §5.1 and changelog §8 | 0–6 |
+
+### 5.1 `s` — the suite-restricted case, added 2026-08-16 (T-06)
+
+**The hole this fills.** §5 as originally frozen had a term for a representation with *no admissible
+distance* (`k`, −15, keeps Claim A) and a sentence for one that *cannot be computed at all* (−10 more,
+"recorded separately"). It had **no case for a representation computable on one suite and not the
+other**, which [competitors/README](competitors/README.md) finding 4 flagged and no ticket owned.
+T-04 then measured exactly that: `agm_cam` completes on 100 % of Letter and LINUX but **76 % of GREC**
+and **82 % of AIDS-IAM**, and T-04's article notes refuse a column "conditioned on tractability" —
+correctly, since which graphs finish correlates with structure.
+
+> **`s` counts representations computable on Suite 1 but not on Suite 2.** Such a representation
+> **loses its 10 A1 rows and its 10 B1a rows** (both indexed by Suite-2 dataset) and **keeps its 5
+> B1e rows and its Suite-1 A1 rows**. Hence **−20** per representation.
+>
+> **Membership is decided by a pre-declared computability criterion, never by ρ**: a representation
+> is Suite-2-computable **iff it completes on ≥ 99 % of the graphs of every Suite-2 dataset** within
+> the frozen per-graph budget of **300 s** ([statistics](statistics.md) D14, enforced by a killed
+> subprocess).
+
+**Why this carries no more bias than `k` does.** The criterion reads a **completion rate**, not a
+correlation with GED, so it is F5-blind in exactly the sense [decisions](decisions.md) 24 already
+accepts for `k`. The alternative — reporting the representation on whichever graphs happened to
+finish — is *not* neutral: it conditions the column on tractability, which is the same silent
+selection bias D14 exists to prevent, appearing in a different place.
+
+**Recorded, not silent.** Every representation excluded by `s` still enters the **AE.3 comparison
+table** (T-17) on its qualitative properties, with its measured per-dataset completion rate printed
+and the reason stated — the same disposition §3.4 gives a `k`-excluded representation.
 
 **Why 15 and not 25.** T-04a's criteria F1–F4 are properties of a **distance**, not of an encoding. A
 representation with no admissible distance loses its Claim B rows (5 × B1e + 10 × B1a = 15) and
@@ -203,6 +233,7 @@ parameters resolved by pre-declared rules:
 |---|---|---|
 | `k` — representations excluded | **T-04a**, rule in [competitors](competitors.md) §3.4 | before T-06 |
 | `d` — datasets with an uninformative bracket | **F1**, rule in §3 above | during T-06 |
+| **`s` — representations computable on Suite 1 only** | **T-06's encoding campaign**, rule in §5.1 | during T-06, before any F2 p-value |
 | The primary bound at each end | **T-27**, rule in [approx_ged](approx_ged.md) §2 | before T-06 |
 
 ## 8. Changelog
@@ -210,3 +241,4 @@ parameters resolved by pre-declared rules:
 | Date | Change | p-values already computed? |
 |---|---|---|
 | 2026-08-13 | Initial freeze, N_max = 197 across three families | none |
+| **2026-08-16** | **§5 reduction rule gains a fourth term: `N_actual(F2) = 182 − 15k − 8d − 20s`, with `s` defined in the new §5.1.** **Why**: the rule as frozen had no case for a representation computable on one suite and not the other, a hole [competitors/README](competitors/README.md) finding 4 raised and no ticket owned. T-04 measured `agm_cam` at **76 % of GREC** and **82 % of AIDS-IAM**, and refused a column conditioned on tractability. Without `s`, T-06 would either print such a column or reduce the denominator by an unwritten rule. **`N_max` is unchanged at 182 / 197** — this adds a reduction term, not a test. The criterion is a completion rate, never a correlation, so the reduction stays F5-blind (decision 24) | **none.** T-06 had not begun computing; no distance matrix, no ρ and no p-value existed under either version |
