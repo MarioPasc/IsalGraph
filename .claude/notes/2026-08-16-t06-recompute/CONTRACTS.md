@@ -73,6 +73,24 @@ COMPUTABILITY_THRESHOLD = 0.99  # PER (representation, dataset): computable iff 
 > Other tickets' completion rates are **not** this measurement — they use each backend's own budget
 > (`agm_cam` → `AGMBudgetExceeded`; `min_dfs` → `max_projections = 50,000`; `isalgraph_pruned` →
 > `CanonicalizationTimeoutError` at **2 s**), not 300 s. Measure it here, under this budget.
+>
+> ### The criterion is "completes under its FROZEN CONFIGURATION within 300 s" — decided 2026-08-16
+>
+> Raised by `t06-encoding` as assumption A1. **The backends keep their frozen internal caps**
+> (`agm_cam`'s `search_nodes`, `min_dfs`'s `max_projections = 50,000`). Two reasons: those caps are
+> part of each backend's frozen T-04 specification, so lifting them **moves a published ceiling**;
+> and `min_dfs`'s cap is a **memory** guard — the first Suite-2 run was **OOM-killed (exit 137)**
+> because the construction holds every embedding realising the current minimal prefix, which at
+> `n = 92` grows without bound. Lifting that one risks killing the campaign, not just changing a
+> number.
+>
+> **But the two failure modes are recorded separately.** `error_kind` carries the exception class
+> (`AGMBudgetExceeded`, `MinDfsBudgetExceeded`, `CanonicalizationTimeoutError`, `Killed`), so the
+> report can state *internal-cap* failures and *wall-clock* failures as distinct columns. A rate that
+> conflates them is not interpretable, and separating them costs nothing.
+>
+> The `--agm-search-nodes` / `--min-dfs-max-projections` overrides stay available for a **labelled
+> sensitivity arm** only. They are never the primary reading.
 
 **Dataset keys, in this exact spelling and order** (they are the `.npz` basenames throughout):
 
@@ -119,10 +137,28 @@ D15_TIERS = {
 /media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data/source/APPROX_GED/exported_suite2/{key}.npz
 ```
 
-CSR format: `graph_ids <U16`, `n_nodes int32 (G,)`, `n_edges int32 (G,)`,
-`edge_offsets int64 (G+1,)`, `edges int32 (2, E)` (node ids **local** `0..n_nodes-1`, **both
-orientations stored**, so `edge_offsets` spans are `2 × n_edges`), `splits <U5`, `labels <U1`
+CSR format: `n_nodes int32 (G,)`, `n_edges int32 (G,)`, `edge_offsets int64 (G+1,)`,
+`edges int32 (2, E)` (node ids **local** `0..n_nodes-1`), `graph_ids`, `splits`, `labels <U1`
 (per-graph **class** label, `''` when the dataset has none), `metadata` (0-d JSON string).
+
+> ## ⚠ CORRECTED 2026-08-16 — this paragraph was wrong in two ways. Both were caught by
+> `t06-encoding` and **verified by the orchestrator** before the correction was made.
+>
+> **1. `edges` stores ONE orientation (`u < v`), not both.** The original text said both
+> orientations, so `edge_offsets` spans were `2 × n_edges`. **Measured**: `edge_offsets[-1] ==
+> sum(n_edges)` exactly, ratio **1.000**, on `iam_letter_low` (3,618), `linux` (743) and `protein`
+> (34,957); every pair satisfies `u < v`. **A loader that followed the original contract and halved
+> the span would have read half the edges of every graph in the cohort, with no error raised.**
+>
+> Write loaders that are correct under either layout — de-duplicate on `frozenset({u, v})` and
+> **assert the recovered count equals `n_edges`**. That assertion is what makes this class of defect
+> loud instead of silent.
+>
+> **2. The dtypes are NOT uniform across datasets.** Measured: `splits` is `<U10` on
+> `iam_letter_low` but `<U5` on `linux` and `protein`; `graph_ids` is `<U8` / `<U16` / `<U10`
+> respectively. **And the split vocabulary differs**: `validation` (Letter) vs `val` (LINUX) vs
+> `valid` (Protein). Never hard-code a width, and never match a split by name across datasets.
+> Splits are merged anyway (decision 3), so read them for provenance only.
 
 **GED matrices (read-only)**, same 10 keys, **square** `float64 (G, G)`:
 
@@ -149,8 +185,38 @@ One file per `(suite, dataset, representation)`:
 | `graph_ids` | `<U16` | `(G,)` | **in cohort order**, identical to the cohort file's `graph_ids` |
 | `node_counts` | `int32` | `(G,)` | carried through from the cohort — **the distance track gets `n` from here and never opens a cohort file**, which is what keeps the two ownership sets disjoint |
 | `edge_counts` | `int32` | `(G,)` | carried through from the cohort |
-| `encoding` | `<U…` (object-free) | `(G,)` | the encoded string; `''` when `status != "ok"` |
-| `length` | `int32` | `(G,)` | `len(encoding)`; `-1` when not encoded |
+| `encoding` | `<U…` (object-free) | `(G,)` | the encoded **symbol sequence**, joined by `metadata.symbol_sep`; `''` when `status != "ok"` |
+| `length` | `int32` | `(G,)` | **the SYMBOL count** (`Encoding.length`), not `len(encoding)`; `-1` when not encoded |
+| `error_kind` | `<U32` | `(G,)` | exception class name when `status == "error"`, else `''` — see §3.1 |
+
+### 3.1 🔴 Symbols are the unit, not characters — corrected 2026-08-16
+
+Raised by `t06-encoding`. **`Encoding.symbols`, not `Encoding.text`, is the comparison unit.** For
+every backend except `min_dfs` one symbol is one character and the two coincide. For **`min_dfs` a
+symbol is a whole DFS tuple**, so a character-level Levenshtein over the rendered text charges ~4
+edits for one deleted tuple — the twofold error `competitors/base.py` warns about, on the comparator
+[competitors](../review/plan/competitors.md) §2 calls *"the single most important comparator"*.
+
+**Frozen convention:**
+
+- `metadata.symbol_sep` is a **one-character separator** — **`"\x1f"` (ASCII unit separator)** — for
+  any backend whose symbols are not single characters, and **`""`** otherwise.
+- `encoding` is `symbol_sep.join(str(s) for s in Encoding.symbols)` when `symbol_sep != ""`, and
+  `Encoding.text` when it is `""`.
+- **The producer asserts `symbol_sep` occurs in no symbol rendering** before joining. It must never
+  appear in graph6/sparse6 printable ASCII, IsalGraph's `NnPpVvCcW`, adjacency `01`, an AGM code or
+  a DFS-tuple rendering — but assert it, do not assume it.
+- **`length` is always the symbol count**, so `length == len(encoding.split(sep))` when
+  `sep != ""` and `length == len(encoding)` when it is `""`. A test asserts both branches.
+
+**Consumer rule (`t06-distance`)**: split on `metadata.symbol_sep` when non-empty and compute the
+distance over the resulting **list of symbols**; otherwise over the characters. `rapidfuzz`'s
+Levenshtein accepts any sequence of hashables, so this costs nothing. **Never re-encode through the
+registry** — that would need the cohort and would break the ownership partition.
+
+This keeps `levenshtein` (symbol-level, **primary**) and `levenshtein_char` (character-level,
+reported only where explicitly labelled) distinguishable downstream, which is the convention T-04
+froze.
 | `entropy_bits` | `float64` | `(G,)` | `L·log2(alphabet_size)`; `nan` if `BitCountUndefined` |
 | `realised_bits` | `float64` | `(G,)` | format-defined byte length × 8; `nan` if undefined |
 | `status` | `<U12` | `(G,)` | `ok` \| `censored` \| `fallback` \| `error` |
