@@ -78,9 +78,16 @@ extends them without editing them:
 | Command | Does |
 |---|---|
 | `python -m isalgraph.competitors.smoke` | encode a real cohort, time it, record every failure |
-| `python -m isalgraph.competitors.grid` | F1–F4 and F6. **Never F5** |
-| `python -m isalgraph.competitors.f5` | F5 alone — reported, not an input to selection |
+| `python -m isalgraph.competitors.grid` | F0–F4 and F6 on `--sample pooled-<k>`. **Never F5** |
+| `python -m isalgraph.competitors.f5` | F5 alone, `--grid <grid.json>` — reported, not an input to selection |
+| `python -m isalgraph.competitors.report` | the audit path: grid JSON + F5 JSON → supplementary table, selection table, `k` |
 | `python -m isalgraph.competitors.reproduce` | the reproduction gate, `--mode artefacts\|table` |
+
+`f5` takes its distance **per representation** from the grid's `primary_distance` block rather
+than a single `--metric`, because T-04a selects a different distance for different
+representations and running them all under one would report a distance the selection rule
+rejected. `report` reads both JSONs and imports neither module — it is the audit path, and a
+shared import would let one bug hide the other.
 
 ---
 
@@ -135,8 +142,20 @@ one is *unreachable* rather than merely forbidden.
 - **F3 uses `fixtures.shuffled_copy`, never `nx.relabel_nodes(copy=True)`**,
   which preserves insertion order and makes order-dependent formats look
   invariant. A test asserts the relabeller *can* make `graph6` fail: a harness
-  that cannot fail is worthless. `_f3` also reports a **skip count**, so a
-  `0/50` can never be confused with a harness that never called the backend.
+  that cannot fail is worthless. F3 also reports a **skip count**, so a
+  `0/50` can never be confused with a harness that never called the backend —
+  written as a contract by T-04, **made true by T-04a**, which found the shipped
+  `_f3_cell` returned no skip count at all.
+- **A candidate distance must read the representation.** Selection ranges over
+  metrics with `consumes ∈ {symbols, frame, features}` only. `size_null`
+  (`consumes = "order"`) and `levenshtein_char` (`consumes = "text"`) are
+  measured and printed like every other cell but can never be *selected*.
+  T-04a measured why this is not pedantry: `size_null` passes F1–F4 on every
+  backend and is **10.9× cheaper** than `levenshtein`, and `levenshtein_char`
+  is **3.4× cheaper** — so under the shipped rule the primary distance of all
+  eleven representations would have been *count the nodes and subtract*, and
+  under an `order`-only guard it would have been the character-level unit that
+  charges four edits per deleted min-DFS tuple.
 
 ### F5-blindness is structural, not procedural
 
