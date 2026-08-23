@@ -1251,3 +1251,83 @@ with its greedy-min fallback string*, so it **does** produce an encoding — whi
 entirely, and no comparator produced a censored row. **Latent tomorrow**: a comparator with censored
 rows would be under-counted, over-charged to `c`, and would shrink `N_actual` — the anti-conservative
 direction, and the sixth instance of §8.1's pattern.
+
+---
+
+## 16. What "wins" means — the measurement stated exactly, and two errors it exposed in §15.3
+
+The PI asked what quantity §15.3's "beaten on 15 of 15" refers to. Stating it precisely uncovered
+**two errors in my own analysis**. The conclusion survives both, but on different evidence.
+
+### 16.1 The measurement, exactly
+
+> **Spearman ρ between (a) the pairwise distance under representation `R` using `R`'s *selected
+> primary distance*, and (b) ground-truth GED**, over the pairs of one view of one dataset.
+
+| | |
+|---|---|
+| **Primary distance** | chosen by `grid.py` on F1–F4, cost as tie-break, **blind to ρ** — a test asserts `grid.py` has no import path reaching a GED value, so the selection *could not* have picked the baseline that flatters IsalGraph |
+| **Not one distance** | `levenshtein` for `isalgraph_pruned`, `agm_cam`, `min_dfs`, `nauty_graph6`, `sparse6_nauty`; **`kernel`** for `wl_subtree`. Each representation with its own admissible distance — so this compares *representation + distance* pairs, not one function across representations |
+| **Reference** | `exact` on Suite 1; on Suite 2 **`lb` and `ub` as two separate records**, never averaged, never interpolated (`approx_ged.md` §4) |
+| **Views** | `all_pairs`, and `equal_n` (`n_i = n_j`) |
+| **Sample** | 200 graphs/dataset, seed 42. Pairs: 15,634 (aids `all_pairs`) down to **470** (protein `equal_n`) |
+| **Interval** | graph-level bootstrap — ρ moved up to 0.07 between two 200-graph draws on AIDS, so a pair-level interval is wrong by construction |
+
+### 16.2 Error 1 — I ranked on raw `all_pairs` ρ, which carries the size channel
+
+Raw ρ is not the comparable quantity in the `all_pairs` view, and using it made one competitor look
+far stronger than it is. On `aids`, `agm_cam` scores **0.7828** against a `size_null_on_my_pairs` of
+**0.7844** — an excess of **−0.0010**. It is *at* the trivial baseline, not above it. Calling that a
+"win over IsalGraph" is true of the raw number and misleading about the science.
+
+Corrected to **excess over `size_null_on_my_pairs`** — the per-cell null, which is the right
+subtrahend, not the row-level one:
+
+- IsalGraph has the **largest excess on 0 of 15**.
+- **No representation clears its own null on 7 of 15 records** — every `lb` arm, plus `aids/exact`
+  and `iam_letter_high/exact`. On those the whole field is below the trivial baseline.
+- On the `ub` arms, 4–5 representations clear it, IsalGraph among them.
+
+### 16.3 Error 2 — the `equal_n` null is UNDEFINED, and that is the point
+
+My first `equal_n` pass returned zero records. Not a bug: on `n_i = n_j` the `size_null` distance
+`|n_i − n_j|` is **identically zero**, so Spearman has no denominator. The file states it —
+*"the 'size_null' distance is constant over the pairs of this view, so the rank correlation has no
+denominator."*
+
+**So on `equal_n` there is nothing to subtract: raw ρ *is* the structural signal.** This is the view
+the module calls *"where canonicity, rather than order, has to do the work"* — and it is the fairest
+test of the representation as such. Restricting to competitors both admissible and computable:
+
+**`isalgraph_pruned` is best on 0 of 15 here too.**
+
+### 16.4 But only 8 of 15 losses are resolvable at n = 200
+
+Comparing graph-level bootstrap CIs in the `equal_n` view:
+
+| verdict | n | records |
+|---|---|---|
+| **DISJOINT** (real loss) | **8** | aids, aids_iam/lb, grec/lb, iam_letter_high, iam_letter_med, linux, mutagenicity/lb, protein/lb |
+| **OVERLAP** (tie at this n) | **7** | aids_iam/ub, coil_del/lb, coil_del/ub, grec/ub, iam_letter_low, mutagenicity/ub, protein/ub |
+
+The disjoint losses are large — `wl_subtree` leads by **0.544** on aids_iam/lb, **0.450** on
+mutagenicity/lb, **0.362** on protein/lb. The overlapping ones are small (0.015–0.125).
+
+**CI overlap is a conservative test**: non-overlap implies a difference, overlap does not imply
+none. The correct instrument is a **paired** bootstrap of `ρ(IsalGraph) − ρ(competitor)` on identical
+pair sets and identical resamples — exactly what `paired_null_ci.json` already does for
+IsalGraph-vs-null, and which **does not yet exist for IsalGraph-vs-competitor**.
+
+> **T-06 deliverable, added here:** a paired IsalGraph-vs-competitor bootstrap on the full cohort.
+> Without it the honest statement is *"best on 0 of 15, with 8 losses resolvable and 7 ties"* — not
+> *"beaten on 15 of 15"*, which overstates what the marginal CIs support.
+
+### 16.5 What §15.3 should have said
+
+**Superseded:** "beaten on 15 of 15 records."
+
+**Stands:** *IsalGraph is the best representation on **none** of the 15 records in either view. Eight
+of those deficits are resolvable at the graph-level bootstrap and seven are ties at n = 200. The
+competitors responsible for the resolvable losses — `wl_subtree`, `min_dfs`, `agm_cam` — are not
+excludable by `k` or `c` on the datasets where they win.* The structural argument of §15.3 is
+unchanged; its arithmetic is now stated at the right strength.
