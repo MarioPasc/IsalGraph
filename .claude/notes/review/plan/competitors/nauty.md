@@ -155,7 +155,33 @@ Measured over 120 one-edit pairs (unit GED = 1) against 120 random same-`n` pair
 
 By §3.4's rule nauty→graph6 does have admissible distances (F1/F2/F3/F4 all pass), so it **stays in
 the running comparison** and its poor separation is reported as a result rather than an exclusion.
-Primary distance: **padded Hamming**, the cheapest that is defined on 100 % of pairs.
+
+> ## ⚠ CORRECTED 2026-08-23 by T-04a — the primary distance is **Levenshtein**, not padded Hamming
+>
+> This section said padded Hamming was "the cheapest that is defined on 100 % of pairs". **Both
+> candidates are defined on 100 % of pairs**, so F1 does not separate them and the choice falls to
+> §3.4's F6 tie-break — which was never measured when the line was written. Measured on the frozen
+> `S200` draw, 19,900 pairs:
+>
+> | candidate | F1 | F2 | F3 | F4 | **F6 (ms/pair)** |
+> |---|---:|---|---|---|---:|
+> | `levenshtein` | 1.00 | pass | 50/50 | pass | **0.0010** |
+> | `padded_hamming` | 1.00 | pass | 50/50 | pass | 0.0704 |
+>
+> **Levenshtein wins the tie-break by 68×.** `grid_200.json`'s `selection_reason` records it as
+> *"tie-break on F6 over ['levenshtein', 'padded_hamming'] → levenshtein at 0.001036 ms/pair"*.
+>
+> **What this changes**: the primary-distance column here, in [agm](agm.md) §3 and in
+> [README](README.md) §3, and the distance T-06 computes its production matrix under. **`padded_hamming`
+> is primary for nothing in the pool.**
+>
+> **What survives**: everything else. nauty→graph6 is still admissible on all four criteria, still
+> exactly relabelling-invariant (T-04a E1: **ψ = 0.0000** on all eleven draws), and its separation
+> argument — that a canonical form is a *unique* representative, not a *stable* one — is untouched.
+> Its ρ is now 0.46–0.99 across the 15 records under Levenshtein, and it is the best representation
+> on **2** of them (AIDS-IAM `::ub`, GREC `::ub`).
+
+~~Primary distance: **padded Hamming**, the cheapest that is defined on 100 % of pairs.~~
 
 ---
 
@@ -210,7 +236,7 @@ this file measures how much that mattered: separation moves 1.00 → 0.83, and i
 |---|---|---|
 | 1 | Reproducible? | **Yes.** `pip install pynauty`, sdist bundles nauty 2.8.8, **from-source build verified** with gcc 12.2.0 |
 | 2 | Representation | canonical relabelling → graph6. **40/40 invariant**, complete invariant |
-| 3 | Distance | Hamming / padded Hamming / Levenshtein all defined. **Primary: padded Hamming.** Real ρ **0.46–0.68** all-pairs, **0.19–0.97** equal-`n` — lowest of the three canonical forms |
+| 3 | Distance | Hamming / padded Hamming / Levenshtein all defined. ~~**Primary: padded Hamming.**~~ **CORRECTED 2026-08-23 by T-04a: primary is `levenshtein`**, by F6 tie-break, **68×** cheaper (§3). Real ρ **0.46–0.68** all-pairs, **0.19–0.97** equal-`n` — lowest of the three canonical forms |
 | 4 | Claim A? | **Yes**, identical bit count to graph6 by construction — print one row, not two |
 | 5 | Scope | **In, and central.** Isolates canonicity as a variable at fixed format |
 | — | IsalGraph advantage | **Narrow**: only edit-distance compatibility (0.73 vs 0.83) and the operational alphabet. nauty wins efficiency, scalability, expressiveness |

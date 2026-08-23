@@ -193,3 +193,24 @@ and edgeless graphs, a deterministic length, and a decode that is `O(n²)` with 
   test it. `networkx` handles it; the closed-form length above does not.
 - Record the payload length `n(n−1)/2` separately from the byte length. §4's two conventions need
   both and they are not recoverable from each other after the fact.
+
+---
+
+## RESULT — T-04a, 2026-08-23. Outcome 1 confirmed, and generalised
+
+**[competitors](../competitors.md) §4's outcome 1 — "non-canonical graph6 should fail F3 outright" —
+is confirmed**, and it generalises to the whole non-canonical family: `adjacency`, `graph6` and
+`sparse6` each fail F3 at **1/50** on the frozen `S200` draw and each take **no primary distance**.
+`hamming` additionally fails F1 at **0.035**. graph6 is therefore the negative control the plan
+designed it to be, and it earns that role on measurement rather than on argument.
+
+**E1 quantifies it**: ψ, the median distance between a graph and a relabelled copy of itself, is
+**0.32 – 1.003** for graph6 across eleven draws, peaking on LINUX at **1.003 [0.953, 1.054]**. All
+eleven intervals exclude 0. The seven canonical representations are at **0.0000** throughout. A ψ
+above 1 means the median self-distance under relabelling exceeds one edit — the representation
+disagrees with itself by more than the unit it is supposed to measure in.
+
+**Exhaustively**, the invariant set of the n² family — which graph6 belongs to — is **exactly
+`{K_n}`**: over all 995 connected graphs to `n = 7` under full `n!` enumeration (**1,866,256**
+distinct labelled graphs, OEIS A001187), no other graph has a relabelling-invariant serialisation.
+There is no subfamily on which graph6 could be rescued. **Inherits: T-17, T-20.**

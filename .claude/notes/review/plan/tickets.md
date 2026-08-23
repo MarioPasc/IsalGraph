@@ -145,6 +145,37 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 > two independent 200-graph draws on AIDS**, which is direct support for [statistics](statistics.md)
 > D2.
 
+> ## ⚠ T-04a closed 2026-08-23. **`k = 3`, and three plan files named the wrong primary distance.
+> T-06, T-17 and T-20 inherit corrections.**
+>
+> 1. **`padded_hamming` is primary for NOTHING.** [competitors/README](competitors/README.md) §3's
+>    provisional column, [nauty](competitors/nauty.md) §3 and [agm](competitors/agm.md) §3 all named
+>    it for `nauty_graph6` / `agm_cam`. Measured on the frozen draw it loses the F6 tie-break to
+>    `levenshtein` by **68×** (0.0010 vs 0.0704 ms/pair) and **8.6×** respectively. All three files
+>    corrected in place. **`levenshtein` is primary for all six surviving serialisations**;
+>    `wl_subtree` takes `kernel`. **Inherits: T-06, T-17, T-20.**
+> 2. **`k = 3`** — `adjacency`, `graph6`, `sparse6`, each failing F3 at **1/50**. `preregistration.md`
+>    §7's `k` is settled; **T-06 owns applying it** (`N_actual = 182 − 15k − 8d`).
+> 3. **[gspan-mdfsc](competitors/gspan-mdfsc.md) §3's "best in the pool on all five Suite-1 datasets"
+>    does not survive.** Under the selected distances `min_dfs` is best on **2 of 5** (Letter LOW,
+>    Letter MED); `agm_cam` takes the other three. Over all 15 records: `min_dfs` 4, `agm_cam` 3,
+>    `wl_subtree` 3, `sparse6_nauty` 3, `nauty_graph6` 2, **IsalGraph 0**. Inherits: **T-17, T-20.**
+> 4. **`competitors/README` §7's Suite-2 LB range `−0.082 to −0.295` is stale** — corrected to
+>    **`−0.289`**. The size null must be restricted to *each representation's own* pair set; on
+>    Mutagenicity, where IsalGraph loses 14 graphs to the canonicalisation budget and every censored
+>    graph is larger than every kept one, the whole-cohort null overstates by 0.118 (UB margin
+>    **+0.078 → +0.196**). **A size null computed on a different pair set than the arm is not a
+>    comparison.** Inherits: **T-06, T-20.**
+> 5. **finding 13 is REFUTED for the shipped backends.** The n² family's `normalised()` reads
+>    `sorted(nodes)`, so `nx.relabel_nodes(copy=True)` cannot leak insertion order through them. The
+>    prescribed relabeller `fixtures.shuffled_copy` stays — its *stated reason* was wrong, not the
+>    prescription. Inherits: **T-06.**
+>
+> Also: **F0 is measured at each backend's own budget** (`timeout_s = 2.0`,
+> `max_projections = 50,000`, `search_nodes = 200,000`), **not** D14's 300 s. Every printed F0 must
+> name its budget, and `SuiteScopeError` (a scope decision) must never be summed with
+> `AGMBudgetExceeded` or `CanonicalizationTimeoutError` (budget outcomes).
+
 **Read for every ticket**: [decisions](decisions.md) (do not re-litigate a signed decision) and
 [demands](demands.md) (what the ticket is answering, and to whom).
 
@@ -158,7 +189,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 | ~~**T-02**~~ | ~~Statistics lock — graph-level bootstrap, Mantel, pair-accounting ladder, and the frozen confirmatory family with its cardinality~~ → **DONE 2026-08-13.** Family enumerated and frozen at **`N_max = 197`** in three fixed-sequence families — F0 calibration gate 5, F1 bracket gate 10, F2 primary 182 — BH-FDR q = 0.05 within each; `N_actual = 182 − 15k − 8d`. **Four defects fixed in the locked protocol**: §9's exact-regime omnibus contradicted §4; two gates sat inside the family they gate; the labels row made the cardinality indeterminate; **D15 validated a 7.72 % subsample by drawing 94.4 % of a smaller dataset**. **D13 promoted to confirmatory**; ρ(Lev, UB) gets no primary rows. Raised **T-27** | T-01 | **done** | — | [preregistration](preregistration.md), [T-02 design](../tasks/T-02-design.md), [statistics](statistics.md) §12 |
 | ~~**T-03**~~ | ~~Exact GED on Picasso~~ → **DONE 2026-08-13.** All five Suite-1 datasets: **3,897,911 pairs, 98.43 % certified exact, 1.57 % interval-censored, ≈ 2,081 core-h.** Both stages ran and **agree on their 22,051-pair overlap**. Three findings carried: the **exact solver changed** (`ANCHOR_AWARE_GED` is non-deterministic and non-exact), **GraphEdX uses UNIT node costs, not zero** (retracts a T-03 finding *and* contradicts [gedlib](gedlib.md) §6 / D6), and **censoring is hardware-dependent** | T-01 | **done** | — | [T-03 log](../tasks/../2026-08-12-exact-ged/summary.md), [exact_ged](exact_ged.md) §7 |
 | ~~**T-04**~~ | ~~**Competitor backends** — `src/isalgraph/competitors/` in the IsalHG idiom: graph6, sparse6, nauty, AGM, **gSpan min-DFS**~~ → **DONE 2026-08-15.** **Eleven backends, 6 metrics, 383 tests**, 9,510 lines; ruff + `mypy --strict` clean; full suite **2,106 passed / 321 skipped**. **The reproduction gate closed bit-for-bit**: replaying each scout script's `Random(42)` stream reproduces `real_suite1.json` on **all 5 datasets × 8 rows at delta `0.00e+00`**. Oracles: AGM **327 graphs / 0 mismatches** vs the lex-min over all `n!`; min-DFS distinct codes **1/2/6/21/112** = OEIS A001349, **0 collisions**; budget **24/400 Mutagenicity, 0 elsewhere**. `pynauty` **builds from source under gcc 12.2.0 on Picasso**, byte-identical output (stop-condition 2 closed). **Five plan files corrected — see the header warning.** Carries: **the corrected ρ table supersedes `competitors/README` §4.1/§4.2**; **IsalGraph clears the size null on 1 of 5, not 2**; **bootstrap CIs are now a precondition for any printed ρ** | — | **done** | — | [T-04 design](../tasks/T-04-design.md), [article notes](../tasks/T-04-article-notes.md), [wave](../../2026-08-14-t04-competitors/summary.md) |
-| **T-04a** | **Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule. **Must close before any production distance matrix.** F3 and the separation ratio already have synthetic priors ([competitors/README](competitors/README.md) §3); T-04a is what makes them real | T-04 | 0.5–1 | **P0** | [competitors](competitors.md) §3, [competitors/README](competitors/README.md) |
+| ~~**T-04a**~~ | ~~**Metric feasibility** — every (representation × distance) cell on a fixed 200-graph sample; select each primary distance by the pre-declared rule~~ → **DONE 2026-08-23.** All **66 cells** measured on one frozen pooled draw (200 graphs, six node-count strata `[33,33,33,33,34,34]`, seed 42, `n` 2–83, suite split 51/149). **`k = 3`** over preregistration §4.1's seven-member Claim-B set: `adjacency`, `graph6`, `sparse6` have **no admissible distance**, each failing F3 at **1/50**. **`levenshtein` is primary for all six surviving serialisations, `kernel` for `wl_subtree`** — `padded_hamming` is primary for **nothing**, losing the F6 tie-break by **68×** on `nauty_graph6` and **8.6×** on `agm_cam`. Plus the **E1–E4 admissibility annex**: ψ = 0.0000 on all eleven draws for the seven canonical representations vs up to **1.148** for `sparse6`; **0 collisions** for six complete invariants (zero set ≡ VF2-certified isomorphic set) against **45 / 183,016** for WL; **0 axiom violations in 9,881,851 checks** over 467,180 triples. **Five findings carried: (1) `padded_hamming` primary column in `competitors/README` §3, `nauty.md` and `agm.md` is WRONG — corrected in place; (2) IsalGraph clears the size null on 1 of 5 Suite-1 datasets and is the best representation on 0 of 15 records (`min_dfs` 4, `agm_cam` 3, `wl_subtree` 3, `sparse6_nauty` 3, `nauty_graph6` 2) — `gspan-mdfsc.md`'s "best on all five Suite-1" corrected to 2 of 5; (3) the Suite-2 verdict FLIPS on 5/5 between LB and UB, all 15 paired differences excluding zero, because `ρ(\|Δn\|, LB) = 0.960–0.998` makes the lower bound very nearly the size null — degenerate by construction, not a defect in `BRANCH_FAST`; (4) `adjacency` beats IsalGraph significantly on 3/5 all-pairs and 0/5 equal-`n`, the F5-blindness trap, `ρ(d_adjacency, \|Δn\|) = 0.83–0.93`; (5) finding 13 REFUTED for the shipped backends** — the n² family's `normalised()` reads `sorted(nodes)`, so it is insertion-order invariant; the prescribed relabeller stays, its stated reason was wrong. **F0 is per-backend-budget, not D14's 300 s, and every printed F0 must name its budget** | ~~T-04~~ | **done** | — | [design](../tasks/T-04a-design.md), [annex protocol](../tasks/T-04a-admissibility-protocol.md), [article notes](../tasks/T-04a-article-notes.md), [letter](../tasks/T-04a-letter-fragment.md), [plan RESULT](competitors.md) §9 |
 | ~~**T-05**~~ | ~~**Bounded GED via GEDLIB** — wire the bounds T-27 selects, pass the validation gates, run the calibration ladder, then all 21,710,892 Suite-2 pairs (≈ 0.57 core-h)~~ → **DONE 2026-08-15.** All **21,710,892** pairs bounded under D6, **≈ 2,140 core-h realised** (not 0.57). G1–G4 all passed and were re-verified with independent code: **0 bracket violations over all 21.7 M pairs**, **0** containment violations over 3,836,827 T-03-certified pairs, and G2 reproduces T-27 **element-wise on 10,807,845 pairs across three arms**, byte-identical. Ladder rungs 13–18 → **measured exact-GED ceiling `n = 17`** (up from 12). Certification spans **28.46 % → 0.03 %**, a factor of 949. ⚠ **The absolute gap `UB−LB` RISES with `n` in 10/10 datasets while `(UB−LB)/UB` falls in 6/10 — the measure this plan named would have inverted the AE.1 conclusion** (approx_ged §3.1 item 3, corrected). The `BP_BEAM_DET` arm fired 10/10: the frozen gate explains **63–88 %** of the widening at small `n` but only **35–51 %** at the disputed sizes. **Carries: §7.5 (`ρ(Lev,·)`) deferred in full → T-06** · **class counts false of the filtered cohort (Letter LOW 9/15, GREC 17/22, LINUX & AIDS-GraphEdX none) → T-18, T-06** · **T-03's `ub_matrix` run-dependent, accepted unrepaired → T-20 must state it** · **D14's censoring premise understated, and its 300 s timeout cannot be enforced with a Python signal → T-06** | ~~T-01~~, ~~T-03~~, ~~T-27~~ | 5–10 | ~~P0~~ **done** | [log](../tasks/T-05-design.md), [notes](../tasks/T-05-article-notes.md), [letter](../tasks/T-05-letter-fragment.md), [plan RESULT](approx_ged.md) |
 | **T-06** | **Full recompute** — all experiments, C++ engine, new cohorts, competitor columns, new statistics | T-02…T-05 | 10–14 | **P0** | [statistics](statistics.md), [data](data.md), [competitors](competitors.md), [labels](labels.md) |
 | **T-07** | **Read [28] and [29]**; inherited/modified/new delta table **plus the sufficiency paragraph**; resolve D19 | — | 1–4 | **P0** | [corrections](corrections.md) §4, [decisions](decisions.md) 9 |
@@ -195,13 +226,16 @@ see the header warning) · ~~T-10~~ (merged into T-09) ·
 decides which bound T-05 computes. It is 1–2 days and can start immediately.
 
 **T-02 is closed and no longer gates T-06** — but three of its parameters are still open and each has
-a named owner: `k` (T-04a), `d` (T-06's own F1 run), and the primary bound at each end (T-27). See
+a named owner: ~~`k` (T-04a)~~ — **`k = 3`, settled 2026-08-23; T-06 applies it** — `d` (T-06's own F1
+run), and the primary bound at each end (T-27, `BRANCH_FAST` / `BIPARTITE`). See
 [preregistration](preregistration.md) §7.
 
 **Parallel off it** — T-04 → T-04a → T-17 · T-07 → T-08 → T-19 → T-26 · T-22 · T-13 · T-09 · T-11.
 
-**T-04a gates T-06's distance matrices**, so it is on the path for everything downstream of the
-competitors even though it is half a day.
+~~**T-04a gates T-06's distance matrices**, so it is on the path for everything downstream of the
+competitors even though it is half a day.~~ **Gate released 2026-08-23**: T-06 computes its
+production matrices under `levenshtein` for all six admissible serialisations, `kernel` for
+`wl_subtree`, and none at all for `adjacency`, `graph6` and `sparse6`.
 
 **Ordering constraints that cost rework if violated**: [manuscript](manuscript.md) §5.
 

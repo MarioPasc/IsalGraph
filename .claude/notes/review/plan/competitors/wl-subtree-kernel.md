@@ -251,3 +251,30 @@ Marginal cost ≈ 0.
   fixture — that assertion is cheap and it pins the off-by-one forever.
 - Add the `K_{3,3}` / prism pair as a **unit test fixture**: WL distance 0, every other backend
   non-zero. It is a two-line regression test that would catch a broken canonical backend instantly.
+
+---
+
+## RESULT — T-04a, 2026-08-23. The incompleteness has an incidence now, not just a witness
+
+**Primary distance confirmed as `kernel`** by T-04a's grid — sole candidate passing F1–F4 on the
+frozen `S200` draw, at 0.002117 ms/pair. WL is the **only** representation in the pool whose primary
+distance is not `levenshtein`.
+
+**§2.2's claim that the incompleteness fires on the real cohort is now a rate.** T-04a's E2 measured
+collisions — distinct isomorphism classes at distance exactly 0 — over ten datasets, with every
+zero-distance pair adjudicated by VF2:
+
+| | collisions | rate |
+|---|---:|---|
+| the six complete invariants (`nauty_graph6`, `sparse6_nauty`, `agm_cam`, `min_dfs`, `isalgraph_pruned`, `isalgraph_canonical`) | **0** | ≤ 2.0–3.4 × 10⁻⁵ by rule of three; **zero set ≡ VF2-certified isomorphic set**, exactly |
+| **`wl_subtree`** | **45 / 183,016** | **2.46 × 10⁻⁴** [1.79, 3.29] × 10⁻⁴ |
+
+**On LINUX and AIDS, which contain no duplicate graphs, every zero WL emits is a false isomorphism
+certificate** — 1/1 and 11/11, AIDS CI [0.715, 1.000]. Read the LINUX figure with care: **it rests
+on a single pair and establishes nothing on its own**; AIDS is the load-bearing one. As a fraction of
+all pairs those are 0.026 % and 0.055 %.
+
+**The K₃,₃ / prism witness reproduces exactly**: WL distance **0.0**, and all six complete invariants
+separate the pair. So the identity-of-indiscernibles failure §3 requires be declared is not a
+constructed edge case — it has a measured incidence on the cohort the paper reports, and the
+declaration should carry it. **Inherits: T-17, T-20.**
