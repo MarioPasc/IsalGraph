@@ -200,6 +200,38 @@ checkout's `src/` — which is **T-04a's branch, carrying T-04a's in-flight edit
 environment to remove a hazard that disappears when T-04a merges, inside a 15-day window.
 **Detection beats isolation here — but the detection is not optional.**
 
+#### 1.4b.1 The hazard is real but currently **inert** — measured 2026-08-23, and re-measurable in one command
+
+T-04a has merged. The shared checkout is parked on `main` at `c1d36b1`, and the question the rules
+above exist to manage — *is the `src/` we import the `src/` we think we are testing?* — now has a
+direct answer rather than a mitigation:
+
+```bash
+git -C /home/mpascual/research/code/IsalGraph-T06 diff --stat c1d36b1..HEAD -- src/isalgraph/
+# empty  ->  the shared checkout's src/ is EQUIVALENT to this branch's
+git -C /home/mpascual/research/code/IsalGraph status --porcelain -- src/isalgraph/
+# empty  ->  and it has no uncommitted edits on top
+```
+
+Both were **empty** on 2026-08-23. All 40 `ticket/T-06` commits touch only `.claude/notes/`,
+`benchmarks/` and `tests/`. **So imports resolving to the shared checkout is currently harmless: the
+production campaigns run the intended encoder.** Corroborated at run time — the campaign's own
+banner records `engine: cpp, build 298fc1188bf1b051`, which equals the `isalgraph_build_hash` stored
+in every wave-1 `.npz`.
+
+**This is a check, not a conclusion.** The shared checkout belongs to another session and can move
+under us at any moment; §1.4b's whole premise is that it already did once. So:
+
+> **Re-run both commands immediately before every production campaign**, not once per ticket. Cost:
+> two `git` invocations. Failure mode if skipped: a whole campaign silently encodes under another
+> branch's `src/`, with nothing in the output to show it — the same class of silent-wrong-answer as
+> the `error_kind` overloading rejected in §3.2, and detectable only by the `src_commit` field after
+> the fact.
+
+Rule 5 above remains the backstop and stays mandatory: recording `build_hash` and `src_commit`
+detects contamination *afterwards*; this check prevents it *beforehand*. They are complementary, and
+neither replaces the other.
+
 ### 1.5 What already exists, and must not be rebuilt
 
 | Need | Exists at | Verdict |
