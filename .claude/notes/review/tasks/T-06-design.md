@@ -1077,3 +1077,75 @@ Two facts worth carrying into F0, and neither is visible from a cohort count:
 
 **This does not yet trigger stop-and-ask 1**, which is about F0 *failing*, not about the pair supply.
 It is recorded because it shapes how an F0 result on `aids` or `linux` must be read.
+
+---
+
+## 14. What is actually established as of 2026-08-23 — pilot, not result
+
+Written after the PI challenged an orchestrator summary that presented three findings as settled.
+**The challenge was correct in substance**: T-06 has computed **no** competitor correlation at any
+scale. The encoding campaign is still running and no distance matrix exists. Every ρ quoted anywhere
+in this ticket today comes from **T-04a's 200-graph pilot**.
+
+The three findings do have artifacts and all three reproduce — the error was in the **epistemic
+status** assigned to them, not in their existence.
+
+### 14.1 Verified from `paired_null_ci.json` — `isalgraph_pruned` vs the size null
+
+Paired graph-level bootstrap, 2,000 resamples, seed 42, **n = 200 graphs** (89 for `linux`, which has
+only 89). **This file contains `isalgraph_pruned` only — no competitor appears in it at all.**
+
+| arm | dataset | ρ(Lev) | ρ(null) | paired diff | 95 % CI | verdict |
+|---|---|---|---|---|---|---|
+| exact | iam_letter_low | 0.9253 | 0.8991 | **+0.0262** | [0.0083, 0.0463] | **clears** |
+| exact | iam_letter_med | 0.8750 | 0.9190 | −0.0440 | [−0.0676, −0.0140] | below |
+| exact | iam_letter_high | 0.6969 | 0.9174 | −0.2205 | [−0.2599, −0.1825] | below |
+| exact | linux | 0.4742 | 0.7134 | −0.2392 | [−0.3199, −0.1570] | below |
+| exact | aids | 0.2561 | 0.7844 | **−0.5283** | [−0.5708, −0.4823] | below |
+| lb | all 5 Suite-2 | 0.69–0.92 | **0.96–0.998** | −0.08 … −0.29 | all exclude 0 | **all below** |
+| ub | all 5 Suite-2 | 0.74–0.93 | **0.46–0.74** | +0.03 … +0.38 | all exclude 0 | **all clear** |
+
+**1 of 5 on Suite 1, and a 5/5 inversion on Suite 2** — both confirmed.
+
+**The inversion is driven by the null, not by the arm.** ρ(Lev) moves little between LB and UB
+(e.g. protein 0.7372 → 0.8428); ρ(null) collapses from 0.9699 to 0.4596. The bracket changes what
+the *baseline* correlates with, so the comparison is genuinely undetermined rather than merely noisy
+— §10's conclusion, now with the numbers attached.
+
+### 14.2 Verified from `f5_200.json` — `isalgraph_pruned` against every competitor
+
+**n = 200**, `all_pairs` view, and the file's own note reads *"DESCRIPTIVE. F5 is not an input to
+distance selection."*
+
+`isalgraph_pruned` is beaten on **15 of 15** records. The margins are not marginal:
+
+| record | isalgraph_pruned | best competitor | |
+|---|---|---|---|
+| aids / exact | 0.2561 | **agm_cam 0.7828** | +0.53 |
+| linux / exact | 0.4742 | **agm_cam 0.7979** | +0.32 |
+| iam_letter_high / exact | 0.6969 | **agm_cam 0.8921** | +0.20 |
+| mutagenicity / lb | 0.6926 | **wl_subtree 0.9005** | +0.21 |
+| iam_letter_low / exact | 0.9253 | **min_dfs 0.9720** | +0.05 |
+
+**The winners are all admissible.** `agm_cam`, `min_dfs`, `wl_subtree`, `sparse6_nauty` and
+`nauty_graph6` are not among the `k = 3` metric-axiom exclusions, so this result does **not** dissolve
+when the k-excluded backends are dropped.
+
+### 14.3 What this is not, and what T-06 must therefore do
+
+1. **It is a 200-graph pilot.** 200 of 4,040 Mutagenicity graphs is a **5 % subsample**; 200 of 3,900
+   coil_del likewise. T-06 recomputes at **16,370** and **5,350**. A ρ estimated on 19,900 pairs can
+   move at 8,158,780.
+2. **It is a single seed-42 draw**, per `corrected_rho_table.json`'s own `convention` block. No
+   resample-across-draws exists, so the between-draw variance is unmeasured.
+3. **It predates the frozen conventions.** `corrected_rho_table.json` supersedes
+   `competitors/README` §4.1–4.2, and `wl_kernel_computer` ran at `h = 5` until `b7ce447` — E10's WL
+   numbers were a different kernel from the one the paper reports.
+4. **Nothing here has been through BH.** These are raw ρ and CIs, not F0/F1/F2 outcomes over
+   `N_actual`.
+
+> **Standing rule for this ticket, adopted here.** Quote a T-04a pilot number as *"the pilot found X
+> at n = 200; T-06 tests whether it holds at cohort scale"* — never as a T-06 result. The direction
+> of the pilot is a **prior**, and a strong one, but the ticket exists because a prior is not a
+> result. If the full recompute overturns any of these three, that is a finding and not an
+> embarrassment.
