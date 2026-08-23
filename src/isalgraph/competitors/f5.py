@@ -1,153 +1,635 @@
 """``python -m isalgraph.competitors.f5`` -- F5, and F5 only.
 
-Spearman rho of each (representation x distance) against T-03's **certified
-exact GED**, on Suite 1.
+Spearman rho of each representation's **selected primary distance** against
+ground-truth graph edit distance.
 
-**This is reported and is not an input to selection.**  It lives in its own
-entry point precisely so that ``grid.py`` -- which applies
-``competitors.md`` §3.4's rule -- has no import path that could reach a GED
-value.  Selecting a distance on its correlation with GED would be selecting
-the baseline that makes IsalGraph look best, and decision 24's defence is
-that the selection tool *could not* have done so.
+**This is descriptive.  It is reported and it is not an input to selection.**
+The primary distance is chosen by ``grid.py`` on F1-F4 with cost as the
+tie-break, deliberately blind to rho; this module *consumes* that choice and
+never feeds back into it.  The entry point is separate precisely so that
+``grid.py`` has no import path that could reach a GED value: selecting a
+distance on its correlation with GED would be selecting the baseline that
+makes IsalGraph look best, and decision 24's defence is that the selection
+tool *could not* have done so.  A test asserts both halves of that closure.
 
-**Every rho printed here carries its size null.**  ``rho(|n1 - n2|, GED)``
-scores 0.71-0.93 on the five Suite-1 datasets, and IsalGraph clears it on
-two of five by at most 0.03.  A rho without the null beside it hands the
-first reviewer who computes it an unanswerable objection, so the null is
-emitted in the same record rather than left to a later script.
+Three things this reports that a bare rho does not.
+
+**Every rho carries its size null.**  ``rho(|n1 - n2|, GED)`` -- count the
+nodes, subtract, no representation at all -- scores 0.71-0.93 on the five
+Suite-1 datasets, and IsalGraph clears it on one of five.  A rho printed
+without its null hands the first reviewer who computes it an unanswerable
+objection, so the null is emitted in the same record rather than left to a
+later script.
+
+**Every rho carries a graph-level bootstrap interval.**  rho moved by up to
+0.07 between two independent 200-graph draws on AIDS.  The effective sample
+size is governed by *graphs*, not by pairs, so a pair-level interval is wrong
+by construction; see :mod:`isalgraph.competitors.bootstrap`.  This is a
+stated precondition for printing any rho in this revision.
+
+**Every rho is reported in two views.**  ``all_pairs`` and ``equal_n``
+(``n1 == n2``).  The equal-``n`` view removes the size channel entirely and
+is therefore where canonicity, rather than order, has to do the work.
+
+The Suite-2 arm reports T-05's proven bounds as **two separate records**,
+``<dataset>::lb`` and ``<dataset>::ub``.  They are never averaged and never
+interpolated into a midpoint (``approx_ged.md`` §4).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from typing import Any
+import os
+import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from isalgraph.competitors import datasets
-from isalgraph.competitors.base import VectorBackend
-from isalgraph.competitors.ged_reference import load_ged
-from isalgraph.competitors.registry import (
-    available_backends,
-    get_backend,
-    get_metric,
+from isalgraph.competitors.base import VectorBackend, table_scope_error
+from isalgraph.competitors.bootstrap import (
+    DEFAULT_RESAMPLES,
+    DEFAULT_SEED,
+    ResampleIndex,
+    graph_bootstrap_ci,
+    make_resample_index,
+    spearman,
 )
-from isalgraph.errors import CompetitorError
+from isalgraph.competitors.ged_reference import load_bounds, load_ged
+from isalgraph.competitors.registry import available_backends, get_backend, get_metric
+from isalgraph.errors import IsalGraphError
+
+if TYPE_CHECKING:
+    import networkx as nx
+
+#: Frozen protocol constant (design note 3.8): the per-dataset draw.
+DEFAULT_N_GRAPHS = 200
+
+#: The baseline row.  It is a registered backend and metric so that the null
+#: falls out of the same encode/distance path every competitor uses, rather
+#: than out of a second hand-written implementation that could drift from it.
+SIZE_NULL = "size_null"
+
+#: The two views, frozen.  ``equal_n`` is the one the paper leads with.
+VIEWS: tuple[str, ...] = ("all_pairs", "equal_n")
+
+#: Printed for a representation the grid found no admissible distance for.
+NO_DISTANCE_REASON = "no admissible distance (T-04a selection)"
+
+#: Printed for a representation absent from the grid's ``primary_distance``.
+ABSENT_REASON = "absent from the grid's primary_distance map"
 
 
-def _spearman(xs: list[float], ys: list[float]) -> tuple[float, float]:
-    from scipy.stats import spearmanr
+@dataclass(frozen=True, slots=True)
+class Draw:
+    """One dataset's sampled graphs, and the position map the bootstrap uses.
 
-    result = spearmanr(xs, ys)
-    return float(result.statistic), float(result.pvalue)
+    Attributes:
+        dataset: cohort name.
+        suite: ``"suite1"`` or ``"suite2"``.
+        indices: cohort indices, sorted, as ``Cohort.sample`` returned them.
+        position: cohort index -> position in :attr:`indices`.  The bootstrap
+            resamples **positions**, so every pair must be translated before
+            it reaches :func:`~isalgraph.competitors.bootstrap.graph_bootstrap_ci`.
+        n_nodes: cohort index -> node count, for the size null and the
+            equal-``n`` view.
+    """
+
+    dataset: str
+    suite: str
+    indices: tuple[int, ...]
+    position: dict[int, int]
+    n_nodes: dict[int, int]
 
 
-def rho_for(
+def draw_for(dataset: str, n_graphs: int, seed: int) -> Draw:
+    """Sample *n_graphs* graphs from *dataset* at *seed*."""
+    cohort = datasets.load(dataset)
+    indices = cohort.sample(n_graphs, seed=seed)
+    return Draw(
+        dataset=dataset,
+        suite=cohort.suite,
+        indices=indices,
+        position={idx: p for p, idx in enumerate(indices)},
+        n_nodes={idx: int(cohort.graphs[idx].number_of_nodes()) for idx in indices},
+    )
+
+
+def encode_draw(backend_name: str, draw: Draw) -> tuple[dict[int, Any], int, dict[str, int]]:
+    """Encode every sampled graph under *backend_name*.
+
+    A graph the backend raises on is **excluded from that backend's pair set
+    and counted**, never silently substituted.  A failure is a datum, not a
+    stop.  Both the count and the exception names reach the record.
+
+    **The catch is `IsalGraphError`, not `CompetitorError`, and the
+    difference is a whole crashed run.**  The two live on separate branches
+    of the hierarchy::
+
+        IsalGraphError
+        |-- CompetitorError   -- the backends' OWN caps: AGMBudgetExceeded,
+        |                        MinDfsBudgetExceeded, SuiteScopeError
+        `-- EncodingError
+            `-- CanonicalizationTimeoutError  -- the CORE ENGINE's wall clock
+
+    ``isalgraph_ref`` lets the core engine's timeout propagate unchanged, so
+    catching only ``CompetitorError`` misses it -- and misses it on
+    ``isalgraph_pruned``, the paper's own reference arm, on exactly the
+    Suite-2 draws the F5 arm exists to reach.  Small graphs never hit the
+    2.0 s budget, so a demonstration run on 40 Letter or GREC graphs does not
+    exercise this path at all.  ``IsalGraphError`` is the common base and is
+    still narrow enough that a ``TypeError`` in our own code propagates.
+
+    **The kinds are counted separately, never summed.**  An internal-cap
+    failure (``AGMBudgetExceeded``, ``MinDfsBudgetExceeded``) is a scope
+    decision; a wall-clock failure (``CanonicalizationTimeoutError``) is a
+    budget outcome; ``SuiteScopeError`` is a declared refusal.  T-06's
+    ``error_kind`` column reports them as separate columns for that reason.
+
+    Returns:
+        ``(encoded, n_unencodable, errors)``.  ``encoded`` is keyed by cohort
+        index and holds only the graphs that encoded; ``errors`` counts
+        ``type(exc).__name__``.
+    """
+    cohort = datasets.load(draw.dataset)
+    graphs: dict[int, nx.Graph] = {idx: cohort.graphs[idx] for idx in draw.indices}
+    backend = get_backend(backend_name)
+    encoded: dict[int, Any] = {}
+    errors: dict[str, int] = {}
+
+    if isinstance(backend, VectorBackend):
+        # Fitted once over the whole draw: a per-batch vocabulary would make
+        # the distance matrix depend on batching order.  This call is outside
+        # the per-graph loop and so was outside the per-graph guard; a raise
+        # here would take the whole run down for one representation.  It is a
+        # total failure for this backend, and it is reported as one.
+        try:
+            backend.fit(list(graphs.values()))
+        except IsalGraphError as exc:
+            return {}, len(graphs), {f"fit:{type(exc).__name__}": len(graphs)}
+
+    for idx, graph in graphs.items():
+        try:
+            if isinstance(backend, VectorBackend):
+                encoded[idx] = backend.features(graph)
+            else:
+                encoded[idx] = backend.encode(graph)
+        except IsalGraphError as exc:
+            name = type(exc).__name__
+            errors[name] = errors.get(name, 0) + 1
+    return encoded, len(graphs) - len(encoded), errors
+
+
+def reference_pairs(draw: Draw, reference: str) -> tuple[list[tuple[int, int]], list[float]]:
+    """Ground-truth pairs and their GED, for one reference.
+
+    Args:
+        draw: the sampled graphs.
+        reference: ``"exact"`` for Suite 1's certified A* GED, ``"lb"`` or
+            ``"ub"`` for T-05's proven Suite-2 bounds.
+
+    Returns:
+        ``(pairs, geds)`` over the upper triangle of the draw.  Suite 1 keeps
+        certified pairs only; the bounds keep finite pairs only.
+    """
+    if reference == "exact":
+        matrix = load_ged(draw.dataset)
+        pairs = matrix.certified_pairs(draw.indices)
+        return pairs, [float(matrix.ged[a, b]) for a, b in pairs]
+    bounds = load_bounds(draw.dataset, reference)
+    pairs = bounds.finite_pairs(draw.indices)
+    return pairs, [float(bounds.values[a, b]) for a, b in pairs]
+
+
+def _view_mask(draw: Draw, pairs: list[tuple[int, int]], view: str) -> list[bool]:
+    if view == "all_pairs":
+        return [True] * len(pairs)
+    if view == "equal_n":
+        return [draw.n_nodes[a] == draw.n_nodes[b] for a, b in pairs]
+    raise ValueError(f"unknown view {view!r}; expected one of {VIEWS}")
+
+
+def _empty_record(metric: str | None, reason: str) -> dict[str, Any]:
+    """A printed absence.  Every key of a full record is present and null."""
+    return {
+        "metric": metric,
+        "rho": None,
+        "p": None,
+        "ci": None,
+        "n_pairs": 0,
+        "n_undefined": 0,
+        "zero_frac": None,
+        "size_null_on_my_pairs": None,
+        "reason": reason,
+    }
+
+
+def _constant_reason(distances: list[float], geds: list[float], metric_name: str) -> str | None:
+    """Why Spearman is undefined here, or ``None`` when it is defined."""
+    flat_distance = len(set(distances)) < 2
+    flat_ged = len(set(geds)) < 2
+    if not (flat_distance or flat_ged):
+        return None
+    if flat_distance and flat_ged:
+        side = "both the distance and the reference GED are"
+    elif flat_distance:
+        side = f"the {metric_name!r} distance is"
+    else:
+        side = "the reference GED is"
+    return (
+        f"Spearman undefined: {side} constant over the pairs of this view, so the "
+        f"rank correlation has no denominator"
+    )
+
+
+def rho_record(
     backend_name: str,
     metric_name: str,
-    dataset: str,
-    indices: tuple[int, ...],
+    draw: Draw,
+    encoded: dict[int, Any],
+    pairs: list[tuple[int, int]],
+    geds: list[float],
+    index: ResampleIndex,
+    whole_view_null: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Spearman rho for one cell on one dataset's certified-exact pairs."""
-    cohort = datasets.load(dataset)
-    reference = load_ged(dataset)
-    pairs = reference.certified_pairs(indices)
-    if not pairs:
-        return {"rho": None, "reason": "no certified-exact pairs in the sample"}
+    """One cell of one view: rho, its p-value, and its graph-level interval.
 
-    backend = get_backend(backend_name)
+    Pairs whose distance is undefined are counted and excluded; pairs naming
+    a graph this backend could not encode are excluded without being counted
+    as undefined, since the count they belong in is ``n_unencodable``.
+
+    **The cell also carries its own null.**  ``size_null_on_my_pairs`` is
+    ``rho(|n1 - n2|, GED)`` recomputed on *exactly the pairs this cell used*,
+    and it is the only valid subtrahend for a difference.  The row-level
+    ``size_null`` is computed on the cohort's whole pair set, so on any
+    dataset where this representation lost graphs the two are correlations
+    over different samples and ``rho - size_null`` is not a comparison.
+
+    The gap is not academic and it does not point in a safe direction.  On
+    Mutagenicity the 2.0 s canonicalisation budget censors 14 of 200 graphs,
+    and they are **not missing at random**: measured, the censored graphs
+    average 75.8 nodes (max 97) against 25.4 (max 48) for the kept ones --
+    every censored graph is larger than every kept one.  Removing them
+    collapses the spread of ``|n1 - n2|`` from sd 16.4 to 8.0 and so makes
+    the cohort *easier for the null*, while leaving the representation's own
+    rho untouched at 0.832.  The null falls from 0.754 to 0.636, and the
+    margin moves from +0.078 to +0.196 purely through which pairs the
+    baseline saw.  That is D14's censoring bias landing inside the baseline
+    rather than inside the arm -- the direction nobody checks, and it lands
+    on the one dataset where IsalGraph wins Claim A outright.
+
+    Both nulls are emitted.  The cohort-level one is what a standalone null
+    column should print; the restricted one is what a difference must use.
+    Neither silently replaces the other, because a reader needs to see that
+    they differ and by how much.
+    """
     metric = get_metric(metric_name)
-    graphs = {i: cohort.graphs[i] for i in indices}
-
-    try:
-        if isinstance(backend, VectorBackend):
-            backend.fit(list(graphs.values()))
-            encoded: dict[int, Any] = {i: backend.features(g) for i, g in graphs.items()}
-        else:
-            encoded = {i: backend.encode(g) for i, g in graphs.items()}
-    except CompetitorError as exc:
-        return {"rho": None, "reason": f"{type(exc).__name__}: {exc}"}
-
     distances: list[float] = []
-    geds: list[float] = []
+    values: list[float] = []
+    positions: list[tuple[int, int]] = []
+    size_diffs: list[float] = []
     undefined = 0
-    for a, b in pairs:
+    for (a, b), ged in zip(pairs, geds, strict=True):
+        if a not in encoded or b not in encoded:
+            continue
         if not metric.is_defined(encoded[a], encoded[b]):
             undefined += 1
             continue
-        distances.append(metric.distance(encoded[a], encoded[b]))
-        geds.append(float(reference.ged[a, b]))
-    if len(distances) < 3:
-        return {"rho": None, "reason": "fewer than three defined pairs"}
+        distances.append(float(metric.distance(encoded[a], encoded[b])))
+        values.append(ged)
+        positions.append((draw.position[a], draw.position[b]))
+        size_diffs.append(float(abs(draw.n_nodes[a] - draw.n_nodes[b])))
 
-    rho, p = _spearman(distances, geds)
+    if len(distances) < 3:
+        record = _empty_record(metric_name, "fewer than three defined pairs")
+        record["n_undefined"] = undefined
+        return record
+
+    # A rank correlation against a constant column is undefined, and scipy
+    # returns NaN for it rather than raising.  NaN is not valid JSON, so it
+    # would either abort the write or -- worse -- reach track C as the token
+    # `NaN` and be read as a number.  The size null hits this **by
+    # construction** in the equal-n view, where |n1 - n2| is 0 for every
+    # pair: that is the whole point of the view, and it has to be printed as
+    # the stated absence it is rather than as a correlation of nothing.
+    constant = _constant_reason(distances, values, metric_name)
+    if constant is not None:
+        record = _empty_record(metric_name, constant)
+        record["n_pairs"] = len(distances)
+        record["n_undefined"] = undefined
+        record["zero_frac"] = sum(d == 0.0 for d in distances) / len(distances)
+        return record
+
+    rho, p = spearman(distances, values)
+    ci = graph_bootstrap_ci(distances, values, positions, index)
     return {
+        "metric": metric_name,
         "rho": rho,
         "p": p,
+        "ci": None if ci is None else [ci[0], ci[1]],
         "n_pairs": len(distances),
         "n_undefined": undefined,
         "zero_frac": sum(d == 0.0 for d in distances) / len(distances),
+        "size_null_on_my_pairs": _restricted_null(
+            size_diffs, values, positions, index, whole_view_null
+        ),
+        "reason": None,
     }
 
 
-def size_null_rho(dataset: str, indices: tuple[int, ...]) -> dict[str, Any]:
-    """``rho(|n1 - n2|, GED)`` -- the baseline every other row is judged against."""
-    cohort = datasets.load(dataset)
-    reference = load_ged(dataset)
-    pairs = reference.certified_pairs(indices)
-    if not pairs:
-        return {"rho": None, "reason": "no certified-exact pairs"}
-    orders = {i: cohort.graphs[i].number_of_nodes() for i in indices}
-    diffs = [float(abs(orders[a] - orders[b])) for a, b in pairs]
-    geds = [float(reference.ged[a, b]) for a, b in pairs]
-    rho, p = _spearman(diffs, geds)
-    equal_n = sum(orders[a] == orders[b] for a, b in pairs)
+def _restricted_null(
+    size_diffs: list[float],
+    values: list[float],
+    positions: list[tuple[int, int]],
+    index: ResampleIndex,
+    whole_view_null: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """``rho(|n1 - n2|, GED)`` on one cell's own pair set.
+
+    The only valid subtrahend for ``rho - null``.  It is computed on the same
+    resample indices as everything else in this dataset and view, so a
+    difference taken against it is paired.
+
+    Args:
+        whole_view_null: the row-level null, when the caller knows this cell
+            kept every pair of the view.  A cell's pair set is a subset of
+            the view's, so equal counts imply the *same* pairs and the two
+            nulls are then the same number -- reusing it saves a second
+            bootstrap on the great majority of cells, which lose nothing.
+    """
+    if whole_view_null is not None and whole_view_null.get("n_pairs") == len(size_diffs):
+        return {
+            "rho": whole_view_null["rho"],
+            "p": whole_view_null["p"],
+            "ci": whole_view_null["ci"],
+            "n_pairs": len(size_diffs),
+            "reason": whole_view_null["reason"],
+        }
+    constant = _constant_reason(size_diffs, values, SIZE_NULL)
+    if constant is not None:
+        return {"rho": None, "p": None, "ci": None, "n_pairs": len(size_diffs), "reason": constant}
+    rho, p = spearman(size_diffs, values)
+    ci = graph_bootstrap_ci(size_diffs, values, positions, index)
     return {
         "rho": rho,
         "p": p,
-        "n_pairs": len(pairs),
-        "equal_n_pairs": equal_n,
-        "equal_n_frac": equal_n / len(pairs),
+        "ci": None if ci is None else [ci[0], ci[1]],
+        "n_pairs": len(size_diffs),
+        "reason": None,
     }
+
+
+def dataset_record(
+    draw: Draw,
+    reference: str,
+    primary: dict[str, Any],
+    reasons: dict[str, str],
+    scope_reasons: dict[str, str],
+    encodings: dict[str, dict[int, Any]],
+    unencodable: dict[str, int | None],
+    index: ResampleIndex,
+) -> dict[str, Any]:
+    """The full record for one (dataset, reference): both views, every row."""
+    pairs, geds = reference_pairs(draw, reference)
+    views: dict[str, Any] = {}
+    for view in VIEWS:
+        mask = _view_mask(draw, pairs, view)
+        view_pairs = [pair for pair, keep in zip(pairs, mask, strict=True) if keep]
+        view_geds = [ged for ged, keep in zip(geds, mask, strict=True) if keep]
+        null_cell = rho_record(
+            SIZE_NULL, SIZE_NULL, draw, encodings[SIZE_NULL], view_pairs, view_geds, index
+        )
+        row: dict[str, Any] = {SIZE_NULL: null_cell}
+        # The null over the whole view, for cells that kept every pair.
+        whole_view_null = {
+            "rho": null_cell["rho"],
+            "p": null_cell["p"],
+            "ci": null_cell["ci"],
+            "n_pairs": null_cell["n_pairs"],
+            "reason": null_cell["reason"],
+        }
+        for backend_name in sorted(primary):
+            if backend_name == SIZE_NULL:
+                # The grid lists `size_null` with a null distance, because
+                # CONTRACTS 4 forbids selecting a baseline as anyone's primary
+                # distance.  Falling through would overwrite the null row
+                # computed above with a printed absence and delete the one
+                # column every other row is judged against.  It is the
+                # baseline, not a competitor, and it is emitted once.
+                continue
+            metric_name = primary[backend_name]
+            if metric_name is None:
+                row[backend_name] = _empty_record(
+                    None, reasons.get(backend_name, NO_DISTANCE_REASON)
+                )
+                continue
+            scope = scope_reasons.get(backend_name)
+            if scope is not None:
+                row[backend_name] = _empty_record(str(metric_name), scope)
+                continue
+            row[backend_name] = rho_record(
+                backend_name,
+                str(metric_name),
+                draw,
+                encodings[backend_name],
+                view_pairs,
+                view_geds,
+                index,
+                whole_view_null,
+            )
+        views[view] = row
+
+    return {
+        "dataset": draw.dataset,
+        "suite": draw.suite,
+        "reference": reference,
+        "n_graphs": len(draw.indices),
+        "n_unencodable": unencodable,
+        "n_reference_pairs": len(pairs),
+        "views": views,
+    }
+
+
+def _primary_map(grid: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """The grid's selection, widened to every available representation.
+
+    A representation the grid never mentions is emitted as a printed absence
+    rather than dropped, so a silently shrinking grid cannot silently shrink
+    the F5 table with it -- and the two absences are told apart: the grid
+    found no admissible distance, or the grid never mentioned it at all.
+
+    Returns:
+        ``(primary, reasons)`` -- the widened selection, and the reason to
+        print for each representation whose distance is ``None``.
+    """
+    declared = dict(grid.get("primary_distance") or {})
+    primary = dict(declared)
+    for name in available_backends():
+        primary.setdefault(name, None)
+    reasons = {
+        name: (NO_DISTANCE_REASON if name in declared else ABSENT_REASON)
+        for name, value in primary.items()
+        if value is None
+    }
+    return primary, reasons
+
+
+def _scope_reasons(primary: dict[str, Any], suite: str) -> dict[str, str]:
+    """Representations that may not contribute a printed row on *suite*.
+
+    ``agm_cam`` and ``isalgraph_canonical`` both declare
+    :attr:`~isalgraph.competitors.base.Capability.SUITE1_ONLY` and both raise
+    ``SuiteScopeError`` above n = 12.  On a Suite-2 cohort they therefore
+    encode only the graphs that happen to be Suite-1-sized, and a rho over
+    those is a rho over the *small* half of the cohort wearing the Suite-2
+    label.  Measured on a 40-graph GREC draw: 11 of 40 graphs are refused, so
+    the surviving pair set is 406 of 780 -- and the missing 374 are exactly
+    the pairs the representation finds hardest.
+
+    ``base.table_scope_error`` is the frozen rule for this (design criteria 5
+    and 9): running the backend to measure its ceiling is allowed, printing a
+    row from whichever graphs finished is not.  The row is emitted with the
+    reason instead of the number.
+    """
+    out: dict[str, str] = {}
+    for name in primary:
+        if primary[name] is None:
+            continue
+        reason = table_scope_error(get_backend(name).capabilities, suite, name)
+        if reason is not None:
+            out[name] = reason
+    return out
+
+
+def run(
+    grid_path: str,
+    *,
+    names: tuple[str, ...],
+    n_graphs: int = DEFAULT_N_GRAPHS,
+    seed: int = DEFAULT_SEED,
+    resamples: int = DEFAULT_RESAMPLES,
+) -> dict[str, Any]:
+    """Compute the whole F5 table.  Returns the payload of CONTRACTS §5."""
+    with open(grid_path, encoding="utf-8") as handle:
+        grid = json.load(handle)
+    primary, reasons = _primary_map(grid)
+
+    payload: dict[str, Any] = {
+        "protocol": "T-04a-F5",
+        "note": "DESCRIPTIVE. F5 is not an input to distance selection.",
+        "seed": seed,
+        "n_graphs": n_graphs,
+        "bootstrap_resamples": resamples,
+        "primary_distance_source": os.path.abspath(grid_path),
+        "primary_distance": primary,
+        "results": {},
+    }
+
+    for dataset in names:
+        draw = draw_for(dataset, n_graphs, seed)
+        scope_reasons = _scope_reasons(primary, draw.suite)
+        encodings: dict[str, dict[int, Any]] = {}
+        unencodable: dict[str, int | None] = {}
+        errors: dict[str, dict[str, int]] = {}
+        for backend_name in [SIZE_NULL, *(n for n in sorted(primary) if n != SIZE_NULL)]:
+            skipped = backend_name != SIZE_NULL and (
+                primary.get(backend_name) is None or backend_name in scope_reasons
+            )
+            if skipped:
+                # `None`, not 0.  Zero would assert that every graph encoded;
+                # this representation was never attempted on this dataset.
+                encodings[backend_name] = {}
+                unencodable[backend_name] = None
+                continue
+            encoded, failed, failures = encode_draw(backend_name, draw)
+            encodings[backend_name] = encoded
+            unencodable[backend_name] = failed
+            if failures:
+                errors[backend_name] = failures
+
+        index = make_resample_index(len(draw.indices), resamples=resamples, seed=seed)
+        references = ("exact",) if draw.suite == "suite1" else ("lb", "ub")
+        for reference in references:
+            key = dataset if reference == "exact" else f"{dataset}::{reference}"
+            record = dataset_record(
+                draw, reference, primary, reasons, scope_reasons, encodings, unencodable, index
+            )
+            record["encode_errors"] = errors
+            payload["results"][key] = record
+
+    return payload
+
+
+def _print_summary(payload: dict[str, Any]) -> None:
+    for key, record in payload["results"].items():
+        for view, row in record["views"].items():
+            null = row[SIZE_NULL]["rho"]
+            head = f"{key} [{view}] null="
+            print(f"\n=== {head}{'n/a' if null is None else f'{null:.4f}'} ===")
+            for name, cell in row.items():
+                if name == SIZE_NULL:
+                    continue
+                if cell["rho"] is None:
+                    print(f"  {name:20s} ---   {cell['reason']}")
+                    continue
+                # The difference is taken against THIS cell's own null, never
+                # against the cohort-level one, which is a correlation over a
+                # different sample whenever this cell lost graphs.
+                own = cell.get("size_null_on_my_pairs") or {}
+                own_rho = own.get("rho")
+                gap = "" if own_rho is None else f"   vs null {cell['rho'] - own_rho:+.4f}"
+                drift = ""
+                if own_rho is not None and null is not None and abs(own_rho - null) > 5e-4:
+                    drift = f"  [null {null:.4f}->{own_rho:.4f} on its pairs]"
+                ci = cell["ci"]
+                span = "" if ci is None else f"  CI [{ci[0]:.4f}, {ci[1]:.4f}]"
+                print(f"  {name:20s} {cell['rho']:>8.4f}{gap}{span}  n={cell['n_pairs']}{drift}")
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
     parser = argparse.ArgumentParser(prog="python -m isalgraph.competitors.f5")
-    parser.add_argument("--datasets", default=",".join(datasets.SUITE1))
-    parser.add_argument("--n-graphs", type=int, default=200)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--metric", default="levenshtein")
+    parser.add_argument("--grid", required=True, help="grid.json from isalgraph.competitors.grid")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument(
+        "--n-graphs",
+        type=int,
+        default=DEFAULT_N_GRAPHS,
+        help="per-dataset draw; the frozen protocol is 200 and the flag exists for "
+        "reduced demonstration runs",
+    )
+    parser.add_argument(
+        "--datasets",
+        default="",
+        help="comma-separated subset; the default is every cohort present under the root",
+    )
     args = parser.parse_args(argv)
 
-    payload: dict[str, Any] = {
-        "seed": args.seed,
-        "n_graphs": args.n_graphs,
-        "metric": args.metric,
-        "note": (
-            "DESCRIPTIVE. F5 is not an input to distance selection; grid.py "
-            "applies competitors.md 3.4 and cannot import this module's data."
-        ),
-        "results": {},
-    }
-    for dataset in [d.strip() for d in args.datasets.split(",") if d.strip()]:
-        cohort = datasets.load(dataset)
-        indices = cohort.sample(args.n_graphs, seed=args.seed)
-        row: dict[str, Any] = {"size_null": size_null_rho(dataset, indices)}
-        for backend in available_backends():
-            metric = "kernel" if backend == "wl_subtree" else args.metric
-            row[backend] = rho_for(backend, metric, dataset, indices)
-        payload["results"][dataset] = row
-        null = row["size_null"]["rho"]
-        print(f"\n=== {dataset}  null={null:.4f} ===")
-        for name, rec in row.items():
-            if name == "size_null" or rec.get("rho") is None:
-                continue
-            print(f"  {name:20s} {rec['rho']:>8.4f}   vs null {rec['rho'] - null:+.4f}")
+    if args.datasets.strip():
+        names = tuple(d.strip() for d in args.datasets.split(",") if d.strip())
+    else:
+        names = datasets.available_datasets()
 
+    started = time.perf_counter()
+    payload = run(
+        args.grid,
+        names=names,
+        n_graphs=args.n_graphs,
+        seed=args.seed,
+        resamples=args.resamples,
+    )
+    payload["wall_seconds"] = time.perf_counter() - started
+
+    _print_summary(payload)
     with open(args.out, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-    print(f"\nwrote {args.out}")
+        # allow_nan=False: NaN and Infinity are not JSON (RFC 8259).  Python
+        # writes them anyway by default, and a downstream strict parser then
+        # either fails far from the cause or reads `NaN` as a number.  Fail
+        # here instead.
+        json.dump(payload, handle, indent=2, sort_keys=True, allow_nan=False)
+    print(f"\nwrote {args.out} in {payload['wall_seconds']:.1f} s")
     return 0
 
 

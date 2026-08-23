@@ -85,6 +85,19 @@ F3 = isomorphism invariance, 50 real graphs × 20 genuine relabellings, per data
 ρ = Spearman of Levenshtein against **certified exact GED**, 200-graph sample per dataset.
 **The ρ column below inherits §4.1's three-draw provenance — see the block there.**
 
+> ## ⚠ The "Primary distance" column is SUPERSEDED 2026-08-16 by T-04a, which ran the grid
+>
+> It was set by inspection during the scout. **Measured, `levenshtein` is the primary distance for
+> every admissible representation and `padded_hamming` is the primary distance for none.** Where both
+> passed F1–F4 the F6 tie-break went to `levenshtein` by **68×** on `nauty→graph6` (0.0010 vs 0.0704
+> ms/pair) and **8.6×** on AGM CAM. The rows below reading "padded Hamming" are wrong.
+>
+> *"none admissible"* for `graph6`, `sparse6` and `adjacency` **is confirmed** — F3 = 1/50 on the
+> frozen 200-graph draw. That gives **`k = 3`** for [preregistration](../preregistration.md) §5.
+>
+> Authority: `experiments/metric-admissibility/results/grid_200.json` on the external drive, and
+> [T-04a design](../../tasks/T-04a-design.md).
+
 | Representation | Reproducible? | F3 (real) | Complete invariant | Primary distance | ρ range, Suite 1 | Claim A bits | Ceiling |
 |---|---|---|---|---|---|---|---|
 | [graph6](graph6.md) | **trivial** (`networkx`) | **0–6 / 50** | no | *none admissible* | 0.46–0.69 | `6(1+⌈n(n−1)/12⌉)` | none |
@@ -310,7 +323,8 @@ Median entropy-bound bits, all retained graphs per dataset (Suite 2: 400-graph s
 | **10** | **The gSpan vendoring plan is superseded. Three repositories tested, three rejected**: `LasseRegin/gSpan` (broken on numpy ≥ 1.24, `G2DFS` not minimal), `betterenvi` (`_is_min` private), **`kaviniitm/DFSCode` (builds, claims exactly this, not isomorphism-invariant — 46/90)**. Vendor nothing. Effort **2–3 d → ~1 d** | [competitors](../competitors.md) §2 | T-04, [schedule](../schedule.md) |
 | **11** | **The competitor runtime figure must be language-matched.** Timing a pure-Python min-DFS against the C++ engine reproduces R1.1's own complaint inside our answer to it | [gspan-mdfsc](gspan-mdfsc.md) §5 | T-06, Fig. 2 |
 | **12** | ~~**`grakel`'s `n_iter = k` equals our `h = k−1`** (verified: `grakel(3)` ≡ `ours(2)` = 5.830952)~~ **CORRECTED 2026-08-15 by T-04: there is no off-by-one.** `grakel(n_iter=k) ≡ ours(h=k)`, from the source and confirmed by arithmetic; `grakel(n_iter=2) = 5.830952` and `grakel(n_iter=3) = 7.211103`. The off-by-one was in **our own** `scratch/backends.py::wl_features`, which compresses colours per graph per round so rounds ≥ 2 are cross-graph incomparable. **Frozen `h = 2` means `n_iter = 2`**, and `wl_kernel_computer.py`'s `n_iter = 5` is `h = 5`, not `h = 4`. §4.1's WL row moves (Letter LOW 0.895 → 0.7792). **E10's existing WL numbers must still be re-checked** | [wl-subtree-kernel](wl-subtree-kernel.md) §1 | T-06 |
-| **13** | **`nx.relabel_nodes(copy=True)` preserves insertion order**, so any F3 test built on it is void | method note for T-04a | T-04a |
+| **13** | ~~**`nx.relabel_nodes(copy=True)` preserves insertion order**, so any F3 test built on it is void~~ **REFUTED 2026-08-16 by T-04a for the shipped backends.** The finding was true of the scout's code and is **false of `src/isalgraph/competitors/`**: the `n²` family's `normalised()` reads `sorted(nodes)`, so those backends are insertion-order invariant and shuffling insertion or edge order moves the encoding **0/50** times. Both relabellers land on the automorphism rate instead (38 and 26 per 5,000 against 27.8 expected). **`fixtures.shuffled_copy` is still the right relabeller** — it is a genuine relabelling rather than a reordering — but the stated *reason* is wrong, and a test asserting the old claim fails | correct the reason; keep the relabeller | T-04a ✅ |
+| **16** | **The separation ratio ψ is measured, and it reaches 1.** `ψ = E[d(G,π(G))] / E[d(G,H)]` is **0.0000 on all eleven draws** for the seven canonical representations and **0.07–1.15** for the three excluded ones, all 33 intervals excluding 0 — **graph6 on LINUX 1.003 [0.953, 1.054], sparse6 on AIDS 1.148 [1.111, 1.187]**. At ψ ≥ 1 the distance between two relabellings of one graph exceeds the distance between two different graphs. **ψ must be quoted with its metric**: under `padded_hamming` pooled `adjacency` ψ is 0.988 against `levenshtein`'s 0.072, a 14× difference. Also: the invariant set of the `n²` family is **exactly `{K_n}`**, now verified over all 995 connected graphs to `n = 7` by full `n!` enumeration | new row in the AE.3 table; §3's F3 caption | **T-17**, T-20 |
 | **14** | **ρ moved by up to 0.07 between two independent 200-graph draws on AIDS** (0.329 vs 0.255). Direct support for [statistics](../statistics.md) D2: effective sample size is governed by **graphs**, not pairs | evidence for D2 | T-02 |
 | **15** | **bliss / Traces stay cut** — the `pynauty` from-source build was rehearsed under gcc 12.2.0 and succeeded | decision S-g | — |
 
@@ -369,8 +383,52 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
   §4.1 and §4.2 are Suite 1 only. **Mutagenicity is the row to watch**: it is the one dataset where
   IsalGraph wins Claim A outright, and whether it also clears the size null on ρ is unknown.
 - **Graph-level bootstrap CIs** on every ρ in §4.1 (D2). Finding 14 says they will be wide.
-- **Whether IsalGraph clears the size null anywhere in Suite 2.** Larger, sparser graphs are where
-  its `m`-scaling should help; nothing here settles it.
+- ~~**Whether IsalGraph clears the size null anywhere in Suite 2.**~~ **ANSWERED 2026-08-16 by T-04a,
+  and the answer is that the data does not determine it.** Against the **lower** bound
+  (`BRANCH_FAST`) IsalGraph fails the size null on **5 of 5** Suite-2 datasets (−0.082 to ~~−0.295~~
+  **−0.289**, corrected 2026-08-23 — see the note below);
+  against the **upper** bound (`BIPARTITE`) it clears it on **5 of 5** (+0.027 to +0.383). Every one
+  of those ten differences excludes zero under a paired graph-level bootstrap. **The verdict flips
+  with the end of the bracket on all five datasets**, and GED lies between them.
+
+  The mechanism is measured: `ρ(|n₁−n₂|, LB)` is **0.960–0.998**, so the lower bound very nearly *is*
+  the size null and no representation can beat it — the comparison is degenerate by construction,
+  not a fact about IsalGraph. `ρ(|n₁−n₂|, UB)` is 0.460–0.754, and on Suite 1 where truth exists
+  `ρ(|n₁−n₂|, exact)` is 0.713–0.920, **between** the two arms. The bracket is valid; neither arm
+  alone is a stand-in for the truth. **This is the empirical case for
+  [approx_ged](../approx_ged.md) §4's no-interpolation rule** — a midpoint would have produced one
+  confident answer to a question the data leaves open, five times. **Inherits: T-06, T-20.**
+
+  > ## ⚠ CORRECTED 2026-08-23 — two Mutagenicity margins above were computed against the wrong null
+  >
+  > `ρ − size_null` originally subtracted a null computed over the cohort's **whole** pair set from a
+  > ρ computed over the representation's **own** pair set. Wherever a representation loses graphs
+  > those are two correlations over two different samples, and their difference is not a comparison.
+  > Mutagenicity is the only dataset in this run where a selected representation loses graphs —
+  > IsalGraph loses 14/200 to the 2.0 s canonicalisation budget:
+  >
+  > | quantity | value |
+  > |---|---|
+  > | `isalgraph_pruned` ρ, `::ub` | 0.8322 — **unchanged**, it was always on its own subset |
+  > | null over all 19,900 pairs | 0.7538 |
+  > | null over IsalGraph's 17,205 pairs | **0.6363** |
+  > | **margin, `::ub`** | +0.078 → **+0.196** |
+  > | **margin, `::lb`** | −0.295 → **−0.289** |
+  >
+  > **The censoring is maximally size-biased, which is why it moves the null and not the arm.** The
+  > 14 censored graphs average **75.8 nodes (max 97)** against the kept graphs' **25.4 (max 48)** —
+  > *every censored graph is larger than every kept one*. Removing them collapses sd(|n₁−n₂|) from
+  > 16.4 to 8.0, and a null that is a function of |n₁−n₂| loses exactly that much signal.
+  >
+  > **The restriction must be per representation, not per dataset.** `min_dfs` is also censored
+  > 14/200 on Mutagenicity, but on a *different* 14 graphs, and its restricted null lands at
+  > **0.6817**, not IsalGraph's 0.6363. One null per dataset would have been wrong for at least one
+  > of them. **Inherits: T-06** — this is D14's censoring bias appearing inside the *baseline* rather
+  > than inside the arm, the direction nobody checks.
+  >
+  > **What survives**: every verdict above. The margin stays positive against UB and negative against
+  > LB on all five datasets, all fifteen differences still exclude zero, and the flip is unchanged.
+  > `paired_null_ci.json` in the T-04a deliverable is the authority for every interval.
 - **Whether AGM's GREC ceiling moves** under orbit pruning from `pynauty.autgrp`. It will move; it
   will not reach `n = 98`.
 - **The realised-bytes column** for every method — measured only for the running example.

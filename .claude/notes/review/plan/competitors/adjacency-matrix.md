@@ -223,3 +223,55 @@ decode with no search, and **fewer bits on 7 of 10 profiles**.
 - The padded-Hamming frame must be built from the **canonical** labelling when the pair comes from
   a canonical backend, and from the incident labelling otherwise. Mixing the two silently compares
   different things.
+
+---
+
+## RESULT — T-04a, 2026-08-23. The exclusion is confirmed, and it costs us a headline
+
+**§3's verdict stands and was re-derived independently**: on the frozen `S200` draw the raw upper
+triangle fails F3 at **1/50** under all three candidate distances, so it takes **no primary distance**
+and carries no distance column in any results table. `hamming` additionally fails F1 at **0.032**.
+
+**T-04a's E1 quantifies the failure continuously.** F3 is a binary predicate; ψ is the relabelling
+sensitivity in the same units as the distance itself — the median distance between a graph and a
+relabelled copy of itself, which for a relabelling-invariant representation is exactly 0.
+
+| representation | ψ under `levenshtein` | ψ under `padded_hamming` (pooled) |
+|---|---|---|
+| the seven canonical representations | **0.0000** on all eleven draws, 77/77 rows | — |
+| **`adjacency`** | **0.07 – 0.74**, all intervals exclude 0 | **0.988** vs 0.072 — **14× worse** |
+
+**The padding convention makes it worse, not better.** §3 argues padded Hamming is "principled here
+and only here". It is principled as a *frame*; it is not a repair. Padding aligns positions, and
+positions are exactly what a relabelling permutes.
+
+**The exhaustive result**: the invariant set of the n² family is **exactly `{K_n}`** — over all 995
+connected graphs to `n = 7`, full `n!` enumeration, **1,866,256** distinct labelled graphs
+(OEIS A001187), the complete graphs are the only ones whose adjacency serialisation is
+relabelling-invariant, and they are invariant only because every relabelling of `K_n` is the same
+bit string. There is no non-trivial invariant subfamily to carve out.
+
+### ⚠ And this is the representation that beats us — E4, the F5-blindness trap
+
+`adjacency` versus `isalgraph_pruned`, paired graph-level bootstrap, Holm over five datasets:
+
+| dataset | all-pairs Δρ (adjacency − IsalGraph) | equal-`n` |
+|---|---|---|
+| AIDS | **+0.500** [+0.443, +0.558], Holm p = 0.005 | loses significantly |
+| LINUX | **+0.262** [+0.160, +0.362], Holm p = 0.005 | **−** CI [−0.301, −0.007], excludes zero |
+| Letter HIGH | **+0.123** [+0.079, +0.174], Holm p = 0.005 | loses significantly |
+| Letter MED | +0.002 (ns) | — |
+| Letter LOW | −0.037 | — |
+| **score** | **beats IsalGraph significantly on 3 of 5** | **0 of 5** |
+
+**Mechanism, measured**: `ρ(d_adjacency, |n₁−n₂|) = 0.83–0.93`. The adjacency distance is very
+nearly a size proxy, exact GED is substantially a size proxy, and the two correlate through size
+rather than through structure. Restrict to equal-`n` pairs, where size cannot carry the correlation,
+and the advantage reverses on all five.
+
+**This is the argument for [competitors](../competitors.md) §3.4's rule being F5-blind.** A selection
+rule with sight of the GED correlation would have admitted a representation that changes its answer
+when you relabel the graph and nothing else. It is also why the equal-`n` view is not optional
+supplementary material: on LINUX the **paired** CI excludes zero while the **unpaired** one
+([−0.333, +0.034]) does not — the difference between two quantities must be tested with an interval
+on the difference, never by eyeballing two marginal intervals. **Inherits: T-17, T-20.**

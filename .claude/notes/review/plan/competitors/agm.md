@@ -210,7 +210,23 @@ Measured, 120 one-edit pairs (unit GED = 1) vs 120 random same-`n` pairs, `n ∈
 > distance. **They are not interchangeable and the paper must not collapse them into one row** —
 > which is also why §4's outcome 2 should name nauty specifically rather than "canonical forms".
 
-Primary distance by §3.4's rule: **padded Hamming** (cheapest passing F1 at 100 %, F2, F3, F4).
+> ## ⚠ CORRECTED 2026-08-23 by T-04a — the primary distance is **Levenshtein**, not padded Hamming
+>
+> "Cheapest passing F1 at 100 %, F2, F3, F4" was asserted from the F1 column alone. **Both candidates
+> pass F1 at 100 %**, so the choice falls to §3.4's F6 tie-break, which was not measured when this
+> line was written. On the frozen `S200` draw, `levenshtein` costs **0.000575 ms/pair** against
+> `padded_hamming`'s **8.6×** more, and `grid_200.json` records the tie-break explicitly.
+>
+> **What this changes**: this line, [nauty](nauty.md) §3, [README](README.md) §3, and the distance
+> T-06 computes AGM's production matrix under. **`padded_hamming` is primary for nothing in the pool.**
+>
+> **What survives**: AGM's admissibility, its exact relabelling-invariance (T-04a E1: **ψ = 0.0000**
+> on all eleven draws), its completeness (E2: **0 collisions in 108,290 pairs**, ≤ 2.77 × 10⁻⁵ by rule
+> of three, zero set ≡ the VF2-certified isomorphic set), and the §2.2b ceiling. Under `levenshtein`
+> AGM is the **best representation on 3 of the 5 Suite-1 records** (AIDS 0.783, Letter HIGH 0.892,
+> LINUX 0.798) — the strongest showing of any competitor on Suite 1, and it is Suite-1-only.
+
+~~Primary distance by §3.4's rule: **padded Hamming** (cheapest passing F1 at 100 %, F2, F3, F4).~~
 
 ---
 
@@ -264,7 +280,7 @@ assertion to evidence, and they are worth having even if the empirical row is cu
 |---|---|---|
 | 1 | Reproducible? | **No package exists.** We wrote it (~120 lines) and **validated it against brute force on 327 graphs, 0 mismatches** |
 | 2 | Representation | lex-min adjacency bit string, `n(n−1)/2` bits, **50/50 invariant on real graphs**, complete invariant, handles disconnected |
-| 3 | Distance | **padded Hamming**. Real ρ **0.80–0.92 — beats IsalGraph on 3 of 4 datasets**, by up to +0.324 |
+| 3 | Distance | ~~**padded Hamming**~~ **CORRECTED 2026-08-23 by T-04a: `levenshtein`**, by F6 tie-break, **8.6×** cheaper (§3). Real ρ **0.80–0.92 — beats IsalGraph on 3 of 4 datasets**, by up to +0.324; under the selected distance it is **best in the pool on 3 of the 5 Suite-1 records** |
 | 4 | Claim A? | **Yes but redundant** — identical to the adjacency row by construction; and **not computable on Suite 2** |
 | 5 | Scope | **In, restricted to Suite 1.** R1 named it; the family coverage (CAM vs M-DFSC) needs it |
 | — | IsalGraph advantage | **Tractability only, and it is decisive.** AGM wins expressiveness and GED tracking; it cannot be computed on 24 % of GREC |

@@ -233,3 +233,25 @@ the same claim as "shortest".
 - `networkx` emits sparse6 with `k = ⌈log₂ n⌉`; for `n` a power of two the spec has an off-by-one
   special case. Suite 2 contains graphs at `n = 16, 32, 64` — **assert round-trip equality on
   every encode** rather than trusting the length formula.
+
+---
+
+## RESULT — T-04a, 2026-08-23. No primary distance, and the padding warning was right
+
+**§3's verdict is confirmed on the frozen `S200` draw**: sparse6 fails F3 at **1/50** under
+`levenshtein` and takes **no primary distance**. `hamming` fails F1 at **0.033**.
+
+**The warning at the end of §5 — "do not attempt padded Hamming on sparse6" — is now measured, not
+argued**: `padded_hamming × sparse6` is the one cell in the 66-cell grid with **F1 = 0.0**, defined
+on *no* pair, and its F3 is **0/50 attempted**. There is no positional frame to pad into, which is
+exactly the reason the file gave. The cell is still attempted and printed, per §3.2.
+
+**E1**: ψ = **0.54 – 1.148** across eleven draws, peaking on AIDS at **1.148 [1.111, 1.187]** — the
+**largest relabelling sensitivity of any representation in the pool**, larger than graph6's and
+larger than the raw adjacency triangle's. sparse6 is the most compact serialisation we measure and
+the least stable under relabelling; those two facts belong in the same sentence.
+
+**This is the sharpened form of [competitors](../competitors.md) §4's outcome 3.** sparse6 wins on
+bits, and it buys those bits by having **no admissible distance at all**. The contribution the paper
+claims is *canonical **and** edit-distance-compatible*, not *shortest* — and sparse6 is the exhibit
+that makes the conjunction non-vacuous. **Inherits: T-17, T-20.**
