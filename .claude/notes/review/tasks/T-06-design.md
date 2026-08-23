@@ -1415,3 +1415,103 @@ shows most of that ρ is size agreement.
 > is local to the figure, ranges over its own 582 points, and is stated on it. Nothing here feeds
 > F0, F1 or F2 — but it is the right diagnostic to put beside them, and it should reach the response
 > letter.
+
+---
+
+## 18. 🛑 STOP-AND-ASK — F0 and F1 both fired. Two of §7's conditions, together
+
+Run 2026-08-23. **I have not run F2 and will not until the PI decides.** Both gates are
+pre-declared, both fired on their own rules, and between them they change what the paper claims.
+
+### 18.1 F0 — the calibration gate fires on **4 of 5** (§7 condition 1: "≥ 3 of 5")
+
+| dataset | point | 95 % FCR CI | BH p | fires |
+|---|---|---|---|---|
+| iam_letter_low | **+0.2180** | [+0.1964, +0.2416] | 0.00125 | ✅ |
+| iam_letter_med | **+0.1952** | [+0.1284, +0.1696]¹ | 0.00125 | ✅ |
+| iam_letter_high | **+0.0672** | — | 0.00125 | ✅ |
+| linux | **+0.1169** | — | 0.021 | ✅ |
+| aids | +0.0370 | — | 0.00125 | ❌ (below the 0.05 threshold) |
+
+¹ intervals as stored in `family_F0.json`; every firing interval excludes 0.
+
+**Pre-declared consequence** (`preregistration` §2 / §5.3): the exact-GED results become primary, the
+**81 approximate-regime cells** (70 B1a + 1 B2 + 10 B3a) are demoted to **descriptive only**, `d` is
+**not applied at all**, and `k` removes only its 5 B1e cells per representation.
+
+### 18.2 🔴 The branch flips on a choice the pre-registration never made
+
+§16.1 flagged that "GED_approx" does not name one object. It is now **determinative**:
+
+| reading | datasets exceeding \|0.05\| | majority branch |
+|---|---|---|
+| **LB only** | **2 of 5** (`iam_letter_low`, `iam_letter_high`) | **does NOT fire** |
+| **UB only** | **4 of 5** | **FIRES** |
+| conservative (worse of the two — as run) | 4 of 5 | **FIRES** |
+
+| dataset | LB | UB |
+|---|---|---|
+| iam_letter_low | +0.0612 | +0.2180 |
+| iam_letter_med | +0.0470 | +0.1952 |
+| iam_letter_high | **−0.0616** | **+0.0672** |
+| linux | +0.0316 | +0.1169 |
+| aids | +0.0370 | +0.0262 |
+
+**`iam_letter_high` changes sign**, which is the expected signature of a bracket that genuinely
+contains the truth: ρ(Lev, exact) sits *between* ρ(Lev, LB) and ρ(Lev, UB). That is reassuring about
+the bracket and fatal to the idea of a single "GED_approx".
+
+**This is the PI's call, not mine.** I ran the conservative reading and it demotes 81 cells; the
+permissive reading keeps them confirmatory. I am not willing to pick between "the large-`n`
+extension is confirmatory" and "the large-`n` extension is descriptive" on a coin the
+pre-registration left in the air — that is precisely the decision AE.1 turns on.
+
+### 18.3 F1 — `d = 7 of 10` (§7 condition 5: "`d ≥ 5`")
+
+| dataset | point | 95 % FCR CI | fires |
+|---|---|---|---|
+| iam_letter_low | +0.1568 | [+0.1370, +0.1789] | ✅ |
+| iam_letter_med | +0.1482 | [+0.1284, +0.1696] | ✅ |
+| iam_letter_high | +0.1288 | [+0.1165, +0.1416] | ✅ |
+| protein | −0.1180 | [−0.1362, −0.0954] | ✅ |
+| mutagenicity | −0.1106 | [−0.1170, −0.1036] | ✅ |
+| linux | +0.0760 | [+0.0020, +0.1590] | ✅ |
+| grec | −0.0668 | [−0.0814, −0.0515] | ✅ |
+| coil_del | −0.0165 | [−0.0212, −0.0107] | ❌ |
+| aids_iam | −0.0129 | [−0.0199, −0.0056] | ❌ |
+| aids_graphedx | −0.0139 | [−0.0340, +0.0084] | ❌ |
+
+**Seven of ten brackets are uninformative**: the conclusion is *not* invariant to where inside the
+proven bracket the truth lies. Note the sign split — ρ(Lev, LB) exceeds ρ(Lev, UB) on the Letter
+datasets and LINUX, and the reverse on GREC, Mutagenicity and Protein — so this is not one
+systematic offset but a genuine dependence on the bound.
+
+Only `coil_del`, `aids_iam` and `aids_graphedx` have brackets tight enough to conclude from, and
+their point estimates are all ≈ −0.015, i.e. essentially invariant.
+
+### 18.4 `N_actual` under each branch — enumeration and closed form agree, discrepancy 0
+
+| branch | `k` | `d` | `c` | **`N_actual`** | closed form |
+|---|---|---|---|---|---|
+| **F0 fired** (as measured) | 3 | not applied | 7 | **79** | 79 ✅ |
+| F0 not fired (LB reading), `d = 7` | 3 | 7 | 10 | **92** | 92 ✅ |
+
+### 18.5 Why this is coherent with everything else measured today
+
+These are not three surprises; they are one finding seen three ways.
+
+- §17: the within-`n` correlation collapses to ρ ≈ 0.135 above `n = 12` and is indistinguishable
+  from 0 above `n ≈ 40`.
+- §10 / §14.1: the size-null verdict **inverts** across the bracket on 5 of 5 Suite-2 datasets.
+- §18.3: 7 of 10 brackets are formally uninformative.
+
+**The bracket is too wide, at exactly the sizes the extension needs it, to support a confirmatory
+claim.** F0 and F1 are the pre-registered instruments detecting that, and they detected it. This is
+the "legitimate outcome" `approx_ged.md` §3 item 2 explicitly allows for.
+
+### 18.6 The question for the PI, in one line
+
+**Which bound is `GED_approx` for F0?** Answer that and the branch follows mechanically:
+`UB` or conservative → 81 cells descriptive, `N_actual = 79`; `LB` → extension stays confirmatory,
+`N_actual = 92` with `d = 7`. Everything downstream — F2, T-20's claims, the AE.1 response — hangs
+on it.
