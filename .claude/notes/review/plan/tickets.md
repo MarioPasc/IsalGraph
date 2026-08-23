@@ -155,7 +155,7 @@ the long pole is off the critical path. T-02 CLOSED 2026-08-13. T-27 opened.**
 >    corrected in place. **`levenshtein` is primary for all six surviving serialisations**;
 >    `wl_subtree` takes `kernel`. **Inherits: T-06, T-17, T-20.**
 > 2. **`k = 3`** — `adjacency`, `graph6`, `sparse6`, each failing F3 at **1/50**. `preregistration.md`
->    §7's `k` is settled; **T-06 owns applying it** (`N_actual = 182 − 15k − 8d`).
+>    §7's `k` is settled; **T-06 owns applying it** (`N_actual = 182 − 15k − 8d + k·d − c`, **corrected 2026-08-17** — the form `182 − 15k − 8d` omits both the `+k·d` overlap term and `c`, and **under-counts `N_actual` by `3d` at `k = 3`**, which lowers the BH burden on every surviving test. See [preregistration](preregistration.md) §5–§5.3; `N_actual` is defined by **enumeration**, the closed form is a printed check).
 > 3. **[gspan-mdfsc](competitors/gspan-mdfsc.md) §3's "best in the pool on all five Suite-1 datasets"
 >    does not survive.** Under the selected distances `min_dfs` is best on **2 of 5** (Letter LOW,
 >    Letter MED); `agm_cam` takes the other three. Over all 15 records: `min_dfs` 4, `agm_cam` 3,

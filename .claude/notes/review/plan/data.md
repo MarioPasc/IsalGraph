@@ -33,7 +33,11 @@ tracked code (`cohort_audit.py`, `iam_gxl_loader.py`, 34 unit tests). See §7 RE
 > ten rows exactly (16,370 graphs, 21,710,892 pairs, exit 0) on 2026-08-15, so the numbers are
 > confirmed — by a different program than the one this line names.
 >
-> **Owner: T-06**, which must either fix the two paths or state the two-root invocation here.
+> ## ✅ DISCHARGED — by T-05 itself, not by T-06. Verified 2026-08-17; **strike this item, do not re-implement it.**
+>
+> `benchmarks/real_data/eval_setup/data_roots.py` already exists and both call sites go through it: a probing resolver with an environment override and its own tests. Verified live that **one `--source` resolves both trees**, so the “no single `--source` value” sentence above is **false of the current tree** and only the *history* it records is still accurate.
+>
+> The frozen T-01/T-03 artifacts were never patched — the resolver was added beside them, which is why the concern about re-opening a closed ticket’s certified output does not arise. **T-06 inherited a debt that had already been paid**, and nearly re-implemented it.
 
 Related: [exact_ged](exact_ged.md) · [approx_ged](approx_ged.md) · [statistics](statistics.md) ·
 [preregistration](preregistration.md) · [decisions](decisions.md) · [tickets](tickets.md)
