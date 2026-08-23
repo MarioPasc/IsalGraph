@@ -533,6 +533,43 @@ def test_the_null_and_the_arm_are_defined_on_exactly_the_same_pairs(tmp_path: Pa
     assert np.array_equal(np.where(np.diagonal(differing))[0], np.array([5, 9]))
 
 
+def test_restricted_null_agrees_with_the_whole_cohort_null_iff_nothing_was_lost(
+    tmp_path: Path,
+) -> None:
+    """The `size_null` vs `size_null_on_my_pairs` trap, made into an invariant.
+
+    T-04a's `f5_200.json` carries both a row-level whole-cohort `size_null` and
+    a per-cell `size_null_on_my_pairs`, and **only the latter is a valid
+    subtrahend for a per-representation difference**. On the 13 uncensored
+    records the two agree to 1e-9, so choosing the wrong key is SILENT on 13 of
+    15 records and diverges only on Mutagenicity -- which is precisely the
+    dataset where IsalGraph wins Claim A outright. A silent error that fires
+    only on the best result is the worst possible failure shape; it is what
+    produced the +0.078 against +0.196 discrepancy, a factor of 2.5.
+
+    So: agreement is asserted where it must hold, and divergence is asserted
+    where it must not. "Remember to use the right key" becomes something the
+    suite enforces.
+    """
+    intact = load_dense(
+        size_null.run(_encodings_with_losses(tmp_path / "i", "intact", set()), tmp_path / "o")
+    )
+    restricted, _, _ = masks.upper_triangle(intact.distance_matrix, mask=intact.defined_mask)
+    whole, _, _ = masks.upper_triangle(intact.distance_matrix)
+    assert intact.metadata["n_excluded"] == 0
+    assert restricted.size == whole.size
+    np.testing.assert_allclose(restricted, whole, rtol=0, atol=1e-9)
+
+    lossy = load_dense(
+        size_null.run(_encodings_with_losses(tmp_path / "l", "lossy", {21, 22, 23}), tmp_path / "o")
+    )
+    r_lossy, _, _ = masks.upper_triangle(lossy.distance_matrix, mask=lossy.defined_mask)
+    w_lossy, _, _ = masks.upper_triangle(lossy.distance_matrix)
+    assert lossy.metadata["n_excluded"] == 3
+    assert r_lossy.size < w_lossy.size
+    assert abs(float(r_lossy.mean()) - float(w_lossy.mean())) > 1e-9
+
+
 def test_unrestricted_null_is_recoverable_from_the_same_file(tmp_path: Path) -> None:
     """Both views survive in one file: the matrix is unrestricted, the mask
     carries the restriction, so the contrast needs no second run."""
