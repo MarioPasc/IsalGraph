@@ -823,3 +823,15 @@ evidence that never needed them.
    **inflate** a wall-clock kill count, which is the conservative direction for the arm F-1 already
    favours, so it cannot manufacture the conclusion — but the split is stated rather than left to be
    discovered.
+
+> **The `pruned` figure is verified against the artifact, not taken on report.** Read directly from
+> `encodings/suite2/protein__isalgraph_pruned.npz`: **G = 569, sum = 47.12 s, mean = 82.8 ms**, and
+> the PI's quoted figure reproduces exactly. Two details the mean hides, both worth carrying:
+> **median = 3.2 ms** against a **max of 15.01 s**, on `n_max = 96`. The distribution is dominated by
+> a handful of large graphs — the same shape `canonical` has, simply ~520× cheaper.
+>
+> This is why the comparison above is framed as **total dataset cost** (47.12 s against ≥ 6.8
+> core-hours) rather than as a ratio of per-graph medians, which would compare the cheap tail of one
+> encoder against the expensive tail of the other and overstate nothing but explain less. Total cost
+> is also the quantity the decision actually turns on: whether the arm is computable across the
+> cohort at all.
