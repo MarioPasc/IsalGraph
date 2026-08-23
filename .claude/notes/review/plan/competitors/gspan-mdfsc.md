@@ -236,6 +236,36 @@ structure:
 Primary distance by [competitors](../competitors.md) §3.4: **Levenshtein, tuple-level** (F1 100 %,
 F2 metric, F3 40/40, F4 non-degenerate; F6 is the tiebreak and F5 is never allowed to be).
 
+> ## ⚠ CORRECTED 2026-08-23 by T-04a — the distance is confirmed; **"best in the pool on all five
+> Suite-1 datasets" is not**
+>
+> **The primary distance stands**, re-derived independently by T-04a's grid on the frozen `S200`
+> draw: `levenshtein` is the sole candidate passing F1–F4, F3 at 50/50, at 0.000753 ms/pair.
+>
+> **What falls is the ranking claim.** §5 and the summary table said min-DFS is best in the pool on
+> all five Suite-1 datasets. Under every representation's *selected* primary distance, on one draw
+> and one convention, it is best on **2 of 5**:
+>
+> | Suite-1 record | best | ρ | `min_dfs` | `isalgraph_pruned` |
+> |---|---|---:|---:|---:|
+> | Letter LOW | **`min_dfs`** | 0.972 | 0.972 | 0.925 |
+> | Letter MED | **`min_dfs`** | 0.940 | 0.940 | 0.875 |
+> | Letter HIGH | `agm_cam` | 0.892 | 0.835 | 0.697 |
+> | LINUX | `agm_cam` | 0.798 | 0.653 | 0.474 |
+> | AIDS | `agm_cam` | 0.783 | 0.533 | 0.256 |
+>
+> Over all 15 records (Suite 1 exact, Suite 2 LB and UB): `min_dfs` **4**, `agm_cam` 3, `wl_subtree`
+> 3, `sparse6_nauty` 3, `nauty_graph6` 2, **IsalGraph 0**.
+>
+> **What this changes**: the ranking sentence, and any manuscript line that reads "min-DFS is the
+> best proxy". The competitor that displaces it is AGM, which is **Suite-1-only** — so on the ten
+> Suite-2 records `min_dfs` is again the leader among representations computable there (2 of 10).
+>
+> **What survives, and it is the half that matters for the paper**: **min-DFS still out-correlates
+> IsalGraph on all five Suite-1 datasets** — by +0.047 (Letter LOW) to +0.277 (AIDS) on this draw —
+> and the honest statement is that one, not the pool ranking. State both halves. Inherits: **T-17,
+> T-20.**
+
 ---
 
 ## 4. Fit for the information-content / message-length experiment (Claim A)
@@ -355,7 +385,7 @@ remains open is Suite 2, which has no GED reference until T-05.
 |---|---|---|
 | 1 | Reproducible? | **Not from any of the three candidates.** `LasseRegin` is broken on modern numpy and its `G2DFS` is not minimal; `betterenvi`'s `_is_min` is private and needs a miner; **`kaviniitm/DFSCode` builds and claims exactly this but is wrong on 50 % of 6-node graphs and is not isomorphism-invariant.** **We wrote it**, validated against exhaustive brute force + 4,440 relabellings |
 | 2 | Representation | `m` DFS tuples, **deterministic length**, complete invariant (112/112 at `n = 6`), alphabet grows as `O(n²)` |
-| 3 | Distance | **Levenshtein, tuple-level.** **ρ vs certified exact GED = 0.55–0.97, best in the pool on all five Suite-1 datasets** |
+| 3 | Distance | **Levenshtein, tuple-level** — **confirmed as primary by T-04a's grid**, sole candidate passing F1–F4. ~~ρ vs certified exact GED = 0.55–0.97, **best in the pool on all five Suite-1 datasets**~~ **CORRECTED 2026-08-23 by T-04a — see §3** |
 | 4 | Claim A? | **Yes**, `m · 2⌈log₂ n⌉` bits. **IsalGraph is shorter on 60–100 % of real graphs** |
 | 5 | Scope | **In, and it is the closest competitor there is.** Named by R1; M-DFSC family representative |
 | — | IsalGraph advantage | **Bits yes, alphabet yes, GED tracking no (loses by +0.047 to +0.296 on real data), runtime unresolved.** State all four |

@@ -276,3 +276,137 @@ T-17 the AE.3 table. Full API: `src/isalgraph/competitors/README.md`.
 
 **Article notes**: [T-04-article-notes.md](../tasks/T-04-article-notes.md) — read its
 *"What is NOT claimable"* section before quoting anything from this folder.
+
+---
+
+## 9. RESULT — T-04a, closed 2026-08-23
+
+**Run, not built.** All **66 cells** measured on one frozen pooled draw; the E1–E4 admissibility
+annex run on top of it. No cluster: the whole campaign is a workstation job.
+
+**The sample `S200`**, frozen by the design note before any agent started and reproducible from
+`(ALL_DATASETS, 200, 42)` alone: 200 graphs, six node-count strata `[33, 33, 33, 33, 34, 34]`,
+`n` 2–83, suite split **51 / 149**. LINUX draws zero graphs — 89 graphs at `n ∈ [4,10]` against
+thousands in the strata it falls in. That is a property of stratifying on node count, and it is
+reported rather than repaired.
+
+### 9.1 The selection table — §3.4's rule, as it fired
+
+| representation | primary distance | why |
+|---|---|---|
+| `adjacency` | **none admissible** | F3 = 1/50; `hamming` also F1 = 0.032 |
+| `graph6` | **none admissible** | F3 = 1/50; `hamming` also F1 = 0.035 |
+| `sparse6` | **none admissible** | F3 = 1/50; `padded_hamming` F1 = **0.0** — no positional frame |
+| `nauty_graph6` | `levenshtein` | F6 tie-break over `padded_hamming`, **68×** cheaper |
+| `agm_cam` | `levenshtein` | F6 tie-break over `padded_hamming`, **8.6×** cheaper |
+| `sparse6_nauty` | `levenshtein` | sole candidate passing F1–F4 |
+| `min_dfs` | `levenshtein` | sole candidate passing F1–F4 |
+| `isalgraph_pruned` | `levenshtein` | sole candidate passing F1–F4 |
+| `isalgraph_canonical` | `levenshtein` | sole candidate passing F1–F4 |
+| `wl_subtree` | `kernel` | sole candidate passing F1–F4 |
+| `size_null` | none | baseline; no candidate distance exists for it |
+
+**`k = 3`** over preregistration §4.1's seven-member Claim-B set (`graph6`, `sparse6`,
+`nauty_graph6`, `adjacency`, `agm_cam`, `min_dfs`, `wl_subtree`). **`padded_hamming` is primary for
+nothing**, which retires §3's provisional column and the same claim in
+[nauty](competitors/nauty.md) and [agm](competitors/agm.md), all three corrected in place.
+
+**The rule fired as written on the metrics it was allowed to range over** — but only after the
+repair recorded in the §3 RESULT block above. As shipped it ranged over `size_null` and
+`levenshtein_char` and would have named *count the nodes and subtract* the primary distance of all
+eleven representations.
+
+### 9.2 F0 — encodability, **at each backend's own budget**
+
+`timeout_s = 2.0`, `max_projections = 50,000`, `search_nodes = 200,000`. **Not** D14's 300 s. A
+different budget gives a different F0, so the budget travels with the number.
+
+| representation | F0 overall | breakdown |
+|---|---:|---|
+| `agm_cam` | 98/200 | 101 `SuiteScopeError` (scope), 1 `AGMBudgetExceeded` (budget) |
+| `isalgraph_canonical` | 99/200 | 101 `SuiteScopeError` — a capability refusal, not a timeout |
+| `isalgraph_pruned` | 191/200 | 9 `CanonicalizationTimeoutError` |
+| `min_dfs` | 192/200 | 8 `MinDfsBudgetExceeded` |
+| the other seven | 200/200 | — |
+
+All four are **1.00 on Suite 1**; every exclusion is a Suite-2 graph. **`SuiteScopeError` must never
+be summed with a budget error** — the first is a decision, the second an outcome, and
+`preregistration.md` §5 charges them differently.
+
+### 9.3 F5 — computed after selection was written to disk, never fed back
+
+`paired_null_ci.json` is the authority for every interval: paired graph-level bootstrap, 2,000
+resamples, seed 42, both arms on the identical pair set and the identical resamples.
+
+| | IsalGraph − size null, all-pairs |
+|---|---|
+| **Suite 1, exact GED** | Letter LOW **+0.026 [+0.008, +0.046]** · MED −0.044 · HIGH −0.220 · LINUX −0.239 · AIDS −0.528 |
+| **Suite 2 vs LB** (`BRANCH_FAST`) | GREC −0.214 · AIDS-IAM −0.248 · COIL-DEL −0.082 · Mutagenicity −0.289 · Protein −0.233 |
+| **Suite 2 vs UB** (`BIPARTITE`) | GREC +0.122 · AIDS-IAM +0.027 · COIL-DEL +0.197 · Mutagenicity +0.196 · Protein +0.383 |
+
+**All 15 differences exclude zero.** IsalGraph clears the size null on **1 of 5** Suite-1 datasets
+and on **6 of 15** records overall, and is the best representation on **none** of the 15
+(`min_dfs` 4, `agm_cam` 3, `wl_subtree` 3, `sparse6_nauty` 3, `nauty_graph6` 2).
+
+**The verdict flips with the end of the bracket on 5 of 5 Suite-2 datasets**, and the mechanism is
+measured: `ρ(|n₁−n₂|, LB) = 0.960–0.998`, so the lower bound very nearly *is* the size null and no
+representation can beat it. That is degenerate by construction, **not a defect in `BRANCH_FAST`**,
+which is a proven bound T-27 selected on measurement. `ρ(|n₁−n₂|, UB) = 0.460–0.754`; on Suite 1,
+where truth exists, `ρ(|n₁−n₂|, exact) = 0.713–0.920` — **between** the two arms. This is the
+empirical case for [approx_ged](approx_ged.md) §4's no-interpolation rule.
+
+**Supersession, as §3.7 fixed it before the outcome was known**: F5 reproduces
+`corrected_rho_table.json` at **max |delta| = 0.0000**, so §3.7's tie-break never had to fire.
+
+### 9.4 The E1–E4 annex
+
+| | measured |
+|---|---|
+| **E1 — ψ**, relabelling sensitivity under `levenshtein` | **0.0000** on all eleven draws for the seven canonical representations (77/77 rows). Excluded three: `adjacency` 0.07–0.74, `graph6` 0.32–**1.003** [0.953, 1.054] on LINUX, `sparse6` 0.54–**1.148** [1.111, 1.187] on AIDS. All 33 intervals exclude 0. Under `padded_hamming`, pooled `adjacency` ψ = 0.988 vs 0.072 — **14×**, so the padding convention makes it worse, not better |
+| **E1 — exhaustive** | the invariant set of the n² family is **exactly `{K_n}`** over all 995 connected graphs to `n = 7`, full `n!` enumeration, **1,866,256** distinct labelled graphs (OEIS A001187) |
+| **E2 — completeness** | six complete invariants: **0 collisions**, and the zero set is **≡** the VF2-certified isomorphic set; ≤ 2.0–3.4 × 10⁻⁵ by rule of three. `wl_subtree`: **45 / 183,016 = 2.46 × 10⁻⁴** [1.79, 3.29] × 10⁻⁴. On LINUX and AIDS, which hold no duplicate graphs, **every zero WL emits is a false isomorphism certificate** — 1/1 and 11/11, AIDS CI [0.715, 1.000]. K₃,₃ vs the triangular prism: WL exactly 0.0, all six canonical separate them |
+| **E3 — axioms** | **0 violations in 9,881,851 checks** over all **467,180** triples of the 142 connected graphs on `n ≤ 6`, `worst_excess = 0.0` exactly. A correctness check on our implementation, **not a discovery** |
+| **E4 — the trap** | `adjacency` beats IsalGraph **significantly on 3 of 5** all-pairs (AIDS **+0.500** [+0.443, +0.558], LINUX **+0.262**, Letter HIGH **+0.123**, all Holm p = 0.005) and on **0 of 5** equal-`n`, losing significantly on three. `ρ(d_adjacency, \|n₁−n₂\|) = 0.83–0.93` |
+
+**E4 is why §3.4's rule is F5-blind.** A representation that fails F3 at 1/50 — that is, one whose
+distance changes when you relabel the graph and nothing else — nonetheless out-correlates IsalGraph
+against exact GED on three of five datasets, because both it and GED are dominated by size. A
+selection rule with sight of F5 would have picked it.
+
+### 9.5 §4's three pre-committed outcomes, answered
+
+1. **"Non-canonical graph6 should fail F3 outright."** **Confirmed, and it generalises**: all three
+   non-canonical serialisations fail at **1/50**, and E1 quantifies the failure continuously —
+   ψ up to **1.148**, an edit distance larger than the strings' own scale.
+2. **"Canonical graph6 under Hamming may also correlate poorly ... it separates the two properties."**
+   **Confirmed in the stronger form.** The separation is not between two grades of correlation but
+   between ψ = 0 and ψ > 0: `nauty_graph6`, `agm_cam` and `sparse6_nauty` are exactly relabelling-
+   invariant, and their correlations then range 0.46–0.99 across records. Canonical **and**
+   edit-distance-compatible are independent properties, and E2 supplies the second half — six
+   complete invariants at 0 collisions against WL's 45.
+3. **"If sparse6 beats IsalGraph on bits."** Settled by T-04, unchanged here. What T-04a adds is that
+   sparse6 buys those bits by having **no admissible distance at all**.
+
+### 9.6 Artifacts
+
+| Location | |
+|---|---|
+| `/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/experiments/metric-admissibility/` | **canonical, self-contained** — `PROTOCOL.md`, `README.md`, `results/` (7 JSON), `code/` (13 files), `manifest.json` with sha256 over 22 files |
+| `/media/mpascual/Sandisk2TB/research/isalgraph/T-04a/` | the run directory, with the `.log` files; the JSONs are byte-identical to the deliverable |
+
+`paired_null_ci.json` is the authority for every interval quoted anywhere.
+
+### Standing requests this file made of T-04a, answered
+
+- *"T-04a decides the distance"* (§2 table, §8) — **decided**, §9.1. `levenshtein` for six,
+  `kernel` for `wl_subtree`, none for three.
+- *"T-04a must close before any production distance matrix is computed — it gates T-06"* (§3) —
+  **released**. T-06 has the table.
+- *"The three pre-committed outcomes in §4 are stated in the paper regardless of which way they
+  fall"* (§7 criterion 5) — answered in §9.5 and carried to the article notes.
+- *"No representation reaches a results table on a distance that fails F1, F2, F3 or F4"*
+  (§7 criterion 3) — enforced: `adjacency`, `graph6` and `sparse6` carry **no** distance column.
+  E4 is the measurement of what criterion 3 buys.
+
+**Article notes**: [T-04a-article-notes.md](../tasks/T-04a-article-notes.md) — read its
+*"What is NOT claimable"* section before quoting anything from this run.

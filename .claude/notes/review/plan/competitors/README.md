@@ -385,7 +385,8 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
 - **Graph-level bootstrap CIs** on every ρ in §4.1 (D2). Finding 14 says they will be wide.
 - ~~**Whether IsalGraph clears the size null anywhere in Suite 2.**~~ **ANSWERED 2026-08-16 by T-04a,
   and the answer is that the data does not determine it.** Against the **lower** bound
-  (`BRANCH_FAST`) IsalGraph fails the size null on **5 of 5** Suite-2 datasets (−0.082 to −0.295);
+  (`BRANCH_FAST`) IsalGraph fails the size null on **5 of 5** Suite-2 datasets (−0.082 to ~~−0.295~~
+  **−0.289**, corrected 2026-08-23 — see the note below);
   against the **upper** bound (`BIPARTITE`) it clears it on **5 of 5** (+0.027 to +0.383). Every one
   of those ten differences excludes zero under a paired graph-level bootstrap. **The verdict flips
   with the end of the bracket on all five datasets**, and GED lies between them.
@@ -397,6 +398,37 @@ separates them); and the running example `C₄(0,1,2,3) + K₃(3,4,5)`.
   alone is a stand-in for the truth. **This is the empirical case for
   [approx_ged](../approx_ged.md) §4's no-interpolation rule** — a midpoint would have produced one
   confident answer to a question the data leaves open, five times. **Inherits: T-06, T-20.**
+
+  > ## ⚠ CORRECTED 2026-08-23 — two Mutagenicity margins above were computed against the wrong null
+  >
+  > `ρ − size_null` originally subtracted a null computed over the cohort's **whole** pair set from a
+  > ρ computed over the representation's **own** pair set. Wherever a representation loses graphs
+  > those are two correlations over two different samples, and their difference is not a comparison.
+  > Mutagenicity is the only dataset in this run where a selected representation loses graphs —
+  > IsalGraph loses 14/200 to the 2.0 s canonicalisation budget:
+  >
+  > | quantity | value |
+  > |---|---|
+  > | `isalgraph_pruned` ρ, `::ub` | 0.8322 — **unchanged**, it was always on its own subset |
+  > | null over all 19,900 pairs | 0.7538 |
+  > | null over IsalGraph's 17,205 pairs | **0.6363** |
+  > | **margin, `::ub`** | +0.078 → **+0.196** |
+  > | **margin, `::lb`** | −0.295 → **−0.289** |
+  >
+  > **The censoring is maximally size-biased, which is why it moves the null and not the arm.** The
+  > 14 censored graphs average **75.8 nodes (max 97)** against the kept graphs' **25.4 (max 48)** —
+  > *every censored graph is larger than every kept one*. Removing them collapses sd(|n₁−n₂|) from
+  > 16.4 to 8.0, and a null that is a function of |n₁−n₂| loses exactly that much signal.
+  >
+  > **The restriction must be per representation, not per dataset.** `min_dfs` is also censored
+  > 14/200 on Mutagenicity, but on a *different* 14 graphs, and its restricted null lands at
+  > **0.6817**, not IsalGraph's 0.6363. One null per dataset would have been wrong for at least one
+  > of them. **Inherits: T-06** — this is D14's censoring bias appearing inside the *baseline* rather
+  > than inside the arm, the direction nobody checks.
+  >
+  > **What survives**: every verdict above. The margin stays positive against UB and negative against
+  > LB on all five datasets, all fifteen differences still exclude zero, and the flip is unchanged.
+  > `paired_null_ci.json` in the T-04a deliverable is the authority for every interval.
 - **Whether AGM's GREC ceiling moves** under orbit pruning from `pynauty.autgrp`. It will move; it
   will not reach `n = 98`.
 - **The realised-bytes column** for every method — measured only for the running example.
