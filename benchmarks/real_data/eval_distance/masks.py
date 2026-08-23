@@ -16,6 +16,46 @@ from __future__ import annotations
 import numpy as np
 
 
+def encodable_mask(status: np.ndarray, length: np.ndarray) -> np.ndarray:
+    """Return the ``(G,)`` mask that is true where a representation encoded a graph.
+
+    The rule is CONTRACTS §3.2's: ``status == "error"`` or ``length < 0`` means
+    no usable encoding.  **A censored row is encodable** -- D14 retains it with
+    its greedy-min fallback string, so it has an encoding and enters the pair
+    set.  An empty string is not by itself a fault: a one-node graph
+    legitimately encodes to zero symbols.
+
+    This is the single source of truth for the rule.  ``distance_runner``
+    marks invalid rows with it and ``size_null`` restricts the baseline with
+    it, so the arm and its null are defined on exactly the same pairs.  Two
+    copies of this predicate that drifted apart would produce an arm and a
+    null measured on different pair sets, which is not detectable in the
+    output.
+
+    Args:
+        status: ``(G,)`` of ``ok`` | ``censored`` | ``fallback`` | ``error``.
+        length: ``(G,)`` symbol counts, ``-1`` when not encoded.
+
+    Returns:
+        ``bool (G,)``, true where the graph has a usable encoding.
+    """
+    invalid = (np.asarray(status) == "error") | (np.asarray(length, dtype=np.int64) < 0)
+    return ~np.asarray(invalid, dtype=bool)
+
+
+def pair_mask(row_mask: np.ndarray) -> np.ndarray:
+    """Lift a ``(G,)`` row mask to the ``(G, G)`` pairs where both ends hold.
+
+    Args:
+        row_mask: ``(G,)`` boolean, typically from :func:`encodable_mask`.
+
+    Returns:
+        ``bool (G, G)``.
+    """
+    rows = np.asarray(row_mask, dtype=bool)
+    return np.asarray(rows[:, None] & rows[None, :], dtype=bool)
+
+
 def equal_n_mask(node_counts: np.ndarray) -> np.ndarray:
     """Return the ``(G, G)`` mask that is true where two graphs share ``n``.
 
@@ -86,4 +126,10 @@ def paired_upper_triangle(
     return left_values, right[rows, cols], rows, cols
 
 
-__all__ = ["equal_n_mask", "paired_upper_triangle", "upper_triangle"]
+__all__ = [
+    "encodable_mask",
+    "equal_n_mask",
+    "pair_mask",
+    "paired_upper_triangle",
+    "upper_triangle",
+]

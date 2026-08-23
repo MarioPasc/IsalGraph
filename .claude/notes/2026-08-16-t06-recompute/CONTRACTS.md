@@ -293,10 +293,40 @@ One file per `(suite, dataset, representation, metric)`:
 | `defined_mask` | `bool` | `(G, G)` | `False` where the metric is undefined for that pair (F1) |
 | `metadata` | `<U…` | `()` | 0-d JSON, keys in §5 |
 
-**Two derived arrays, same schema, emitted once per dataset (not per representation):**
+### 🔴 4.1 The size null is emitted PER `(representation, dataset)` — corrected 2026-08-23
 
-- `distances/{suite}/{dataset}__size_null.npz` — `distance_matrix[i,j] = abs(n_i - n_j)`. This is
-  T-04's trivial baseline and **every printed ρ must carry it**.
+> This block **supersedes** the original, which said the size null is *"emitted once per dataset
+> (not per representation)"* and named the file `{dataset}__size_null.npz`. That was wrong, and the
+> file name changes with it.
+
+- `distances/{suite}/{dataset}__{representation}__size_null.npz` —
+  `distance_matrix[i,j] = abs(n_i - n_j)`. T-04's trivial baseline; **every printed ρ must carry
+  it**. It is no longer a special case: it is an ordinary
+  `{dataset}__{representation}__{metric}` file with `metric = "size_null"`.
+- **`defined_mask` is restricted to the pairs that representation itself encoded**, via
+  `masks.encodable_mask(status, length)` — the *same* predicate `distance_runner` marks invalid
+  rows with, so an arm and its null are defined on exactly the same pairs. Two copies of that
+  predicate drifting apart would measure the arm and the null on different pair sets, and nothing
+  in the output would show it.
+- **`distance_matrix` stays unrestricted**, because a node count exists for every graph including
+  one whose encoder failed. So one file carries **both views**: honour `defined_mask` for the
+  restricted null, ignore it for the whole-cohort null. The contrast is reportable without a
+  second run.
+
+**Why.** Censoring is not independent of size and differs by representation, so an unrestricted
+null is computed over pairs the arm was never evaluated on. Measured on Mutagenicity:
+`isalgraph_pruned` loses 14 of 200 graphs and **every lost graph is larger than every kept one**
+(mean 75.8 nodes, max 97, against 25.4 and 48), collapsing `sd(|Δn|)` from 16.4 to 8.0.
+Whole-cohort null **0.7538**, restricted null **0.6363**, while the arm itself does not move
+(0.8322 either way). `min_dfs` loses the same *count* but a **different 14 graphs**, restricted
+null **0.6817**. One null per dataset would have been wrong for at least one of them.
+
+**This is D14's censoring bias appearing inside the BASELINE rather than inside the arm** — a
+distinct failure mode from the one D14 was written for, and the reason this correction is not
+cosmetic.
+
+**Also derived, and not a file:**
+
 - `equal_n_mask` is **not** a file: it is `node_counts[:,None] == node_counts[None,:]`, computed by
   the consumer. Do not materialise it.
 

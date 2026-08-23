@@ -46,6 +46,7 @@ import numpy as np
 
 from benchmarks.eval_distance.bands import RowBand, band_for
 from benchmarks.eval_distance.gates import assert_dense, degenerate_zero_fraction
+from benchmarks.eval_distance.masks import encodable_mask
 from benchmarks.eval_distance.schema import (
     EncodingsFile,
     MetricUnsupportedError,
@@ -235,7 +236,7 @@ def rebuild_encodings(
     texts = [str(value) for value in source.encoding]
     symbols = [_split_symbols(text, separator) for text in texts]
     lengths = np.array([len(item) for item in symbols], dtype=np.int64)
-    invalid = (source.status == "error") | (np.asarray(source.length, dtype=np.int64) < 0)
+    invalid = ~encodable_mask(source.status, source.length)
     declared = np.asarray(source.length, dtype=np.int64)
     agrees = _assert_symbol_counts(
         lengths, declared, ~invalid, separator, source.path, on_length_mismatch

@@ -406,14 +406,15 @@ def test_merge_rejects_shards_from_two_different_matrices(tmp_path: Path) -> Non
 def test_size_null_is_the_absolute_node_count_difference(tmp_path: Path) -> None:
     source, _, _ = _real_encodings(tmp_path, "iam_letter_low", "isalgraph_pruned")
     out = size_null.run(source, tmp_path / "out")
-    assert out.name == "iam_letter_low__size_null.npz"
+    # CONTRACTS §4.1: the name carries the representation the null is restricted to.
+    assert out.name == "iam_letter_low__isalgraph_pruned__size_null.npz"
     loaded = load_dense(out)
     counts = loaded.node_counts.astype(np.int64)
     expected = np.abs(counts[:, None] - counts[None, :]).astype(np.float64)
+    # The matrix itself stays unrestricted: a node count exists for every graph.
     assert np.array_equal(loaded.distance_matrix, expected)
     assert np.array_equal(loaded.distance_matrix, loaded.distance_matrix.T)
     assert np.all(np.diagonal(loaded.distance_matrix) == 0.0)
-    assert loaded.defined_mask.all()
 
 
 def test_size_null_file_has_the_same_schema_as_any_distance_file(tmp_path: Path) -> None:
@@ -423,7 +424,129 @@ def test_size_null_file_has_the_same_schema_as_any_distance_file(tmp_path: Path)
         assert set(handle.files) == set(DENSE_KEYS)
     meta = load_dense(out).metadata
     assert set(METADATA_KEYS) <= set(meta)
-    assert meta["representation"] == "size_null"
+    # CONTRACTS §4.1: it is an ordinary (representation, metric) file now, so
+    # `representation` names the arm and `size_null` is the metric.
+    assert meta["representation"] == "toy"
+    assert meta["metric"] == "size_null"
+    assert meta["restricted_to_representation"] == "toy"
+
+
+# -- CONTRACTS §4.1: the null is restricted per (representation, dataset) ----
+
+
+def _encodings_with_losses(tmp_path: Path, name: str, lost: set[int], n: int = 24) -> Path:
+    """A §3 file where the rows in *lost* have `status == "error"`.
+
+    The lost rows are given the LARGEST node counts, reproducing the shape
+    D14's censoring actually has: on Mutagenicity every censored graph is
+    larger than every kept one.
+    """
+    rng = np.random.default_rng(7)
+    counts = sorted(int(v) for v in rng.integers(2, 40, size=n))
+    order = [i for i in range(n) if i not in lost] + sorted(lost)
+    node_counts = [0] * n
+    for slot, idx in enumerate(order):
+        node_counts[idx] = counts[slot]
+    return _write_encodings_npz(
+        tmp_path / f"ds__{name}.npz",
+        graph_ids=np.asarray([f"g{i:04d}" for i in range(n)], dtype="<U16"),
+        node_counts=node_counts,
+        edge_counts=[1] * n,
+        # Varied lengths, so the arm's own matrix is not degenerately all-zero
+        # and `degenerate_zero_fraction` does not (correctly) reject it.
+        symbols=[
+            tuple("ab"[j % 2] for j in range(1 + i % 7)) if i not in lost else () for i in range(n)
+        ],
+        separator="",
+        dataset="ds",
+        representation=name,
+        status=["error" if i in lost else "ok" for i in range(n)],
+    )
+
+
+def test_size_null_is_restricted_to_the_representations_own_pair_set(tmp_path: Path) -> None:
+    """A representation that lost graphs must not be judged against a null
+    computed over pairs it was never evaluated on."""
+    lost = {21, 22, 23}
+    source = _encodings_with_losses(tmp_path, "lossy", lost)
+    loaded = load_dense(size_null.run(source, tmp_path / "out"))
+    assert not loaded.defined_mask.all()
+    for i in lost:
+        assert not loaded.defined_mask[i, :].any()
+        assert not loaded.defined_mask[:, i].any()
+    kept = [i for i in range(24) if i not in lost]
+    assert loaded.defined_mask[np.ix_(kept, kept)].all()
+
+
+def test_a_censored_row_is_still_encodable_and_stays_in_the_null(tmp_path: Path) -> None:
+    """CONTRACTS §3.2: D14 retains a censored graph with its fallback string,
+    so it has an encoding and must remain in the pair set."""
+    source = _write_encodings_npz(
+        tmp_path / "ds__cens.npz",
+        graph_ids=np.asarray([f"g{i:04d}" for i in range(6)], dtype="<U16"),
+        node_counts=[2, 3, 4, 5, 6, 7],
+        edge_counts=[1] * 6,
+        symbols=[("a",)] * 6,
+        separator="",
+        dataset="ds",
+        representation="cens",
+        status=["ok", "ok", "censored", "fallback", "ok", "ok"],
+    )
+    loaded = load_dense(size_null.run(source, tmp_path / "out"))
+    assert loaded.defined_mask.all()
+    assert loaded.metadata["n_excluded"] == 0
+
+
+def test_two_representations_losing_different_graphs_get_different_nulls(
+    tmp_path: Path,
+) -> None:
+    """The failure mode that forced §4.1: `isalgraph_pruned` and `min_dfs` lose
+    the same COUNT on Mutagenicity but a different 14 graphs, so one null per
+    dataset would have been wrong for at least one of them."""
+    a = load_dense(
+        size_null.run(_encodings_with_losses(tmp_path / "a", "arm_a", {21, 22, 23}), tmp_path / "o")
+    )
+    b = load_dense(
+        size_null.run(_encodings_with_losses(tmp_path / "b", "arm_b", {0, 1, 2}), tmp_path / "o")
+    )
+    assert not np.array_equal(a.defined_mask, b.defined_mask)
+    assert a.defined_mask.sum() == b.defined_mask.sum()  # same count, different pairs
+
+
+def test_the_null_and_the_arm_are_defined_on_exactly_the_same_pairs(tmp_path: Path) -> None:
+    """One predicate, two consumers. If `masks.encodable_mask` ever drifts from
+    what the runner marks invalid, the arm and its null would be measured on
+    different pair sets and nothing in the output would show it."""
+    source = _encodings_with_losses(tmp_path, "lossy", {5, 9})
+    _run(source, "levenshtein", tmp_path / "out")
+    arm = load_dense(tmp_path / "out" / "ds__lossy__levenshtein.npz")
+    null = load_dense(size_null.run(source, tmp_path / "out"))
+    off_diagonal = ~np.eye(arm.defined_mask.shape[0], dtype=bool)
+    assert np.array_equal(arm.defined_mask & off_diagonal, null.defined_mask & off_diagonal)
+    # They differ on the diagonal ONLY, and only at the lost rows: the runner
+    # marks a graph's self-distance defined at 0.0 whatever its status, while
+    # the null excludes a lost graph outright. Immaterial -- `upper_triangle`
+    # is strict, so no diagonal cell ever reaches a correlation. Asserted
+    # rather than ignored, so a future off-diagonal divergence still fails.
+    differing = arm.defined_mask != null.defined_mask
+    assert not (differing & off_diagonal).any()
+    assert np.array_equal(np.where(np.diagonal(differing))[0], np.array([5, 9]))
+
+
+def test_unrestricted_null_is_recoverable_from_the_same_file(tmp_path: Path) -> None:
+    """Both views survive in one file: the matrix is unrestricted, the mask
+    carries the restriction, so the contrast needs no second run."""
+    source = _encodings_with_losses(tmp_path, "lossy", {21, 22, 23})
+    loaded = load_dense(size_null.run(source, tmp_path / "out"))
+    counts = loaded.node_counts.astype(np.int64)
+    assert np.array_equal(
+        loaded.distance_matrix, np.abs(counts[:, None] - counts[None, :]).astype(np.float64)
+    )
+    restricted, _, _ = masks.upper_triangle(loaded.distance_matrix, mask=loaded.defined_mask)
+    whole, _, _ = masks.upper_triangle(loaded.distance_matrix)
+    assert restricted.size < whole.size
+    # The excluded graphs are the largest, so dropping them shrinks the spread.
+    assert restricted.std() < whole.std()
 
 
 # --------------------------------------------------------------------------
