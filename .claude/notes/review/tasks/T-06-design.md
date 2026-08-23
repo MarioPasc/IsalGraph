@@ -992,3 +992,63 @@ campaign it would block. Authorised in this session's status report.
 **For the response letter:** the reference arm is justified by scope, not by cost. Do not quote
 43 s/graph, 520×, or 6.8 core-hours — they are retracted here and must not survive into the
 manuscript or the letter.
+
+---
+
+## 13. Gate results, measured 2026-08-23 — cohort, pairs, structure
+
+Run by the orchestrator against the artifacts, not taken from any report.
+
+### 13.1 Stop-and-ask condition 3 — the cohort reproduces, all four counts
+
+| Quantity | Target | Measured | |
+|---|---|---|---|
+| Suite-2 graphs | 16,370 | **16,370** | ✅ |
+| Suite-2 pairs | 21,710,892 | **21,710,892** | ✅ |
+| Suite-1 graphs | 5,350 | **5,350** | ✅ |
+| Suite-1 pairs | 3,897,911 | **3,897,911** | ✅ |
+
+Both pair counts are `Σ_d C(n_d, 2)` over datasets and reproduce to the unit. **`aids` is 769 in
+Suite 1 against `aids_graphedx`'s 819 in Suite 2** — F-12's positional-join hazard is live in the
+data, not hypothetical.
+
+### 13.2 A4 structural gate — Suite-1 exact-GED matrices, 0 violations
+
+Joined **on `graph_ids`**, never positionally, then cross-checked on `node_counts`, which both files
+carry — set equality alone would not catch a permuted join, and this does.
+
+| dataset | n | ids match | node_counts agree under the join | symmetric | zero diagonal |
+|---|---|---|---|---|---|
+| aids | 769 | ✅ | ✅ | ✅ | ✅ |
+| iam_letter_high | 2,059 | ✅ | ✅ | ✅ | ✅ |
+| iam_letter_low | 1,180 | ✅ | ✅ | ✅ | ✅ |
+| iam_letter_med | 1,253 | ✅ | ✅ | ✅ | ✅ |
+| linux | 89 | ✅ | ✅ | ✅ | ✅ |
+
+**No NaN anywhere** — F-13 holds: censored pairs are `inf`, and `np.isfinite` is the correct filter.
+
+### 13.3 🔴 GED availability is NOT uniform — two Suite-1 datasets are under half populated
+
+Strict upper triangle, so these are the ladder's `GED-available` and `GED > 0` rungs directly:
+
+| dataset | pairs | GED-available | avail % | GED > 0 | GED == 0 |
+|---|---|---|---|---|---|
+| aids | 295,296 | 131,148 | **44.41 %** | 131,148 | **0** |
+| linux | 3,916 | 1,685 | **43.03 %** | 1,685 | **0** |
+| iam_letter_low | 695,610 | 695,610 | 100 % | 587,626 | 107,984 |
+| iam_letter_med | 784,378 | 784,378 | 100 % | 674,262 | 110,116 |
+| iam_letter_high | 2,118,711 | 2,118,711 | 100 % | 2,030,043 | 88,668 |
+
+Two facts worth carrying into F0, and neither is visible from a cohort count:
+
+1. **`aids` and `linux` lose ~56 % of their pairs at the `GED-available` rung.** Exact GED stops
+   being computable above ~12 nodes, so the surviving pairs are a **size-biased subsample**, not a
+   random one — the same bias §4.1 found inside the size null, arriving here in the denominator.
+   Any ρ on these two datasets is computed on the small-graph half.
+2. **Every available pair in `aids` and `linux` has GED > 0, exactly.** No isomorphic pairs survive
+   the availability filter, while the three Letter datasets carry 12.7–15.5 % exact zeros. So the
+   `GED > 0` rung is a no-op on two datasets and removes a sixth of the pairs on three — a per-dataset
+   difference the pooled ladder would hide, which is why A9 requires it per dataset.
+
+**This does not yet trigger stop-and-ask 1**, which is about F0 *failing*, not about the pair supply.
+It is recorded because it shapes how an F0 result on `aids` or `linux` must be read.
