@@ -767,3 +767,59 @@ via `review-close`.
    `WL_ROUNDS`, `wl_kernel_computer` and `eval_setup` are now bound to one constant, asserted equal
    to 2. **E10's existing WL numbers were produced under the old default and need re-checking**;
    the board already anticipates §4.1's WL row moving on Letter LOW from 0.895 to 0.7792.
+
+### 11.3 Pre-declared stopping rule for the F-1 re-measurement, 2026-08-23
+
+**Written and committed BEFORE any result existed.** At `2026-08-23T09:22:53Z`,
+`grep -c '^protein ' f1_verify.log` returned **0** and `f1_verify.json` did not exist — no cell had
+completed, so nothing about the outcome was visible when this rule was fixed. That is the whole
+point of recording it here rather than afterwards: a stopping rule applied at a declared boundary
+for a stated non-outcome reason is defensible; one applied after glancing at results is not.
+
+| | |
+|---|---|
+| **Declared sample** | 200 graphs × 3 datasets (protein, coil_del, mutagenicity) × 2 encoders, seed 42 |
+| **Executed** | **protein only** — both encoders, full 200 |
+| **Not executed** | coil_del and mutagenicity, both encoders |
+| **Reason** | ≈ 8 h of exclusive box time against 8 days to deadline, with the competitor-encoding critical path blocked behind it. **A resource reason, not an outcome reason** |
+| **Boundary** | Stopped at a **dataset boundary, never mid-sample**. The report is written after every cell, so protein's two cells are complete and internally whole |
+| **Mechanism** | A watcher polls for the second protein row and kills the run before `coil_del` begins — the stop is automatic and does not involve reading a result first |
+| **Authorised by** | the PI, on the costed options in this session's status report |
+
+**Why protein is the right dataset to keep.** §1.6's probe killed `canonical` on **10 of 15** protein
+graphs, the worst of the three. An `n = 200` result there bounds the **worst case**, so the datasets
+dropped are the ones that would have been *easier* on `canonical`, not harder. **Note the probe used
+here is the warm-up-contaminated one**: it is being used only to choose *which* dataset to retain, a
+decision its contamination cannot corrupt, and **not** as evidence for any conclusion.
+
+#### The verdict rests on cost, not on kill counts
+
+**F-1 is forced by the cost ratio, independently of any kill count**, which is a stronger footing
+than the one it was originally frozen on and does not depend on the contaminated probe at all:
+
+| | protein, 569 graphs |
+|---|---|
+| `pruned`, production, measured | **47.1 s total ≈ 83 ms/graph** |
+| `canonical`, this run, measured | **≈ 43 s/graph** |
+| ratio | **≈ 520×** |
+| projected full-dataset cost under `canonical` | **≥ 6.8 core-hours**, against `pruned`'s 47 seconds |
+
+For **one of ten** datasets. **The `≥` is not decorative**: 43 s/graph is an average taken under a
+60 s cap, and a killed graph would have taken *longer* than 60 s had it been allowed to finish, so
+the true cost is bounded **below** by this figure. The estimate errs in the conservative direction.
+
+**Record it as: cost ratio primary, kill counts corroborating.** This also disposes of the retracted
+figures cleanly — the original numbers were wrong, and the decision they supported survives on
+evidence that never needed them.
+
+#### Two caveats that travel with any number from this run
+
+1. **60 s budget against D14's frozen 300 s.** A graph killed at 60 s might survive at 300 s, so
+   **every kill count here is an UPPER bound** on the true D14-budget count. `max_ok_s` is recorded
+   precisely so a reader can judge the gap rather than assume it: if no survivor approaches 60 s,
+   the cut is clean and a 5× budget would change little.
+2. **Partial contention, disclosed.** Sampled positions **0–47 of 200 overlapped test-suite
+   execution** on the same box; positions **48–200 ran with no other compute**. Contention can only
+   **inflate** a wall-clock kill count, which is the conservative direction for the arm F-1 already
+   favours, so it cannot manufacture the conclusion — but the split is stated rather than left to be
+   discovered.
