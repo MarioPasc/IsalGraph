@@ -475,6 +475,31 @@ That asymmetry is the tell — a transcription slip is direction-neutral, a moti
 closed form**, and any proposed change that shrinks `N_actual` is treated as a defect until
 re-derived from the admissible cell set. A7 above is corrected accordingly.
 
+> ### ✅ The CODE was never wrong. Verified 2026-08-23.
+>
+> All five instances above are **prose**. `eval_stats/family.py` has carried the correct form the
+> whole time:
+>
+> ```python
+> return N_MAX_F2 - 15 * k - 8 * d + k * d - c      # family.py:392
+> ```
+>
+> Executed: `enumerate_f2_cells()` returns **182 cells**, equal to `N_MAX_F2`; `_closed_form(3, d, c)`
+> equals `137 − 5d − c` for every `d ∈ [0,5] × c ∈ [0,3]` tested. Its own docstring already says the
+> enumeration is the definition and the closed form only a check.
+>
+> **This changes what the failure mode is.** It is not an arithmetic error that reached the
+> statistics — no p-value was ever computed against a shrunken denominator. It is **documentation
+> drift**: five prose restatements of one formula, each dropping a term, none of them the thing that
+> runs. The risk was never a wrong number in `family_F2.json`; it was that a reader — a reviewer, or
+> the next agent — would trust the prose over the code and "correct" the code to match. Two documents
+> had already converged on the same wrong form, which is exactly how that correction gets made
+> confidently.
+>
+> **So the mitigation is documentation-shaped, not code-shaped:** cite `family.py:_closed_form` as
+> the reference rather than restating the formula, and where a document must state it, state it
+> beside the enumeration that outranks it.
+
 ---
 
 ## 9. Inherited finding, 2026-08-16 — the Suite-2 reference is size-dominated
