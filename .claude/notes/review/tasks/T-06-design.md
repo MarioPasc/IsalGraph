@@ -691,3 +691,79 @@ itself error of the day.
 **And it vindicates T-04a's insistence** that `SuiteScopeError` be reported as a separate `error_kind`
 from `AGMBudgetExceeded`. Summing them would have produced a "completion rate" here that was 100 %
 scope policy and 0 % budget, read as if it were the latter — and `c` would have been determined by it.
+
+### 11.2 🔴 The second attempt never ran either — two defects in `f1_verify.py`, 2026-08-23
+
+The re-measurement §11.1 promised was launched on 2026-08-16 and left a **zero-byte log and no
+result**. It was not slow, and it was not killed: it could not have terminated. Two independent
+defects, found by `[T06-subagent]` on 2026-08-23 and fixed in `7274f13`.
+
+1. **The worker was given a range, not the sample.** The parent passed `idx[pos] .. idx[-1] + 1`, so
+   the worker encoded every graph in the contiguous **span** of the 200-graph sample rather than the
+   sample itself — **2.8×** the intended work on protein, **19.3×** on coil_del, **19.7×** on
+   mutagenicity. At a 60 s kill budget that turns a ~4.5 h run into a multi-day one. The reported
+   `attempted` was `len(idx)` while `ok` and `killed` ranged over the whole span, so the printed
+   kill rate could exceed 100 % — the same arithmetic inconsistency that would have made the defect
+   visible had anyone read a completed row.
+
+2. **The deadline could never fire.** `proc.stdout.readline()` blocks, and the loop only re-checked
+   `time.monotonic() > deadline` *after* a line arrived. Once a graph ran past the budget no line
+   ever arrived, the check was never reached, and the parent blocked **indefinitely** instead of
+   killing. **The wall-clock kill this whole instrument exists to apply had never once executed.**
+   Reading now happens on a reader thread feeding a queue the parent polls with a timeout.
+
+Both are the same species as the two errors §11.1 already records: **the harness measuring itself**.
+The probe measured warm-up, the registry measured a scope guard, and this measured neither because
+it could not finish. Three in a row on one question is worth naming as a pattern rather than three
+accidents — a timing instrument needs its own verification before its output is read.
+
+**Verification before relaunch**, which is what the first two attempts lacked: at a 0.002 s budget
+every sampled graph is killed, the parent recovers past each culprit, and coverage is exact — 6 of 6,
+no strays. At a 5 s budget on mutagenicity, 8 of 8 encode including **n = 35**, no strays, no gaps.
+
+**Budget caveat, to be quoted with any result.** The kill budget is **60 s** while D14's frozen
+encoding budget is **300 s**, so a kill count here is an **upper bound** on the 300 s kill count.
+`max_ok_s` is recorded so the gap can be judged rather than assumed: if no survivor approaches 60 s,
+the cut is clean and a 5× budget would change little.
+
+**Status: running.** Relaunched 2026-08-23 with provenance recorded in the result
+(`engine`, `build_hash`, `src_commit = c1d36b1`) and a refusal to measure on any engine but `cpp`.
+The report is written after **every cell**, so a mid-run kill now leaves a usable partial record
+rather than nothing. **The verdict is not yet in this note; do not quote one until it is.**
+
+> ⚠ **`ps` on this box is proxied through `rtk` and returned empty output for a process that was
+> demonstrably alive**, which briefly produced a false "the run died" diagnosis here. `pgrep -a`
+> reported it correctly. Same class as the stale `git log` head T-04a hit — **trust `pgrep -a` and
+> `git rev-parse`, not `ps` or `git log`.**
+
+## 12. Defects found in files this ticket does not own, 2026-08-23
+
+Reported rather than patched: `.claude/notes/review/plan/` is the orchestrator's to change at close,
+via `review-close`.
+
+1. 🔴 **`tickets.md:158` carries the stale `N_actual` formula.** It reads
+   `N_actual = 182 − 15k − 8d`, which predates **both** the `+k·d` correction and the `c` term added
+   to [preregistration](../plan/preregistration.md) §5 on 2026-08-16. With `k = 3` the correct form
+   is `182 − 15k − 8d + k·d − c = 137 − 5d − c`; the board's version gives `137 − 8d` and therefore
+   **under-counts by `3d`** — the anti-conservative direction, and precisely the defect the `+k·d`
+   amendment exists to prevent. The same stale formula reached T-04a's close independently, so this
+   is two documents carrying it, not a transcription slip in one. **`preregistration.md` §5 is
+   correct and is the authority.** Enumeration remains authoritative over any closed form.
+
+2. ✅ **`data.md` §7's two-root path assignment is already discharged — by T-05, not by T-06.**
+   The defect as stated (`cohort_audit.py` and `export_graphs.py` resolving GraphEdX as
+   `<source>/GED_PRECOMPUTED/<NAME>`, with no single `--source` reaching both trees) **no longer
+   exists in the merged tree**. Both call sites now go through
+   `benchmarks/real_data/eval_setup/data_roots.py`, a resolver that probes known layouts newest-first
+   with an environment override and names every candidate on failure; it carries
+   `tests/unit/test_data_roots.py`. Verified against the live tree: one `--source` resolves IAM to
+   `APPROX_GED/datasets/IAM_Database/extracted` and GraphEdX to `GED_PRECOMPUTED/datasets`. **No T-06
+   action is required and none was taken** — the item should be struck rather than re-implemented.
+
+3. **`eval_setup/wl_kernel_computer.py` defaulted to `n_iter = 5`.** That is `h = 5`, three
+   refinement rounds past the frozen `h = 2`, with **no off-by-one to absorb it**
+   (`grakel(n_iter=k) == ours(h=k)`, corrected 2026-08-15). Every WL number that module produced was
+   of a different kernel from the one the paper reports. Fixed in `b7ce447`: the backend's
+   `WL_ROUNDS`, `wl_kernel_computer` and `eval_setup` are now bound to one constant, asserted equal
+   to 2. **E10's existing WL numbers were produced under the old default and need re-checking**;
+   the board already anticipates §4.1's WL row moving on Letter LOW from 0.895 to 0.7792.
