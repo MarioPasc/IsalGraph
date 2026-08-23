@@ -1149,3 +1149,105 @@ when the k-excluded backends are dropped.
 > of the pilot is a **prior**, and a strong one, but the ticket exists because a prior is not a
 > result. If the full recompute overturns any of these three, that is a finding and not an
 > embarrassment.
+
+---
+
+## 15. RESULT — the competitor campaign, `c`, and a defence that does not work
+
+Campaign complete 2026-08-23, 14:26:52Z → 14:47:19Z (**20 min 27 s**), 135 cells, **0 failures**,
+both file-count assertions passed. Manifest: 155 cells, **0 contract violations**, cohort coverage
+complete on both suites.
+
+### 15.1 `c` is set by `agm_cam`'s scope guard, and the split was load-bearing
+
+**`agm_cam` is refused above `n = 12` by policy**, exactly like `isalgraph_canonical`. The split is
+clean on every dataset — `ok` tops out at `n = 12`, refusals start at `n = 13`:
+
+| cell | rate | scope | budget | infra |
+|---|---|---|---|---|
+| suite2/protein/agm_cam | **6.15 %** | 534 | 0 | 0 |
+| suite2/mutagenicity/agm_cam | **6.29 %** | 3,754 | 32 | 0 |
+| suite2/coil_del/agm_cam | **31.15 %** | 2,685 | 0 | 0 |
+| suite2/grec/agm_cam | 67.08 % | 214 | 0 | 0 |
+| suite2/aids_iam/agm_cam | 82.55 % | 311 | 5 | 0 |
+| suite2/aids_graphedx/agm_cam | 93.53 % | 50 | 3 | 0 |
+| suite2/mutagenicity/min_dfs | 94.78 % | 0 | 207 | **4** |
+| suite1/aids/agm_cam | 99.61 % ✅ | 0 | 3 | 0 |
+
+**These reproduce `preregistration` §5.1's own table**, measured by T-04 at `n = 200`: protein 90 %
+fail (measured **93.9 %**), mutagenicity 98 % (**93.7 %**), aids_iam 18 % (**17.5 %**), Letter ×3 and
+LINUX 0 % (**0 %**). The rule was written for this case and the case arrived as predicted.
+
+**§5.1's criterion decides it and needs no judgement from me:** *"computable on a dataset iff it
+produces an encoding for ≥ 99 % of that dataset's graphs."* A scope refusal produces no encoding, so
+it counts — **even though §11.1 established that a scope refusal measures a guard, not an encoder**.
+Those two facts are compatible: *why* the cell is empty is a matter for the prose, *whether* it is
+empty decides the test's existence. The distinction is still recorded per cell, because a reader must
+be able to see that `agm_cam` is guarded rather than slow.
+
+### 15.2 `N_actual` — enumeration and closed form agree exactly
+
+`k = 3`, 7 non-computable triples, and **`discrepancy = 0` at every `d`**:
+
+| `d` | `N_actual` | closed form | `c` |
+|---|---|---|---|
+| 0 | **123** | 123 | 14 |
+| 1 | 119 | 119 | 13 |
+| 2 | 115 | 115 | 12 |
+| 3 | 111 | 111 | 11 |
+| 4 | 107 | 107 | 10 |
+| 5 | 102 | 102 | 10 |
+
+`c` **falls as `d` rises** — §5.2's precedence working: a cell removed by `d` is not charged again to
+`c`. Final `c` awaits F1.
+
+### 15.3 🔴 "The competitors that beat us are the ones that fail to scale" — TESTED, FALSE
+
+A natural defence, and worth testing rather than assuming: if the winners are exactly the
+representations excluded by `k` (metric axioms) or by `c` (computability), the comparison is not
+really lost.
+
+**It is false.** Restricting to competitors that are **both** admissible (not `k`-excluded) **and**
+computable (≥ 99 % on that dataset), `isalgraph_pruned` is still beaten on **15 of 15** records.
+
+| winner | fails? | wins on |
+|---|---|---|
+| `agm_cam` | fails 6 **Suite-2** cells | aids, iam_letter_high, linux — **all Suite 1, where it completes** |
+| `min_dfs` | fails **mutagenicity only** | aids_iam/lb, grec/lb, iam_letter_low, iam_letter_med — **all cells it survives** |
+| `wl_subtree` | **fails nothing** | coil_del/lb, mutagenicity/lb, protein/lb |
+| `sparse6_nauty` | **fails nothing** | coil_del/ub, mutagenicity/ub, protein/ub |
+| `nauty_graph6` | **fails nothing** | grec/ub, aids_iam/ub |
+
+**The exclusions and the wins are disjoint.** `agm_cam` fails on the six Suite-2 datasets where it
+never wins anyway; on those exact datasets the winners are `wl_subtree`, `sparse6_nauty` and
+`nauty_graph6` — **three representations that complete on 100 % of every cell of both cohorts and
+pass every metric axiom.** There is no ground on which to exclude them.
+
+**So the honest positioning is not "IsalGraph approximates GED better".** On the pilot it does not,
+anywhere. What survives is narrower and still real:
+
+1. **Completeness is a theorem, not a measurement** — `w*_G = w*_H ⟺ G ≅ H` within a directedness
+   class. `nauty_graph6` and `sparse6_nauty` are also complete invariants, so this is shared, not
+   unique.
+2. **It computes everywhere.** 100 % of both cohorts, with 2.50 % D14 censoring on Mutagenicity
+   retained with its greedy-min fallback. `agm_cam`, the strongest Suite-1 competitor, manages
+   **6 %** of protein.
+3. **The representation is an executable instruction string**, which is what no serialisation
+   competitor is. That is the actual novelty and it is not a ρ claim at all.
+
+**This is a prior, not a result** (§14): `f5_200` is `n = 200`, one seed-42 draw, descriptive by its
+own note, and pre-BH. T-06 tests it at 16,370. But the defence above is **structural** — it depends
+on which representations are excludable, not on the ρ values — so a full-cohort recompute will not
+rescue it. If the ranking is to change, it must change on the ρ values themselves.
+
+### 15.4 Defect found — `t06_completion` counts a censored graph as not completed
+
+`suite2/mutagenicity/isalgraph_pruned` reports `n_completed = 3939`, `n_censored = 101`,
+`rate = 0.9750`, `meets_threshold = false`. **Wrong under D14/F-4**: a censored graph is *retained
+with its greedy-min fallback string*, so it **does** produce an encoding — which is precisely what
+§5.1's criterion asks for. The manifest gate counts it as complete (100 %).
+
+**Inert today**, for two independent reasons: §5.1 consequence 2 exempts the IsalGraph arm from `c`
+entirely, and no comparator produced a censored row. **Latent tomorrow**: a comparator with censored
+rows would be under-counted, over-charged to `c`, and would shrink `N_actual` — the anti-conservative
+direction, and the sixth instance of §8.1's pattern.

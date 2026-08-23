@@ -37,10 +37,27 @@ EXPECTED_COHORT: Final[dict[str, int]] = {"suite1": 5_350, "suite2": 16_370}
 SCOPE_ERROR_KINDS: Final[frozenset[str]] = frozenset({"SuiteScopeError"})
 
 #: ``error_kind`` values that denote a genuine *budget* or resource failure --
-#: the representation tried and could not finish.
+#: the representation tried and could not finish. ``MinDfsBudgetExceeded`` and
+#: ``WorkerExit`` were added 2026-08-23 after the production campaign surfaced
+#: them as unclassified; the gate flagging them rather than silently bucketing
+#: them is why they were noticed.
 BUDGET_ERROR_KINDS: Final[frozenset[str]] = frozenset(
-    {"AGMBudgetExceeded", "EncodeBudgetExceeded", "TimeoutError", "MemoryError"}
+    {
+        "AGMBudgetExceeded",
+        "EncodeBudgetExceeded",
+        "MinDfsBudgetExceeded",
+        "TimeoutError",
+        "MemoryError",
+    }
 )
+
+#: ``error_kind`` values denoting an *infrastructure* failure -- the worker
+#: process died rather than the algorithm declining. Deliberately kept out of
+#: :data:`BUDGET_ERROR_KINDS`: a crashed worker is not evidence that a
+#: representation cannot encode a graph, and folding it into the budget count
+#: would let a harness defect be read as a capability limit. It still counts
+#: against completion, because no encoding was produced either way.
+INFRASTRUCTURE_ERROR_KINDS: Final[frozenset[str]] = frozenset({"WorkerExit"})
 
 
 class ManifestError(Exception):
@@ -61,7 +78,8 @@ class CellReport:
         n_error: Rows with ``status == "error"``.
         n_scope_errors: Error rows whose kind is a scope refusal.
         n_budget_errors: Error rows whose kind is a budget or resource failure.
-        n_unclassified_errors: Error rows whose kind matches neither set.
+        n_infra_errors: Error rows whose kind is an infrastructure failure.
+        n_unclassified_errors: Error rows whose kind matches none of the sets.
         error_kinds: Raw ``error_kind`` histogram over error rows.
         symbol_sep: The frozen separator from ``metadata``.
         build_hash: ``isalgraph_build_hash`` from ``metadata``.
@@ -80,6 +98,7 @@ class CellReport:
     n_error: int
     n_scope_errors: int
     n_budget_errors: int
+    n_infra_errors: int
     n_unclassified_errors: int
     error_kinds: dict[str, int]
     symbol_sep: str
@@ -102,19 +121,20 @@ class CellReport:
         return (self.n_ok + self.n_censored) / self.n_graphs
 
 
-def _classify_errors(kinds: Counter[str]) -> tuple[int, int, int]:
-    """Split an ``error_kind`` histogram into scope, budget and unclassified counts.
+def _classify_errors(kinds: Counter[str]) -> tuple[int, int, int, int]:
+    """Split an ``error_kind`` histogram into scope, budget, infra and unknown counts.
 
     Args:
         kinds: Histogram of ``error_kind`` values over error rows.
 
     Returns:
-        Triple ``(n_scope, n_budget, n_unclassified)``.
+        Quadruple ``(n_scope, n_budget, n_infra, n_unclassified)``.
     """
     n_scope = sum(v for k, v in kinds.items() if k in SCOPE_ERROR_KINDS)
     n_budget = sum(v for k, v in kinds.items() if k in BUDGET_ERROR_KINDS)
-    n_other = sum(kinds.values()) - n_scope - n_budget
-    return n_scope, n_budget, n_other
+    n_infra = sum(v for k, v in kinds.items() if k in INFRASTRUCTURE_ERROR_KINDS)
+    n_other = sum(kinds.values()) - n_scope - n_budget - n_infra
+    return n_scope, n_budget, n_infra, n_other
 
 
 def _check_status_invariants(
@@ -261,7 +281,7 @@ def verify_cell(path: Path) -> CellReport:
             )
 
     kinds = Counter(error_kind[status == "error"].tolist())
-    n_scope, n_budget, n_other = _classify_errors(kinds)
+    n_scope, n_budget, n_infra, n_other = _classify_errors(kinds)
 
     return CellReport(
         suite=suite,
@@ -273,6 +293,7 @@ def verify_cell(path: Path) -> CellReport:
         n_error=int((status == "error").sum()),
         n_scope_errors=n_scope,
         n_budget_errors=n_budget,
+        n_infra_errors=n_infra,
         n_unclassified_errors=n_other,
         error_kinds=dict(kinds),
         symbol_sep=sep,
@@ -363,7 +384,8 @@ def _print_summary(manifest: dict[str, object]) -> None:
             f"  {c['suite']}/{c['dataset']}/{c['representation']:16s} "
             f"rate={c['completion_rate']:.4f} ok={c['n_ok']} cens={c['n_censored']} "
             f"err={c['n_error']} (scope={c['n_scope_errors']} budget={c['n_budget_errors']} "
-            f"other={c['n_unclassified_errors']}) {c['error_kinds'] or ''}"
+            f"infra={c['n_infra_errors']} other={c['n_unclassified_errors']}) "
+            f"{c['error_kinds'] or ''}"
         )
 
     prov = manifest["provenance"]
