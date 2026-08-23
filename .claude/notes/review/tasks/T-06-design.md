@@ -1331,3 +1331,87 @@ of those deficits are resolvable at the graph-level bootstrap and seven are ties
 competitors responsible for the resolvable losses — `wl_subtree`, `min_dfs`, `agm_cam` — are not
 excludable by `k` or `c` on the datasets where they win.* The structural argument of §15.3 is
 unchanged; its arithmetic is now stated at the right strength.
+
+---
+
+## 17. 🔴 RESULT — the within-`n` correlation collapses with graph size
+
+**This is the ticket's central measurement and it answers the reviewers' question directly.** The
+figure and the table below are produced by `benchmarks/real_data/eval_size_profile/`, run over the
+full cohort: 2,355 strata, 1,553 with a defined ρ, 582 dataset-aggregated points.
+
+### Why a within-`n` stratum is the right instrument
+
+A pair enters stratum `n` only when `n_i = n_j = n`. Inside a stratum the size null `|n_i − n_j|`
+is **identically zero**, so its rank correlation has no denominator and there is nothing to
+subtract. Raw ρ inside a stratum is therefore the structural signal with the size channel removed
+**by construction rather than by adjustment** — which is exactly what a reviewer asking "is this
+just size agreement?" needs to see. It is `f5`'s `equal_n` view decomposed by `n` instead of pooled.
+
+### `isalgraph_pruned`, exact-GED regime — 1.00 at `n = 3` to 0.26 at `n = 12`
+
+| `n` | ρ | 95 % CI | datasets |
+|---|---|---|---|
+| 3 | **1.0000** | [1.0000, 1.0000] | 2 |
+| 4 | 0.9931 | [0.9922, 0.9938] | 3 |
+| 5 | 0.8785 | [0.8660, 0.8899] | 3 |
+| 6 | 0.5661 | [0.5056, 0.6210] | 3 |
+| 7 | 0.4383 | [0.2954, 0.5620] | 4 |
+| 8 | 0.4177 | [0.1516, 0.6274] | 2 |
+| 9 | 0.4135 | [0.2400, 0.5614] | 2 |
+| 10 | 0.3161 | [0.1804, 0.4400] | 2 |
+| 11 | 0.2288 | [0.1033, 0.3471] | 1 |
+| 12 | **0.2608** | [0.1368, 0.3767] | 1 |
+
+Every point is BH-significant against ρ = 0, so the decay is not a power artefact — the correlation
+is reliably **present** and reliably **small** by `n = 12`.
+
+### Above `n = 12` it degrades to noise, for every representation
+
+| representation | strata (`n` 13–76) | BH-significant | last significant `n` |
+|---|---|---|---|
+| `wl_subtree` | 52 | **22** | 37 |
+| `sparse6_nauty` | 52 | 16 | **42** |
+| `min_dfs` | 48 | 14 | 38 |
+| `nauty_graph6` | 52 | 6 | 33 |
+| **`isalgraph_pruned`** | 52 | **6** | **29** |
+
+Mean ρ by regime, best first:
+
+| regime | ranking |
+|---|---|
+| `n` 3–12, exact | `min_dfs` 0.644 · `agm_cam` 0.643 · **`isalgraph_pruned` 0.551** · `isalgraph_canonical` 0.537 |
+| `n` 13–30, UB | `wl_subtree` 0.202 · `sparse6_nauty` 0.175 · `min_dfs` 0.158 · **`isalgraph_pruned` 0.135** |
+| `n` 31+, UB | `sparse6_nauty` 0.162 · `nauty_graph6` 0.153 · `wl_subtree` 0.147 · `min_dfs` 0.138 |
+
+### What this means, stated plainly
+
+1. **The headline pooled ρ is mostly the size channel.** The paper reports ρ ≈ 0.93 on sparse IAM.
+   Holding `n` fixed, the same arm scores **0.26 at `n = 12`** and **0.135** averaged over `n` 13–30.
+   The gap between those numbers *is* the size channel, and it is most of the correlation.
+2. **The collapse is not IsalGraph's alone.** Every representation falls the same way, and above
+   `n ≈ 40` no representation is reliably distinguishable from ρ = 0. This is a statement about
+   **Levenshtein-style distances on serialised graphs against GED**, not about IsalGraph in
+   particular — which makes it a more interesting finding than a defeat, and a fairer one.
+3. **`isalgraph_pruned` is last or near-last in every regime**, and has the *earliest* loss of
+   significance (`n = 29`) of the five computable arms. §16.5's conclusion is unchanged and now has
+   a mechanism attached.
+4. **`agm_cam` is absent above `n = 12` by construction** — its scope guard (§15.1) means it
+   contributes no bracket-regime strata at all. Its strong `n ≤ 12` showing (0.643) is measured
+   exactly where it is computable and nowhere else.
+
+### What may be claimed, and what may not
+
+**May be claimed:** the encoding is a complete invariant (§16 / ladder: zero collisions on 24.8 M
+pairs); its Levenshtein distance correlates with GED at small `n`; the correlation is significant
+throughout the exact regime.
+
+**May NOT be claimed:** that the distance approximates GED at the sizes Suite 2 covers. On this
+evidence it does not, and neither does any comparator. **Any sentence in the manuscript that quotes a
+pooled ρ as evidence of structural fidelity must be re-scoped**, because the within-`n` decomposition
+shows most of that ρ is size agreement.
+
+> **Descriptive, not confirmatory.** These strata are not a pre-registered family. The BH correction
+> is local to the figure, ranges over its own 582 points, and is stated on it. Nothing here feeds
+> F0, F1 or F2 — but it is the right diagnostic to put beside them, and it should reach the response
+> letter.

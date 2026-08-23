@@ -38,6 +38,10 @@ EXACT_CEILING: Final[int] = 12
 
 FDR_Q: Final[float] = 0.05
 
+#: Above this many points in one series, draw the interval as a band rather
+#: than as error bars: a picket fence of caps hides the trend it qualifies.
+DENSE_SERIES: Final[int] = 20
+
 #: Drawn in this order so the reference arm is never hidden behind a comparator.
 REPRESENTATION_ORDER: Final[tuple[str, ...]] = (
     "isalgraph_pruned",
@@ -281,21 +285,32 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
                 ys = [p.rho for p in sel]
                 lo = [p.rho - p.ci_lo for p in sel]
                 hi = [p.ci_hi - p.rho for p in sel]
-                ax.errorbar(
-                    xs,
-                    ys,
-                    yerr=[lo, hi],
-                    color=colours[rep],
-                    linestyle=styles[ref],
-                    marker="o",
-                    markersize=3.2,
-                    linewidth=1.2,
-                    elinewidth=0.6,
-                    capsize=1.5,
-                    alpha=0.9 if ref != "lb" else 0.65,
-                    label=f"{DISPLAY.get(rep, rep)}"
-                    + ("" if ref == "exact" else f" · {ref.upper()}"),
+                label = f"{DISPLAY.get(rep, rep)}" + (
+                    "" if ref == "exact" else f" · {ref.upper()}"
                 )
+                alpha = 0.9 if ref != "lb" else 0.65
+                if len(xs) > DENSE_SERIES:
+                    # Error bars on a dense series produce a picket fence that
+                    # hides the trend they exist to qualify. A translucent band
+                    # carries the same interval and stays legible.
+                    ax.plot(
+                        xs, ys, color=colours[rep], linestyle=styles[ref],
+                        marker="o", markersize=2.0, linewidth=1.0,
+                        alpha=alpha, label=label,
+                    )
+                    ax.fill_between(
+                        xs,
+                        [p.ci_lo for p in sel],
+                        [p.ci_hi for p in sel],
+                        color=colours[rep], alpha=0.10, linewidth=0,
+                    )
+                else:
+                    ax.errorbar(
+                        xs, ys, yerr=[lo, hi],
+                        color=colours[rep], linestyle=styles[ref],
+                        marker="o", markersize=3.2, linewidth=1.2,
+                        elinewidth=0.6, capsize=1.5, alpha=alpha, label=label,
+                    )
                 marked = [(p.n, p.rho) for p in sel if (rep, ref, p.n) in significant]
                 if marked:
                     ax.scatter(
