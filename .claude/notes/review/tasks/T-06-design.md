@@ -386,7 +386,7 @@ Each names the command or artifact that proves it. **A ticket without these cann
 | **A4** | Distance matrices join T-05's on `graph_ids`, and every matrix is symmetric, zero-diagonal, finite | `gate_T06_structural.json`, 0 violations |
 | **A5** | **Every printed ρ carries a graph-level bootstrap CI and the size null** | `rho_table.json`: no row with `ci_low`/`ci_high`/`null_rho` null |
 | **A6** | F0 and F1 run under BH at q = 0.05 and **`d` is determined by F1's pre-declared rule**, not chosen | `family_F0.json`, `family_F1.json`; `d` derived in code from the CI/threshold rule |
-| **A7** | `N_actual` is computed from `182 − 15k − 8d − 20s` with `k`, `d`, `s` each traceable to the rule that set it, and the **BH-over-`N_max` sensitivity column is printed** | `family_F2.json` carries `k`, `d`, `s`, `N_actual`, `N_max`, and both threshold columns |
+| **A7** | `N_actual` is computed **by enumeration of the admissible cell set**, with `k`, `d`, `c` each traceable to the rule that set it, and the **BH-over-`N_max` sensitivity column is printed**. Closed form `182 − 15k − 8d + k·d − c` printed as a check only (`= 137 − 5d − c` at `k = 3`); **enumeration wins on disagreement** | `family_F2.json` carries `k`, `d`, `c`, `N_actual`, `N_max`, and both threshold columns |
 | **A8** | The bootstrap resamples **graphs**, never pairs | a test asserts the resampling unit; `correlation_metrics.bootstrap_correlation` is not imported by any T-06 module |
 | **A9** | The pair-accounting ladder is emitted per dataset: `raw → connected → GED-available → GED > 0 → Lev > 0 → analysed` | `ladder.json`, 10 rows |
 | **A10** | Full suite green, ruff clean, `mypy --strict` clean; nothing in `scratchpad/` | `$PY -m pytest tests/ -q`; ≥ 2,106 passed (T-04's reference state) |
@@ -418,6 +418,30 @@ I halt and bring a **diagnosed** problem with costed options, rather than procee
 | Date | Entry |
 |---|---|
 | 2026-08-16 | Opened. Plan read; state measured (§1). PI decided items 2–4 of §2; item 1 deferred to the §1.6 probe. Two plan claims corrected by measurement: the IAM GXL tree is **present**, and both canonical forms are **verified complete invariants** that agree on only 13.8 % of classes |
+| 2026-08-23 | Wave 1 verified against its artifacts by the orchestrator, not by report. Cohort gate **passes**: 5,350 Suite-1 under both representations, 16,370 Suite-2 under `pruned`. D14 censoring **101 graphs, all Mutagenicity** (2.50 % of it, 0.617 % of the cohort), zero elsewhere. Provenance uniform: `build_hash 298fc1188bf1b051` — **equal to the live engine** — `encode_budget_s = 300.0`, `seed = 42`, `schema t06.1`. The two distinct `src_commit` values are **benign**: the diff between them touches only `src/isalgraph/competitors/`, leaving `core/` and the encoding driver untouched |
+| 2026-08-23 | **F-1 closed** (§11.4). Reference arm `isalgraph_pruned`, justified by the `SUITE1_ONLY` scope policy, **not by cost**. Kill counts **NOT MEASURED** after four diagnosed instrument failures. `43 s/graph`, `≈ 520×` and `≥ 6.8 core-hours` **retracted as unprovenanced**. No relaunch |
+| 2026-08-23 | **Date correction.** A handoff asserted the current date was 2026-08-17 and asked that `2026-08-23` stamps be rewritten as false provenance. **They are correct provenance and were kept.** Independently confirmed: system clock, HEAD `ed77037` committed `2026-08-23T11:24:33+02:00`, and §11.3's own recorded `2026-08-23T09:22:53Z`. Deadline distance is **8 days, not 14** |
+
+---
+
+### 8.1 One recurring failure mode, named once — reductions that shrink the BH denominator
+
+Five instances to date, in five places, all in the **same direction**: every one *lowers* `N_actual`
+and therefore *weakens* the BH correction on every surviving test. None ever erred the other way.
+That asymmetry is the tell — a transcription slip is direction-neutral, a motivated one is not.
+
+| # | Where | The reduction |
+|---|---|---|
+| 1 | the `s` rule | dropped cells the data did not license dropping |
+| 2 | closed-form arithmetic | `+k·d` omitted |
+| 3 | a cancellation argument | cancelled a term that does not cancel |
+| 4 | `tickets.md:158` | `182 − 15k − 8d` → under-counts by `3d` |
+| 5 | **this note, §6/A7** | `182 − 15k − 8d − 20s` — a *fourth* variant, carrying the retired `s` term |
+
+**Rule, adopted here:** `preregistration.md` §5 is the sole authority for the closed form
+(`182 − 15k − 8d + k·d − c` = `137 − 5d − c` at `k = 3`), **enumeration is authoritative over any
+closed form**, and any proposed change that shrinks `N_actual` is treated as a defect until
+re-derived from the admissible cell set. A7 above is corrected accordingly.
 
 ---
 
@@ -726,15 +750,31 @@ encoding budget is **300 s**, so a kill count here is an **upper bound** on the 
 `max_ok_s` is recorded so the gap can be judged rather than assumed: if no survivor approaches 60 s,
 the cut is clean and a 5× budget would change little.
 
-**Status: running.** Relaunched 2026-08-23 with provenance recorded in the result
+~~**Status: running.**~~ Relaunched 2026-08-23 with provenance recorded in the result
 (`engine`, `build_hash`, `src_commit = c1d36b1`) and a refusal to measure on any engine but `cpp`.
 The report is written after **every cell**, so a mid-run kill now leaves a usable partial record
-rather than nothing. **The verdict is not yet in this note; do not quote one until it is.**
+rather than nothing.
+
+> ## ⚠ SUPERSEDED 2026-08-23 — **the third attempt died too.** See §11.4.
+>
+> Verified at `2026-08-23T14:13Z`: no `f1_verify` or `f1_worker` process (`pgrep -a -f
+> 'f1_ver[i]fy'`, bracketed so the pattern cannot self-match); `f1_verify.log` present but **zero
+> data rows**; `f1_idx_protein.txt` (765 B) shows it reached protein and stopped; no
+> `f1_verify.json` anywhere on the box — worktree, shared checkout, `/tmp`, `$HOME`, and both
+> `Sandisk2TB` trees were searched. **No cell ever completed. Quote nothing from this run.**
 
 > ⚠ **`ps` on this box is proxied through `rtk` and returned empty output for a process that was
 > demonstrably alive**, which briefly produced a false "the run died" diagnosis here. `pgrep -a`
 > reported it correctly. Same class as the stale `git log` head T-04a hit — **trust `pgrep -a` and
 > `git rev-parse`, not `ps` or `git log`.**
+>
+> **Amended 2026-08-23.** `pgrep -a -f <name>` has the *opposite* failure mode and it fired twice
+> in one session, in both directions: the shell wrapper carries the pattern in its own command
+> line, so a bare `pgrep -a -f f1_verify` **always matches itself** and reads as "still running"
+> when nothing is. Both sessions on this box made that call. **Use `pgrep -a -f 'f1_ver[i]fy'`** —
+> the bracket matches the real process and cannot match the literal pattern text — **and confirm a
+> claimed run against its artifact, never against a process list alone.** A run that is alive but
+> has produced no output for hours is not meaningfully distinguishable from a dead one.
 
 ## 12. Defects found in files this ticket does not own, 2026-08-23
 
@@ -835,3 +875,88 @@ evidence that never needed them.
 > encoder against the expensive tail of the other and overstate nothing but explain less. Total cost
 > is also the quantity the decision actually turns on: whether the arm is computable across the
 > cohort at all.
+
+---
+
+## 11.4 RESULT — F-1 closed 2026-08-23. It never needed a timing argument
+
+**F-1 stands: `isalgraph_pruned` is the reference arm on both suites.** The kill counts §11.3
+declared were **never measured**, and the cost figures §11.3 built its case on are **retracted**.
+The verdict is unchanged, because the reason that actually forces it is a policy, not a speed.
+
+### The operative reason
+
+`isalgraph_canonical` **cannot produce Suite-2 columns at any speed.** `SUITE1_ONLY` is a frozen
+T-04 policy: the competitors registry raises `SuiteScopeError` above `n = 12` *before attempting an
+encode*. §11.1 measured that guard directly — the split is exactly at `n(ok) max = 12` /
+`n(err) min = 13`, and the counts equal `#{n ≤ 12}` in each sample precisely.
+
+So the arm is excluded by scope, and **a timing measurement could not have changed the outcome**.
+§11.1 already said as much — "even a fast result does not by itself reopen F-1; it would have to go
+to the PI" — which means the four runs below were, in hindsight, gathering corroboration for a
+decision already forced on other grounds. Recording that is more useful than the number would have
+been.
+
+### What is retracted, and why
+
+| Retracted | Reason |
+|---|---|
+| **`canonical` ≈ 43 s/graph** | **No artifact.** §11.3 records it as "this run, measured", but the run left no `f1_verify.json` and a zero-row log. The figure came from a live observation of a process that never wrote a result, computed as wall-clock ÷ positions *including kills* — not commensurable with the per-graph `seconds` it was compared against |
+| **the ≈ 520× cost ratio** | Verified numerator, unprovenanced denominator. A ratio is not more defensible than its weaker half |
+| **projected ≥ 6.8 core-hours** | Derived from the retracted per-graph figure |
+
+**The §1.6 probe's kill counts do not rescue these.** They are warm-up-contaminated and were
+retracted already; using them to re-float a retracted figure would be circular. §11.3's own use of
+that probe was legitimate and narrower — choosing *which* dataset to retain, a decision its
+contamination cannot corrupt — and that use stands.
+
+### What survives, verified
+
+Read directly from `encodings/suite2/protein__isalgraph_pruned.npz` by the orchestrator on
+2026-08-23, independently of any report:
+
+| protein, `isalgraph_pruned` | measured |
+|---|---|
+| graphs | **569** |
+| total encode time | **47.12 s** |
+| mean / median | **82.8 ms** / **3.2 ms** |
+| max | **15.01 s**, at `n_max = 96` |
+
+All five reproduce §11.3 exactly. Provenance in the file: `isalgraph_build_hash =
+298fc1188bf1b051` (**equal to the live engine's**, so the `.so` has not drifted since wave 1),
+`encode_budget_s = 300.0`, `seed = 42`, `schema_version = t06.1`.
+
+### Kill counts: NOT MEASURED — four attempts, four diagnosed instrument failures
+
+| # | Date | What it actually measured | Defect |
+|---|---|---|---|
+| 1 | 2026-08-16 | **Start-up cost**, not the encoder | One graph per subprocess; a 4.95 ms encode read as 579 ms (**×117**) |
+| 2 | 2026-08-16 | **A scope guard**, not a timeout | Ran through the competitors registry; every failure `SuiteScopeError`, 0 budget failures (§11.1) |
+| 3 | 2026-08-16 | **Nothing** — could not terminate | Worker given the contiguous *span* of the sample, not the sample (2.8×–19.7× the work); and `readline()` blocked so the deadline was never re-checked (§11.2) |
+| 4 | 2026-08-23 | **Nothing** — died before any cell completed | Relaunched after `7274f13` fixed both defects above; zero-row log, no JSON, no surviving process |
+
+**This is one pattern, not four accidents: the harness measuring itself.** A timing instrument
+needs its own verification before its output is read — and three of the four failures were only
+visible *because* someone checked an artifact rather than a status line. The fourth was hidden by
+the inverse error, below.
+
+### The process-liveness trap, both directions in one session
+
+§11.2 records `ps` returning empty for a live process. The complement bit twice on 2026-08-23:
+**`pgrep -a -f f1_verify` matches the shell wrapper running the `pgrep`**, so it reports a hit when
+nothing is running. Two sessions independently read that as "still executing". The rule that
+survives both failure modes:
+
+> **Confirm a run against its artifact, not against a process list.** Use
+> `pgrep -a -f 'f1_ver[i]fy'` when a process check is genuinely needed. A run that is alive but has
+> written nothing for hours is not usefully different from a dead one.
+
+### Decision
+
+**No relaunch.** With 8 days to the 2026-08-31 deadline, ~5 h of exclusive box time to corroborate
+a verdict that does not depend on it is not a defensible trade against the competitor-encoding
+campaign it would block. Authorised in this session's status report.
+
+**For the response letter:** the reference arm is justified by scope, not by cost. Do not quote
+43 s/graph, 520×, or 6.8 core-hours — they are retracted here and must not survive into the
+manuscript or the letter.
