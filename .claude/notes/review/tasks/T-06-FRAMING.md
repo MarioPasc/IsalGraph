@@ -710,3 +710,53 @@ degrades on harder data", because it names *what* gets harder and shows the base
 **Pending:** `iam_letter_med`'s β vector should sit between LOW and HIGH. **If it breaks the monotone,
 that is more interesting than the trend** and must be reported — a broken monotone on a controlled
 family would need explaining, not smoothing.
+
+### 11.7 The straddle, finally stated correctly — 6 of 6 on two quantities, with a dose–response
+
+This **replaces** §11.2 item 3, withdrawn in §11.6. Sixteen production fits, six datasets carrying
+both bounds. Orchestrator-verified arithmetic.
+
+| dataset | β_lev lb → ub | rises | size/Lev lb → ub | falls |
+|---|---|:---:|---|:---:|
+| `aids_graphedx` | 0.1552 → 0.3519 | ✓ | 5.6× → 1.8× | ✓ |
+| `grec` | 0.1764 → 0.4475 | ✓ | 4.9× → 1.5× | ✓ |
+| `iam_letter_low` | 0.2788 → 0.3082 | ✓ | 2.5× → 1.8× | ✓ |
+| `iam_letter_med` | 0.2862 → 0.2974 | ✓ | 2.6× → 2.1× | ✓ |
+| `linux` | 0.2854 → 0.2985 | ✓ | 3.1× → 1.3× | ✓ |
+| `protein` | 0.1478 → 0.9869 | ✓ | 5.5× → 0.1× | ✓ |
+
+**6 of 6 on both**, sign test **p = 0.031** each.
+
+**The ratio is the better statement of the two.** It is a *within-model* comparison — β_size against
+β_lev inside one regression — so it is immune to any objection that β_lev moved because the response
+was rescaled between bounds. Quote the ratio; keep β_lev beside it.
+
+#### The dose–response is what makes this a mechanism rather than a coincidence
+
+The further a bound sits from the truth in size-domination, the more weight transfers:
+
+> **Spearman(LB ratio, ratio drop) = 0.886, p = 0.019; Pearson = 0.950, n = 6.**
+
+`protein` and `aids_graphedx` carry the largest LB ratios (5.5×, 5.6×) and show the largest collapses
+(→0.1×, →1.8×); `iam_letter_low` and `iam_letter_med` carry the smallest (2.5×, 2.6×) and barely move
+(→1.8×, →2.1×). **A direction alone could be an artefact of the bounds' arithmetic; a graded
+magnitude that scales with the size-domination gap is a mechanism.** Six datasets is a small n and
+the p-values are correspondingly modest — say so — but a predicted direction, confirmed on 6/6 of two
+quantities, with a significant dose–response, is a different class of evidence from an observed
+correlation.
+
+#### Frozen statement
+
+> *"BRANCH-FAST's lower bound is more size-dominated than exact GED (+0.06) and IPFP's upper bound is
+> less (−0.18). Every downstream verdict inherits that: on all six datasets carrying both bounds, the
+> structural coefficient rises and the size-to-structure ratio falls from LB to UB, and the size of
+> that shift scales with how far the bound sits from the truth (ρ = 0.89)."*
+
+**This is a finding about BRANCH-FAST and IPFP**, useful to anyone bracketing GED, and only
+incidentally about us. It also explains — mechanically, not by appeal — every bracket-dependent
+verdict in the ticket: F1's `d = 7 of 10`, the size-null inversion on 7 of 10, and the competitor
+verdicts flipping between bounds.
+
+**What does NOT change:** size still dominates on **9 of 11** landed `lb`/`exact` fits, and the two
+exceptions remain `iam_letter_low`/exact and `protein`/ub — the same two cells the size-null
+instrument singled out independently.
