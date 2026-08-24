@@ -8,7 +8,9 @@
 #
 #   results/reports/T-06-full-recompute/
 #       REPORT.md        the headline document (DECISION_SUMMARY.md, promoted)
-#       PROVENANCE.md    which run produced this, in one page
+#       PROVENANCE.md    which run produced this -- GENERATED, never hand-written,
+#                        because a provenance page maintained by hand drifts from
+#                        the run it claims to describe and a later reader cannot tell
 #       figures/         pdf AND png, as T-27 ships both
 #       data/            the analysis JSONs a reader needs
 #
@@ -22,12 +24,14 @@
 # assertion at the end will say so.
 set -uo pipefail
 
+PY=${PY:-/home/mpascual/.conda/envs/isalgraph-cpp/bin/python}
 DATA=${DATA:-/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data}
 ROOT=${ROOT:-/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/results/reports}
 REPO=${REPO:-/home/mpascual/research/code/IsalGraph-T06}
 T06="$DATA/source/T06"
 OUT="$ROOT/T-06-full-recompute"
 
+cd "$REPO" || exit 1
 mkdir -p "$OUT/data" "$OUT/figures" || exit 1
 fail=0
 echo "=== T-06 archive -> $OUT ==="
@@ -71,12 +75,17 @@ for f in "$REPO/.claude/notes/review/tasks/T-06-FRAMING.md" \
   [ -f "$f" ] && cp -p "$f" "$OUT/"
 done
 
+# --- provenance, generated so it cannot drift from the run it describes -----
+"$PY" -m benchmarks.real_data.eval_stats.t06_f2 \
+  --provenance "$OUT/PROVENANCE.md" --out-dir "$T06/families" || fail=$((fail + 1))
+
 # --- verification ----------------------------------------------------------
 n_data=$(ls -1 "$OUT/data"/*.json 2>/dev/null | wc -l)
 n_gates=$(ls -1 "$OUT/data/gates"/*.json 2>/dev/null | wc -l)
 size_mb=$(du -sm "$OUT" | cut -f1)
 echo "=== data JSONs: $n_data | gates: $n_gates | figures: $figs | size: ${size_mb} MB ==="
 
+[ -s "$OUT/PROVENANCE.md" ] || { echo "!!! PROVENANCE.md missing or empty"; fail=$((fail + 1)); }
 [ "$figs" -eq 6 ] || { echo "!!! expected 6 figures (3 pdf + 3 png), got $figs"; fail=$((fail + 1)); }
 [ "$n_gates" -eq 3 ] || { echo "!!! expected 3 gate JSONs, got $n_gates"; fail=$((fail + 1)); }
 # A distance matrix copied here by mistake is the failure this guards against:

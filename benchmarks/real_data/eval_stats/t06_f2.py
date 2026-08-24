@@ -981,6 +981,83 @@ def campaign_status(partial_dirs: Sequence[Path], logs: Path | None) -> dict[str
     }
 
 
+def provenance_markdown(out_dir: Path, family: Path | None) -> str:
+    """Render the archive's ``PROVENANCE.md``.
+
+    **Generated, never hand-written.** A provenance page maintained by hand
+    drifts from the run it claims to describe, and a reader six months out has
+    no way to tell. Every value here is read from the artifact or the live
+    environment at the moment of archiving.
+
+    Args:
+        out_dir: Where the report tree is being written.
+        family: ``family_F2.json``, for the reduction terms.
+
+    Returns:
+        Markdown.
+    """
+    meta = _metadata(out_dir, {})
+    card: dict[str, Any] = {}
+    if family is not None and family.exists():
+        card = json.loads(family.read_text()).get("cardinality", {})
+
+    lines = [
+        "# T-06 — provenance",
+        "",
+        "Generated at archive time from the artifacts and the live environment. "
+        "Nothing here is transcribed by hand.",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| generated | `{meta['generated_utc']}` |",
+        f"| code_commit | `{meta['code_commit']}` |",
+        f"| src_commit | `{meta['src_commit']}` |",
+        f"| engine | `{meta['isalgraph_engine']}` |",
+        f"| build_hash | `{meta['isalgraph_build_hash']}` |",
+        f"| seed | `{meta['seed']}` |",
+        f"| encode_budget_s | `{meta['encode_budget_s']}` (F-3, killed subprocess) |",
+        "",
+        "## The confirmatory family",
+        "",
+        "| term | value | source |",
+        "|---|---|---|",
+        f"| `N_actual` | **{card.get('n_actual', 'n/a')}** | enumeration of the admissible "
+        "cell set — **this is the definition** |",
+        f"| closed form | {card.get('closed_form', 'n/a')} | "
+        f"`{card.get('closed_form_expression', 'n/a')}`, printed as a check only |",
+        f"| discrepancy | {card.get('discrepancy', 'n/a')} | enumeration minus closed form; "
+        "the enumeration wins on disagreement |",
+        f"| `k` | {card.get('k', 'n/a')} | representations with no admissible distance "
+        "(`competitors.md` 3.4), F5-blind |",
+        f"| `d` | {card.get('d', 'n/a')} | **not applied** — F0's majority branch fired, so "
+        "F1 removes nothing from a family that no longer contains its rows |",
+        f"| `c` | {card.get('c', 'n/a')} | cells whose representation falls below 99 % "
+        "completion at the 300 s budget |",
+        f"| `N_max` | {card.get('n_max', 'n/a')} | `preregistration.md` 4.2 |",
+        "",
+        "## Cohorts",
+        "",
+        "| | graphs | pairs |",
+        "|---|---:|---:|",
+        "| Suite 1 (`n <= 12`, exact GED) | 5,350 | 3,897,911 |",
+        "| Suite 2 (bracketed GED) | 16,370 | 21,710,892 |",
+        "",
+        "Both counts are gated in `data/gates/gate_T06_reproduction.json`; the per-dataset "
+        "pair accounting is in `data/ladder.json` and `data/ladder_suite1.json`, whose "
+        "`analysed` rung equals the `n_pairs` behind every rho in `data/rho_table.json`.",
+        "",
+        "## Reading order",
+        "",
+        "`REPORT.md` first — it opens with a five-line answer. `T-06-FRAMING.md` records the "
+        "framings that were **measured and rejected**, which is the part that saves the next "
+        "person work. `data/` holds the analysis JSONs; the encodings and distance matrices "
+        "they were computed from stay under `data/source/T06/` and are deliberately not "
+        "copied here.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the CLI parser."""
     ap = argparse.ArgumentParser(description="Run F2, the primary family.")
@@ -1011,6 +1088,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="write this shard's raw records here and stop, for a sharded run",
+    )
+    ap.add_argument(
+        "--provenance",
+        type=Path,
+        default=None,
+        help="write PROVENANCE.md here and stop",
     )
     ap.add_argument(
         "--status",
@@ -1445,6 +1528,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.provenance is not None:
+        args.provenance.parent.mkdir(parents=True, exist_ok=True)
+        family = args.out_dir / "family_F2.json"
+        args.provenance.write_text(provenance_markdown(args.out_dir, family))
+        print(f"wrote {args.provenance}")
+        return 0
 
     if args.status:
         # Default the log root to the campaign's conventional location so a bare
