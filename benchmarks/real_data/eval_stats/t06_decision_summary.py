@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -625,7 +626,9 @@ def rejection_composition(
     }
 
 
-def mrm_table(partial_dirs: Sequence[Path]) -> list[dict[str, Any]]:
+def mrm_table(
+    partial_dirs: Sequence[Path], logs: Path | None = None
+) -> list[dict[str, Any]]:
     """Collect D4's fits with their **whole** coefficient vector.
 
     ``beta1`` alone is a coefficient without its context. The model regresses
@@ -635,8 +638,16 @@ def mrm_table(partial_dirs: Sequence[Path]) -> list[dict[str, Any]]:
     larger on most fits. Reporting one without the other is the same shape of
     error as a rejection count without its composition.
 
+    Every field --- the beta vector, ``r_squared`` **and**
+    ``beta1_permutation_p`` --- comes from the partial, so the table is
+    single-sourced. Fits reported in a shard log but not yet written to a
+    partial are picked up separately and flagged ``landed = False``, because a
+    count that is about to move should say so before it moves: the reader then
+    sees a completing series rather than a changing story.
+
     Args:
         partial_dirs: Directories of shard partials.
+        logs: Optional shard-log directory, for fits still in flight.
 
     Returns:
         One record per ``(suite, dataset, reference)``, production fits only.
@@ -664,6 +675,34 @@ def mrm_table(partial_dirs: Sequence[Path]) -> list[dict[str, Any]]:
                         "r_squared": float(fit["r_squared"]),
                         "p_value": float(fit["beta1_permutation_p"]),
                         "n_pairs": int(fit["n_pairs"]),
+                        "landed": True,
+                    }
+                )
+
+    if logs is not None and logs.is_dir():
+        seen = {(r["dataset"], r["reference"]) for r in records}
+        pattern = re.compile(
+            r"(suite\d)/(\S+)\s+MRM@(\w+)\s+beta1=([+-][\d.]+)\s+p=([\d.]+)"
+        )
+        for path in sorted(logs.glob("f2_suite*.log")):
+            for match in pattern.finditer(path.read_text(errors="replace")):
+                suite, dataset, reference, beta, p_value = match.groups()
+                if (dataset, reference) in seen:
+                    continue
+                seen.add((dataset, reference))
+                records.append(
+                    {
+                        "suite": suite,
+                        "dataset": dataset,
+                        "reference": reference,
+                        "beta_levenshtein": float(beta),
+                        "beta_delta_n": float("nan"),
+                        "beta_delta_density": float("nan"),
+                        "ratio_size_over_lev": float("nan"),
+                        "r_squared": float("nan"),
+                        "p_value": float(p_value),
+                        "n_pairs": 0,
+                        "landed": False,
                     }
                 )
     return sorted(records, key=lambda r: (r["suite"], r["dataset"], r["reference"]))
@@ -1005,8 +1044,12 @@ def render(
             )
 
     if mrm:
-        significant = [r for r in mrm if r["p_value"] < 0.05]
-        size_wins = [r for r in mrm if abs(r["beta_delta_n"]) > abs(r["beta_levenshtein"])]
+        landed = [r for r in mrm if r["landed"]]
+        pending = [r for r in mrm if not r["landed"]]
+        significant = [r for r in landed if r["p_value"] < 0.05]
+        size_wins = [
+            r for r in landed if abs(r["beta_delta_n"]) > abs(r["beta_levenshtein"])
+        ]
         ratios = [
             r["ratio_size_over_lev"]
             for r in size_wins
@@ -1021,11 +1064,14 @@ def render(
             "significant coefficient that is one-fifth the size of the confound it competes "
             "with is a real finding and a modest one, and it has to read as both.",
             "",
+            "Every column is read from the shard partial, `beta1_permutation_p` included, so "
+            "the table is single-sourced.",
+            "",
             "| suite | dataset | ref | **β₁ (Lev)** | **β_size** | β_density | R² | p(β₁) | "
             "size/Lev |",
             "|---|---|---|---:|---:|---:|---:|---:|---:|",
         ]
-        for r in mrm:
+        for r in landed:
             ratio = (
                 f"{r['ratio_size_over_lev']:.1f}×"
                 if np.isfinite(r["ratio_size_over_lev"])
@@ -1039,9 +1085,9 @@ def render(
             )
         lines += [
             "",
-            f"**β₁ is significant on {len(significant)} of {len(mrm)} fits and positive on "
-            f"every one — D4's β₁ does NOT collapse.** But **the size coefficient exceeds "
-            f"Levenshtein's on {len(size_wins)} of {len(mrm)}**"
+            f"**β₁ is significant on {len(significant)} of {len(landed)} landed fits and "
+            "positive on every one — D4's β₁ does NOT collapse.** But **the size coefficient "
+            f"exceeds Levenshtein's on {len(size_wins)} of {len(landed)}**"
             + (
                 f", by {min(ratios):.1f}×–{max(ratios):.1f}×"
                 if ratios
@@ -1055,6 +1101,34 @@ def render(
             "**controls** for the confound rather than stratifying it away, which makes it "
             "more citable than the within-`n` collapse, not less.",
         ]
+        if pending:
+            not_significant = [r for r in pending if r["p_value"] >= 0.05]
+            lines += [
+                "",
+                f"**{len(pending)} further fit(s) have reported in a shard log and not yet "
+                "landed in a partial**, so they are outside the counts above. Listed here "
+                "because a count that is going to move should say so before it moves:",
+                "",
+                "| suite | dataset | ref | β₁ (Lev) | p(β₁) | |",
+                "|---|---|---|---:|---:|---|",
+            ]
+            for r in pending:
+                mark = "**NOT significant**" if r["p_value"] >= 0.05 else "significant"
+                lines.append(
+                    f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | "
+                    f"{r['beta_levenshtein']:+.4f} | {r['p_value']:.5f} | {mark} |"
+                )
+            if not_significant:
+                worst = min(not_significant, key=lambda r: abs(r["beta_levenshtein"]))
+                lines += [
+                    "",
+                    f"🔴 **`{worst['dataset']}`/{worst['reference']} is not significant** "
+                    f"(β₁ = {worst['beta_levenshtein']:+.4f}, p = {worst['p_value']:.4f}) and "
+                    "carries the smallest β₁ in the whole set. When it lands the headline "
+                    f"becomes **{len(significant)} of {len(landed) + len(pending)}**, not "
+                    f"{len(significant)} of {len(landed)}. The exception is on the record now "
+                    "rather than appearing later as if discovered.",
+                ]
 
     if extras is not None:
         lines += [
@@ -1148,6 +1222,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--size-profile", type=Path, default=None)
     ap.add_argument("--ladders", type=Path, nargs="*", default=[])
     ap.add_argument("--completion-rates", type=Path, default=None)
+    ap.add_argument("--logs", type=Path, default=None, help="shard logs, for fits still in flight")
     ap.add_argument("--view", default="all_pairs")
     ap.add_argument("--out", type=Path, required=True)
     return ap
@@ -1191,7 +1266,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows=rows,
             view=args.view,
             profile=profile,
-            mrm=mrm_table(args.partials),
+            mrm=mrm_table(args.partials, logs=args.logs),
             extras=uniqueness_and_coverage(
                 [json.loads(f.read_text()) for f in args.ladders if f.exists()],
                 json.loads(args.completion_rates.read_text())
