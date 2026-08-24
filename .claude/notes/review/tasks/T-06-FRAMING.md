@@ -789,3 +789,35 @@ verdicts flipping between bounds.
 **What does NOT change:** size still dominates on **9 of 11** landed `lb`/`exact` fits, and the two
 exceptions remain `iam_letter_low`/exact and `protein`/ub — the same two cells the size-null
 instrument singled out independently.
+
+### 12.6 The ONE non-significant β₁ is the strongest instance of the size story, not a weak spot
+
+Verified from the partial. `aids_iam`, 1,638,955 pairs:
+
+| ref | β_lev | β_size | ratio | R² | p |
+|---|---:|---:|---:|---:|---:|
+| **lb** | **+0.0976** | **+0.9066** | **9.29×** | **0.9982** | **0.1502 — not significant** |
+| ub | +0.4032 | +0.6237 | 1.55× | 0.9586 | 0.0002 — significant |
+
+**β₁ fails to clear because there is nothing left for it to explain.** `|n_i − n_j|` alone carries
+β = **+0.9066** and the model reaches **R² = 0.9982**. The residual the structural predictor competes
+for is **≈ 0.2 % of the variance**. **9.29× is the most extreme ratio in the entire set, and it
+belongs to the one cell where β₁ does not reach significance.**
+
+**So the reading inverts.** `aids_iam`/lb was first called "an outlier, not a trend". It is neither —
+**it is the trend taken to its limit**:
+
+> **β₁ is significant wherever size leaves it room, and the single place it is not is the place size
+> leaves it none.**
+
+**Write it that way.** A reader shown "18 of 19 significant" will ask about the exception, and the
+exception is *more* supportive of the size story than any of the 18. Volunteering it is both honest
+and stronger than omitting it — and a reviewer who checks will find `R² = 0.998` sitting beside the
+non-significant p and reach this reading anyway.
+
+**It is also the largest straddle drop measured: 9.29× → 1.55×**, same dataset, same pairs. Exactly
+what §11.7's dose–response predicts — the further a reference sits from the truth in size-domination,
+the more weight transfers — and `aids_iam`/lb is the furthest point in the set.
+
+**Aggregate over 19 landed production fits: 18 significant, 1 not; size exceeds Levenshtein on
+17 of 19 (89 %).** The earlier "9 of 11" was the same picture at smaller `n`.
