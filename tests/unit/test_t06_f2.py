@@ -569,3 +569,53 @@ def test_log_parsing_accepts_both_beta1_formats(tmp_path: Path) -> None:
     assert "UNMEASURED" in summary.render_beta1(rows["mutagenicity"])
     assert rows["grec"]["beta_delta_n"] == pytest.approx(0.6531)
     assert "UNMEASURED" not in summary.render_beta1(rows["grec"])
+
+
+# ---------------------------------------------------------------------------
+# D4 predictor collinearity
+# ---------------------------------------------------------------------------
+
+
+def test_collinearity_flags_the_case_the_coefficients_hide() -> None:
+    """VIF must be read off the design matrix, not guessed from the betas.
+
+    ``coil_del``/ub announces its collinearity (beta_lev = +1.49 with beta_size
+    negative). ``aids_iam``/lb does not: +0.10 against +0.91 at R2 = 0.998 looks
+    like the cleanest fit in the set and has VIF 15.3. A heuristic over stored
+    coefficients catches the harmless case and misses the harmful one, which is
+    why the report is computed from the predictors themselves.
+    """
+    rng = np.random.default_rng(42)
+    n = 5000
+    independent = np.column_stack(
+        [rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)]
+    )
+    base = rng.normal(size=n)
+    collinear = np.column_stack(
+        [base, base + 0.05 * rng.normal(size=n), rng.normal(size=n)]
+    )
+
+    def max_vif(design: np.ndarray) -> float:
+        worst = 0.0
+        for j in range(design.shape[1]):
+            others = [k for k in range(design.shape[1]) if k != j]
+            matrix = np.column_stack([np.ones(design.shape[0]), design[:, others]])
+            beta, *_ = np.linalg.lstsq(matrix, design[:, j], rcond=None)
+            residual = design[:, j] - matrix @ beta
+            total = ((design[:, j] - design[:, j].mean()) ** 2).sum()
+            worst = max(worst, 1.0 / max(1.0 - (1.0 - (residual @ residual) / total), 1e-12))
+        return worst
+
+    assert max_vif(independent) < 10.0, "independent predictors must be identifiable"
+    assert max_vif(collinear) > 10.0, "r ~ 0.999 predictors must not be"
+
+
+def test_collinearity_report_shape(tmp_path: Path) -> None:
+    """The emitted report carries what a reader needs to re-derive the verdict."""
+    from benchmarks.real_data.eval_stats import t06_f2 as driver
+
+    assert hasattr(driver, "collinearity_report")
+    # The threshold is the conventional one and must not drift silently.
+    source = Path(driver.__file__).read_text()
+    assert "worst <= 10.0" in source
+    assert '"threshold": 10.0' in source
