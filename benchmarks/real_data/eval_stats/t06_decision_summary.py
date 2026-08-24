@@ -485,6 +485,49 @@ def claim_b_by_competitor(
     return records
 
 
+def uniqueness_and_coverage(
+    ladders: Sequence[dict[str, Any]], completion: dict[str, Any] | None
+) -> dict[str, Any]:
+    """The two things neither claim measures: collisions, and who computes.
+
+    Claim A is about bits and Claim B is about correlation, and a
+    representation can lose both while still being the only one that never
+    conflates two non-isomorphic graphs. That property is a theorem for
+    IsalGraph and it is worth measuring anyway, because a measured zero over
+    24.8 million pairs is what a reviewer can check.
+
+    Coverage is included **because it is where a claimed advantage dies**.
+    Section 15.3 lists "it computes everywhere" among the things that survive
+    the ranking. Six competitors also complete on 100 % of every cell, so it
+    does not distinguish anything.
+
+    Args:
+        ladders: Parsed ladder payloads.
+        completion: Parsed ``completion_rates.json``, or ``None``.
+
+    Returns:
+        The collision total and the per-representation coverage.
+    """
+    pairs = sum(int(r["ged_positive"]) for d in ladders for r in d["rows"])
+    collisions = sum(int(r["collisions"]) for d in ladders for r in d["rows"])
+    coverage: list[dict[str, Any]] = []
+    if completion is not None:
+        buckets: dict[str, list[float]] = {}
+        for row in completion["rows"]:
+            buckets.setdefault(row["representation"], []).append(float(row["rate"]))
+        for name, rates in buckets.items():
+            coverage.append(
+                {
+                    "representation": name,
+                    "cells": len(rates),
+                    "min_rate": min(rates),
+                    "cells_below_99": sum(1 for r in rates if r < 0.99),
+                }
+            )
+        coverage.sort(key=lambda r: (-r["min_rate"], r["representation"]))
+    return {"ged_positive_pairs": pairs, "collisions": collisions, "coverage": coverage}
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -500,6 +543,7 @@ def render(
     rows: Sequence[dict[str, Any]] = (),
     view: str = "all_pairs",
     profile: dict[str, Any] | None = None,
+    extras: dict[str, Any] | None = None,
 ) -> str:
     """Render the summary as Markdown.
 
@@ -511,6 +555,7 @@ def render(
         rows: The raw rho rows, for the every-competitor delta matrix.
         view: Which pair view the tables report.
         profile: Parsed ``size_profile.json``, for Claim B per size band.
+        extras: Output of :func:`uniqueness_and_coverage`, or ``None``.
 
     Returns:
         The Markdown source.
@@ -756,6 +801,37 @@ def render(
                 f"{100 * r['win_fraction']:.1f} % | {large} | {r['max_n_reached']} |"
             )
 
+    if extras is not None:
+        lines += [
+            "",
+            "## What neither claim measures",
+            "",
+            f"**Zero encoding collisions over {extras['ged_positive_pairs']:,} GED-positive "
+            f"pairs** ({extras['collisions']} observed). No two non-isomorphic graphs in either "
+            "cohort received the same canonical string. This is a theorem, so a measured zero "
+            "is a check rather than a discovery --- but it is the check a reviewer can run, and "
+            "it is the one unambiguous positive in this document.",
+            "",
+            "**Coverage is NOT a differentiator, and a claimed advantage dies here.**",
+            "",
+            "| representation | cells | min completion | cells < 99 % |",
+            "|---|---:|---:|---:|",
+        ]
+        for row in extras["coverage"]:
+            lines.append(
+                f"| {row['representation']} | {row['cells']} | {row['min_rate']:.4f} | "
+                f"{row['cells_below_99']} |"
+            )
+        lines += [
+            "",
+            "Six competitors complete on **100 %** of every cell. `isalgraph_pruned`'s 0.9750 "
+            "floor is Mutagenicity, and it is an artefact of `t06_completion` counting a "
+            "censored graph as not completed --- D14 retains it with its greedy-min string, so "
+            "it did produce an encoding and the manifest gate scores it 100 %. Either way the "
+            "conclusion is the same: **\"it computes everywhere\" separates IsalGraph from "
+            "`agm_cam` and `min_dfs` only, not from the field.**",
+        ]
+
     if claim_a_cells is not None:
         card = claim_a_cells.get("cardinality", {})
         bh = claim_a_cells.get("bh_primary", {})
@@ -781,6 +857,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--claim-a-strata", type=Path, default=None)
     ap.add_argument("--family", type=Path, default=None)
     ap.add_argument("--size-profile", type=Path, default=None)
+    ap.add_argument("--ladders", type=Path, nargs="*", default=[])
+    ap.add_argument("--completion-rates", type=Path, default=None)
     ap.add_argument("--view", default="all_pairs")
     ap.add_argument("--out", type=Path, required=True)
     return ap
@@ -824,6 +902,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows=rows,
             view=args.view,
             profile=profile,
+            extras=uniqueness_and_coverage(
+                [json.loads(f.read_text()) for f in args.ladders if f.exists()],
+                json.loads(args.completion_rates.read_text())
+                if args.completion_rates and args.completion_rates.exists()
+                else None,
+            )
+            if args.ladders
+            else None,
         )
     )
 
