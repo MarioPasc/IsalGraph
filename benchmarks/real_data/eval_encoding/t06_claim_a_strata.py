@@ -46,7 +46,8 @@ from benchmarks.real_data.eval_stats.t06_f2_inputs import (
 
 LOGGER: Final = logging.getLogger(__name__)
 
-#: The six Claim-A serialisations (``preregistration`` 4.1).
+#: The six Claim-A serialisations (``preregistration`` 4.1). These are the only
+#: ones carrying a confirmatory A1 cell.
 CLAIM_A_COMPARATORS: Final[tuple[str, ...]] = (
     "graph6",
     "sparse6",
@@ -55,6 +56,25 @@ CLAIM_A_COMPARATORS: Final[tuple[str, ...]] = (
     "agm_cam",
     "min_dfs",
 )
+
+#: Measured and reported, but outside the frozen A1 set. ``preregistration`` 4.1
+#: names plain ``sparse6``; this is the nauty-canonicalised variant T-04 added
+#: afterwards. It is included **because leaving it out would flatter the
+#: conclusion**: it is metric-admissible, so it is not ``k``-excluded, and it is
+#: one of the strongest Claim B performers. A positioning of the form "among
+#: representations that admit a metric, IsalGraph is the most compact at scale"
+#: depends on this row, so the row has to exist before the claim is made.
+DESCRIPTIVE_COMPARATORS: Final[tuple[str, ...]] = ("sparse6_nauty",)
+
+#: Representations with no message length at all. Their cell carries a reason,
+#: never a number (A2).
+BIT_COUNT_UNDEFINED: Final[tuple[str, ...]] = ("wl_subtree", "size_null")
+
+#: ``k`` from ``competitors.md`` 3.4: no candidate distance passes F1 at 100 %,
+#: F2, F3 and F4. A representation in here still has a bit count --- Claim A
+#: needs no distance --- but a bit win by one of them is not a win a reviewer can
+#: weigh against IsalGraph on the distance claim, so the flag travels with the row.
+K_EXCLUDED: Final[frozenset[str]] = frozenset({"adjacency", "graph6", "sparse6"})
 
 #: Minimum graphs in a stratum before a signed-rank test is worth reporting.
 #: Below this the Wilcoxon null distribution is too coarse for the p-value to
@@ -86,6 +106,10 @@ class StratumVerdict:
         fraction_shorter_realised: The same under realised bytes.
         verdict: ``isalgraph_shorter``, ``competitor_shorter`` or ``tie``.
         discordant: Whether the conventions disagree in direction.
+        in_family: Whether the comparator carries a confirmatory A1 cell.
+        metric_admissible: Whether it survives ``k`` --- i.e. whether beating
+            IsalGraph here is a result a reviewer can hold against it, or a
+            result about a representation with no admissible distance.
     """
 
     suite: str
@@ -102,6 +126,8 @@ class StratumVerdict:
     fraction_shorter_realised: float
     verdict: str
     discordant: bool
+    in_family: bool = True
+    metric_admissible: bool = True
 
 
 def aligned_with_size(
@@ -215,6 +241,8 @@ def stratify(
                 fraction_shorter_realised=shorter["realised_bits"],
                 verdict=_verdict(gaps["entropy_bits"], gaps["realised_bits"], iut_p, alpha),
                 discordant=(gaps["entropy_bits"] > 0) != (gaps["realised_bits"] > 0),
+                in_family=competitor.representation in CLAIM_A_COMPARATORS,
+                metric_admissible=competitor.representation not in K_EXCLUDED,
             )
         )
     return verdicts, skipped
@@ -253,7 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             reference = load_encodings(args.encodings, suite, dataset, REFERENCE_ARM)
             if reference is None:
                 continue
-            for name in CLAIM_A_COMPARATORS:
+            for name in (*CLAIM_A_COMPARATORS, *DESCRIPTIVE_COMPARATORS):
                 competitor = load_encodings(args.encodings, suite, dataset, name)
                 if competitor is None:
                     continue
@@ -267,7 +295,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 suite,
                 dataset,
                 len([r for r in rows if r.dataset == dataset and r.suite == suite]),
-                len(CLAIM_A_COMPARATORS),
+                len(CLAIM_A_COMPARATORS) + len(DESCRIPTIVE_COMPARATORS),
             )
 
     if not rows:
@@ -293,6 +321,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             "conjunction -- fewer bits under both -- so the IUT is the matching procedure and "
             "no primary convention has to be named (design note 18.8)."
         ),
+        "comparators": {
+            "confirmatory_a1": list(CLAIM_A_COMPARATORS),
+            "descriptive_extra": list(DESCRIPTIVE_COMPARATORS),
+            "bit_count_undefined": list(BIT_COUNT_UNDEFINED),
+            "why_not_seven": (
+                "A1's frozen comparator set is preregistration 4.1's six serialisations. "
+                "sparse6_nauty is the nauty-canonicalised sparse6 that T-04 added afterwards "
+                "and carries no confirmatory A1 cell, but it IS metric-admissible and is "
+                "measured here, because a positioning that rests on which competitors survive "
+                "k must not be built on an unmeasured row. wl_subtree and size_null carry no "
+                "bit count at all -- a feature-vector cost would measure the vectoriser."
+            ),
+            "k_excluded_still_measured": sorted(K_EXCLUDED),
+        },
         "arm": args.arm,
         "alpha": args.alpha,
         "min_graphs_per_stratum": MIN_GRAPHS,
