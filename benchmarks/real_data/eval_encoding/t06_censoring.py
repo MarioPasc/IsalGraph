@@ -313,6 +313,105 @@ def size_strata(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def fallback_correlation_contrast(
+    encoding_path: Path,
+    distance_path: Path,
+    approx_path: Path,
+    *,
+    size_floor: int = 40,
+) -> list[dict[str, Any]] | None:
+    """Ask whether the D14 fallback string, not size, drives the rho collapse.
+
+    A censored graph enters every analysis with its **greedy-min fallback**,
+    which is not canonical and sits outside the completeness theorem. Where
+    censoring is heavy that raises a real alternative explanation for the
+    within-``n`` collapse: not *"structural fidelity degrades with size"* --- a
+    property of the method --- but *"the 300 s budget forces a non-canonical
+    string that correlates worse"* --- a property of the compute budget, and
+    fixable by raising it. They are different findings and only one is about the
+    representation.
+
+    The per-stratum arm answers this directly but has almost no power: only six
+    Mutagenicity strata carry a censored graph *and* clear the minimum-pairs
+    floor in both arms. This pools instead, which trades the exact within-``n``
+    control for four orders of magnitude more pairs, and reports three
+    quantities so the pooling cannot hide behind an average: rho over all pairs,
+    rho with every censored-touching pair removed, and rho over the
+    censored-touching pairs alone.
+
+    Args:
+        encoding_path: The reference arm's ``.npz``, for ``status``.
+        distance_path: Its Levenshtein matrix.
+        approx_path: The dataset's ``LB/`` archive, carrying both bounds.
+        size_floor: Also report restricted to pairs with both endpoints above
+            this, which is where censoring concentrates.
+
+    Returns:
+        One record per ``(reference, size restriction)``, or ``None`` when an
+        input is absent.
+    """
+    if not (encoding_path.exists() and distance_path.exists() and approx_path.exists()):
+        return None
+    from scipy import stats
+
+    with np.load(encoding_path, allow_pickle=True) as handle:
+        enc_ids = np.asarray(handle["graph_ids"]).astype(str)
+        status = np.asarray(handle["status"]).astype(str)
+    with np.load(distance_path, allow_pickle=True) as handle:
+        ids = np.asarray(handle["graph_ids"]).astype(str)
+        lev = np.asarray(handle["distance_matrix"], dtype=np.float64)
+        node_counts = np.asarray(handle["node_counts"], dtype=np.int64)
+        defined = np.asarray(handle["defined_mask"], dtype=bool)
+    with np.load(approx_path, allow_pickle=True) as handle:
+        source = np.asarray(handle["graph_ids"]).astype(str)
+        position = {gid: i for i, gid in enumerate(source)}
+        perm = np.array([position[gid] for gid in ids])
+        bounds = {
+            "lb": np.asarray(handle["lb_matrix"], dtype=np.float64)[np.ix_(perm, perm)],
+            "ub": np.asarray(handle["ub_matrix"], dtype=np.float64)[np.ix_(perm, perm)],
+        }
+
+    enc_position = {gid: i for i, gid in enumerate(enc_ids)}
+    censored = np.array([status[enc_position[gid]] == "censored" for gid in ids])
+    upper = np.triu_indices(ids.size, 1)
+    lev_flat = lev[upper]
+    touching = censored[upper[0]] | censored[upper[1]]
+    base = defined[upper] & np.isfinite(lev_flat)
+
+    records: list[dict[str, Any]] = []
+    for name, matrix in bounds.items():
+        reference = matrix[upper]
+        usable = base & np.isfinite(reference) & (reference >= 0.0)
+        for floor in (0, size_floor):
+            big = (node_counts[upper[0]] > floor) & (node_counts[upper[1]] > floor)
+            everything = usable & big
+            clean = everything & ~touching
+            dirty = everything & touching
+            if int(everything.sum()) < 100 or int(clean.sum()) < 100:
+                continue
+            rho_all = float(stats.spearmanr(lev_flat[everything], reference[everything]).statistic)
+            rho_clean = float(stats.spearmanr(lev_flat[clean], reference[clean]).statistic)
+            rho_dirty = (
+                float(stats.spearmanr(lev_flat[dirty], reference[dirty]).statistic)
+                if int(dirty.sum()) >= 100
+                else None
+            )
+            records.append(
+                {
+                    "reference": name,
+                    "size_floor": floor,
+                    "n_pairs_all": int(everything.sum()),
+                    "n_pairs_clean": int(clean.sum()),
+                    "n_pairs_censored_touching": int(dirty.sum()),
+                    "rho_all": rho_all,
+                    "rho_without_censored": rho_clean,
+                    "rho_censored_touching_only": rho_dirty,
+                    "delta_removing_censored": rho_clean - rho_all,
+                }
+            )
+    return records
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the CLI parser."""
     ap = argparse.ArgumentParser(description=__doc__)
@@ -323,6 +422,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="the exported/ tree root; suite1 reads exported/, suite2 exported_suite2/",
     )
+    ap.add_argument("--distances", type=Path, default=None, help="the distances/ tree")
+    ap.add_argument("--approx-root", type=Path, default=None, help="APPROX_GED root")
     ap.add_argument("--out", type=Path, required=True, help="censoring.json")
     return ap
 
@@ -364,6 +465,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rows[-1].invariant_holds,
             )
 
+    contrast: dict[str, Any] = {}
+    if args.distances is not None and args.approx_root is not None:
+        for row in rows:
+            if row.n_censored == 0:
+                continue
+            records = fallback_correlation_contrast(
+                args.encodings / row.suite / f"{row.dataset}__{REFERENCE_ARM}.npz",
+                args.distances / row.suite / f"{row.dataset}__{REFERENCE_ARM}__levenshtein.npz",
+                args.approx_root / "LB" / f"{row.dataset}.npz",
+            )
+            if records:
+                contrast[f"{row.suite}/{row.dataset}"] = records
+                for record in records:
+                    LOGGER.info(
+                        "fallback contrast %s/%s @%s n>%d: rho %+.4f -> %+.4f (delta %+.4f), "
+                        "censored-touching alone %s",
+                        row.suite,
+                        row.dataset,
+                        record["reference"],
+                        record["size_floor"],
+                        record["rho_all"],
+                        record["rho_without_censored"],
+                        record["delta_removing_censored"],
+                        (
+                            "n/a"
+                            if record["rho_censored_touching_only"] is None
+                            else f"{record['rho_censored_touching_only']:+.4f}"
+                        ),
+                    )
+
     if not rows:
         LOGGER.error("no reference-arm encodings under %s", args.encodings)
         return 1
@@ -402,6 +533,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rows": [asdict(r) for r in rows],
         "size_strata": strata,
         "symmetry_strata": symmetry,
+        "fallback_correlation_contrast": contrast,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2, default=str))
