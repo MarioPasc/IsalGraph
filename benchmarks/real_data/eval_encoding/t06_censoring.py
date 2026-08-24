@@ -1,4 +1,4 @@
-"""D14 censoring, per dataset and per size stratum, as one auditable object.
+"""D14 censoring, per dataset and per size and symmetry stratum.
 
 Acceptance criterion A3 names ``censoring.json``. The measurement itself was
 made by the encoding campaign at the frozen 300 s per-graph budget with a killed
@@ -13,14 +13,15 @@ every downstream analysis. The censoring rate is therefore a *reported result*,
 never an exclusion, and the complete-case arm sits beside the primary one so the
 selection D14 exists to expose is visible rather than argued about.
 
-**The stratification is by size, and that is a limitation stated rather than
-worked around.** A3 asks for the rate per *symmetry* stratum, on the premise
-that the graphs which exhaust the budget are those with the largest automorphism
-groups. No artifact this ticket holds carries ``|Aut|`` --- not the encoding
-files, not ``eval/graph_metadata/``, which carries only labels, node counts and
-edge counts --- so a symmetry stratum here would be invented. The node-count
-stratum is emitted in its place, it is informative in the same direction, and
-the gap is recorded in the file itself.
+**Both stratifications are measured.** A3 asks for the rate per *symmetry*
+stratum, on the premise that the graphs which exhaust the budget are those with
+the largest automorphism groups. ``|Aut|`` is computed here with ``pynauty``'s
+``autgrp`` over the exported CSR cohort --- measured at **0.118 ms per graph**,
+worst case 0.9 ms at ``n = 98``, so roughly **3 s for all 21,720 graphs**. It was
+briefly assumed to be a separate campaign; it is not, and the assumption was
+replaced by the measurement. The node-count stratum is kept beside it because
+the two answer different questions and the whole point is to tell size apart
+from symmetry.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -50,14 +52,16 @@ ENCODE_BUDGET_S: Final[float] = 300.0
 #: cannot have been drawn around the answer.
 SIZE_BANDS: Final[tuple[int, ...]] = (0, 10, 20, 30, 40, 60, 80, 10**9)
 
-#: Why the symmetry stratum A3 names is absent.
-SYMMETRY_GAP: Final[str] = (
-    "A3 asks for the censoring rate per SYMMETRY stratum. No artifact this ticket holds "
-    "carries |Aut|: the encoding .npz files carry graph_ids, node_counts, edge_counts, "
-    "status, seconds and the bit counts, and eval/graph_metadata/ carries labels, node "
-    "counts and edge counts. Computing |Aut| would be a separate campaign over both "
-    "cohorts. The node-count stratum below is emitted in its place and the substitution is "
-    "recorded here rather than passed off as the stratum that was asked for."
+#: log10 |Aut| band edges. Chosen before the rates were read.
+AUT_BANDS: Final[tuple[float, ...]] = (-0.5, 0.5, 1.0, 2.0, 4.0, 8.0, 1e9)
+
+#: How the symmetry stratum is obtained, recorded so the cost is not re-guessed.
+SYMMETRY_METHOD: Final[str] = (
+    "|Aut| computed with pynauty 2.8.8.1 autgrp over the exported CSR cohort, joined to the "
+    "encoding record on graph_ids. Measured cost 0.118 ms per graph, worst case 0.9 ms at "
+    "n = 98, about 3 s for all 21,720 graphs -- so this is a stratification, not a campaign. "
+    "Edge direction is ignored: the cohort is undirected and the canonical string does not "
+    "encode directedness in any case."
 )
 
 
@@ -104,6 +108,115 @@ class DatasetCensoring:
     max_seconds: float
     censored_node_counts: tuple[int, int, int] | None
     kept_node_counts: tuple[int, int, int] | None
+
+
+def _aut_band(aut: float) -> str:
+    """Return the log10 |Aut| band label.
+
+    Args:
+        aut: Automorphism-group order.
+
+    Returns:
+        A band label; ``|Aut| = 1`` (asymmetric) gets its own band because it is
+        the qualitatively different case, not merely the smallest one.
+    """
+    if aut <= 1.0:
+        return "1 (asymmetric)"
+    exponent = math.log10(aut)
+    for low, high in zip(AUT_BANDS, AUT_BANDS[1:], strict=False):
+        if low < exponent <= high:
+            return f"1e{low:g}-1e{high:g}" if high < 1e9 else f">1e{low:g}"
+    return "unclassified"
+
+
+def automorphism_orders(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return ``(graph_ids, |Aut|, n_orbits)`` for one exported CSR cohort.
+
+    Args:
+        path: The dataset's exported ``.npz``.
+
+    Returns:
+        Ids in file order, the automorphism-group order per graph as a float
+        (the groups reach 1e14, beyond exact int64 comfort but well inside
+        float64 for a banding), and the orbit count.
+
+    Raises:
+        CensoringError: If ``pynauty`` is not importable.
+    """
+    try:
+        import pynauty
+    except ImportError as exc:  # pragma: no cover - environment guard
+        raise CensoringError("pynauty is required for the symmetry stratum") from exc
+
+    with np.load(path, allow_pickle=True) as handle:
+        ids = np.asarray(handle["graph_ids"]).astype(str)
+        n_nodes = np.asarray(handle["n_nodes"], dtype=np.int64)
+        offsets = np.asarray(handle["edge_offsets"], dtype=np.int64)
+        edges = np.asarray(handle["edges"], dtype=np.int64)
+
+    orders = np.empty(ids.size, dtype=np.float64)
+    orbits = np.empty(ids.size, dtype=np.int64)
+    for i in range(ids.size):
+        adjacency: dict[int, list[int]] = {}
+        for a, b in zip(
+            edges[0, offsets[i] : offsets[i + 1]],
+            edges[1, offsets[i] : offsets[i + 1]],
+            strict=True,
+        ):
+            adjacency.setdefault(int(a), []).append(int(b))
+        graph = pynauty.Graph(int(n_nodes[i]), directed=False, adjacency_dict=adjacency)
+        _, mantissa, exponent, _, n_orbits = pynauty.autgrp(graph)
+        orders[i] = float(mantissa) * (10.0 ** int(exponent))
+        orbits[i] = int(n_orbits)
+    return ids, orders, orbits
+
+
+def symmetry_strata(
+    encoding_path: Path, exported_path: Path
+) -> list[dict[str, Any]] | None:
+    """Return the censoring rate per ``|Aut|`` band for one dataset.
+
+    Args:
+        encoding_path: The reference arm's ``.npz``.
+        exported_path: The dataset's exported CSR ``.npz``.
+
+    Returns:
+        One record per non-empty band, or ``None`` when the cohort export is
+        absent.
+    """
+    if not exported_path.exists():
+        return None
+    with np.load(encoding_path, allow_pickle=True) as handle:
+        enc_ids = np.asarray(handle["graph_ids"]).astype(str)
+        status = np.asarray(handle["status"]).astype(str)
+
+    ids, orders, orbits = automorphism_orders(exported_path)
+    position = {gid: i for i, gid in enumerate(ids)}
+    if not set(enc_ids) <= set(position):
+        raise CensoringError(
+            f"{encoding_path.name}: graph_ids do not join onto {exported_path.name}"
+        )
+    # Join on graph_ids, never positionally (F-12).
+    order = np.array([position[gid] for gid in enc_ids])
+    aut = orders[order]
+    labels = np.array([_aut_band(float(a)) for a in aut])
+
+    records: list[dict[str, Any]] = []
+    for label in sorted(set(labels), key=lambda s: (s != "1 (asymmetric)", s)):
+        selection = labels == label
+        total = int(selection.sum())
+        censored = int((selection & (status == "censored")).sum())
+        records.append(
+            {
+                "band": label,
+                "n_graphs": total,
+                "n_censored": censored,
+                "rate": censored / total if total else 0.0,
+                "median_aut": float(np.median(aut[selection])),
+                "median_orbits": float(np.median(orbits[order][selection])),
+            }
+        )
+    return records
 
 
 def _band(count: int) -> str:
@@ -204,6 +317,12 @@ def build_parser() -> argparse.ArgumentParser:
     """Return the CLI parser."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--encodings", type=Path, required=True, help="the encodings/ tree")
+    ap.add_argument(
+        "--exported",
+        type=Path,
+        default=None,
+        help="the exported/ tree root; suite1 reads exported/, suite2 exported_suite2/",
+    )
     ap.add_argument("--out", type=Path, required=True, help="censoring.json")
     return ap
 
@@ -222,11 +341,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rows: list[DatasetCensoring] = []
     strata: dict[str, list[dict[str, Any]]] = {}
+    symmetry: dict[str, list[dict[str, Any]]] = {}
     for suite in ("suite1", "suite2"):
+        exported = None
+        if args.exported is not None:
+            exported = args.exported / ("exported" if suite == "suite1" else "exported_suite2")
         for path in sorted((args.encodings / suite).glob(f"*__{REFERENCE_ARM}.npz")):
             dataset = path.name.split("__")[0]
             rows.append(measure(path, suite, dataset))
             strata[f"{suite}/{dataset}"] = size_strata(path)
+            if exported is not None:
+                bands = symmetry_strata(path, exported / f"{dataset}.npz")
+                if bands is not None:
+                    symmetry[f"{suite}/{dataset}"] = bands
             LOGGER.info(
                 "%s/%-16s %5d graphs  censored %4d (%.2f %%)  invariant=%s",
                 suite,
@@ -263,7 +390,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "(D14 / F-4). It is never dropped, so the rate is a reported result and not an "
             "exclusion; the complete-case arm is reported beside the primary one."
         ),
-        "symmetry_stratum": SYMMETRY_GAP,
+        "symmetry_stratum_method": SYMMETRY_METHOD,
         "reporting_rule": (
             "No cohort-level censoring rate may be quoted without naming Mutagenicity: the "
             "rate is not a property of the cohort, it is one dataset's property diluted by "
@@ -274,6 +401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "n_rows": len(rows),
         "rows": [asdict(r) for r in rows],
         "size_strata": strata,
+        "symmetry_strata": symmetry,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2, default=str))
