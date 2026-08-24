@@ -1131,3 +1131,38 @@ written, quoted after its basis moved.** That is now three instances, and the co
 | D4 exception | **`mutagenicity`, the largest dataset, inverts it under both bounds** |
 | Straddle | **R² falls 8/8, p = 0.0078** — the only supported claim |
 | Collisions | **0 over 24,764,422 pairs** |
+
+### 14.4 FINAL — the size-null verdict on all 25 records, with significance
+
+Orchestrator-verified from `rho_table.json`, using each record's graph-level bootstrap interval on
+`excess_over_size_null`:
+
+| | count | of 25 |
+|---|---:|---:|
+| **below its own size null** | **17** | **68 %** |
+| — of which **significantly** below (CI excludes 0) | **17** | **all of them** |
+| clears its size null | 8 | 32 % |
+| — of which significantly above | 7 | |
+| **undetermined (CI covers 0)** | **1** | |
+
+**Every one of the 17 below-null records is significantly below.** Worst five:
+
+| record | excess | 95 % CI |
+|---|---:|---|
+| `suite1/aids` **exact** | **−0.4597** | [−0.4983, −0.4210] |
+| `suite2/linux` lb | −0.4417 | [−0.5322, −0.3525] |
+| `suite2/aids_graphedx` lb | −0.4302 | [−0.4756, −0.3873] |
+| `suite1/iam_letter_high` **exact** | −0.2536 | [−0.2691, −0.2387] |
+| `suite2/protein` lb | −0.2379 | [−0.2694, −0.2082] |
+
+**This closes the caveat left open in §22.1.** At partial coverage the Suite-1 picture looked like it
+might soften to *"3 of 5 decisively, 2 indistinguishable"* once the intervals landed. **At full cohort
+it does not soften — it sharpens.** Only **1 of 25** records is undetermined; the other 24 are
+resolved, and 17 of those resolve against the representation.
+
+> **Frozen: "On 17 of 25 records (68 %), node-count difference alone predicts graph edit distance
+> significantly better than the canonical string. One record is undetermined; the remaining 7 favour
+> the string."**
+
+**The trend strengthened as coverage completed** — 60 % at 10 records, 68 % at 25 — rather than
+regressing toward the mean, which is the harder outcome and the one that must be reported.
