@@ -1546,3 +1546,56 @@ one that occurred.
 **F1's `d = 7` is still reported.** It does not enter `N_actual` under this branch, but it is the
 evidence that the bracket is uninformative on 7 of 10 datasets and it belongs in the letter beside
 F0.
+
+### 18.8 Four rulings frozen before F2 runs, 2026-08-23
+
+Raised by `[T06-subagent-01]` during scope confirmation, all four before any code was written.
+Verified independently: the three artifacts named in Q1 exist **nowhere** under the data root, and
+`N_actual = 79 / closed_form = 79 / discrepancy = 0 / c = 7` reproduces.
+
+**Q1 — `claim_a.json`, `censoring.json`, `rho_table.json` are all in scope.** `t06_claim_a.py`
+exists and has never been run. **`censoring.json` is emitted even though its measurement is already
+done**: an acceptance criterion that names an artifact is not discharged by the numbers existing in
+two other files. The point of A3 is one auditable object a reviewer can open, not a value
+recoverable by joining `manifest.json` to `completion_rates.json`.
+
+**Q2 — §6.2 is NOT discharged by B1e/B1a, and the reason is the view.** `bootstrap_associations`
+with a `DifferenceSpec` is indeed the paired ρ(IsalGraph) − ρ(comparator) on identical pairs and
+identical resamples. But §16.4's "8 disjoint / 7 ties" was measured in **`equal_n`**, and B1e/B1a are
+**`all_pairs`**. §16.2 showed `all_pairs` ρ carries the size channel; §16.3 showed the `equal_n` null
+is *undefined* so raw ρ there is the structural signal. **Run both views.**
+
+> **Guard, and it is the load-bearing half of this ruling:** the confirmatory B1e cells use whichever
+> view `preregistration` §4 defines. The `equal_n` run is a **descriptive addition** and must be
+> labelled so. Adding a view to a pre-registered family silently doubles it. **If §4 is silent on the
+> view, report both, mark neither primary, and escalate** — do not pick, for the same reason F-5
+> exists.
+
+**Q3 — yes, compute the 81 demoted cells at full cohort.** ~4–7 h wall clock, far under the 5,000
+core-hour line. **Descriptive does not mean unmeasured**; it means not BH-corrected as confirmatory.
+Since F0 fired, descriptive is now the *only* form the large-`n` story can take, so these are exactly
+the numbers the response letter has to quote.
+
+**Q4 — A1's bit convention: use the INTERSECTION–UNION TEST, `p = max(p_entropy, p_realised)`.**
+
+F-5 freezes that both conventions are reported and that the primary is "named in the text"; it is
+never named. Rather than name one now — after the data exist, which is precisely what F-5 exists to
+prevent — note what Claim A actually asserts: *IsalGraph encodes a graph in fewer bits than the
+competing serialisation.* Read against a two-convention report that is a **conjunctive** claim —
+fewer bits under **both** conventions — and the intersection–union test for a conjunction has
+`p = max` of the component p-values. That is a standard level-α procedure, not a hedge:
+
+- it is **valid** — an IUT rejects the conjunctive null at level α without adjustment;
+- it is **conservative for BH** — `max(p₁, p₂) ≥ p₁, p₂`, so BH over max-p rejects a subset of what
+  either convention alone would;
+- it **needs no primary to be named**, which removes the F-5 hazard entirely;
+- it **matches §18.7's stance** on the F0 bound: where the pre-registration left a gap, take the
+  reading that makes the claim harder, not easier.
+
+`entropy_bits` remains the **reference convention for description** — it is the like-for-like
+efficiency measure, independent of how a string is packed into bytes, which is an implementation
+detail rather than a property of the representation. **Both marginal p-values are printed beside
+every A1 cell**, and per-cell discordance between the conventions is flagged rather than absorbed.
+
+`wl_subtree` and `size_null` carry no A1 cell at all: `BitCountUndefined`, with the reason printed
+and never fabricated (A2).
