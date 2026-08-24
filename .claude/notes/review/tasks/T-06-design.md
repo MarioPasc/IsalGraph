@@ -2082,3 +2082,59 @@ to quote rather than less.
 non-significant β₁ in the set** — the counts went from 21 of 22 to **21 of 21**. An exclusion rule
 that removes exactly the anomalies it was not designed to target is picking out real cells rather
 than trimming inconvenient ones.
+
+---
+
+## 24. What actually protected the confirmatory family — measured, not assumed
+
+Eight defects were found on 2026-08-24. **Every one landed in the descriptive layer**; `N_actual = 79`,
+79 of 79 cells, 75 rejections and both BH columns never moved. That is the strongest claim available
+for the response letter — **and it must be stated with the qualification `[T06-subagent-01]` attached,
+because the unqualified version is false.**
+
+### 24.1 The counterfactual, computed
+
+The tier-3 subsampling defect (§12.10) lives in the **Suite-2 MRM row, B3a**. Whether B3a was
+confirmatory depended entirely on the F0 branch — which turned on the `GED_approx` ambiguity the
+pre-registration left open (§18.2) and the PI resolved conservatively (§18.7).
+
+Enumerated both ways from the same inputs:
+
+| branch | `N_actual` | **B3a cells IN the confirmatory family** |
+|---|---:|---:|
+| **F0 fired** — conservative reading, as run | **79** | **0** |
+| F0 not fired — permissive LB reading | 92 | **3** |
+
+> **Under the permissive reading, three B3a cells would have been confirmatory — and the tier-3
+> subsampling defect, found eight hours later, would have been inside the registered family.**
+
+### 24.2 What the letter may therefore claim
+
+**✅ Defensible:** *"The registered family was insulated from every defect found during execution."*
+
+**❌ Not defensible:** *"The registered family could not have been reached."* It could have been, by a
+reading of §2 that the pre-registration itself permitted.
+
+**The protection came from three things, and only the first is structural:**
+
+1. **The pre-registration existing at all** — the confirmatory/descriptive split is what made
+   "insulated" a meaningful category.
+2. **A conservative resolution at a fork the pre-registration left open** — a *decision*, taken
+   before any result depended on it, not a property of the protocol.
+3. **The defect being found before write-up**, which was contingent on someone opening
+   `beta1_interval`.
+
+### 24.3 The lesson worth carrying to the siblings
+
+**A pre-registration protects the family it defines; it cannot protect against the choices it leaves
+undefined.** T-06 found **three** such gaps by executing it — `GED_approx` undefined (§18.2), the
+pair-set view undefined (§18.9), F-5's A1 primary convention unnamed (§18.8) — and **each was
+resolved conservatively, each time by a decision rather than by the document.**
+
+**That is the recommendation:** when a pre-registration is silent, the conservative reading is not
+merely defensible — it is the one that keeps later, unrelated defects out of the confirmatory family.
+Today that was worth three cells and, in hindsight, the entire "insulated" claim.
+
+**It also argues for writing the ambiguity down when it is found.** All three gaps are recorded here
+with their resolutions and their costed alternatives, so a reviewer asking *"why this reading?"* gets
+an answer dated before the result rather than after it.
