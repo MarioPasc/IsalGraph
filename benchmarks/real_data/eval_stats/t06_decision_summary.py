@@ -366,21 +366,31 @@ def claim_b_by_size(profile: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
-def _shorter_than_all_admissible(
-    strata: dict[str, Any], above: int = 20
-) -> tuple[int, int] | None:
-    """Count strata where IsalGraph beats every metric-admissible competitor.
+def compactness_predicates(strata: dict[str, Any], above: int = 20) -> dict[str, Any] | None:
+    """Count the three DIFFERENT things "most compact" can mean.
 
-    This is the number a "most compact among admissible representations" claim
-    actually rests on --- a per-competitor win rate can be high while the
-    intersection is small, because different competitors win different strata.
+    These are not variants of one number. Over the same 122 strata they give
+    0 %, 32 % and 42 %, and the gaps between them are the whole content:
+
+    * ``significantly_shortest`` --- beats **every** admissible competitor with
+      the IUT rejecting at the stratum level. This is what "the most compact
+      representation that admits a metric" asserts.
+    * ``positive_gap_against_all`` --- shorter at the median against every one,
+      significant or not. Weaker: a median gap that does not clear its own test.
+    * ``never_significantly_beaten`` --- no admissible competitor beats it
+      significantly. Weakest, and the one most easily misread as a win.
+
+    Reporting one of these without naming which is how "32 %" becomes "best in a
+    third of cases", which it is not. The caller prints the predicate in the
+    sentence, not in a footnote.
 
     Args:
         strata: Parsed ``claim_a_strata.json``.
         above: Only strata with ``n`` greater than this are counted.
 
     Returns:
-        ``(won, total)``, or ``None`` when no stratum qualifies.
+        The three counts with their shared denominator, or ``None`` when no
+        stratum carries at least two admissible competitors.
     """
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for row in strata["rows"]:
@@ -390,8 +400,26 @@ def _shorter_than_all_admissible(
     usable = [g for g in groups.values() if len(g) >= 2]
     if not usable:
         return None
-    won = sum(1 for g in usable if all(float(r["median_gap_entropy"]) > 0 for r in g))
-    return won, len(usable)
+
+    blockers: Counter[str] = Counter()
+    for block in usable:
+        for row in block:
+            if row["verdict"] != "isalgraph_shorter":
+                blockers[row["representation"]] += 1
+    return {
+        "total": len(usable),
+        "significantly_shortest": sum(
+            1 for g in usable if all(r["verdict"] == "isalgraph_shorter" for r in g)
+        ),
+        "positive_gap_against_all": sum(
+            1 for g in usable if all(float(r["median_gap_entropy"]) > 0 for r in g)
+        ),
+        "never_significantly_beaten": sum(
+            1 for g in usable if all(r["verdict"] != "competitor_shorter" for r in g)
+        ),
+        "blockers": dict(blockers.most_common()),
+        "above": above,
+    }
 
 
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
@@ -563,19 +591,37 @@ def render(
             f"{strata.get('n_graphs_skipped_thin_strata', 0)} graphs sit in strata below "
             f"{strata.get('min_graphs_per_stratum')} graphs and are not tested.",
         ]
-        beat_all = _shorter_than_all_admissible(strata, above=20)
-        if beat_all is not None:
-            won, total = beat_all
+        predicates = compactness_predicates(strata, above=20)
+        if predicates is not None:
+            total = predicates["total"]
+            strict = predicates["significantly_shortest"]
+            gap = predicates["positive_gap_against_all"]
+            unbeaten = predicates["never_significantly_beaten"]
+            blocker = next(iter(predicates["blockers"]), None)
             lines += [
                 "",
-                f"**Shorter than EVERY metric-admissible competitor at n > 20 in {won} of "
-                f"{total} strata ({100 * won / total:.0f} %).** A claim of the form \"the most "
-                "compact representation that admits a metric\" needs this to be a large "
-                "majority, and it is not: `sparse6_nauty` is admissible and beats IsalGraph on "
-                "bits at every size above 20. What holds is narrower --- IsalGraph is the most "
-                "compact of the **canonical-code** representations, and sparsity-exploiting "
-                "serialisations beat it at scale, which is a property of the data these "
-                "cohorts have rather than a defect of the encoding.",
+                f"### Is IsalGraph the most compact admissible representation above "
+                f"n = {predicates['above']}? **No.**",
+                "",
+                "Three predicates, same 122 strata, and the differences between them are the "
+                "content --- so each is stated with its predicate in the sentence:",
+                "",
+                f"- **Significantly shorter than EVERY metric-admissible competitor: "
+                f"{strict} of {total} ({100 * strict / total:.0f} %).** This is what the claim "
+                "asserts, and it is never true.",
+                f"- Shorter at the median against every one, significant or not: {gap} of "
+                f"{total} ({100 * gap / total:.0f} %).",
+                f"- Never significantly beaten by any of them: {unbeaten} of {total} "
+                f"({100 * unbeaten / total:.0f} %) --- so it is significantly beaten by at "
+                f"least one in {total - unbeaten} of {total} "
+                f"({100 * (total - unbeaten) / total:.0f} %).",
+                "",
+                f"`{blocker}` is the arm that blocks it. **What holds instead: IsalGraph is the "
+                "most compact of the canonical-code representations, and edge-list "
+                "serialisations beat it at scale.** Naming the mechanism rather than the "
+                "outcome matters here --- min-DFS is also a canonical code, so beating it on "
+                "112 of 112 strata at +214.8 bits is a like-for-like win rather than a win "
+                "over a different design point.",
             ]
         lines += [
             "",
