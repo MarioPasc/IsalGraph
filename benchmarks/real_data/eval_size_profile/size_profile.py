@@ -96,6 +96,8 @@ class StratumRow:
     mean_distance: float | None
     mean_reference: float | None
     zero_fraction: float | None
+    arm: str = "primary"
+    n_censored_in_stratum: int = 0
 
 
 def _symbols(encoding: npt.NDArray[Any], separator: str) -> list[tuple[str, ...]]:
@@ -256,13 +258,23 @@ def _load_reference(
 
 
 def profile_cell(
-    encodings: Path, references: dict[str, tuple[FloatArray, npt.NDArray[Any]]]
+    encodings: Path,
+    references: dict[str, tuple[FloatArray, npt.NDArray[Any]]],
+    *,
+    arm: str = "primary",
 ) -> list[StratumRow]:
     """Compute every stratum row for one ``(dataset, representation)`` cell.
 
     Args:
         encodings: Path to ``{dataset}__{representation}.npz``.
         references: Reference matrices keyed by name, from :func:`_load_reference`.
+        arm: ``primary`` keeps the D14 censored graphs, which enter with a
+            greedy-min fallback string rather than the canonical one;
+            ``complete_case`` keeps only ``status == "ok"``. The pair exists
+            because a fallback string is **not canonical** and sits outside the
+            completeness theorem, so a stratum where half the arm is fallback is
+            measuring the 300 s budget as much as the representation. Comparing
+            the two arms on identical strata is what separates the two.
 
     Returns:
         One row per stratum and reference.
@@ -289,7 +301,11 @@ def profile_cell(
         node_counts = np.asarray(z["node_counts"]).astype(np.int64)
         seqs = _symbols(np.asarray(z["encoding"]).astype(str), str(meta.get("symbol_sep", "")))
 
-    usable = ((status == "ok") | (status == "censored")) & (length >= 0)
+    censored = status == "censored"
+    if arm == "complete_case":
+        usable = (status == "ok") & (length >= 0)
+    else:
+        usable = ((status == "ok") | censored) & (length >= 0)
     counts = _wl_counts(seqs) if metric == "kernel" else None
 
     rows: list[StratumRow] = []
@@ -344,6 +360,8 @@ def profile_cell(
                     mean_distance=float(x.mean()),
                     mean_reference=float(y.mean()),
                     zero_fraction=float((x == 0).mean()),
+                    arm=arm,
+                    n_censored_in_stratum=int(censored[idx].sum()),
                 )
             )
     return rows
@@ -357,6 +375,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--approx-root", type=Path, required=True, help="APPROX_GED root")
     ap.add_argument("--out", type=Path, required=True, help="size_profile.json")
     ap.add_argument("--suite", choices=("suite1", "suite2"), default=None)
+    ap.add_argument(
+        "--arm",
+        choices=("primary", "complete_case", "both"),
+        default="primary",
+        help="both emits each stratum twice, so the D14 fallback confound is measurable",
+    )
     ap.add_argument("--dataset", default=None)
     return ap
 
@@ -388,7 +412,10 @@ def main(argv: list[str] | None = None) -> int:
                 LOGGER.warning("%s/%s: no reference GED, skipped", suite, dataset)
                 continue
             for path in sorted(directory.glob(f"{dataset}__*.npz")):
-                new = profile_cell(path, references)
+                arms = ("primary", "complete_case") if args.arm == "both" else (args.arm,)
+                new: list[StratumRow] = []
+                for arm in arms:
+                    new.extend(profile_cell(path, references, arm=arm))
                 rows.extend(new)
                 if new:
                     LOGGER.info(
@@ -400,12 +427,20 @@ def main(argv: list[str] | None = None) -> int:
                     )
 
     payload = {
-        "schema_version": "t06.size_profile.1",
+        "schema_version": "t06.size_profile.2",
         "ticket": "T-06",
         "descriptive": True,
         "note": (
             "Equal-n strata: within a stratum |n_i - n_j| is identically 0, so the size null is "
             "undefined and raw rho is the structural signal. NOT a pre-registered family."
+        ),
+        "arm": args.arm,
+        "arm_note": (
+            "A censored graph enters the primary arm with its greedy-min FALLBACK string, "
+            "which is not canonical and sits outside the completeness theorem. Where the "
+            "censoring rate is high the primary arm therefore measures the 300 s budget as "
+            "well as the representation. The complete_case arm removes those graphs; the "
+            "difference between the arms on identical strata is the budget's contribution."
         ),
         "min_pairs": MIN_PAIRS,
         "n_bootstrap": N_BOOTSTRAP,
