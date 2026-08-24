@@ -1909,3 +1909,55 @@ size channel is doing the work; where there is less of it to do — larger graph
 distinguish — the representation has less left. That is a coherent mechanism rather than two
 independent negatives, and stating it as one finding is both more honest and more useful than
 reporting them separately.
+
+---
+
+## 23. A mechanism only works if it is ON THE PATH
+
+The most transferable engineering lesson of this ticket, and it was demonstrated rather than argued.
+
+`[T06-subagent-01]` identified that "the observer counts a progress signal instead of an artifact"
+had no mechanism, built one (`t06_f2 --status`, two tests, committed), watched it correct its own
+author on first run — and then, **within thirty minutes, answered a status question from memory
+instead of running it, and was wrong again.** Fifth instance of the same pattern in one day.
+
+> **A diagnostic you must remember to invoke belongs in the same category as a rule you must
+> remember to follow.** It is a rule wearing a tool's clothes.
+
+### 23.1 The mitigations that actually held, ranked by whether they can be skipped
+
+| mitigation | opt-out? | held today? |
+|---|---|---|
+| `dedup_rho_rows` inside the loader | **none** — every consumer gets it | ✅ |
+| `n_permutations >= 1000` filter inside `mrm_table` | **none** | ✅ |
+| `figures.py` **raises** on an unknown `arm` | **none** | ✅ |
+| `assert bh_primary.m == n_actual` in the test suite | none, once written | ✅ |
+| `t06_f2 --status` | **must be invoked** | ❌ — its author skipped it |
+| "confirm a run against its artifact, not a process list" (handoff rule) | pure discipline | ❌ — violated 3× after being read |
+
+**The pattern is exact: every mitigation with no opt-out held, and every one requiring a decision
+failed at least once.** The handoff rule was read and still violated three times, which is not a
+rule that failed — it is a rule that needed a mechanism.
+
+### 23.2 What to do with it
+
+1. **Prefer a guard inside the consumer over a diagnostic beside it.** `figures.py` raising on an
+   unknown `arm` cannot be forgotten; running `--status` can.
+2. **Where a diagnostic is genuinely the only option, put its output on the path** — the subagent's
+   response was to paste `--status` output verbatim in every status message rather than typing a
+   number, which converts an optional tool into a mandatory one by convention. Second best, and it
+   works.
+3. **The general form for the siblings** (IsalSR, IsalHG, which share this architecture): every
+   consumer asserts it understands the `schema_version` it was handed, and **raises on an unknown
+   minor version rather than ignoring unknown fields**. One rule replaces all three of today's
+   ad-hoc guards. Note `t06.ladder.2` and `t06.size_profile.2` already exist and **nothing reads
+   them** — the versions were maintained as documentation rather than as a contract.
+
+### 23.3 The record, in fairness
+
+Five instances of one pattern in a day sounds alarming; the countervailing fact is that **every one
+was caught — four by the agent itself, one by cross-checking between us — and none reached the PI as
+a wrong result.** The comparison worth keeping is the retracted `43 s/graph` figure (§11.4), which
+survived four attempts precisely because nobody was checking. **A high self-caught error rate on a
+system that catches them is a healthier state than a low one on a system that does not**, and the
+distinction between those two is the only thing the count actually measures.
