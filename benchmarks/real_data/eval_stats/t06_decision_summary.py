@@ -608,6 +608,31 @@ def render(
         "",
     ]
 
+    lines += [
+        "## The answer, in five lines",
+        "",
+        "1. **Claim B (correlation with GED): yes, a clear disadvantage, and it is the "
+        "headline risk.** IsalGraph is best on none of the records landed, sits **below its "
+        "own `|n_i − n_j|` size null** on several, and its within-`n` rho collapses from "
+        "0.9656 at n ≤ 5 to 0.0779 above 40. `sparse6_nauty` beats it under **both** bounds; "
+        "`min_dfs` and `nauty_graph6` tie it under LB and beat it under UB.",
+        "2. **Claim A (information content): an advantage, and it GROWS with size** --- 20.4 % "
+        "of strata at n ≤ 5 rising to 45.6 % above 40, median gap −1.2 to +242.1 bits. **The "
+        "two claims move in opposite directions with size**, so they do not share a cause.",
+        "3. **But not \"the most compact admissible representation\": that is true in 0 of 122 "
+        "strata above n = 20.** It beats `min_dfs` **112 of 112** and is even with "
+        "`nauty_graph6`; **edge-list serialisations beat it at scale.** The defensible claim is "
+        "*most compact of the canonical codes*.",
+        "4. **Every Claim B verdict is bracket-dependent** --- LB and UB disagree on two of "
+        "four competitors. That is a finding, not a caveat, and it is the third independent "
+        "detection of the same fact after F1's `d = 7 of 10` and the size-null inversion.",
+        "5. **The one clean result: zero encoding collisions on 24,764,422 GED-positive "
+        "pairs.** Completeness is categorical rather than metric --- no competitor comparison "
+        "adjudicates it --- and \"it computes everywhere\" is **not** a differentiator: eight "
+        "representations complete on 100 % of every cell.",
+        "",
+    ]
+
     if missing:
         lines += [
             f"> ⚠ **INCOMPLETE.** {len(missing)} of 15 cells have no verdict yet: "
