@@ -852,3 +852,54 @@ a familiar quantity requiring no explanation of what a "size null" is.
 
 **UB retains substantially more unexplained structure (23–81 %)**, which is why β_lev has more room
 there. Same mechanism, more legible units.
+
+### 11.8 ⚠ §11.7 SUPERSEDED — direction is 7/8, but the dose–response STRENGTHENED
+
+`[T06-subagent-01]` found the first exception when `iam_letter_high` s2 landed with both bounds, and
+was right that §11.7's "6 of 6" cannot stand. **Verified, and one of its conclusions inverts.**
+
+| dataset | ratio lb → ub | drop | β_lev rises? |
+|---|---|---:|:--:|
+| `aids_iam` | 9.29 → 1.55 | **7.75** | ✓ |
+| `protein` | 5.52 → −0.12 | **5.64** | ✓ |
+| `aids_graphedx` | 5.60 → 1.83 | 3.77 | ✓ |
+| `grec` | 4.90 → 1.46 | 3.44 | ✓ |
+| `linux` | 3.11 → 1.32 | 1.79 | ✓ |
+| `iam_letter_med` | 2.56 → 2.11 | 0.45 | ✓ |
+| `iam_letter_low` | 2.50 → 1.81 | 0.69 | ✓ |
+| **`iam_letter_high`** | **2.24 → 2.44** | **−0.20** | **✗** |
+
+- **β_lev rises lb→ub on 7 of 8.** Direction has one exception.
+- **The ratio falls on 7 of 8.** Same exception.
+- **R² falls on 8 of 8** — no exception. This is the robust half.
+
+#### 🔴 The exception does NOT weaken the dose–response — it extends it
+
+The subagent expected the counter-example to weaken §11.7's Spearman. **Recomputed over 8 pairs it
+rises:**
+
+> **Spearman(LB ratio, its drop) = 0.952, p = 0.0003** — up from 0.886, p = 0.019 over 6.
+
+**Because `iam_letter_high` has the *smallest* LB ratio in the set (2.24×) and the smallest transfer
+(−0.20).** It sits at the bottom-left of the same line, not off it. **The direction "exception" is
+the low end of a continuum, not a violation of it:** where the lower bound is already close to the
+truth in size-domination, there is almost nothing to transfer, and the observed transfer is
+approximately zero — here marginally negative.
+
+**So the mechanism is simpler than "7 of 8 with an unexplained exception":**
+
+> **The magnitude of the weight transfer scales with how size-dominated the lower bound is
+> (ρ = 0.95). Where the LB is least size-dominated the transfer is ≈ 0, and its sign is then
+> arbitrary.**
+
+`iam_letter_high` is also the one dataset where the extra variance accrues to **neither** predictor —
+both coefficients fall (β_lev 0.3462 → 0.2996, β_size 0.7752 → 0.7314) while R² collapses
+0.951 → 0.642. **That is consistent with the same reading:** with no transfer to make, the UB's extra
+unexplained variance is simply unexplained.
+
+#### Provisional — 2 of 10 bound-pairs are still outstanding
+
+`coil_del` and `mutagenicity` have not reported both bounds. **Do not record 7/8 or ρ = 0.952 as
+final.** The subagent's own caution is the right one and applies to this correction too: it
+characterised at 6 of 6 when 10 pairs will exist, and this section characterises at 8. **The final
+count goes in when all ten land, and not before.**
