@@ -413,3 +413,54 @@ def test_bh_denominator_is_the_admissible_count_not_the_computed_count() -> None
     assert result.cardinality.n_actual == 79
     assert len(result.cells) == 3
     assert result.bh_sensitivity.m == 182
+
+
+# ---------------------------------------------------------------------------
+# Completion is counted from artifacts, never from progress signals
+# ---------------------------------------------------------------------------
+
+
+def test_a_log_line_is_never_counted_as_a_landed_cell(tmp_path: Path) -> None:
+    """A finished ``MRM@`` line in a log does not make a cell complete.
+
+    Three times in one session an observer counted a progress signal instead of
+    an artifact and reported a plausible, wrong number. The handoff's rule
+    already covered it --- *confirm a run against its output file, never against
+    a process list* --- so what was missing was not the rule but a mechanism.
+    """
+    partials = tmp_path / "f2_partials"
+    partials.mkdir()
+    (partials / "suite1__linux.json").write_text("{}")
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    # A shard whose MRM has finished but whose partial has not been written.
+    (logs / "f2_suite2__mutagenicity.log").write_text(
+        "INFO suite2/mutagenicity all_pairs group[abc123] 3 arms in 10.0 s\n"
+        "INFO suite2/mutagenicity MRM@lb beta1=+0.1000 p=0.00010 in 100.0 s\n"
+    )
+
+    report = t06_f2.campaign_status([partials], logs)
+
+    assert report["n_landed"] == 1
+    assert report["landed"] == ["suite1__linux"]
+    assert "suite2__mutagenicity" in report["in_flight"]
+    assert "suite2__mutagenicity" not in report["landed"]
+    assert "1 MRM(s) reported, NOT landed" in report["in_flight"]["suite2__mutagenicity"]
+
+
+def test_status_never_double_counts_a_landed_cell_that_also_has_a_log(
+    tmp_path: Path,
+) -> None:
+    """A cell with both a partial and a log counts once, as landed."""
+    partials = tmp_path / "f2_partials"
+    partials.mkdir()
+    (partials / "suite2__grec.json").write_text("{}")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "f2_suite2__grec.log").write_text("INFO suite2/grec MRM@lb beta1=+0.2 p=0.0001\n")
+
+    report = t06_f2.campaign_status([partials], logs)
+
+    assert report["n_landed"] == 1
+    assert report["in_flight"] == {}

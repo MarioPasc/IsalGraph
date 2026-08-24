@@ -908,14 +908,67 @@ def assemble_p_values(
     return values
 
 
+def campaign_status(partial_dirs: Sequence[Path], logs: Path | None) -> dict[str, Any]:
+    """Report progress counted from **artifacts**, never from progress signals.
+
+    Three times in one session an observer counted a log line, a running
+    process or a partially written set and reported a cell as complete when it
+    was not: a shard's log carried a finished ``MRM@`` line while its partial
+    was still unwritten, and the count that resulted was both plausible and
+    wrong. The handoff's rule already covered it --- *confirm a run against its
+    output file, never against a process list* --- so the failure was not an
+    unknown rule but an unmechanised one.
+
+    This is the mechanism. A cell is **landed** iff its partial exists on disk.
+    Anything visible only in a log is reported under ``in_flight`` and can never
+    be added to the landed count by accident, because the two never share a
+    field.
+
+    Args:
+        partial_dirs: Directories of shard partials.
+        logs: Shard-log directory, or ``None``.
+
+    Returns:
+        ``landed``, ``in_flight`` and the expected total.
+    """
+    landed: set[str] = set()
+    for directory in partial_dirs:
+        for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+            landed.add(path.stem)
+
+    expected = {f"suite1__{d}" for d in SUITE1} | {f"suite2__{d}" for d in SUITE2}
+    in_flight: dict[str, str] = {}
+    if logs is not None and logs.is_dir():
+        for path in sorted(logs.glob("f2_suite*.log")):
+            stem = path.stem[len("f2_") :]
+            if stem in landed:
+                continue
+            text = path.read_text(errors="replace")
+            groups = text.count("group[")
+            mrms = text.count("MRM@")
+            in_flight[stem] = f"{groups} bootstrap group(s), {mrms} MRM(s) reported, NOT landed"
+
+    return {
+        "landed": sorted(landed),
+        "n_landed": len(landed),
+        "n_expected": len(expected),
+        "missing": sorted(expected - landed),
+        "in_flight": in_flight,
+        "rule": (
+            "A cell is landed iff its partial exists. A log line is a progress signal, not an "
+            "artifact, and is never counted as completion."
+        ),
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the CLI parser."""
     ap = argparse.ArgumentParser(description="Run F2, the primary family.")
-    ap.add_argument("--distances", type=Path, required=True)
-    ap.add_argument("--encodings", type=Path, required=True)
-    ap.add_argument("--completion-rates", type=Path, required=True)
-    ap.add_argument("--ged-root", type=Path, required=True)
-    ap.add_argument("--approx-root", type=Path, required=True)
+    ap.add_argument("--distances", type=Path, default=None)
+    ap.add_argument("--encodings", type=Path, default=None)
+    ap.add_argument("--completion-rates", type=Path, default=None)
+    ap.add_argument("--ged-root", type=Path, default=None)
+    ap.add_argument("--approx-root", type=Path, default=None)
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--views", default=",".join(VIEWS))
     ap.add_argument(
@@ -939,6 +992,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="write this shard's raw records here and stop, for a sharded run",
     )
+    ap.add_argument(
+        "--status",
+        action="store_true",
+        help="report campaign progress counted from partials, never from log lines",
+    )
+    ap.add_argument("--logs", type=Path, default=None, help="shard logs, for the status report")
     ap.add_argument(
         "--merge-partials",
         type=Path,
@@ -1366,6 +1425,21 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.status:
+        report = campaign_status(
+            [args.out_dir / "f2_partials", args.out_dir / "f2_partials_early"], args.logs
+        )
+        print(f"LANDED {report['n_landed']} of {report['n_expected']} cells (partials on disk)")
+        for name in report["landed"]:
+            print(f"  landed    {name}")
+        for name, detail in sorted(report["in_flight"].items()):
+            print(f"  IN FLIGHT {name:<30} {detail}")
+        for name in report["missing"]:
+            if name not in report["in_flight"]:
+                print(f"  not started {name}")
+        print(f"\n{report['rule']}")
+        return 0
 
     if args.merge_partials is not None:
         return assemble(merge_partials(args.merge_partials), args)
