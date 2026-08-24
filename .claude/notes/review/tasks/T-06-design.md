@@ -1711,3 +1711,85 @@ built for and is very unlikely to need a cluster. **Probe 200 graphs, time-boxed
 anything about scale** — the same standard applied everywhere else in this ticket. If the probe is
 fast, emit the real symmetry stratum and discharge A3 as written; if it is genuinely slow, keep the
 substitution and record the measured reason rather than an estimate.
+
+---
+
+## 19. RESULT — Claim A resolved, and it runs OPPOSITE to Claim B
+
+Full cohort, 1,578 node-count strata, 7 comparators, IUT `p = max` over both bit conventions
+(§18.8). Descriptive — the confirmatory A1 family is `preregistration` §4.1's frozen six; the
+seventh, `sparse6_nauty`, carries no A1 cell but does belong in a descriptive file, and restricting
+the descriptive file to the frozen six was an error the subagent caught in itself.
+
+### 19.1 The bit advantage GROWS with size
+
+| `n` | strata | IsalGraph shorter | tie | competitor shorter | win % | median gap |
+|---|---:|---:|---:|---:|---:|---:|
+| 1–5 | 186 | 38 | 71 | 77 | 20.4 % | −1.2 bits |
+| 6–10 | 300 | 49 | 111 | 140 | 16.3 % | +0.5 |
+| 11–20 | 243 | 46 | 108 | 89 | 18.9 % | +5.8 |
+| 21–40 | 350 | 105 | 112 | 133 | 30.0 % | +58.6 |
+| **41+** | 250 | **114** | 89 | **47** | **45.6 %** | **+242.1** |
+
+`competitor_shorter` falls 77 → 47 while `isalgraph_shorter` rises 38 → 114, so this is a trend, not
+a ratio artefact. **§17's GED correlation collapses with size; Claim A's advantage grows with it.
+The two claims do not share a cause, and Claim A is the one that survives scale.**
+
+### 19.2 🔴 "Most compact among metric-admissible representations" is FALSE
+
+Proposed by the orchestrator, measured, refuted. At `n > 20`:
+
+| competitor | admissible | win | tie | LOSS | median gap |
+|---|---|---:|---:|---:|---:|
+| `min_dfs` | ✅ | **112** | 0 | **0** | **+214.8 bits** |
+| `nauty_graph6` | ✅ | 41 | 47 | 34 | +131.4 |
+| **`sparse6_nauty`** | ✅ | **0** | 51 | **71** | **−46.3** |
+| `sparse6` | ❌ | 0 | 44 | 78 | −60.6 |
+| `adjacency` | ❌ | 25 | 63 | 34 | +123.4 |
+| `agm_cam` | ✅ | — | — | — | max `n` = 12, contributes nothing above 20 |
+
+`sparse6_nauty` tracks `sparse6`, not `nauty_graph6` — the exact failure mode the claim was checked
+against before being offered.
+
+**State the predicate inside the sentence.** Four different numbers describe these 122 strata and
+they are not interchangeable:
+
+| predicate | count | % |
+|---|---:|---:|
+| **Significantly shorter than EVERY metric-admissible competitor** | **0 of 122** | **0 %** |
+| Positive median gap against every one, significance ignored | 39 | 32 % |
+| Never significantly beaten by any | 51 | 42 % |
+| Significantly beaten by at least one | 71 | 58 % |
+
+**0 % is the number that belongs beside the claim**, because 0 % is what the claim asserts. "32 %"
+standing alone reads as "best in a third of cases" and says something much weaker. Same class of
+defect as the row-level vs per-cell size null, and as "beaten on 15 of 15" vs "best on none of 15".
+
+**And `sparse6_nauty` is the single blocking arm**: of the 39 strata with a positive gap everywhere
+but no significance, it is the arm that fails to clear in **all 39** (`nauty_graph6` in 9). It is not
+merely a counterexample — it blocks the claim in every stratum where the claim came closest to true.
+
+### 19.3 What survives, and it is genuinely strong
+
+> **IsalGraph beats `min_dfs` on 112 of 112 strata above `n = 20`, median +214.8 bits, zero losses
+> and zero ties.** `min_dfs` is what `competitors.md` §2 calls *"the single most important
+> comparator"*, and it is **also a canonical code** — so this is a like-for-like win, not a win over
+> a different design point. Against `nauty_graph6` it is roughly even (41/47/34).
+
+**Frozen wording:** *"IsalGraph is the most compact of the canonical-code representations, and
+edge-list serialisations beat it at scale."* Say **edge-list**, not "sparsity-exploiting": it names
+the mechanism rather than the outcome, and conceding the right thing is what makes the `min_dfs`
+result read as the fair comparison it is. These cohorts are sparse, so an edge list exploits a
+property of the data that an instruction string does not.
+
+### 19.4 `graph6` and `nauty_graph6` carry IDENTICAL bit counts — not a copy-paste error
+
+Verified elementwise by the orchestrator on GREC, Mutagenicity and Protein: **bit counts identical
+on every graph**, while the strings differ on 650/650, 4040/4040 and 566/569 respectively.
+
+**Mechanism:** graph6 writes the full upper triangle at fixed width, so its length is a function of
+`n` alone; canonicalising permutes the bits without changing how many there are. `sparse6` vs
+`sparse6_nauty` **do** differ, because an edge list's length depends on the vertex ordering.
+
+Two identical rows in a published table invite a reviewer to assume a duplication bug. **Note the
+reason in the caption.** (Protein's 3 coincident strings are graphs already in canonical order.)
