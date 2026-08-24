@@ -519,3 +519,47 @@ exact included.
 **Same shape as reading a rejection count without its composition**, flagged by the same agent hours
 earlier. The point estimates required no bootstrap and were available the whole time. **Characterise
 the complete set before describing any of it.**
+
+### 11.6 ⚠ CORRECTION to §11.2 item 3 — the high null is the DATASETS, not the bracket
+
+`[T06-subagent-01]` withdrew its own "the bracket is nearly a size measurement" framing and I am
+withdrawing §11.2's item 3 with it. **Independently reproduced, every cell.**
+
+The three Letter datasets have **identical cohorts** across both suites — same graph ids, same
+695,610 / 784,378 / 2,118,711 pairs — so exact, LB and UB are comparable **on the same pairs**.
+`ρ(|n_i − n_j|, reference)`:
+
+| dataset | **exact** | **lb** | **ub** | lb − exact | ub − exact |
+|---|---:|---:|---:|---:|---:|
+| `iam_letter_low` | 0.9139 | 0.9804 | 0.7482 | **+0.0664** | **−0.1657** |
+| `iam_letter_med` | 0.9146 | 0.9740 | 0.7363 | **+0.0594** | **−0.1782** |
+| `iam_letter_high` | 0.9195 | 0.9224 | 0.7080 | +0.0029 | **−0.2115** |
+
+**Exact GED is itself ~0.92 size-dominated on Letter.** So the high size null is **not** a bracket
+artefact — on these datasets graph edit distance genuinely *is* mostly a size difference, because IAM
+Letter graphs vary chiefly in node count. §11.2's claim that this was "a fifth and most direct
+detection that the **bracket** is uninformative" implied the bracket was uniquely bad. **It is not,
+and that item is withdrawn.** §11.1–11.2's core claim survives unchanged and is if anything
+strengthened: the *benchmark* is size-dominated, and that is a property of the data.
+
+**What IS bracket-specific is cleaner and better than what either of us claimed:**
+
+> **LB and UB straddle the truth in how size-dominated they are.** LB is **more** size-dominated than
+> exact (+0.066, +0.059, +0.003); UB is **less**, consistently and substantially (−0.166, −0.178,
+> −0.212).
+
+**That is the mechanism of the inversion, measured rather than inferred.** An arm carrying structure
+must look worse against a reference that is nearly pure size (LB) and better against one *less*
+size-dominated than truth (UB) — which is exactly the 10-of-10-below / 3-of-10-below split, now with
+a cause attached. It also explains why `iam_letter_high` is the one Letter dataset where LB ≈ exact
+(+0.0029) and yet is still below its null under **all three** references: **there the bracket is not
+the problem, the dataset is.**
+
+**Use this instead of §11.2 item 3.** It is mechanistic, it predicts the direction of every inversion
+observed, it is measured on identical pairs rather than argued from disagreement between instruments,
+and it tells a reviewer something useful about BRANCH-FAST and IPFP rather than only about us.
+
+**Method note worth carrying:** both this and the 10/10-vs-3/10 split came from **point estimates
+computed directly**, needing no bootstrap. Where a question is about *direction* rather than
+*resolution*, the point estimate answers it immediately — and waiting for intervals to characterise a
+shape that is already determined costs time for nothing.
