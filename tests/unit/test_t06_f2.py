@@ -464,3 +464,48 @@ def test_status_never_double_counts_a_landed_cell_that_also_has_a_log(
 
     assert report["n_landed"] == 1
     assert report["in_flight"] == {}
+
+
+def test_status_reports_unknown_rather_than_not_started_without_logs(
+    tmp_path: Path,
+) -> None:
+    """Without a readable log root the in-flight state is UNKNOWN, not 'not started'.
+
+    This is the over-accepting-consumer defect reappearing inside the tool
+    written to prevent it: an earlier version reported every unlanded cell as
+    ``not started`` when no log root was given. That is a claim the function
+    cannot support, and a dangerous one --- "not started" on a shard 90 %
+    through its MRM reads as a dead shard, and the correct response to a dead
+    shard is to relaunch it.
+    """
+    partials = tmp_path / "f2_partials"
+    partials.mkdir()
+    (partials / "suite1__linux.json").write_text("{}")
+
+    blind = t06_f2.campaign_status([partials], None)
+    assert blind["in_flight_state_known"] is False
+    assert blind["not_started"] == []
+    assert "suite2__mutagenicity" in blind["unknown_state"]
+
+    empty_logs = tmp_path / "logs"
+    empty_logs.mkdir()
+    still_blind = t06_f2.campaign_status([partials], empty_logs)
+    assert still_blind["in_flight_state_known"] is False
+    assert still_blind["not_started"] == []
+
+
+def test_status_claims_not_started_only_when_it_can_see_logs(tmp_path: Path) -> None:
+    """With logs readable, a cell absent from them really has not started."""
+    partials = tmp_path / "f2_partials"
+    partials.mkdir()
+    (partials / "suite1__linux.json").write_text("{}")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "f2_suite2__mutagenicity.log").write_text("INFO group[abc] 1 arms in 1.0 s\n")
+
+    report = t06_f2.campaign_status([partials], logs)
+
+    assert report["in_flight_state_known"] is True
+    assert report["unknown_state"] == []
+    assert "suite2__mutagenicity" in report["in_flight"]
+    assert "suite2__grec" in report["not_started"]

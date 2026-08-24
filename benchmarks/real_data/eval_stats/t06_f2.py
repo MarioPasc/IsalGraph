@@ -924,6 +924,14 @@ def campaign_status(partial_dirs: Sequence[Path], logs: Path | None) -> dict[str
     be added to the landed count by accident, because the two never share a
     field.
 
+    **Without a log root the in-flight state is unknowable, and this says so
+    rather than guessing.** An earlier version reported every unlanded cell as
+    ``not started`` when ``logs`` was ``None`` --- which is a claim the function
+    cannot support, and a dangerous one: "not started" on a shard that is 90 %
+    through its MRM reads as a dead shard, and the correct response to a dead
+    shard is to relaunch it. That is the over-accepting-consumer defect
+    reappearing inside the tool written to prevent it.
+
     Args:
         partial_dirs: Directories of shard partials.
         logs: Shard-log directory, or ``None``.
@@ -938,7 +946,15 @@ def campaign_status(partial_dirs: Sequence[Path], logs: Path | None) -> dict[str
 
     expected = {f"suite1__{d}" for d in SUITE1} | {f"suite2__{d}" for d in SUITE2}
     in_flight: dict[str, str] = {}
-    if logs is not None and logs.is_dir():
+    logs_readable = logs is not None and logs.is_dir() and any(logs.glob("f2_suite*.log"))
+    if not logs_readable:
+        LOGGER.warning(
+            "no readable shard logs at %s: the in-flight state of the %d unlanded cells is "
+            "UNKNOWN, not 'not started'",
+            logs,
+            len(expected - landed),
+        )
+    if logs_readable and logs is not None:
         for path in sorted(logs.glob("f2_suite*.log")):
             stem = path.stem[len("f2_") :]
             if stem in landed:
@@ -954,9 +970,13 @@ def campaign_status(partial_dirs: Sequence[Path], logs: Path | None) -> dict[str
         "n_expected": len(expected),
         "missing": sorted(expected - landed),
         "in_flight": in_flight,
+        "in_flight_state_known": logs_readable,
+        "not_started": sorted(expected - landed - set(in_flight)) if logs_readable else [],
+        "unknown_state": [] if logs_readable else sorted(expected - landed),
         "rule": (
-            "A cell is landed iff its partial exists. A log line is a progress signal, not an "
-            "artifact, and is never counted as completion."
+            "A cell is landed iff its partial exists. A log line is a progress signal, not "
+            "an artifact, and is never counted as completion. Without a readable log root "
+            "the in-flight state is reported as UNKNOWN, never as 'not started'."
         ),
     }
 
@@ -1427,17 +1447,26 @@ def main(argv: list[str] | None = None) -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.status:
+        # Default the log root to the campaign's conventional location so a bare
+        # --status is complete; the UNKNOWN path still covers a wrong one.
+        log_root = args.logs if args.logs is not None else args.out_dir.parent / "logs"
         report = campaign_status(
-            [args.out_dir / "f2_partials", args.out_dir / "f2_partials_early"], args.logs
+            [args.out_dir / "f2_partials", args.out_dir / "f2_partials_early"], log_root
         )
         print(f"LANDED {report['n_landed']} of {report['n_expected']} cells (partials on disk)")
         for name in report["landed"]:
             print(f"  landed    {name}")
         for name, detail in sorted(report["in_flight"].items()):
             print(f"  IN FLIGHT {name:<30} {detail}")
-        for name in report["missing"]:
-            if name not in report["in_flight"]:
-                print(f"  not started {name}")
+        for name in report["not_started"]:
+            print(f"  not started {name}")
+        if not report["in_flight_state_known"]:
+            print(
+                f"  !!! in-flight state UNKNOWN for {len(report['unknown_state'])} cells "
+                "-- no readable shard logs; pass --logs to see it"
+            )
+            for name in report["unknown_state"]:
+                print(f"  UNKNOWN   {name}")
         print(f"\n{report['rule']}")
         return 0
 
