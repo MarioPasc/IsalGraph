@@ -145,10 +145,29 @@ know in advance whether the method will encode their graphs. Very few representa
 you their failure mode's governing parameter. Frame the 2.50 % Mutagenicity censoring rate as a
 **characterised and predictable** limitation rather than an unexplained one.
 
-**Also usable:** IsalGraph produces an encoding for **100 % of both cohorts** (with the D14 fallback
-on 101 graphs), while `agm_cam` — the strongest small-`n` competitor — manages **6.15 % of Protein**
-and **6.29 % of Mutagenicity** because it is refused above `n = 12`. Computability across the cohort
-is a real property and it is worth one sentence.
+> ### ❌ RETRACTED — *"it computes everywhere"* is **not** a differentiator
+>
+> Drafted here, measured by `[T06-subagent-01]`, withdrawn. Completion floor across all 15 cells,
+> under the D14 reading in which a censored graph **does** carry an encoding:
+>
+> | representation | min completion |
+> |---|---|
+> | `adjacency`, `graph6`, `nauty_graph6`, `sparse6`, `sparse6_nauty`, `wl_subtree`, `size_null`, both IsalGraph arms | **1.0000** |
+> | `min_dfs` | 0.9478 |
+> | `agm_cam` | **0.0615** |
+>
+> **Eight representations complete on 100 % of every cell.** IsalGraph ties them; it does not lead.
+> The `agm_cam` comparison is true and is the *only* comparison that flatters — selected, whether or
+> not deliberately, from a field where almost everything else does as well or better. **It separates
+> IsalGraph from `agm_cam` and `min_dfs` and from nothing else.**
+>
+> *(Under `t06_completion`'s count IsalGraph reads 0.9750 and third-worst, but that is the §15.4
+> defect — a censored graph is retained with its greedy-min string, so D14's reading is the correct
+> one. Both readings give the same verdict: a tie, not a lead.)*
+>
+> **What may still be said, in one clause:** `agm_cam` — the strongest small-`n` competitor on both
+> claims — is computable on **6.15 % of Protein**, so *its* results are a small-graph statement. That
+> is a scope note on a competitor, not a strength of ours.
 
 ---
 
@@ -168,6 +187,7 @@ wrong to use, and a reviewer who checks will find every one of them.**
 | Quoting `43 s/graph`, `≈ 520×`, `≥ 6.8 core-hours` | **Retracted as unprovenanced** (§11.4). The run that produced them left no artifact. |
 | *"the fallback does not affect the correlation"* | It **does** — censored-touching pairs score ρ 0.3273 against 0.6095 clean at `n > 40`. What is true is narrower: the fallback does not *explain the collapse*. Report all three numbers (§4.1), never the Δ alone. |
 | *"above n = 20, 91–99 % of strata are unresolved, so the field is indistinguishable"* | **Refuted by a five-minute test a reviewer will run.** "Unresolved" there is a statement about per-stratum **power**, not about equality — equal-`n` strata above 20 are thin. Pool them with a sign test and IsalGraph is significantly lower against **all four** admissible competitors: `min_dfs` 35 higher / 66 lower, p = 0.0027; `nauty_graph6` 43/67, p = 0.028; `sparse6_nauty` 30/80, **p = 2.0e-06**; `wl_subtree` 29/81, **p = 7.3e-07**. Many underpowered comparisons all leaning one way is *evidence*, not absence of evidence. |
+| *"IsalGraph computes everywhere, unlike the competitors"* | **Eight representations also complete on 100 % of every cell.** Only `agm_cam` (6.15 % floor) and `min_dfs` (0.9478) are worse. Naming `agm_cam` alone selects the single flattering comparison from a field that mostly matches us. |
 | Any F0/F1/F2 result restated more favourably than it came out | The confirmatory layer is pre-registered. Its value is precisely that it is reported unchanged; softening one sentence forfeits the protection for all of them. |
 
 **The general rule:** a scoped claim must carry its scope **in the same sentence**, not in a later
