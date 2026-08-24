@@ -610,6 +610,19 @@ def run_b_rows(
     return records
 
 
+def _size_beta(fit: MrmResult) -> float:
+    """Return the standardised size coefficient beside which beta1 must travel.
+
+    Args:
+        fit: A D4 fit.
+
+    Returns:
+        The ``delta_n`` coefficient, or ``nan`` when the predictor is absent.
+    """
+    betas = dict(zip(fit.predictors, fit.betas, strict=False))
+    return float(betas.get("delta_n", float("nan")))
+
+
 def run_mrm_rows(
     *,
     distances: Path,
@@ -665,11 +678,17 @@ def run_mrm_rows(
                 n_permutations=permutations,
             )
             LOGGER.info(
-                "%s/%-16s MRM@%-5s beta1=%+.4f p=%.5f in %6.1f s",
+                # beta1 never travels without beta_size -- INCLUDING here. This
+                # log line is the narrowest common point for every consumer that
+                # reads a log, and it was emitting a bare beta1 that briefly read
+                # as a clean win when a log-sourced set reached the summary.
+                # Guarding each reader is four fixes; guarding the producer is one.
+                "%s/%-16s MRM@%-5s beta1=%+.4f beta_size=%+.4f p=%.5f in %6.1f s",
                 suite,
                 dataset,
                 reference,
                 fits[dataset, reference].beta1,
+                _size_beta(fits[dataset, reference]),
                 fits[dataset, reference].beta1_permutation_p,
                 time.monotonic() - started,
             )

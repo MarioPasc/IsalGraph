@@ -681,12 +681,16 @@ def mrm_table(
 
     if logs is not None and logs.is_dir():
         seen = {(r["dataset"], r["reference"]) for r in records}
+        # beta_size is optional: shards launched before the producer was guarded
+        # emit a bare beta1, and those logs must still parse rather than vanish.
+        # A missing group becomes nan, which render_beta1 turns into UNMEASURED.
         pattern = re.compile(
-            r"(suite\d)/(\S+)\s+MRM@(\w+)\s+beta1=([+-][\d.]+)\s+p=([\d.]+)"
+            r"(suite\d)/(\S+)\s+MRM@(\w+)\s+beta1=([+-][\d.]+)"
+            r"(?:\s+beta_size=([+-][\d.]+))?\s+p=([\d.]+)"
         )
         for path in sorted(logs.glob("f2_suite*.log")):
             for match in pattern.finditer(path.read_text(errors="replace")):
-                suite, dataset, reference, beta, p_value = match.groups()
+                suite, dataset, reference, beta, size, p_value = match.groups()
                 if (dataset, reference) in seen:
                     continue
                 seen.add((dataset, reference))
@@ -696,9 +700,13 @@ def mrm_table(
                         "dataset": dataset,
                         "reference": reference,
                         "beta_levenshtein": float(beta),
-                        "beta_delta_n": float("nan"),
+                        "beta_delta_n": float(size) if size else float("nan"),
                         "beta_delta_density": float("nan"),
-                        "ratio_size_over_lev": float("nan"),
+                        "ratio_size_over_lev": (
+                            abs(float(size) / float(beta))
+                            if size and float(beta)
+                            else float("nan")
+                        ),
                         "r_squared": float("nan"),
                         "p_value": float(p_value),
                         "n_pairs": 0,

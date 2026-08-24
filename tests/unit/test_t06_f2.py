@@ -541,3 +541,31 @@ def test_beta1_cannot_render_without_beta_size() -> None:
     assert "UNMEASURED" in unmeasured
     # The bare number must never be the whole cell.
     assert unmeasured.strip() != "+0.0976"
+
+
+def test_log_parsing_accepts_both_beta1_formats(tmp_path: Path) -> None:
+    """The producer now emits beta_size; shards launched before it did not.
+
+    A guard installed at the producer only helps output produced after it. The
+    consumer therefore has to read both, and the older bare-beta1 line must come
+    back as UNMEASURED rather than fail to parse -- a log that silently stops
+    matching loses the fit entirely, which is worse than showing it qualified.
+    """
+    from benchmarks.real_data.eval_stats import t06_decision_summary as summary
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "f2_suite2__mutagenicity.log").write_text(
+        "INFO suite2/mutagenicity  MRM@lb  beta1=+0.5229 p=0.00050 in 3452.7 s\n"
+    )
+    (logs / "f2_suite2__grec.log").write_text(
+        "INFO suite2/grec  MRM@ub  beta1=+0.4475 beta_size=+0.6531 p=0.00010 in 12.0 s\n"
+    )
+
+    rows = {r["dataset"]: r for r in summary.mrm_table([tmp_path / "none"], logs=logs)}
+
+    assert len(rows) == 2, "an unguarded log line must still parse"
+    assert not np.isfinite(rows["mutagenicity"]["beta_delta_n"])
+    assert "UNMEASURED" in summary.render_beta1(rows["mutagenicity"])
+    assert rows["grec"]["beta_delta_n"] == pytest.approx(0.6531)
+    assert "UNMEASURED" not in summary.render_beta1(rows["grec"])
