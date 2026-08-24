@@ -1793,3 +1793,26 @@ on every graph**, while the strings differ on 650/650, 4040/4040 and 566/569 res
 
 Two identical rows in a published table invite a reviewer to assume a duplication bug. **Note the
 reason in the caption.** (Protein's 3 coincident strings are graphs already in canonical order.)
+
+---
+
+## 20. Write-up framing — see `T-06-FRAMING.md`
+
+The strongest **defensible** framings of T-06's results, with the scope each one requires stated in
+the same sentence, and an explicit list of framings that are technically true and would still be
+wrong to use. Written 2026-08-24 at the PI's request, for T-20 and the response letter.
+
+The architecture that makes it defensible: T-06 has a **pre-registered confirmatory layer** (F0, F1,
+F2 over `N_actual = 79`) reported unchanged including its negative results, and a **descriptive
+layer** where the favourable framings live and are labelled as such. Reporting the pre-registered
+analysis exactly as it came out is what buys credibility for everything else, so §7 of that file puts
+it in the results section rather than in an appendix.
+
+**P4 closed 2026-08-24 and it strengthens §17 rather than qualifying it.** Removing every
+censored-touching pair *lowers* ρ at both bounds and both size restrictions (LB all-`n` −0.0305,
+LB `n>40` −0.0354, UB all-`n` −0.0170, UB `n>40` −0.0725), so the within-`n` collapse is a property
+of the representation and not of the 300 s budget. Because censoring tracks `|Aut|` rather than `n`,
+the removed graphs are the most *symmetric* at their size, so the unchanged collapse further implies
+structural fidelity does not depend on symmetry. The countervailing half travels with it: censored
+pairs do correlate worse in isolation (0.3273 against 0.6095 at `n > 40`), and the pooled ρ exceeding
+both components is a Simpson-type effect that the Δ alone would hide.
