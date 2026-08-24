@@ -18,7 +18,24 @@ import time
 
 import numpy as np
 
+from isalgraph.competitors.backends.wl import WL_ROUNDS
+
 logger = logging.getLogger(__name__)
+
+#: The frozen number of WL refinement rounds, ``h``.  Bound to the backend's
+#: own ``WL_ROUNDS`` so the two cannot drift apart.
+#:
+#: **Corrected 2026-08-23 by [T06-subagent]: this file defaulted to 5.**  That
+#: is ``h = 5``, three refinement rounds past the frozen ``h = 2``, so every WL
+#: number this module produced was of a different kernel from the one the paper
+#: reports.  There is no off-by-one to compensate for it either:
+#: ``grakel(n_iter=k) == ours(h=k)`` exactly (``wl.py`` §, corrected
+#: 2026-08-15), so ``n_iter = 5`` really was ``h = 5``.
+#:
+#: **E10's existing WL numbers were produced under this default and need
+#: re-checking.**  Related: the board already records §4.1's WL row moving on
+#: Letter LOW from 0.895 to 0.7792 once ``h`` is set correctly.
+DEFAULT_WL_N_ITER = WL_ROUNDS
 
 
 def _apply_grakel_numpy_shim() -> None:
@@ -56,7 +73,7 @@ def nx_graphs_to_grakel(graphs: list) -> list:
 
 def compute_wl_kernel_matrix(
     graphs: list,
-    n_iter: int = 5,
+    n_iter: int = DEFAULT_WL_N_ITER,
 ) -> np.ndarray:
     """Compute the WL subtree kernel matrix.
 
@@ -113,7 +130,7 @@ def kernel_to_distance(kernel_matrix: np.ndarray) -> np.ndarray:
 
 def compute_wl_kernel_distance(
     nx_graphs: list,
-    n_iter: int = 5,
+    n_iter: int = DEFAULT_WL_N_ITER,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute WL kernel distance matrix from NetworkX graphs.
 

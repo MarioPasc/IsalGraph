@@ -65,6 +65,9 @@ from benchmarks.eval_setup.validator import (
     validate_all,
 )
 from benchmarks.eval_setup.wl_kernel_computer import (
+    DEFAULT_WL_N_ITER as _WL_DEFAULT_N_ITER,
+)
+from benchmarks.eval_setup.wl_kernel_computer import (
     compute_wl_kernel_distance,
     save_wl_kernel_matrix,
 )
@@ -91,7 +94,11 @@ ALGORITHM_TO_METHOD = {
 
 DEFAULT_ALGORITHMS = "canonical,canonical_pruned,greedy_min,greedy_single"
 DEFAULT_DISTANCE_METRICS = "levenshtein,wl_kernel"
-DEFAULT_WL_N_ITER = 5
+#: WL refinement rounds. Taken from ``wl_kernel_computer``, which binds it to
+#: the backend's frozen ``WL_ROUNDS``, so the two cannot drift apart. Was
+#: hard-coded to 5 -- that is ``h = 5``, three rounds past the frozen ``h = 2``
+#: -- until 2026-08-23; see ``wl_kernel_computer.DEFAULT_WL_N_ITER``.
+DEFAULT_WL_N_ITER = _WL_DEFAULT_N_ITER
 
 
 # ---------------------------------------------------------------------------

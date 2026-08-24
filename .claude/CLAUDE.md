@@ -82,9 +82,21 @@ $PY -m pip install -e ".[dev,native]"     # builds the extension
 | `$PY -m mypy src/isalgraph/` | Type check (strict) |
 | `$PY -m isalgraph.viz` | Regenerate `docs/figures/` |
 
-**Reference state (integration of wave 2026-08-10):** 726 passed / 271 skipped
-with the engine; 561 passed / 276 skipped with the `.so` removed. A change that
-lowers either number needs an explanation.
+**Reference state (measured 2026-08-24, T-06 close):** **2,550 passed / 321 skipped**
+with the engine. A change that lowers either number needs an explanation.
+
+> ⚠ **This figure was stale by ~3.5× until 2026-08-24.** It read *"726 passed /
+> 271 skipped (integration of wave 2026-08-10)"* while the suite had grown across
+> T-04, T-04a, T-05, T-27 and T-06 to 2,544. **A stale floor here is worse than
+> no floor**: the instruction above tells the next agent that a drop needs
+> explaining, so an agent trusting 726 would have accepted a suite that had
+> silently lost ~1,800 tests. **Re-measure and update this line at every ticket
+> close**, not when someone notices.
+>
+> The `.so`-removed figure (previously *"561 passed / 276 skipped"*) is
+> **unverified since 2026-08-10** and deliberately not restated — it has not been
+> re-measured, and inventing a number here would recreate the defect this note
+> exists to record.
 
 ---
 
