@@ -13,6 +13,18 @@ rung is a no-op on those same two while removing 12.7-15.5 % on the Letter
 datasets, which carry genuinely isomorphic pairs. A single pooled ladder would
 report an average that describes no dataset.
 
+**These are two rung families, not one chain, and reading them as a chain was a
+defect in this module (corrected 2026-08-23).** ``raw -> connected ->
+GED-available -> analysed`` accounts for the correlation, with ``analysed =
+ged_available & defined_mask``. ``GED > 0`` and ``Lev > 0`` exist to define the
+**collision denominator**: a collision is a pair with positive GED that the
+encoding cannot separate, so it is only definable where GED > 0. They are not
+steps towards ``analysed``, and ``analysed`` does not filter GED = 0 --- that is
+what isomorphic graphs have, and dropping them would truncate the response at
+its most informative end. Before this correction ``analysed`` was computed as
+``ged_positive & defined_mask``, which disagreed with the pair count every rho
+is actually computed over.
+
 The ``Lev > 0`` rung is measured on the **IsalGraph reference arm**, since that
 is the arm whose correlation the ladder is accounting for. A pair with a
 zero Levenshtein distance and a positive GED is a *collision* --- two
@@ -54,9 +66,15 @@ class LadderRow:
         raw: Pairs implied by ``n_raw_graphs``.
         connected: Pairs implied by ``n_graphs`` --- the cohort.
         ged_available: Pairs with a finite reference GED.
-        ged_positive: Of those, pairs with GED > 0.
-        lev_positive: Of those, pairs the reference arm separates.
-        analysed: Pairs entering the correlation.
+        ged_positive: **Collision denominator**, not a correlation rung. Pairs
+            with GED > 0, i.e. the pairs on which a collision is even definable.
+        lev_positive: **Collision denominator.** Of those, the pairs the
+            reference arm separates.
+        analysed: Pairs entering the correlation: ``ged_available`` intersected
+            with this arm's ``defined_mask``. GED = 0 pairs are **retained** ---
+            that is what isomorphic graphs have, 28.05 % of IAM Letter LOW is
+            certified at exactly 0, and dropping them would truncate the
+            response at its most informative end.
         collisions: GED > 0 but Levenshtein == 0 --- encoding collisions.
     """
 
@@ -153,7 +171,11 @@ def ladder_row(
     available = upper & np.isfinite(ged)
     positive = available & (ged > 0)
     separated = positive & (lev > 0)
-    analysed = positive & mask
+    # The analysed set is what the correlation actually runs on: every pair with
+    # a finite reference GED that this arm encoded. GED = 0 is legitimate --- it
+    # is what isomorphic graphs have --- so it is NOT filtered here. The two
+    # rungs below are the collision denominator, not a step towards this one.
+    analysed = available & mask
     collisions = int((positive & (lev == 0)).sum())
 
     raw_graphs: int | None = None
@@ -231,10 +253,33 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     payload = {
-        "schema_version": "t06.ladder.1",
+        "schema_version": "t06.ladder.2",
         "ticket": "T-06",
         "reference_arm": REFERENCE_ARM,
         "suite": args.suite,
+        "rung_semantics": {
+            "correlation_ladder": ["raw", "connected", "ged_available", "analysed"],
+            "collision_denominator": [
+                "ged_positive",
+                "lev_positive",
+                "collisions",
+                "collision_rate",
+            ],
+            "note": (
+                "Two rung families, not one chain. 'analysed' = ged_available & defined_mask "
+                "and is the pair set every rho in rho_table.json is computed over -- the two "
+                "files agree on n_pairs. 'ged_positive' and 'lev_positive' exist to define the "
+                "collision denominator: a collision is GED > 0 with Levenshtein == 0, so it is "
+                "only definable on GED-positive pairs. GED = 0 pairs are RETAINED in the "
+                "analysed set: that is what isomorphic graphs have, 28.05 % of IAM Letter LOW "
+                "is certified at exactly 0, and filtering them would truncate the response at "
+                "its most informative end (CONTRACTS.md 4.1)."
+            ),
+            "corrected": (
+                "schema t06.ladder.1 computed analysed = ged_positive & defined_mask, which is "
+                "not the set that gets analysed. Corrected 2026-08-23 under T-06."
+            ),
+        },
         "n_rows": len(rows),
         "rows": [asdict(r) | {"collision_rate": r.collision_rate} for r in rows],
     }
