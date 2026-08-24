@@ -75,6 +75,18 @@ instruction string does not — that is a difference in design point, not a defe
 artefact. **Where a representation-length claim usually degrades with scale, this one improves.**
 That is a positive scaling result and it is unusual enough to be worth a figure of its own.
 
+> ### ⚠ The scoping is not optional — pooled over all sizes, Claim A goes AGAINST us
+>
+> Of the F2 `A1` cells that reject, **10 have IsalGraph LONGER against 9 shorter**. Across all sizes
+> the significant bit results run *against* the representation by a narrow majority. **"Claim A is
+> our win" is true only with the size qualifier attached**, and the stratification in the table above
+> is what reconciles the two facts — small graphs lose, large graphs win, and the crossover sits
+> around `n ≈ 20`.
+>
+> **Never write "IsalGraph produces shorter encodings" unqualified.** Write *"above `n ≈ 20`"*, in
+> the same sentence, every time. This is the same discipline as §2's canonical-code qualifier: a
+> scoped claim carries its scope inline or it is not scoped at all.
+
 ---
 
 ## 4. Turn the negative into a field-level finding — this is the honest reframe, not a dodge
@@ -188,6 +200,7 @@ wrong to use, and a reviewer who checks will find every one of them.**
 | *"the fallback does not affect the correlation"* | It **does** — censored-touching pairs score ρ 0.3273 against 0.6095 clean at `n > 40`. What is true is narrower: the fallback does not *explain the collapse*. Report all three numbers (§4.1), never the Δ alone. |
 | *"above n = 20, 91–99 % of strata are unresolved, so the field is indistinguishable"* | **Refuted by a five-minute test a reviewer will run.** "Unresolved" there is a statement about per-stratum **power**, not about equality — equal-`n` strata above 20 are thin. Pool them with a sign test and IsalGraph is significantly lower against **all four** admissible competitors: `min_dfs` 35 higher / 66 lower, p = 0.0027; `nauty_graph6` 43/67, p = 0.028; `sparse6_nauty` 30/80, **p = 2.0e-06**; `wl_subtree` 29/81, **p = 7.3e-07**. Many underpowered comparisons all leaning one way is *evidence*, not absence of evidence. |
 | *"IsalGraph computes everywhere, unlike the competitors"* | **Eight representations also complete on 100 % of every cell.** Only `agm_cam` (6.15 % floor) and `min_dfs` (0.9478) are worse. Naming `agm_cam` alone selects the single flattering comparison from a field that mostly matches us. |
+| *"N of M F2 cells are significant"* as evidence of success | **A rejection is against `H₀: Δ = 0` and can mean *significantly worse*.** On the 6-cell dry run, **16 of 26 directional rejections went against IsalGraph** — all six `B1e` rejections were losses, and `A1` split 10 longer / 9 shorter. A bare count reads as a win count and is closer to the opposite. Report rejections **split by row and by direction**. |
 | Any F0/F1/F2 result restated more favourably than it came out | The confirmatory layer is pre-registered. Its value is precisely that it is reported unchanged; softening one sentence forfeits the protection for all of them. |
 
 **The general rule:** a scoped claim must carry its scope **in the same sentence**, not in a later
