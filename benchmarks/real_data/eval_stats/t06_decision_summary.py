@@ -561,6 +561,66 @@ def uniqueness_and_coverage(
     return {"ged_positive_pairs": pairs, "collisions": collisions, "coverage": coverage}
 
 
+def rejection_composition(
+    family: dict[str, Any], rows: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """Split BH rejections by row **and by direction**.
+
+    A bare rejection count is the most misreadable number this ticket produces.
+    BH tests ``H0: no difference``, so a rejection on a B1e cell can perfectly
+    well mean *significantly worse* --- and "28 of 32 significant" reads to
+    everyone as 28 wins. Measured on a partial run it was 19 A1 (ten of them
+    with IsalGraph **longer**), 1 A2, 6 B1e (**all six** with IsalGraph lower)
+    and 2 B3e: a majority of the directional rejections were **against** the
+    reference arm.
+
+    Args:
+        family: Parsed ``family_F2.json``.
+        rows: Rho rows, for the B1e directions.
+
+    Returns:
+        Counts by row, by direction, and the two totals.
+    """
+    cells = family.get("cells", [])
+    flags = family.get("bh_primary", {}).get("rejected", [])
+    bits = {
+        (r["dataset"], r["representation"]): r
+        for r in family.get("a1_cells", [])
+        if r.get("arm") == "primary"
+    }
+    deltas = {
+        (r["dataset"], r["representation"]): r["difference_vs_reference_arm"]["point"]
+        for r in rows
+        if r.get("row") == "B1e"
+        and r["view"] == "all_pairs"
+        and r.get("difference_vs_reference_arm") is not None
+    }
+
+    by_row: Counter[str] = Counter()
+    favour: Counter[str] = Counter()
+    for cell, rejected in zip(cells, flags, strict=False):
+        if not rejected:
+            continue
+        row = cell["row"]
+        by_row[row] += 1
+        key = (cell["dataset"], cell["representation"])
+        if row == "A1":
+            record = bits.get(key)
+            gap = record["median_difference"]["entropy_bits"] if record else 0.0
+            favour["for IsalGraph" if gap > 0 else "against IsalGraph"] += 1
+        elif row == "B1e":
+            favour["for IsalGraph" if deltas.get(key, 0.0) > 0 else "against IsalGraph"] += 1
+        else:
+            favour["no direction (omnibus / MRM)"] += 1
+    return {
+        "by_row": dict(by_row),
+        "by_direction": dict(favour),
+        "n_rejected": sum(by_row.values()),
+        "n_with_p_value": len(cells),
+        "cells_by_row": dict(Counter(c["row"] for c in cells)),
+    }
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -907,15 +967,36 @@ def render(
     if claim_a_cells is not None:
         card = claim_a_cells.get("cardinality", {})
         bh = claim_a_cells.get("bh_primary", {})
+        composition = rejection_composition(claim_a_cells, rows)
+        against = composition["by_direction"].get("against IsalGraph", 0)
+        favour = composition["by_direction"].get("for IsalGraph", 0)
         lines += [
             "",
             "## The confirmatory family, for reference",
             "",
             f"`N_actual` = {card.get('n_actual')} (closed form {card.get('closed_form')}, "
             f"discrepancy {card.get('discrepancy')}); BH at q = {bh.get('q')} over "
-            f"{bh.get('m')} rejects {bh.get('n_rejected')}. This is the pre-registered family "
-            "and it is **not** what the tables above report: those are per-cell verdicts, "
-            "unadjusted, meant for a methodology decision rather than for the manuscript.",
+            f"**{bh.get('m')}**, with {composition['n_with_p_value']} cells carrying a "
+            f"p-value and **{composition['n_rejected']} rejected**.",
+            "",
+            "🔴 **That count is not a win count and must never be quoted as one.** BH tests "
+            "*no difference*, so a rejection can mean significantly **worse**. Split by row "
+            "and direction:",
+            "",
+            "| row | rejected | direction |",
+            "|---|---:|---|",
+        ]
+        for row, count in sorted(composition["by_row"].items()):
+            lines.append(f"| {row} | {count} | see below |")
+        lines += [
+            "",
+            f"**{against} of the {against + favour} directional rejections are AGAINST "
+            f"IsalGraph**, {favour} for it; the rest are omnibus or MRM cells with no "
+            "direction. Every rejected B1e cell is a cell where IsalGraph's rho is *lower*.",
+            "",
+            "This is the pre-registered family and it is **not** what the tables above report: "
+            "those are per-cell verdicts, unadjusted, meant for a methodology decision rather "
+            "than for the manuscript.",
         ]
 
     return "\n".join(lines) + "\n"

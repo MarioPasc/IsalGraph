@@ -97,6 +97,20 @@ fail=0
 [ "$have" -eq "$want" ] || { echo "!!! missing $((want - have)) partials"; fail=$((fail + 1)); }
 [ "$shard_rc" -eq 0 ] || { echo "!!! at least one shard exited non-zero"; fail=$((fail + 1)); }
 
+# Merge over EVERY partials directory, not just this run's. The early pass
+# writes to its own directory to avoid racing this one on a shared path, so
+# merging only $PARTIALS means a failed long shard loses that cell AND discards
+# the early twin that already computed it. Staged into one directory because
+# --merge-partials takes a single tree; dedup keeps the widest pair set, so a
+# dataset present in both contributes once.
+MERGE_STAGE="$PARTIALS/../f2_merge_stage"
+rm -rf "$MERGE_STAGE"; mkdir -p "$MERGE_STAGE"
+for d in "$PARTIALS" "$PARTIALS/../f2_partials_early"; do
+  [ -d "$d" ] && cp -n "$d"/*.json "$MERGE_STAGE"/ 2>/dev/null
+done
+staged=$(ls -1 "$MERGE_STAGE"/*.json 2>/dev/null | wc -l)
+echo "=== merging $staged partials from all directories ==="
+
 "$PY" -m benchmarks.real_data.eval_stats.t06_f2 \
   --distances "$T06/distances" \
   --encodings "$T06/encodings" \
@@ -104,7 +118,7 @@ fail=0
   --ged-root "$DATA/eval/ged_matrices" \
   --approx-root "$DATA/source/APPROX_GED" \
   --out-dir "$OUT" \
-  --merge-partials "$PARTIALS" || fail=$((fail + 1))
+  --merge-partials "$MERGE_STAGE" || fail=$((fail + 1))
 
 date -u +"end %Y-%m-%dT%H:%M:%SZ"
 
