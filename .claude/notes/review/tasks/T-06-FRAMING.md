@@ -1017,3 +1017,59 @@ Restricted to the **7 identifiable bound-pairs**:
 **Add a VIF column to every MRM table.** A standardised β above 1, or a sign flip on a competitor
 predictor, is a collinearity signature and not a result. `mutagenicity` is *not* collinear
 (VIF 2.58), so its fit is trustworthy when it lands.
+
+### 12.9 ⚠ THE LARGEST DATASET INVERTS THE HEADLINE — and it is identifiable
+
+**All 15 cells landed. Orchestrator-verified from the partial.** `mutagenicity`, 8,158,780 pairs,
+4,040 graphs, `r(Lev,|Δn|) = 0.8442`, **max VIF 3.94 — identifiable**:
+
+| ref | β_lev | β_size | ratio | R² | p |
+|---|---:|---:|---:|---:|---:|
+| lb | **+0.5229** | +0.3622 | **0.69×** | 0.937 | 0.0005 |
+| ub | **+0.7303** | +0.2641 | **0.36×** | 0.864 | 0.0005 |
+
+**Levenshtein dominates size on the largest dataset in the cohort, under BOTH bounds** — by 1.4× and
+2.8×. Not marginal, not an unidentifiable fit, not a bound artefact.
+
+#### This must not be smoothed, and it must not be over-claimed
+
+**Both statements are true and both belong in the paper:**
+
+> **"Node-count difference carries more weight than the canonical string on 17 of 21 identifiable
+> fits. The four exceptions are not scattered: two of them are `mutagenicity` — the dataset with the
+> most pairs, the most graphs and the most censoring — where Levenshtein dominates under both
+> bounds."**
+
+**Why saying both is the only defensible option.** Omitting the exception is indefensible: **a
+reviewer who checks the biggest dataset first finds the opposite of the headline**, and this is the
+most likely single check anyone will run. Leading with it is equally wrong: it is 2 fits of 21, and
+the three Letter datasets — the controlled family (§13) — run the other way, monotonically.
+
+The other two exceptions are `iam_letter_low`/exact (0.63×) and `protein`/ub (−0.12×, and `protein`
+is the smallest Suite-2 dataset). **So the exceptions do not line up with size** — largest and
+smallest both appear — which is itself worth one clause, because it forecloses the obvious "it only
+fails on small data" reading in either direction.
+
+#### The straddle: FINAL, and my size hypothesis is refuted
+
+Identifiable bound-pairs only, `n = 8`:
+
+| claim | count | exact p | |
+|---|---|---|---|
+| **R² falls lb → ub** | **8 / 8** | **0.0078** | ✅ the only supported straddle claim |
+| β_lev rises lb → ub | 7 / 8 | 0.0703 | ❌ descriptive only |
+| ratio falls lb → ub | 7 / 8 | 0.0703 | ❌ same test |
+
+**`mutagenicity` conforms** (ratio 0.69 → 0.36), so `iam_letter_high` remains the sole exception.
+
+> **The orchestrator's hypothesis — that the transfer decays with dataset size, so the two largest
+> would be where a second exception appeared — is REFUTED.** The largest Suite-2 dataset conforms and
+> the lone exception is a mid-sized Letter set. The competing LB-ratio reading fares no better:
+> `iam_letter_high`'s LB ratio is 2.24× while `mutagenicity`'s is 0.69×, smaller still, and it
+> conforms. **With `n = 8` and one exception, neither reading is adjudicable. Report the count, not a
+> mechanism.**
+
+#### Final D4, over 21 identifiable fits
+
+**β₁ significant and positive on 21 of 21. Size exceeds Levenshtein on 17 of 21.** Four fits excluded
+as unidentifiable: `aids_iam` ×2, `coil_del` ×2.
