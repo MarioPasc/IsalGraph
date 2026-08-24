@@ -1100,6 +1100,17 @@ def render(
             "This is the ticket's central finding stated by the one instrument that "
             "**controls** for the confound rather than stratifying it away, which makes it "
             "more citable than the within-`n` collapse, not less.",
+            "",
+            "> **A significant β₁ on a dataset whose within-`n` ρ is indistinguishable from "
+            "noise is NOT a contradiction, and a reader will take it for one.** The two "
+            "instruments answer different questions. §17 asks whether the distance tracks GED "
+            "*within a fixed size*, where the size channel is removed by construction. The MRM "
+            "asks whether it adds anything *given* size and density, across all sizes. A "
+            "representation can carry real information about the size-driven part of GED while "
+            "carrying none about the residual — and on these cohorts GED is itself heavily "
+            "size-driven (the `|n_i − n_j|` null reaches 0.9971 on `coil_del`). So "
+            "\"β₁ significant\" and \"within-`n` ρ ≈ 0\" are two facts about the same arm, "
+            "not an inconsistency in the pipeline.",
         ]
         if pending:
             not_significant = [r for r in pending if r["p_value"] >= 0.05]
