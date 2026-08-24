@@ -344,3 +344,45 @@ checkable dishonesty available in this paper, and conceding it is what makes the
 a finding rather than a selection. **It is also why the differentiator has to be categorical**
 (§7's executable instruction string) rather than a point on this surface: on these two axes we are
 dominated, and no amount of scoping changes that.
+
+### 9.6 🔴 CORRECTION to §9.1–9.5 — the Claim B verdicts are BRACKET-DEPENDENT
+
+`[T06-subagent-01]` observed that `lb` and `ub` are two bounds on the **same pairs**, so pooling them
+in a sign test enters every stratum twice and breaks the independence the test assumes. **That
+defect is in §9's matrix**, which keyed strata on `(dataset, n, reference)` and treated the two
+bounds as separate observations. Recomputed split by reference:
+
+| IsalGraph vs | Claim A | Claim B under **LB** | Claim B under **UB** |
+|---|---|---|---|
+| `min_dfs` | **WIN** | **tie** | LOSS |
+| `nauty_graph6` | **WIN** | **tie** | LOSS |
+| `sparse6_nauty` | LOSS | **LOSS** | **LOSS** |
+| `wl_subtree` | n/a (`BitCountUndefined`) | LOSS | LOSS |
+
+**What changes:**
+
+- **Under LB, IsalGraph weakly dominates BOTH `min_dfs` and `nauty_graph6`** — wins compactness, ties
+  correlation. §9.3 reported the `min_dfs` relationship as a cross-over; that is the **UB** reading.
+- **Under UB it trades with both** — wins compactness, loses correlation. A genuine cross-over.
+- **`sparse6_nauty` dominates IsalGraph under BOTH bounds.** That concession is **robust** and §9.3's
+  headline stands unchanged.
+- `wl_subtree` beats it under both but has no Claim A, so it remains incomparable rather than
+  dominating.
+
+**What this means, and it is the ticket's recurring theme arriving once more:** the competitor
+verdicts on Claim B are **not invariant to where inside the proven bracket the truth lies** — which
+is exactly what F1 measured when it returned `d = 7 of 10` (§18.3), and exactly what §10 found for
+the size null. **Reporting the LB verdict alone would be the mirror image of the UB-only size-null
+cherry-pick already on the red-line list**, and equally checkable.
+
+**Corrected frozen wording, replacing §9.5's:**
+
+> *"No single representation leads on both axes: the most compact serialisation admits no metric
+> satisfying the distance axioms, and the best-correlating representation admits no bit count. Among
+> those measurable on both, IsalGraph is decisively more compact than min-DFS and nauty-graph6, and
+> its correlation against them is **bracket-dependent** — indistinguishable under the lower bound,
+> weaker under the upper. It is dominated on both axes by nauty-sparse6."*
+
+**Every Claim B verdict in the paper must carry both bounds.** Not as a hedge — as the finding. The
+bracket being wide enough to flip competitor verdicts *is* a result, it is pre-registered (F1), and it
+is measured on 21.7 M pairs.
