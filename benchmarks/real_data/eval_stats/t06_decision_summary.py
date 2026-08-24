@@ -598,6 +598,7 @@ def rejection_composition(
 
     by_row: Counter[str] = Counter()
     favour: Counter[str] = Counter()
+    per_row: dict[str, Counter[str]] = {}
     for cell, rejected in zip(cells, flags, strict=False):
         if not rejected:
             continue
@@ -607,13 +608,16 @@ def rejection_composition(
         if row == "A1":
             record = bits.get(key)
             gap = record["median_difference"]["entropy_bits"] if record else 0.0
-            favour["for IsalGraph" if gap > 0 else "against IsalGraph"] += 1
+            label = "for IsalGraph" if gap > 0 else "against IsalGraph"
         elif row == "B1e":
-            favour["for IsalGraph" if deltas.get(key, 0.0) > 0 else "against IsalGraph"] += 1
+            label = "for IsalGraph" if deltas.get(key, 0.0) > 0 else "against IsalGraph"
         else:
-            favour["no direction (omnibus / MRM)"] += 1
+            label = "no direction (omnibus / MRM)"
+        favour[label] += 1
+        per_row.setdefault(row, Counter())[label] += 1
     return {
         "by_row": dict(by_row),
+        "per_row_direction": {r: dict(c) for r, c in per_row.items()},
         "by_direction": dict(favour),
         "n_rejected": sum(by_row.values()),
         "n_with_p_value": len(cells),
@@ -1004,11 +1008,24 @@ def render(
             "*no difference*, so a rejection can mean significantly **worse**. Split by row "
             "and direction:",
             "",
-            "| row | rejected | direction |",
-            "|---|---:|---|",
+            "| row | what it tests | rejected | for IsalGraph | against |",
+            "|---|---|---:|---:|---:|",
         ]
+        meaning = {
+            "A1": "fewer bits than a comparator",
+            "A2": "Friedman omnibus on bits",
+            "B1e": "rho difference vs a comparator, exact GED",
+            "B3e": "MRM standardised beta1",
+        }
         for row, count in sorted(composition["by_row"].items()):
-            lines.append(f"| {row} | {count} | see below |")
+            split = composition["per_row_direction"].get(row, {})
+            favours = split.get("for IsalGraph", 0)
+            against_row = split.get("against IsalGraph", 0)
+            cells_for = str(favours) if row in {"A1", "B1e"} else "—"
+            cells_against = str(against_row) if row in {"A1", "B1e"} else "—"
+            lines.append(
+                f"| {row} | {meaning.get(row, '')} | {count} | {cells_for} | {cells_against} |"
+            )
         lines += [
             "",
             f"**{against} of the {against + favour} directional rejections are AGAINST "
