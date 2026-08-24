@@ -2029,3 +2029,25 @@ by the subagent measuring them — which is the same argument in the other direc
 
 **Implication for the siblings:** ~~automate the counting, and budget a second party for the
 claims~~ — superseded by the correction above.
+
+### 23.6 A third named pattern — a derived difference correlated against one of its own terms
+
+Three instances today, each producing a compelling and meaningless number:
+
+1. **§11.7/§11.8's dose–response** — `Spearman(ratio_lb, ratio_lb − ratio_ub)`. Correlates X with
+   X − U; permutation null gives +0.90 for pure noise, observed +0.95, **p = 0.29**. The
+   orchestrator's, promoted twice before being caught.
+2. **§11.7's two sign tests** — β_lev rising and the ratio falling are one transfer seen twice, the
+   ratio having β_lev in its denominator. Caught by the subagent.
+3. **The `equal_n` size null** — `|n_i − n_j|` is identically zero within a stratum, so its rank
+   correlation has no denominator. Caught early, by reading the file's own `reason` string.
+
+**Shared shape: a quantity is compared against something that contains it.** The correlation is then
+partly or wholly an identity, and the conventional null (ρ = 0, independence) is the wrong one.
+
+**The test that exposes all three: permute the term you believe is doing the work and keep the
+identity.** If the null distribution is already near the observed value, the finding is arithmetic.
+Cheap, decisive, and it took 20,000 draws and four lines here.
+
+**Rule adopted:** before quoting a correlation, ask whether either variable is a function of the
+other. If it is, the p-value against ρ = 0 is not the p-value of the claim.

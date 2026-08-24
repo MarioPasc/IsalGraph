@@ -903,3 +903,50 @@ unexplained variance is simply unexplained.
 final.** The subagent's own caution is the right one and applies to this correction too: it
 characterised at 6 of 6 when 10 pairs will exist, and this section characterises at 8. **The final
 count goes in when all ten land, and not before.**
+
+### 11.9 🔴 RETRACTED — the dose–response was an artefact of the identity. §11.7 and §11.8 both wrong
+
+**Caught by `[T06-subagent-01]`, verified independently by the orchestrator, and retracted in full.**
+This was the orchestrator's own construction, promoted twice as "the strongest methodological result
+in the ticket". **It is not a result at all.**
+
+**The defect.** `drop = ratio_lb − ratio_ub`, so `Spearman(ratio_lb, drop)` correlates **X against
+X − U**. That is positively correlated *by construction*, whatever `U` does. Testing it against
+ρ = 0 is the wrong null.
+
+| test | result | verdict |
+|---|---|---|
+| `Spearman(ratio_lb, drop)` — as recorded in §11.7/§11.8 | ρ = **+0.9524**, p = 0.00026 | **meaningless** |
+| `Spearman(ratio_lb, ratio_ub)` — identity-free | ρ = **−0.4762**, p = **0.233** | **nothing** |
+| **Permutation null** — shuffle `ratio_ub`, keep the identity, 20,000 draws | mean ρ = **+0.899**, 95 % **[+0.762, +0.976]** | — |
+| observed +0.9524 against that null | **permutation p = 0.29** | **not significant** |
+
+**If `ratio_ub` were pure noise with the same marginals, the expected correlation would be +0.90.**
+The observed +0.95 falls *inside* the null's 95 % interval. **There is no dose–response.**
+
+#### What actually survives, on the 8 landed bound-pairs
+
+| claim | count | exact sign-test p | |
+|---|---|---|---|
+| **R² falls lb → ub** | **8 / 8** | **0.0078** | ✅ **significant** |
+| β_lev rises lb → ub | 7 / 8 | 0.0703 | ❌ not significant |
+| ratio falls lb → ub | 7 / 8 | 0.0703 | ❌ not significant — **and the same test as the row above** |
+
+> **Only the R² half has statistical support.** It carries the BRANCH-FAST sentence — *under the
+> lower bound the three predictors explain 92–99.8 % of the variance* — and that stands.
+>
+> **The weight transfer must be stated descriptively and with no p-value:** *"the size-to-structure
+> ratio fell on 7 of 8 bound-pairs."* Nothing more. And β_lev-rises and ratio-falls are **one test,
+> not two** — the same correction §11.7 applied to itself an hour earlier, missed here.
+
+**A defensible reformulation exists** — regress `ratio_ub` on `ratio_lb` and test slope < 1 — but with
+8 points and an identity-free ρ of −0.48 it is unlikely to survive, and the two outstanding pairs
+will not rescue it. **Do not attempt it in the paper without checking.**
+
+#### The mechanism claim is not dead, it is unquantified
+
+The **direction** is still real and still predicted the β₁ finding before it was measured. What is
+gone is the *graded magnitude*, which was the part that made it "a mechanism rather than a
+coincidence" (§11.7's own words). **Without the dose–response that argument is unavailable**, and the
+straddle should be presented as a consistent direction with a measured exception, not as a
+quantified law.
