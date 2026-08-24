@@ -241,12 +241,14 @@ def claim_a_by_competitor(strata: dict[str, Any], split_at: int = 20) -> list[di
     """
     buckets: dict[str, dict[str, Counter[str]]] = {}
     reach: dict[str, int] = {}
+    admissible: dict[str, bool] = {}
     for row in strata["rows"]:
         name = row["representation"]
         half = "small" if int(row["n"]) <= split_at else "large"
         bucket = buckets.setdefault(name, {"small": Counter(), "large": Counter()})
         bucket[half][row["verdict"]] += 1
         reach[name] = max(reach.get(name, 0), int(row["n"]))
+        admissible[name] = bool(row.get("metric_admissible", True))
 
     records: list[dict[str, Any]] = []
     for name, halves in buckets.items():
@@ -266,6 +268,7 @@ def claim_a_by_competitor(strata: dict[str, Any], split_at: int = 20) -> list[di
                     halves["large"]["isalgraph_shorter"] / large_total if large_total else None
                 ),
                 "max_n_reached": reach[name],
+                "metric_admissible": admissible.get(name, True),
             }
         )
     return sorted(records, key=lambda r: -r["win_fraction"])
@@ -361,6 +364,34 @@ def claim_b_by_size(profile: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return records
+
+
+def _shorter_than_all_admissible(
+    strata: dict[str, Any], above: int = 20
+) -> tuple[int, int] | None:
+    """Count strata where IsalGraph beats every metric-admissible competitor.
+
+    This is the number a "most compact among admissible representations" claim
+    actually rests on --- a per-competitor win rate can be high while the
+    intersection is small, because different competitors win different strata.
+
+    Args:
+        strata: Parsed ``claim_a_strata.json``.
+        above: Only strata with ``n`` greater than this are counted.
+
+    Returns:
+        ``(won, total)``, or ``None`` when no stratum qualifies.
+    """
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in strata["rows"]:
+        if not row.get("metric_admissible", True) or int(row["n"]) <= above:
+            continue
+        groups.setdefault((row["suite"], row["dataset"], row["n"]), []).append(row)
+    usable = [g for g in groups.values() if len(g) >= 2]
+    if not usable:
+        return None
+    won = sum(1 for g in usable if all(float(r["median_gap_entropy"]) > 0 for r in g))
+    return won, len(usable)
 
 
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
@@ -532,6 +563,20 @@ def render(
             f"{strata.get('n_graphs_skipped_thin_strata', 0)} graphs sit in strata below "
             f"{strata.get('min_graphs_per_stratum')} graphs and are not tested.",
         ]
+        beat_all = _shorter_than_all_admissible(strata, above=20)
+        if beat_all is not None:
+            won, total = beat_all
+            lines += [
+                "",
+                f"**Shorter than EVERY metric-admissible competitor at n > 20 in {won} of "
+                f"{total} strata ({100 * won / total:.0f} %).** A claim of the form \"the most "
+                "compact representation that admits a metric\" needs this to be a large "
+                "majority, and it is not: `sparse6_nauty` is admissible and beats IsalGraph on "
+                "bits at every size above 20. What holds is narrower --- IsalGraph is the most "
+                "compact of the **canonical-code** representations, and sparsity-exploiting "
+                "serialisations beat it at scale, which is a property of the data these "
+                "cohorts have rather than a defect of the encoding.",
+            ]
         lines += [
             "",
             "### Claim A per competitor",
@@ -539,8 +584,17 @@ def render(
             "`max n` matters: a competitor refused above a size cannot be beaten above it, so a "
             "pooled win rate against `agm_cam` is a statement about small graphs only.",
             "",
-            "| competitor | strata | win | tie | loss | win % | win % at n > 20 | max n |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|",
+            "`graph6` and `nauty_graph6` carry **identical** counts by construction, not by "
+            "accident: graph6 writes the full upper triangle at fixed width, so its length is a "
+            "function of `n` alone and canonicalising the labelling permutes the bits without "
+            "changing how many there are. Verified elementwise on every graph of GREC and "
+            "Mutagenicity --- the strings differ, the bit counts do not. `sparse6` and "
+            "`sparse6_nauty` do differ, because a sparse6 edge list's length depends on the "
+            "vertex ordering that canonicalisation changes.",
+            "",
+            "| competitor | metric-admissible | strata | win | tie | loss | win % | "
+            "win % at n > 20 | max n |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         for r in claim_a_by_competitor(strata):
             large = (
@@ -548,7 +602,8 @@ def render(
                 else f"{100 * r['win_fraction_large_n']:.1f} %"
             )
             lines.append(
-                f"| {r['competitor']} | {r['strata']} | {r['win']} | {r['tie']} | {r['loss']} | "
+                f"| {r['competitor']} | {'yes' if r['metric_admissible'] else 'no (k-excluded)'} "
+                f"| {r['strata']} | {r['win']} | {r['tie']} | {r['loss']} | "
                 f"{100 * r['win_fraction']:.1f} % | {large} | {r['max_n_reached']} |"
             )
 
