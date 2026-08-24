@@ -681,8 +681,9 @@ def render(
         "",
         "1. **Claim B (correlation with GED): yes, a clear disadvantage, and it is the "
         f"headline risk.** IsalGraph is best on none of the records landed and sits **below "
-        f"its own `|n_i − n_j|` size null on {below_share}** — where the trivial baseline "
-        "beats the representation, which competitor wins is second-order. Its within-`n` rho "
+        f"its own `|n_i − n_j|` size null on {below_share}**, including **against EXACT GED "
+        "on Suite 1, where no bracket argument applies** — where the trivial baseline beats "
+        "the representation, which competitor wins is second-order. Its within-`n` rho "
         "collapses from 0.9656 at n ≤ 5 to 0.0779 above 40. `sparse6_nauty` beats it under "
         "**both** bounds; `min_dfs` and `nauty_graph6` tie it under LB and beat it under UB.",
         "2. **Claim A (information content): an advantage, and it GROWS with size** --- 20.4 % "
@@ -729,91 +730,76 @@ def render(
             f"{v.delta:+.4f} [{v.ci_low:+.4f}, {v.ci_high:+.4f}] | {v.n_pairs:,} | {mark} |"
         )
 
-    below_null = [v for v in verdicts if v.size_null is not None and v.isalgraph_rho < v.size_null]
+    with_null = [v for v in verdicts if v.size_null is not None]
+    below_null = [v for v in with_null if v.isalgraph_rho < v.size_null]
     if below_null:
-        worst_null = min(below_null, key=lambda v: v.isalgraph_rho - v.size_null)
+        by_ref: dict[str, list[Verdict]] = {}
+        for v in with_null:
+            by_ref.setdefault(v.reference, []).append(v)
+        exact_below = [v for v in below_null if v.reference == "exact"]
         lines += [
             "",
-            f"### 🔴 Below its own size null on {len(below_null)} of {len(verdicts)} records "
-            f"({100 * len(below_null) / len(verdicts):.0f} %)",
+            f"### 🔴 Below its own size null on {len(below_null)} of {len(with_null)} records "
+            f"({100 * len(below_null) / len(with_null):.0f} %)",
             "",
-            "**This outranks the head-to-head.** On these records the trivial "
-            "`|n_i − n_j|` baseline predicts GED *better than the representation does*, so "
-            "which competitor wins is a second-order question — the arm is not beating a "
-            "baseline that uses no structure at all.",
+            "**This outranks the head-to-head.** Where the trivial `|n_i − n_j|` baseline "
+            "predicts GED better than the representation does, which competitor wins is a "
+            "second-order question.",
             "",
-            f"Worst gap: **`{worst_null.suite[-1]}/{worst_null.dataset}/{worst_null.reference}` "
-            f"at ρ = {worst_null.isalgraph_rho:.4f} against a null of {worst_null.size_null:.4f}"
-            f"** — a deficit of {worst_null.isalgraph_rho - worst_null.size_null:+.4f}.",
+            "**`exact` is not part of the bracket and must be read separately from `lb`/`ub`.**",
             "",
-            "All of them: "
-            + ", ".join(
-                f"`{v.suite[-1]}/{v.dataset}/{v.reference}` ({v.isalgraph_rho:.3f} vs "
-                f"{v.size_null:.3f})"
-                for v in below_null
-            ),
+            "| reference | below | clears | nature |",
+            "|---|---:|---:|---|",
         ]
-        by_reference = Counter(v.reference for v in below_null)
-        totals = Counter(v.reference for v in verdicts if v.size_null is not None)
-        if by_reference.get("ub", 0) == 0 and totals.get("ub", 0):
-            lines += [
-                "",
-                f"**Every one of them is `exact` or `lb`; not one is `ub`** "
-                f"({totals['ub']} `ub` records carry a null and none falls below it). The "
-                "size null wins against the lower bound and loses against the upper one on "
-                "the same pairs --- which is §10's size-null inversion reproducing at full "
-                "cohort, and a fourth independent detection that the bracket is too wide at "
-                "these sizes to conclude from.",
-            ]
-
-    matrix = delta_matrix(rows, view=view)
-    if matrix:
-        counts = Counter(r["verdict"] for r in matrix)
-        lines += [
-            "",
-            "### Every competitor, not only the best",
-            "",
-            f"**{counts['win']} win / {counts['tie']} tie / {counts['loss']} loss** over "
-            f"{len(matrix)} (dataset x competitor) head-to-heads. Paired delta, so a tie means "
-            "the interval covers zero.",
-            "",
-            "| suite | dataset | ref | competitor | its rho | Delta paired [95 % CI] | verdict |",
-            "|---|---|---|---|---:|---|---|",
-        ]
-        for r in matrix:
-            mark = {"win": "**win**", "tie": "tie", "loss": "**LOSS**"}[r["verdict"]]
-            lines.append(
-                f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | {r['competitor']} | "
-                f"{r['competitor_rho']:.4f} | {r['delta']:+.4f} "
-                f"[{r['ci_low']:+.4f}, {r['ci_high']:+.4f}] | {mark} |"
+        for reference in ("exact", "lb", "ub"):
+            block = by_ref.get(reference)
+            if not block:
+                continue
+            low = sum(1 for v in block if v.isalgraph_rho < v.size_null)
+            nature = (
+                "**ground truth — no bracket argument touches it**"
+                if reference == "exact"
+                else "bracketed"
             )
+            lines.append(f"| `{reference}` | {low} | {len(block) - low} | {nature} |")
 
-    if profile is not None:
-        bands = claim_b_by_size(profile)
-        if bands:
+        if exact_below:
+            worst = min(exact_below, key=lambda v: v.isalgraph_rho - v.size_null)
             lines += [
                 "",
-                "### Claim B stratified by size",
-                "",
-                "Equal-`n` strata, where `|n_i - n_j|` is identically zero so the size null has "
-                "no denominator and raw rho IS the structural signal.",
-                "",
-                "| n | strata | IsalGraph best | best % | median rho (IsalGraph) |",
-                "|---|---:|---:|---:|---:|",
-            ]
-            for r in bands:
-                lines.append(
-                    f"| {r['band']} | {r['strata']} | {r['isalgraph_best']} | "
-                    f"{100 * r['best_fraction']:.1f} % | {r['median_rho']:.4f} |"
+                "**Concede this first.** Against **exact** GED — no bound, no interpolation — "
+                "the trivial baseline beats the representation on "
+                f"{len(exact_below)} of {len(by_ref.get('exact', []))} Suite-1 records: "
+                + ", ".join(
+                    f"`{v.dataset}` ({v.isalgraph_rho:.4f} vs {v.size_null:.4f}, "
+                    f"{v.isalgraph_rho - v.size_null:+.4f})"
+                    for v in exact_below
                 )
-            first, last = bands[0], bands[-1]
+                + f". The worst is `{worst.dataset}` at "
+                f"{worst.isalgraph_rho - worst.size_null:+.4f}. **No framing repairs this and "
+                "none should be attempted.** It is also the *cleaner* measurement, which is "
+                "why it goes first: burying a cleaner result behind a bracket argument is what "
+                "makes an omission look deliberate.",
+            ]
+
+        lb_below = [v for v in below_null if v.reference == "lb"]
+        ub_clear = [v for v in by_ref.get("ub", []) if v.isalgraph_rho >= v.size_null]
+        if lb_below and ub_clear:
+            thin = min(ub_clear, key=lambda v: v.isalgraph_rho - v.size_null)
             lines += [
                 "",
-                f"**rho collapses {first['median_rho']:.4f} at n {first['band']} to "
-                f"{last['median_rho']:.4f} at n {last['band']}**, and IsalGraph tops its "
-                f"stratum in only {100 * min(r['best_fraction'] for r in bands):.1f}-"
-                f"{100 * max(r['best_fraction'] for r in bands):.1f} % of them at any size. "
-                "The pooled rho of about 0.93 is mostly the size channel.",
+                f"**Then the Suite-2 half, which is undetermined rather than failed.** All "
+                f"{len(lb_below)} `lb` records fall below their null and all {len(ub_clear)} "
+                "`ub` records clear it — **on the same pairs**. The verdict inverts across the "
+                "bracket, so the approximate regime does not settle the question either way. "
+                "That is §10's size-null inversion reproducing at full cohort, and a fourth "
+                "independent detection that the bracket is too wide at these sizes — after "
+                "F1's `d = 7 of 10`, the competitor verdicts flipping between bounds, and §10 "
+                "itself on the pilot.",
+                "",
+                f"(Do not lean on the UB reading either: `{thin.suite[-1]}/{thin.dataset}/ub` "
+                f"clears by only {thin.isalgraph_rho - thin.size_null:+.4f} — "
+                f"{thin.isalgraph_rho:.4f} against {thin.size_null:.4f}.)",
             ]
 
     if profile is not None:
