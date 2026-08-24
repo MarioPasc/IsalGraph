@@ -821,3 +821,34 @@ the more weight transfers — and `aids_iam`/lb is the furthest point in the set
 
 **Aggregate over 19 landed production fits: 18 significant, 1 not; size exceeds Levenshtein on
 17 of 19 (89 %).** The earlier "9 of 11" was the same picture at smaller `n`.
+
+### 12.7 R² — a statement about BRANCH-FAST, not independent evidence
+
+`R²` falls LB → UB on **6 of 6** datasets:
+
+| dataset | R² lb | R² ub |
+|---|---:|---:|
+| `iam_letter_low` | **0.991** | 0.628 |
+| `iam_letter_med` | **0.988** | 0.627 |
+| `grec` | **0.986** | 0.812 |
+| `aids_graphedx` | **0.964** | 0.678 |
+| `protein` | **0.946** | 0.802 |
+| `linux` | **0.923** | 0.232 |
+| `aids_iam` | **0.998** | 0.959 |
+
+> ⚠ **NOT independent evidence.** This is §11.7's weight transfer seen a *fourth* way, on the same
+> fits. Per §11.7's own correction, these views must not be compounded — **one result, one p-value.**
+
+**But it carries one statement the coefficients alone do not, and it is about the bound rather than
+about us:**
+
+> **Under BRANCH-FAST's lower bound, node-count difference, density difference and one string
+> distance jointly explain 92–99.8 % of the variance, with β_size ≈ 0.87–0.91. The LB matrix is very
+> nearly a deterministic function of node count.**
+
+That is worth one sentence to a reviewer assessing whether a BRANCH-FAST bracket can support a
+correlation claim at all — and it is the cleanest form of §11's size-domination result, because R² is
+a familiar quantity requiring no explanation of what a "size null" is.
+
+**UB retains substantially more unexplained structure (23–81 %)**, which is why β_lev has more room
+there. Same mechanism, more legible units.

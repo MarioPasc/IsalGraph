@@ -2006,5 +2006,26 @@ by the subagent measuring them — which is the same argument in the other direc
 > version also **predicts where the next defect will be** — in the unnamed invariants — which
 > "automate the counting" does not.
 
+> #### ⚠ SECOND CORRECTION — the axis is COVERED vs UNCOVERED surfaces
+>
+> Demonstrated, not argued. `[T06-subagent-01]` built `render_beta1` so the document could not print
+> a bare β₁ — **and then its own monitor emitted three bare β₁ values with no size coefficient**, one
+> surface over from the guard it had just written.
+>
+> **So the axis is not arithmetic-vs-interpretive, and not even nameable-vs-unnameable. It is
+> covered-vs-uncovered.** `render_beta1` *is* interpretive and it *did* work — on the one surface it
+> was installed in. The invariant was named, mechanised, and still violated, because β₁ also travels
+> through the monitor, the inter-agent messages and the shard logs, and none of those routed through
+> the guard.
+>
+> **The operative question for a new invariant is therefore not "can this be mechanised?" but "how
+> many surfaces does this value travel through, and is the guard on all of them?"** A value with one
+> exit needs one guard; β₁ had four exits and got one.
+>
+> **Practical form:** put the guard at the **narrowest common point** every consumer must pass —
+> a renderer, a loader, a serialiser — rather than at each display site. Where that is impossible,
+> enumerate the exits explicitly and check each. `dedup_rho_rows` succeeded because it sits inside
+> the loader every consumer uses; `render_beta1` was installed at one display site among four.
+
 **Implication for the siblings:** ~~automate the counting, and budget a second party for the
 claims~~ — superseded by the correction above.
