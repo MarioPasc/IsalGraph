@@ -399,3 +399,50 @@ cherry-pick already on the red-line list**, and equally checkable.
 **Every Claim B verdict in the paper must carry both bounds.** Not as a hedge — as the finding. The
 bracket being wide enough to flip competitor verdicts *is* a result, it is pre-registered (F1), and it
 is measured on 21.7 M pairs.
+
+---
+
+## 10. The below-null result splits in two, and only one half is rescuable
+
+Verified from `DECISION_SUMMARY.md`'s Claim B table at 10 of 15 cells. `[T06-subagent-01]` found that
+**every below-null record is `exact` or `lb`, and not one is `ub`.** Confirmed — but grouping `exact`
+with `lb` blurs the distinction the paper turns on, because **`exact` is not part of the bracket.**
+
+| reference | below null | clears | nature |
+|---|---|---|---|
+| **`exact`** (Suite 1) | **2 of 2** — `aids` 0.3266 vs 0.7863, `linux` 0.4850 vs 0.7097 | 0 | **Ground truth. No bracket argument touches this.** |
+| `lb` (Suite 2) | 4 of 4 | 0 | bracketed |
+| `ub` (Suite 2) | **0 of 4** | 4 | bracketed |
+
+### 10.1 The Suite-2 half IS rescuable, and honestly
+
+On the same pairs the arm falls below its null under LB and clears it under UB, on **4 of 4**
+datasets. That is not a failure — it is **undetermined**, and it is §10's pilot inversion reproducing
+at full cohort. The correct sentence is *"whether the representation beats the trivial size baseline
+on Suite 2 depends on where inside the proven bracket the truth lies, and the bracket is too wide to
+say"* — which is F1's `d = 7 of 10` restated on a fourth instrument.
+
+**This is a legitimate and much better position than "it fails the trivial baseline".** Use it. But
+it comes with the standing red line: **report both bounds.** *"Clears the null on 4 of 4 Suite-2
+datasets"* is true of the UB half alone and is the single most damaging sentence available in this
+paper. (`2/linux/ub` clears by 0.3612 against 0.3399 — a margin of **0.021**. Thin enough that it
+should not be leaned on even within the UB reading.)
+
+### 10.2 The Suite-1 half is NOT rescuable, and must be conceded
+
+`aids` and `linux` are measured against **exact GED**. There is no bracket, no bound, no
+interpolation — the trivial `|n_i − n_j|` baseline correlates with ground-truth graph edit distance
+**better than the representation does**, by −0.4597 on `aids` and −0.2247 on `linux`.
+
+**No framing repairs this and none should be attempted.** The pilot (§14.1) found the same on 4 of 5
+Suite-1 datasets, with only `iam_letter_low` clearing; the three remaining Suite-1 cells are still
+computing and will tell us whether that reproduces. **Expect it to.**
+
+> **Frozen wording:** *"On Suite 1, where ground-truth GED is exact, the size baseline outperforms the
+> representation on `aids` and `linux`. On Suite 2 the comparison is undetermined: the verdict
+> inverts across the proven bracket on every dataset measured."*
+
+Two sentences, both true, and the first one must come first. **Leading with the Suite-2 "undetermined"
+and leaving the Suite-1 result to a limitations section is exactly the move a reviewer checks for** —
+the exact-GED result is the cleaner measurement and burying the cleaner measurement is what makes an
+omission look deliberate.
