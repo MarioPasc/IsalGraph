@@ -1599,3 +1599,56 @@ every A1 cell**, and per-cell discordance between the conventions is flagged rat
 
 `wl_subtree` and `size_null` carry no A1 cell at all: `BitCountUndefined`, with the reason printed
 and never fabricated (A2).
+
+### 18.9 Q2 ruled: `all_pairs` is confirmatory. And a mislabelled ladder rung, found by the subagent
+
+**Verified independently:** `equal_n`, `equal-n`, `all_pairs` and `n_i = n_j` occur **zero times** in
+both `preregistration.md` and `statistics.md`. §4 is genuinely silent.
+
+#### Ruling — the confirmatory view is `all_pairs`
+
+Three grounds, the first the subagent's and the strongest:
+
+1. **A9's ladder has no equal-`n` rung.** If the family were defined over `equal_n`, the accounting
+   that exists to expose the analysed denominator would have to say so. It does not.
+2. **§4.2 is unqualified** — "bootstrap CI on ρ(Lev, exact) − ρ(comparator distance, exact), per
+   Suite-1 dataset". The unmarked reading of "ρ over a dataset" is over its pairs, not a subset.
+3. **F0 and F1 have already run on the full defined pair set.** B1e/B1a are the same shape of
+   quantity, and a family whose gates and rows use different pair sets is incoherent.
+
+`equal_n` is **descriptive**, and §17 already carries it in the form that matters.
+
+> **No third BH column.** Emit the `equal_n` arm as point estimates and CIs plus a *locally* adjusted
+> q under an explicitly descriptive key — never a `bh_*` column sitting beside the confirmatory one
+> as though co-equal. Three side-by-side BH columns is the shape that gets misread as three families.
+> `primary_view: "all_pairs"`.
+
+#### The ladder's `analysed` rung is mislabelled — my defect, not a protocol conflict
+
+The subagent found that `ladder.json`'s `analysed` (331,202 on `aids_graphedx`) disagrees with the
+pair count F0/F1 actually ran on (334,971 = `ged_available`). The 3,769-pair gap is exactly the
+GED = 0 pairs.
+
+**Checked before ruling:** the rung ordering `raw → connected → GED-available → GED > 0 → Lev > 0 →
+analysed` appears **only in this design note's acceptance criteria** — not in `preregistration.md`,
+not in `statistics.md`. So it is a **reporting requirement, not a protocol definition of the analysed
+set**, and there is no pre-registration conflict to resolve. What there is, is a bug in
+`t06_ladder.py`, which I wrote: it computes `analysed = ged_positive & defined_mask`, which is not
+what gets analysed.
+
+**Fix:** `analysed` reports `ged_available & defined_mask`, the correlation's actual pair set. The
+`GED > 0` and `Lev > 0` rungs are relabelled as what they are — the **collision denominator**, which
+is what they exist for (`collisions` / `collision_rate`, the zero-collisions result on ~24.8 M
+pairs). `rho_table.json` and `ladder.json` must then agree on `n_pairs`, and the JSON says why the
+two families of rung differ.
+
+**The subagent's reasoning for keeping GED = 0 pairs in the correlation is correct and adopted:**
+GED is legitimately 0 for isomorphic graphs — 28.05 % of IAM Letter LOW pairs are certified at
+exactly 0 — and filtering them would truncate the response variable at its most informative end,
+contradicting CONTRACTS §4.1 and trap 9.
+
+> **But measure it rather than assert it.** Those pairs are a large block of ties in the response,
+> and Spearman is tie-sensitive: 15.5 % of `iam_letter_low`'s pairs sit at GED = 0. **Compute ρ with
+> and without them on two contrasting datasets** — one zero-heavy (`iam_letter_low`), one
+> zero-light (`protein`, 15 of 161,581) — and report the delta. If it moves materially the PI must
+> see that before T-20 writes anything. This is a sensitivity, not a re-run: F0/F1 stand.
