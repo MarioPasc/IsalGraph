@@ -1983,4 +1983,28 @@ arithmetic surface toward zero; the interpretive surface is irreducible and need
 will contradict the first. Three of today's six killed framings were the orchestrator's own, caught
 by the subagent measuring them — which is the same argument in the other direction.
 
-**Implication for the siblings:** automate the counting, and budget a second party for the claims.
+> #### ⚠ CORRECTION — the boundary is not arithmetic-vs-framing, and the sharper line predicts more
+>
+> Refined by `[T06-subagent-01]` against the paragraph above. **`render_beta1` is not purely
+> arithmetic.** Forcing β_size into the cell is; rendering **`β_size UNMEASURED`** is not. That string
+> prevents a *framing* — *"β₁ is significant on the hardest dataset"* standing alone — by making the
+> missing half **visible rather than absent**. A purely arithmetic mechanism would have printed
+> `+0.2494`, been entirely correct, and enabled the bad claim.
+>
+> **The real line:** a mechanism can defend any invariant **whose required shape you can name** —
+> including interpretive ones: *"β₁ never without β_size"*, *"a rejection count never without its
+> direction split"*, *"a percentage never without its predicate"*. Every one of those is
+> mechanisable, and three of today's six framing errors were of exactly that kind.
+>
+> **What cannot be mechanised is noticing that an invariant you never thought to state is the one
+> being violated.** *"The bracket is nearly a size measurement"* was false because exact GED is
+> nearly as size-dominated on Letter — a reason nobody had articulated, so no guard could have
+> existed for it.
+>
+> **Conclusion, replacing the one below:** *mechanise every invariant you can name; the irreducible
+> surface is the invariants you have not yet named, and that is what the second party is for.* This
+> version also **predicts where the next defect will be** — in the unnamed invariants — which
+> "automate the counting" does not.
+
+**Implication for the siblings:** ~~automate the counting, and budget a second party for the
+claims~~ — superseded by the correction above.
