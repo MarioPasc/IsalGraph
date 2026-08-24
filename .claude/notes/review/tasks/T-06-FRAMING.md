@@ -1073,3 +1073,61 @@ Identifiable bound-pairs only, `n = 8`:
 
 **β₁ significant and positive on 21 of 21. Size exceeds Levenshtein on 17 of 21.** Four fits excluded
 as unidentifiable: `aids_iam` ×2, `coil_del` ×2.
+
+---
+
+## 14. FINAL — F2 complete over all 15 cells
+
+Orchestrator-verified from `family_F2.json`:
+
+```
+n_max 182 | n_actual 79 | closed_form 79 | discrepancy 0 | k 3 | d 0 | c 7
+BH over N_actual : m = 79,  75 rejected at q = 0.05
+BH over N_max    : m = 182, 74 rejected   (sensitivity column)
+missing: none — 79 of 79 cells carry a p-value
+```
+
+**No cell sat in the denominator empty.** `d = 0` because F0's majority branch fired (§18.7), so F1's
+`d = 7` is reported but not applied.
+
+### 14.1 🔴 The 75 rejections are essentially EVEN, and the count must never travel bare
+
+| row | what it tests | rejected | **for IsalGraph** | **against** |
+|---|---|---:|---:|---:|
+| A1 | fewer bits than a comparator | 51 | **28** | 23 |
+| A2 | Friedman omnibus on bits | 1 | — | — |
+| B1e | ρ difference vs a comparator, exact GED | 18 | **7** | **11** |
+| B3e | MRM standardised β₁ | 5 | — | — |
+
+**35 for / 34 against, of 69 directional rejections.**
+
+> **"75 of 79 significant" would read as a triumph and means nothing of the kind.** A rejection is
+> against `H₀: Δ = 0`; roughly half of them say *significantly worse*. **Print the split by row and
+> direction wherever the count appears** — this is the seventh instance in this ticket of a number
+> that inverts in meaning without its composition.
+
+**The B1e row is 7/11, not uniformly adverse** — materially less bleak than the 0/6 visible when only
+six cells had landed, and a reminder that partial-set characterisations mislead in both directions.
+
+### 14.2 A defect the subagent caught in its own deliverable
+
+`DECISION_SUMMARY.md` was printing *"Every rejected B1e cell is a cell where IsalGraph's ρ is lower"*
+**directly beneath a table showing 7 of 18 favour it.** True of the six cells that had landed when
+written; false once all 79 were in. Now computed from the composition, with the uniform case still
+reading as uniform when it genuinely is.
+
+**Same class as `CLAUDE.md`'s stale 726 and the retracted 6-of-6 straddle: a number correct when
+written, quoted after its basis moved.** That is now three instances, and the common fix is the same
+— derive the sentence from the data rather than asserting it alongside.
+
+### 14.3 Final headline figures
+
+| | |
+|---|---|
+| Claim B, paired per-record | **0 win / 1 tie / 24 loss** over 25 records |
+| Claim B, size null | below it on **4 of 5** Suite-1 datasets against **exact** GED |
+| Claim A | advantage **grows** with size; **112/112** vs `min_dfs` above `n = 20`; net-negative pooled |
+| D4, identifiable fits | β₁ significant **21/21**; size > Levenshtein **17/21** |
+| D4 exception | **`mutagenicity`, the largest dataset, inverts it under both bounds** |
+| Straddle | **R² falls 8/8, p = 0.0078** — the only supported claim |
+| Collisions | **0 over 24,764,422 pairs** |
