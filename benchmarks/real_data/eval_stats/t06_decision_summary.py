@@ -627,7 +627,9 @@ def rejection_composition(
 
 
 def mrm_table(
-    partial_dirs: Sequence[Path], logs: Path | None = None
+    partial_dirs: Sequence[Path],
+    logs: Path | None = None,
+    collinearity: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Collect D4's fits with their **whole** coefficient vector.
 
@@ -648,6 +650,11 @@ def mrm_table(
     Args:
         partial_dirs: Directories of shard partials.
         logs: Optional shard-log directory, for fits still in flight.
+        collinearity: Optional ``collinearity.json``. Where the predictors are
+            not separately identifiable (VIF > 10) the beta1-vs-beta_size
+            comparison is not supported however high R^2 is, so those fits are
+            marked and kept out of the headline counts rather than silently
+            averaged in.
 
     Returns:
         One record per ``(suite, dataset, reference)``, production fits only.
@@ -713,6 +720,21 @@ def mrm_table(
                         "landed": False,
                     }
                 )
+    identifiable: dict[str, bool] = {}
+    if collinearity is not None and collinearity.exists():
+        payload = json.loads(collinearity.read_text())
+        for key, row in payload.get("datasets", {}).items():
+            identifiable[key.split("/", 1)[1]] = bool(row["identifiable"])
+    for record in records:
+        record["identifiable"] = identifiable.get(record["dataset"], True)
+        record["max_vif"] = float("nan")
+    if collinearity is not None and collinearity.exists():
+        vifs = {
+            k.split("/", 1)[1]: v["max_vif"]
+            for k, v in json.loads(collinearity.read_text()).get("datasets", {}).items()
+        }
+        for record in records:
+            record["max_vif"] = float(vifs.get(record["dataset"], float("nan")))
     return sorted(records, key=lambda r: (r["suite"], r["dataset"], r["reference"]))
 
 
@@ -1081,7 +1103,12 @@ def render(
             )
 
     if mrm:
-        landed = [r for r in mrm if r["landed"]]
+        landed_all = [r for r in mrm if r["landed"]]
+        # A fit whose predictors are collinear cannot support the beta1-vs-beta_size
+        # comparison this section exists to make, however high its R^2. Kept in the
+        # table, kept out of the counts.
+        landed = [r for r in landed_all if r.get("identifiable", True)]
+        unidentifiable = [r for r in landed_all if not r.get("identifiable", True)]
         pending = [r for r in mrm if not r["landed"]]
         significant = [r for r in landed if r["p_value"] < 0.05]
         size_wins = [
@@ -1108,21 +1135,37 @@ def render(
             "size/Lev |",
             "|---|---|---|---:|---:|---:|---:|---:|---:|",
         ]
-        for r in landed:
+        for r in landed_all:
             ratio = (
                 f"{r['ratio_size_over_lev']:.1f}×"
                 if np.isfinite(r["ratio_size_over_lev"])
                 else "—"
             )
+            flag = "" if r.get("identifiable", True) else " ⚠"
             lines.append(
-                f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | "
+                f"| {r['suite'][-1]} | {r['dataset']}{flag} | {r['reference']} | "
                 f"{r['beta_levenshtein']:+.4f} | {r['beta_delta_n']:+.4f} | "
                 f"{r['beta_delta_density']:+.4f} | {r['r_squared']:.3f} | "
                 f"{r['p_value']:.5f} | {ratio} |"
             )
+        if unidentifiable:
+            names = sorted({r["dataset"] for r in unidentifiable})
+            worst = max(r["max_vif"] for r in unidentifiable)
+            lines += [
+                "",
+                f"⚠ **{len(unidentifiable)} fits on {len(names)} datasets "
+                f"(`{'`, `'.join(names)}`) are EXCLUDED from the counts below: their "
+                f"predictors are collinear (max VIF {worst:.1f} against a threshold of 10), "
+                "so the β₁-vs-β_size comparison this section makes is **not identifiable** "
+                "there — the split between two predictors correlated at r > 0.93 is arbitrary "
+                "within a wide equivalence class, however high R² is or however small p is. "
+                "`coil_del`/ub announces it (β₁ = +1.49 with β_size negative); "
+                "`aids_iam`/lb does not (+0.10 against +0.91, R² = 0.998) and is the more "
+                "dangerous of the two.",
+            ]
         lines += [
             "",
-            f"**β₁ is significant on {len(significant)} of {len(landed)} landed fits and "
+            f"**β₁ is significant on {len(significant)} of {len(landed)} identifiable fits and "
             "positive on every one — D4's β₁ does NOT collapse.** But **the size coefficient "
             f"exceeds Levenshtein's on {len(size_wins)} of {len(landed)}**"
             + (
@@ -1278,6 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ladders", type=Path, nargs="*", default=[])
     ap.add_argument("--completion-rates", type=Path, default=None)
     ap.add_argument("--logs", type=Path, default=None, help="shard logs, for fits still in flight")
+    ap.add_argument("--collinearity", type=Path, default=None, help="collinearity.json")
     ap.add_argument("--view", default="all_pairs")
     ap.add_argument("--out", type=Path, required=True)
     return ap
@@ -1321,7 +1365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows=rows,
             view=args.view,
             profile=profile,
-            mrm=mrm_table(args.partials, logs=args.logs),
+            mrm=mrm_table(args.partials, logs=args.logs, collinearity=args.collinearity),
             extras=uniqueness_and_coverage(
                 [json.loads(f.read_text()) for f in args.ladders if f.exists()],
                 json.loads(args.completion_rates.read_text())

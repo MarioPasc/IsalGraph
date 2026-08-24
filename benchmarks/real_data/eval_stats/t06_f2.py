@@ -1077,6 +1077,88 @@ def provenance_markdown(out_dir: Path, family: Path | None) -> str:
     return "\n".join(lines)
 
 
+def collinearity_report(distances: Path, encodings: Path) -> dict[str, Any]:
+    """Measure predictor collinearity for D4, per dataset.
+
+    D4 regresses GED on Levenshtein, ``|delta n|`` and ``|delta density|``
+    **simultaneously**, and reads the comparison between the first two
+    coefficients as the ticket's central finding. That reading requires the two
+    to be separately identifiable. Where they are not, the split between them is
+    arbitrary within a wide equivalence class and no amount of significance
+    rescues it --- a fit can have R^2 = 0.998 and still not support "size
+    explains 0.91 of it and the string 0.10".
+
+    The signature is not always visible in the coefficients. ``coil_del``'s
+    upper-bound fit announces itself (beta_lev = +1.49 with beta_size negative),
+    but ``aids_iam``'s lower-bound fit looks perfectly ordinary at +0.10 against
+    +0.91 --- and has VIF 15.3. Only the design matrix shows it, so it is
+    measured here rather than eyeballed.
+
+    Args:
+        distances: The ``distances/`` tree.
+        encodings: The ``encodings/`` tree, for the density predictor.
+
+    Returns:
+        Per ``suite/dataset``: the predictor correlation, the VIFs, and whether
+        the fit is identifiable at the conventional VIF > 10 threshold.
+    """
+    rows: dict[str, Any] = {}
+    for suite, datasets in (("suite1", SUITE1), ("suite2", SUITE2)):
+        for dataset in datasets:
+            arm = load_arm(distances, suite, dataset, REFERENCE_ARM)
+            edges = edge_counts_for(encodings, suite, dataset, arm.graph_ids) if arm else None
+            if arm is None or edges is None:
+                continue
+            upper = np.triu_indices(arm.graph_ids.size, 1)
+            lev = arm.distance[upper]
+            keep = arm.defined[upper] & np.isfinite(lev) & (lev >= 0.0)
+            if int(keep.sum()) < 1000:
+                continue
+            design = np.column_stack(
+                [
+                    lev[keep],
+                    delta_n_matrix(arm.node_counts)[upper][keep],
+                    delta_density_matrix(arm.node_counts, edges)[upper][keep],
+                ]
+            )
+            names = ("levenshtein", "delta_n", "delta_density")
+            vifs: dict[str, float] = {}
+            for j, name in enumerate(names):
+                others = [k for k in range(3) if k != j]
+                matrix = np.column_stack([np.ones(design.shape[0]), design[:, others]])
+                beta, *_ = np.linalg.lstsq(matrix, design[:, j], rcond=None)
+                residual = design[:, j] - matrix @ beta
+                total = ((design[:, j] - design[:, j].mean()) ** 2).sum()
+                r_squared = 1.0 - (residual @ residual) / total if total > 0 else 1.0
+                vifs[name] = float(1.0 / max(1.0 - r_squared, 1e-12))
+            worst = max(vifs.values())
+            rows[f"{suite}/{dataset}"] = {
+                "r_lev_delta_n": float(np.corrcoef(design[:, 0], design[:, 1])[0, 1]),
+                "vif": vifs,
+                "max_vif": worst,
+                "identifiable": bool(worst <= 10.0),
+                "n_pairs": int(keep.sum()),
+            }
+            LOGGER.info(
+                "%s/%-16s r(lev,dn)=%+.4f  max VIF=%6.2f  %s",
+                suite,
+                dataset,
+                rows[f"{suite}/{dataset}"]["r_lev_delta_n"],
+                worst,
+                "identifiable" if worst <= 10.0 else "NOT IDENTIFIABLE",
+            )
+    return {
+        "schema_version": "t06.collinearity.1",
+        "threshold": 10.0,
+        "note": (
+            "D4 compares beta_levenshtein against beta_delta_n. Where VIF exceeds 10 the two "
+            "are not separately identifiable and that comparison is not supported, however "
+            "high R^2 or however small the p-value."
+        ),
+        "datasets": rows,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the CLI parser."""
     ap = argparse.ArgumentParser(description="Run F2, the primary family.")
@@ -1107,6 +1189,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="write this shard's raw records here and stop, for a sharded run",
+    )
+    ap.add_argument(
+        "--collinearity",
+        type=Path,
+        default=None,
+        help="measure D4 predictor collinearity, write it here and stop",
     )
     ap.add_argument(
         "--provenance",
@@ -1547,6 +1635,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.collinearity is not None:
+        report = collinearity_report(args.distances, args.encodings)
+        args.collinearity.parent.mkdir(parents=True, exist_ok=True)
+        args.collinearity.write_text(json.dumps(report, indent=2))
+        bad = [k for k, v in report["datasets"].items() if not v["identifiable"]]
+        total = len(report["datasets"])
+        print(f"wrote {args.collinearity}: {len(bad)} of {total} NOT identifiable")
+        for name in bad:
+            print(f"  NOT IDENTIFIABLE {name}  max VIF {report['datasets'][name]['max_vif']:.2f}")
+        return 0
 
     if args.provenance is not None:
         args.provenance.parent.mkdir(parents=True, exist_ok=True)

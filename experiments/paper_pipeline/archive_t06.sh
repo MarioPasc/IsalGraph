@@ -43,7 +43,7 @@ for f in \
   "$T06/claim_a_strata.json" "$T06/claim_a_suite1.json" "$T06/claim_a_suite2.json" \
   "$T06/censoring.json" "$T06/ladder.json" "$T06/ladder_suite1.json" \
   "$T06/size_profile.json" "$T06/size_profile_censoring_confound.json" \
-  "$T06/completion_rates.json" "$T06/encodings/manifest.json"
+  "$T06/completion_rates.json" "$T06/encodings/manifest.json" "$T06/collinearity.json"
 do
   if [ -f "$f" ]; then cp -p "$f" "$OUT/data/"; else echo "!!! missing $f"; fail=$((fail + 1)); fi
 done
