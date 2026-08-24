@@ -1166,3 +1166,61 @@ resolved, and 17 of those resolve against the representation.
 
 **The trend strengthened as coverage completed** — 60 % at 10 records, 68 % at 25 — rather than
 regressing toward the mean, which is the harder outcome and the one that must be reported.
+
+### 12.10 🔴 RETRACTED — §12.9's `mutagenicity` headline. Tier-3 β₁ points fall OUTSIDE their own CIs
+
+**Found by `[T06-subagent-01]`, verified independently.** `MrmResult` has stored `beta1_interval`
+all along; **no β reported today had been checked against it.**
+
+Over all 37 landed fits, **exactly 4** have a point estimate outside its own 95 % bootstrap interval,
+and they are precisely the **two tier-3 datasets × two bounds**:
+
+| fit | β₁ | its own 95 % CI |
+|---|---:|---|
+| `coil_del`@lb | +0.2494 | [+0.0646, +0.0726] |
+| `coil_del`@ub | +1.4892 | [+1.5122, +1.5618] |
+| **`mutagenicity`@lb** | **+0.5229** | **[+0.0919, +0.1028]** |
+| `mutagenicity`@ub | +0.7303 | [+0.4284, +0.4805] |
+
+**33 of 37 consistent; the 4 inconsistent are exactly `coil_del` and `mutagenicity`** — verified as
+the only tier-3 entries in `D15_TIERS`.
+
+**Diagnosis.** `_TIER_EFFORT[3] = (1000, 1999, 2_000_000)` — **tier 3 is the only tier with a
+within-replicate pair budget.** The point estimate is fitted on **all** pairs (7.6 M / 8.16 M); every
+bootstrap replicate is fitted on a **2 M** subsample. **They are not estimating the same quantity**,
+so the interval cannot be expected to cover the point. `PercentileInterval.point` is documented as
+*"the full-sample estimate, never the bootstrap mean"* — correct in principle, and under tier-3
+subsampling it guarantees this mismatch.
+
+#### What is retracted
+
+**§12.9's headline — "Levenshtein dominates size on the largest dataset, under both bounds" — is
+withdrawn.** It rested on β_lev = +0.5229 against β_size = +0.3622. **The bootstrap for that fit puts
+β_lev in [0.092, 0.103]** — against β_size = 0.362 that is ≈ **3.6× in favour of size**, the
+opposite conclusion.
+
+> **We do not know which number is right, and that is the finding.** Two estimates of the same
+> coefficient differ by a factor of five, and one of them was quoted as a result.
+
+#### ✅ The confirmatory family is UNTOUCHED — verified
+
+**B3e is Suite-1 only, and no Suite-1 dataset is tier 3.** Confirmed from `_SUITE1_TIERS`:
+`aids`, `linux`, `iam_letter_low`, `iam_letter_med` are tier 1; `iam_letter_high` is tier 2; **max
+Suite-1 tier = 2**, and tiers 1–2 carry `subsample = None`.
+
+**So all five B3e cells are among the 33 consistent fits. `N_actual = 79`, the 75 rejections, both BH
+columns and every Claim-A and Claim-B figure stand.** The damage is confined to the descriptive
+**B3a** rows — which F0's majority branch had already demoted (§18.7).
+
+#### Two diagnostics, two datasets, neither catching both
+
+`coil_del` was already excluded for **collinearity** (VIF 16.2) and now fails this check too.
+`mutagenicity` **passed** the VIF screen (3.94) and fails only this one. **Neither diagnostic alone
+would have caught both tier-3 datasets** — an argument for running both screens rather than either.
+
+#### For the propagation list
+
+**This is a defect in the frozen wave machinery** (`association.mrm` + tier-3 resampling), not in the
+T-06 driver, and **it had never fired because no tier-3 dataset had ever been run before today.**
+Either the point estimate should be computed on the same subsample the replicates use, or the
+interval should be labelled as not covering it. **The siblings inherit this.**
