@@ -1224,3 +1224,44 @@ would have caught both tier-3 datasets** — an argument for running both screen
 T-06 driver, and **it had never fired because no tier-3 dataset had ever been run before today.**
 Either the point estimate should be computed on the same subsample the replicates use, or the
 interval should be labelled as not covering it. **The siblings inherit this.**
+
+### 12.11 Corrected D4 counts, and an unplanned determinism check the campaign passed
+
+**A second defect from the same audit:** `mrm_table` read both partial trees without deduplicating.
+The main run re-runs cells the early pass already did, so **39 rows arrived for 25 distinct fits**.
+`dedup_rho_rows` guards the ρ rows against exactly this and was never extended to the MRM table.
+**Every "of N fits" figure quoted today was over duplicates.**
+
+**Corrected — orchestrator-verified: 23 main + 16 early rows, 25 distinct, 14 duplicated:**
+
+> **β₁ significant on 19 of 19 usable fits; size exceeds Levenshtein on 17 of 19.**
+
+Six excluded from 25: `aids_iam` ×2 and `coil_del` ×2 (collinear, VIF 18.1 / 16.2), `mutagenicity` ×2
+(point outside its own CI). **`coil_del` fails both tests independently.**
+
+#### ✅ The duplication is reproducibility evidence, verified
+
+**All 14 duplicated fits are byte-identical** across the two runs — β₁, the full standardised β
+vector, R² **and** the permutation p-value, to the last stored digit.
+
+> **Two independent processes, separate output trees, started hours apart, at seed 42, produced
+> identical results on 14 fits.** That is a determinism check nobody designed, run for free by a
+> scheduling accident, and it is exactly the reproducibility evidence a reviewer asks for.
+
+**Worth one sentence in the paper**, and worth more than a claim of determinism because it was not
+constructed to succeed.
+
+#### Three D4 exclusion criteria, none subsuming another
+
+| criterion | catches | mechanism |
+|---|---|---|
+| VIF > 10 | `aids_iam`, `coil_del` | `collinearity.json`, from the design matrix |
+| point ∉ own CI | `coil_del`, **`mutagenicity`** | computed in `mrm_table` |
+| duplicate fit | 14 rows | dedup on `(dataset, reference)` |
+
+**`mutagenicity` is caught only by the second; `aids_iam` only by the first.** Two diagnostics, each
+blind to the other's case — **the third time today a guard covered one surface and not the
+neighbouring one**, and the argument for running both rather than choosing the better one.
+
+**Nothing in the confirmatory family moved.** `N_actual = 79`, 79 of 79 cells, 75 rejections, both BH
+columns. **Every defect found today has been in the descriptive layer.**
