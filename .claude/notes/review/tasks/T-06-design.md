@@ -2051,3 +2051,34 @@ Cheap, decisive, and it took 20,000 draws and four lines here.
 
 **Rule adopted:** before quoting a correlation, ask whether either variable is a function of the
 other. If it is, the p-value against ρ = 0 is not the p-value of the claim.
+
+### 23.7 Screen the INPUT, not the output — the dangerous defect is the invisible one
+
+The collinearity screen (§12.8) is now `collinearity.json`, written by `t06_f2 --collinearity` from
+the **design matrix**, with an explicit threshold and this note in the file:
+
+> *"D4 compares β_levenshtein against β_delta_n. Where VIF exceeds 10 the two are not separately
+> identifiable and that comparison is not supported, **however high R² or however small the
+> p-value**."*
+
+**Why it had to be measured from the inputs rather than inferred from the coefficients**, and this is
+the transferable part:
+
+| cell | what the coefficients showed | would a heuristic catch it? |
+|---|---|---|
+| `coil_del`/ub | β_lev = **+1.4892**, β_size **negative** | **yes** — obvious |
+| **`aids_iam`/lb** | β_lev = +0.0976, β_size = +0.9066, **R² = 0.998** | **no — it looks like the cleanest fit in the set** |
+
+**The harmful case was the invisible one.** `coil_del`/ub announces itself and misled nobody;
+`aids_iam`/lb looked like the best-behaved model in the whole table and was the one an interpretation
+got built on (§12.6, retracted). **A screen over stored coefficients would have caught the harmless
+case and missed the harmful one.**
+
+**Rule:** diagnose from the design matrix, not from the fit. A high R² and a small p-value are
+compatible with a completely unidentifiable decomposition, and both make the cell *more* attractive
+to quote rather than less.
+
+**Corroborating detail worth keeping:** removing the two unidentifiable fits removed **the only
+non-significant β₁ in the set** — the counts went from 21 of 22 to **21 of 21**. An exclusion rule
+that removes exactly the anomalies it was not designed to target is picking out real cells rather
+than trimming inconvenient ones.
