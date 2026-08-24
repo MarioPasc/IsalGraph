@@ -115,7 +115,12 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
 
     Returns:
         Rows with a defined rho, restricted to the regime that applies at their
-        node count.
+        node count and to the **primary** D14 arm.
+
+    Raises:
+        ValueError: If the profile carries an arm this function does not know
+            how to reduce, which would otherwise be plotted alongside the
+            primary rows as if it were more data.
     """
     payload = json.loads(path.read_text())
     out: list[dict[str, Any]] = []
@@ -123,6 +128,16 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
         if row["rho"] is None:
             continue
         if row["reference"] not in _regime(int(row["n"])):
+            continue
+        # size_profile.json can carry two arms since schema t06.size_profile.2.
+        # A profile written with --arm both holds each stratum twice, and without
+        # this filter every figure would silently plot the complete-case arm on
+        # top of the primary one -- doubling n and biasing the curve, with
+        # nothing in the output to show it.
+        arm = row.get("arm", "primary")
+        if arm != "primary":
+            if arm != "complete_case":
+                raise ValueError(f"{path}: unknown D14 arm {arm!r} in a stratum row")
             continue
         out.append(row)
     return out
@@ -285,31 +300,45 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
                 ys = [p.rho for p in sel]
                 lo = [p.rho - p.ci_lo for p in sel]
                 hi = [p.ci_hi - p.rho for p in sel]
-                label = f"{DISPLAY.get(rep, rep)}" + (
-                    "" if ref == "exact" else f" · {ref.upper()}"
-                )
+                label = f"{DISPLAY.get(rep, rep)}" + ("" if ref == "exact" else f" · {ref.upper()}")
                 alpha = 0.9 if ref != "lb" else 0.65
                 if len(xs) > DENSE_SERIES:
                     # Error bars on a dense series produce a picket fence that
                     # hides the trend they exist to qualify. A translucent band
                     # carries the same interval and stays legible.
                     ax.plot(
-                        xs, ys, color=colours[rep], linestyle=styles[ref],
-                        marker="o", markersize=2.0, linewidth=1.0,
-                        alpha=alpha, label=label,
+                        xs,
+                        ys,
+                        color=colours[rep],
+                        linestyle=styles[ref],
+                        marker="o",
+                        markersize=2.0,
+                        linewidth=1.0,
+                        alpha=alpha,
+                        label=label,
                     )
                     ax.fill_between(
                         xs,
                         [p.ci_lo for p in sel],
                         [p.ci_hi for p in sel],
-                        color=colours[rep], alpha=0.10, linewidth=0,
+                        color=colours[rep],
+                        alpha=0.10,
+                        linewidth=0,
                     )
                 else:
                     ax.errorbar(
-                        xs, ys, yerr=[lo, hi],
-                        color=colours[rep], linestyle=styles[ref],
-                        marker="o", markersize=3.2, linewidth=1.2,
-                        elinewidth=0.6, capsize=1.5, alpha=alpha, label=label,
+                        xs,
+                        ys,
+                        yerr=[lo, hi],
+                        color=colours[rep],
+                        linestyle=styles[ref],
+                        marker="o",
+                        markersize=3.2,
+                        linewidth=1.2,
+                        elinewidth=0.6,
+                        capsize=1.5,
+                        alpha=alpha,
+                        label=label,
                     )
                 marked = [(p.n, p.rho) for p in sel if (rep, ref, p.n) in significant]
                 if marked:
