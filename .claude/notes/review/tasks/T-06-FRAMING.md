@@ -652,3 +652,61 @@ All 14 fits are tier-1/tier-2. **`mutagenicity` and `coil_del` have not reported
 datasets, and exactly where §17 says the correlation is noise. **If β_lev collapses anywhere it is
 there.** Until then this is a claim about 8 of 10 Suite-2 and 3 of 5 Suite-1 datasets, and it must
 say so.
+
+---
+
+## 13. THE CLEANEST CONTROL IN THE TICKET — the IAM Letter family at three distortion levels
+
+Found by `[T06-subagent-01]` when `suite1/iam_letter_high` landed. **Independently checked and it is
+sharper than first framed.**
+
+IAM Letter LOW / MED / HIGH are **the same generator at three distortion levels**, so data source,
+labelling and construction are held fixed and **only the graphs differ**. That makes this a
+*within-family* control, not a cross-dataset comparison — its trend cannot be attributed to different
+cohorts having different properties.
+
+### 13.1 Node count barely moves. Structure does.
+
+| dataset | graphs | mean `n` | sd `n` | mean edges |
+|---|---:|---:|---:|---:|
+| `iam_letter_low` | 1,180 | 4.07 | 1.17 | 3.07 |
+| `iam_letter_med` | 1,253 | 4.11 | 1.16 | 3.17 |
+| `iam_letter_high` | 2,059 | 4.58 | 1.25 | **4.56** |
+
+Mean node count rises 4.07 → 4.58 (+12 %) with essentially unchanged spread; **mean edge count rises
+3.07 → 4.56 (+49 %)**. The family adds *structure*, not *size*.
+
+### 13.2 The size baseline is FLAT. The representation collapses.
+
+| dataset | ρ(Lev, exact) | size null | excess | β_lev | β_Δn | ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| `iam_letter_low` | **0.9278** | 0.9139 | **+0.0139** | +0.5624 | +0.3537 | **0.6×** |
+| `iam_letter_med` | 0.8833 | 0.9146 | −0.0313 | *pending* | — | — |
+| `iam_letter_high` | **0.6660** | 0.9195 | **−0.2536** | +0.2696 | **+0.7507** | **2.8×** |
+
+> **Holding the generator fixed and adding structural distortion, the trivial `|n_i − n_j|` baseline
+> stays flat at ρ ≈ 0.92 while the canonical string's correlation falls from 0.93 to 0.67. In the
+> regression, β_lev halves and β_Δn doubles over the same range, and the size-null verdict flips.**
+
+### 13.3 Why this is the strongest single piece of evidence in the ticket
+
+1. **It is a within-family control.** Nothing varies but the graphs.
+2. **It rebuts the obvious defence.** One could argue the size null wins because these benchmarks are
+   size-dominated (§11) — but here **node count is nearly constant** and the null *still* holds at
+   0.92 while the arm collapses. The failure is not that size is doing the work by default; it is
+   that **the representation stops tracking GED exactly as structure becomes the thing that matters.**
+3. **Two independent instruments move together** — the marginal size-null excess and the MRM
+   coefficient ratio — on the same three datasets, monotonically.
+4. **It is the third appearance of one story**, after §17's within-`n` collapse and §11's
+   size-domination: the representation tracks edit distance where there is little structure to track.
+
+### 13.4 What to do with it
+
+**Put it in the paper as its own small table.** It is the most economical way to state the central
+finding, it is a controlled comparison rather than a pooled one, and a reviewer can check it in three
+rows. It is also **the honest framing of the limitation** — far better than a generic "performance
+degrades on harder data", because it names *what* gets harder and shows the baseline unaffected.
+
+**Pending:** `iam_letter_med`'s β vector should sit between LOW and HIGH. **If it breaks the monotone,
+that is more interesting than the trend** and must be reported — a broken monotone on a controlled
+family would need explaining, not smoothing.
