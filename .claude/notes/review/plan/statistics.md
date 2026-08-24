@@ -234,6 +234,39 @@ runs; it is not recomputed at execution time.**
 In the **exact** regime (Suite 1, `n ≤ 12`) only IAM Letter HIGH reaches tier 2; the other four
 datasets are tier 1. No Suite-1 dataset is subsampled.
 
+> ## 🔴 DEFECT FOUND 2026-08-24 (T-06) — under tier 3, an MRM point estimate falls OUTSIDE its own interval
+>
+> **Measured, first time tier 3 has ever been run.** Of 37 MRM fits, exactly **4** have a β₁ point
+> estimate outside its own 95 % bootstrap interval, and they are precisely the two tier-3 datasets ×
+> two bounds:
+>
+> | fit | β₁ | its own 95 % CI |
+> |---|---:|---|
+> | `mutagenicity`@lb | **+0.5229** | **[+0.0919, +0.1028]** |
+> | `mutagenicity`@ub | +0.7303 | [+0.4284, +0.4805] |
+> | `coil_del`@lb | +0.2494 | [+0.0646, +0.0726] |
+> | `coil_del`@ub | +1.4892 | [+1.5122, +1.5618] |
+>
+> Separation by tier is exact — **tier 1: 28 consistent / 0 not; tier 2: 5 / 0; tier 3: 0 / 4.**
+>
+> **Cause.** Tier 3 is the only tier with a within-replicate pair budget. The **point estimate is
+> fitted on every pair** (7.6 M / 8.16 M); **every replicate is fitted on a 2 × 10⁶ subsample.** They
+> do not estimate the same quantity, so the interval cannot be expected to cover the point.
+> `PercentileInterval.point` is documented as *"the full-sample estimate, never the bootstrap mean"* —
+> correct in principle, and under tier-3 subsampling it **guarantees** the mismatch.
+>
+> **Rule 1 below is therefore necessary but not sufficient.** It keeps the *resampling unit* honest;
+> it does not keep the point estimate and its interval on the same estimand.
+>
+> **Consequence for T-06:** the four fits are excluded from every D4 count. `mutagenicity`'s
+> β_lev = +0.5229 was briefly reported as "Levenshtein dominates on the largest dataset" and is
+> **retracted** — its own bootstrap puts β_lev near 0.10, reversing which predictor dominates.
+> **The confirmatory family is unaffected**: B3e is Suite-1 only and no Suite-1 dataset is tier 3.
+>
+> **Owner: unassigned.** Either compute the point on the same subsample the replicates use, or label
+> the interval as not covering it. **IsalSR and IsalHG inherit this** — it lay dormant only because
+> no tier-3 dataset had been run before 2026-08-24.
+
 Three rules that keep this honest:
 
 1. **The resampling unit is unchanged.** Graphs are always resampled with replacement; subsampling
@@ -404,7 +437,29 @@ q = 0.05 **within** each:
 | **F1** | bracket gate (**D13, promoted to confirmatory**) — ρ(Lev, LB) − ρ(Lev, UB), per Suite-2 dataset | 10 |
 | **F2** | primary — A1 (60) · A2 (1) · B1e (35) · B1a (70) · B2 (1) · B3e (5) · B3a (10) | 182 |
 
-`N_actual(F2) = 182 − 15k − 8d`, with `k` set by T-04a's F5-blind exclusion rule and `d` by F1. BH is
+> ## ⚠ CORRECTED 2026-08-24 (T-06) — the formula below omits TWO terms and under-counts `N_actual`
+>
+> The struck line is missing the `+ k·d` overlap term and the `c` term, both added to
+> [preregistration](preregistration.md) §5/§5.1 on 2026-08-16. **Both omissions shrink the BH
+> denominator, which lowers the correction on every surviving test** — the anti-conservative
+> direction, and the one a reviewer pushes hardest on.
+>
+> **Correct form, and `preregistration.md` §5 is the authority:**
+>
+> ```
+> N_actual(F2) = 182 − 15·k − 8·d + k·d − c        ordinary branch
+> N_actual(F2) = 101 −  5·k          − c        when F0's majority branch fires (§5.3)
+> ```
+>
+> **`N_actual` is defined by ENUMERATION**; the closed form is a printed check and the enumeration
+> wins on disagreement. Cite `eval_stats/family.py:_closed_form` rather than restating the formula —
+> **the code has carried the correct form throughout; five prose restatements did not**, and this was
+> the last live one (T-06 design note §8.1).
+>
+> **As run by T-06, 2026-08-24:** F0's majority branch fired (4 of 5), so `k = 3`, `d` **not applied**,
+> `c = 7`, **`N_actual = 79`**, enumeration and closed form agreeing at discrepancy 0.
+
+~~`N_actual(F2) = 182 − 15k − 8d`, with `k` set by T-04a's F5-blind exclusion rule and `d` by F1.~~ BH is
 computed over `N_actual`; `N_max`, the exclusion list and a BH-over-`N_max` sensitivity column are all
 printed.
 
