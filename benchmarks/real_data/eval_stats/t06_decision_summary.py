@@ -655,6 +655,14 @@ def render(
     """
     tally = Counter(v.verdict for v in verdicts)
     missing = _missing_cells(verdicts)
+    n_below = sum(
+        1 for v in verdicts if v.size_null is not None and v.isalgraph_rho < v.size_null
+    )
+    below_share = (
+        f"{n_below} of {len(verdicts)} records ({100 * n_below / len(verdicts):.0f} %)"
+        if verdicts
+        else "no records yet"
+    )
     lines: list[str] = [
         "# T-06 decision summary",
         "",
@@ -672,10 +680,11 @@ def render(
         "## The answer, in five lines",
         "",
         "1. **Claim B (correlation with GED): yes, a clear disadvantage, and it is the "
-        "headline risk.** IsalGraph is best on none of the records landed, sits **below its "
-        "own `|n_i − n_j|` size null** on several, and its within-`n` rho collapses from "
-        "0.9656 at n ≤ 5 to 0.0779 above 40. `sparse6_nauty` beats it under **both** bounds; "
-        "`min_dfs` and `nauty_graph6` tie it under LB and beat it under UB.",
+        f"headline risk.** IsalGraph is best on none of the records landed and sits **below "
+        f"its own `|n_i − n_j|` size null on {below_share}** — where the trivial baseline "
+        "beats the representation, which competitor wins is second-order. Its within-`n` rho "
+        "collapses from 0.9656 at n ≤ 5 to 0.0779 above 40. `sparse6_nauty` beats it under "
+        "**both** bounds; `min_dfs` and `nauty_graph6` tie it under LB and beat it under UB.",
         "2. **Claim A (information content): an advantage, and it GROWS with size** --- 20.4 % "
         "of strata at n ≤ 5 rising to 45.6 % above 40, median gap −1.2 to +242.1 bits. **The "
         "two claims move in opposite directions with size**, so they do not share a cause.",
@@ -722,14 +731,40 @@ def render(
 
     below_null = [v for v in verdicts if v.size_null is not None and v.isalgraph_rho < v.size_null]
     if below_null:
+        worst_null = min(below_null, key=lambda v: v.isalgraph_rho - v.size_null)
         lines += [
             "",
-            f"**{len(below_null)} of {len(verdicts)} records have IsalGraph BELOW its own size "
-            "null** — on those the trivial `|n_i − n_j|` baseline correlates with GED better "
-            "than the representation does, so the comparison against competitors is secondary "
-            "to that: "
-            + ", ".join(f"`{v.suite[-1]}/{v.dataset}/{v.reference}`" for v in below_null),
+            f"### 🔴 Below its own size null on {len(below_null)} of {len(verdicts)} records "
+            f"({100 * len(below_null) / len(verdicts):.0f} %)",
+            "",
+            "**This outranks the head-to-head.** On these records the trivial "
+            "`|n_i − n_j|` baseline predicts GED *better than the representation does*, so "
+            "which competitor wins is a second-order question — the arm is not beating a "
+            "baseline that uses no structure at all.",
+            "",
+            f"Worst gap: **`{worst_null.suite[-1]}/{worst_null.dataset}/{worst_null.reference}` "
+            f"at ρ = {worst_null.isalgraph_rho:.4f} against a null of {worst_null.size_null:.4f}"
+            f"** — a deficit of {worst_null.isalgraph_rho - worst_null.size_null:+.4f}.",
+            "",
+            "All of them: "
+            + ", ".join(
+                f"`{v.suite[-1]}/{v.dataset}/{v.reference}` ({v.isalgraph_rho:.3f} vs "
+                f"{v.size_null:.3f})"
+                for v in below_null
+            ),
         ]
+        by_reference = Counter(v.reference for v in below_null)
+        totals = Counter(v.reference for v in verdicts if v.size_null is not None)
+        if by_reference.get("ub", 0) == 0 and totals.get("ub", 0):
+            lines += [
+                "",
+                f"**Every one of them is `exact` or `lb`; not one is `ub`** "
+                f"({totals['ub']} `ub` records carry a null and none falls below it). The "
+                "size null wins against the lower bound and loses against the upper one on "
+                "the same pairs --- which is §10's size-null inversion reproducing at full "
+                "cohort, and a fourth independent detection that the bracket is too wide at "
+                "these sizes to conclude from.",
+            ]
 
     matrix = delta_matrix(rows, view=view)
     if matrix:
