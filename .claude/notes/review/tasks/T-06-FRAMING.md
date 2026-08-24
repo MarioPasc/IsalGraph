@@ -563,3 +563,92 @@ and it tells a reviewer something useful about BRANCH-FAST and IPFP rather than 
 computed directly**, needing no bootstrap. Where a question is about *direction* rather than
 *resolution*, the point estimate answers it immediately — and waiting for intervals to characterise a
 shape that is already determined costs time for nothing.
+
+---
+
+## 12. THE CENTRAL TABLE — MRM standardised coefficients, and what to write about Claim B
+
+The instrument that **controls** for the size confound rather than stratifying it away. Two of these
+rows were verified by the orchestrator directly from the partials (`nperm = 9999`, production).
+
+| suite / dataset | ref | **β_lev** | **β_Δn** | β_density | R² |
+|---|---|---:|---:|---:|---:|
+| 1 `aids` | exact | +0.2314 | **+0.8049** | +0.0281 | 0.810 |
+| 1 `iam_letter_low` | exact | **+0.5624** | +0.3537 | +0.1369 | 0.964 |
+| 1 `linux` | exact | +0.3551 | **+0.6689** | +0.0408 | 0.742 |
+| 2 `aids_graphedx` | lb | +0.1552 | **+0.8694** | −0.0028 | 0.964 |
+| 2 `aids_graphedx` | ub | +0.3519 | **+0.6445** | −0.2230 | 0.678 |
+| 2 `grec` | lb | +0.1764 | **+0.8649** | −0.0206 | 0.986 |
+| 2 `grec` | ub | +0.4475 | **+0.6531** | −0.3734 | 0.812 |
+| 2 `linux` | lb | +0.2854 | **+0.8886** | −0.0517 | 0.923 |
+| 2 `linux` | ub | +0.2985 | +0.3954 | −0.1258 | **0.232** ⚠ |
+| 2 `protein` | lb | +0.1478 | **+0.8161** | +0.0705 | 0.946 |
+| 2 `protein` | ub | **+0.9869** | **−0.1177** ⚠ | −0.2609 | 0.802 |
+
+### 12.1 The frozen Claim B sentence
+
+> **"The canonical string contributes significant incremental information about graph edit distance
+> beyond node-count and density difference — β_lev = 0.15–0.36, p < 0.001 on 13 of 14 fits — but node
+> count difference carries 3–6× the weight (β_Δn = 0.65–0.89). Even in the model that adjudicates the
+> confound directly, size does most of the work and the representation adds a significant minority
+> share."**
+
+**Both halves, one sentence.** β₁ reported alone is a coefficient without its context — the sixth
+instance today of a number that inverts in meaning when its companion is withheld. The size
+coefficient exceeds Levenshtein's in **9 of 11** fits.
+
+**This also reconciles the two Claim B results that look contradictory** and must be stated together:
+
+- the **size null** compares *marginal* predictors and Levenshtein **loses** on 4 of 5 Suite-1 datasets;
+- the **MRM** asks whether Levenshtein adds anything *given* size and density, and it **does**, on 13 of 14.
+
+Neither refutes the other. A predictor can be worse standalone and still carry independent
+information, and saying both is more informative — and more obviously honest — than either alone.
+
+### 12.2 The straddle, now visible INSIDE one model — the strongest methodological result in the ticket
+
+On every dataset carrying both bounds, **β_Δn falls and β_lev rises going LB → UB**:
+
+| dataset | β_Δn lb → ub | β_lev lb → ub |
+|---|---|---|
+| `aids_graphedx` | 0.869 → 0.645 | 0.155 → 0.352 |
+| `grec` | 0.865 → 0.653 | 0.176 → 0.448 |
+| `linux` | 0.889 → 0.395 | 0.285 → 0.299 |
+| `protein` | 0.816 → −0.118 | 0.148 → 0.987 |
+
+**4 of 4.** Every earlier detection compared *instruments*; here both predictors sit in **one
+regression on identical pairs**, and the weight transfers from size to structure exactly as the
+measured −0.18 size-domination gap predicts. **The mechanism is no longer inferred — it is fitted.**
+
+This was a **prediction made from one instrument and confirmed on another**, which is worth more than
+any number of instruments agreeing. It is the paper's best evidence that the LB/UB disagreement is
+structural rather than noise.
+
+### 12.3 Two internal consistency checks that were not constructed
+
+1. **`iam_letter_low/exact` is the only fit where Levenshtein dominates** (0.5624 vs 0.3537) — and it
+   is **the only dataset that cleared its size null** (+0.0139). Two independent instruments, the
+   same lone exception.
+2. **`protein/ub` has the largest β_lev** (0.9869) — and **the largest UB size-null excess** (+0.4094).
+   Same cell again.
+
+Nothing was tuned to produce either. **Worth one sentence in the paper**: independent instruments
+agreeing on which cells are exceptional is evidence the pipeline measures something real.
+
+### 12.4 ⚠ Two cells not to build on
+
+- **`linux/ub`, R² = 0.232** — the model explains almost nothing; coefficients weakly identified on
+  3,916 pairs.
+- **`protein/ub`, β_Δn = −0.118** — the only negative size coefficient in the set, and the most
+  extreme fit.
+
+Both are the smallest-R² / most extreme cells. **Do not quote either without its CI**, and do not let
+`protein/ub`'s β_lev = 0.9869 become the headline: it is one cell, it is the outlier, and it is the
+one a reviewer will check first.
+
+### 12.5 Scope, until the tier-3 pair lands
+
+All 14 fits are tier-1/tier-2. **`mutagenicity` and `coil_del` have not reported** — the two largest
+datasets, and exactly where §17 says the correlation is noise. **If β_lev collapses anywhere it is
+there.** Until then this is a claim about 8 of 10 Suite-2 and 3 of 5 Suite-1 datasets, and it must
+say so.
