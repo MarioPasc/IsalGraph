@@ -707,9 +707,33 @@ finding, it is a controlled comparison rather than a pooled one, and a reviewer 
 rows. It is also **the honest framing of the limitation** — far better than a generic "performance
 degrades on harder data", because it names *what* gets harder and shows the baseline unaffected.
 
-**Pending:** `iam_letter_med`'s β vector should sit between LOW and HIGH. **If it breaks the monotone,
-that is more interesting than the trend** and must be reported — a broken monotone on a controlled
-family would need explaining, not smoothing.
+### 13.5 ✅ COMPLETE — the monotone held, and both instruments cross at the same dataset
+
+`iam_letter_med` landed. Orchestrator-verified from the partial:
+
+| dataset | β_lev | β_size | **ratio** | R² | size-null excess |
+|---|---:|---:|---:|---:|---:|
+| `iam_letter_low` | **+0.5624** | +0.3537 | **0.63×** — Lev dominates | 0.964 | **+0.0139** clears |
+| `iam_letter_med` | +0.4610 | +0.5086 | **1.10×** — parity | 0.954 | −0.0313 ≈ 0 |
+| `iam_letter_high` | +0.2696 | **+0.7507** | **2.78×** — size dominates | 0.913 | **−0.2536** below |
+
+**β_lev falls monotonically. β_size rises monotonically. The ratio crosses 1.0 at MED** — and the
+**size-null excess crosses zero at the same dataset.** Two independent instruments, one monotone
+trend, the same crossover, on a family where nothing varies but the graphs.
+
+**This pins a number the pooled tables cannot give:** the representation stops paying its way on this
+family **between LOW and MED distortion** — not "somewhere above `n = 20`", which is where the
+cross-dataset aggregates put it. A within-family crossover is a much more useful statement of the
+limit than a pooled threshold, because it names the *condition* rather than a coincidental size.
+
+**The two instruments agree even at the ambiguous point:** MED is *parity* by the MRM (1.10×) and
+*marginally below* by the size null (−0.0313). Those disagree only in the sense that a ratio of 1.1
+and an excess of −0.03 are both "about zero" — which is the agreement, not a discrepancy.
+
+**Write it as the limitation.** *"On a controlled family at three distortion levels, the structural
+predictor's share of graph edit distance falls from dominant to parity to minority, crossing at the
+middle level."* That is a far stronger and more honest limitation statement than any pooled
+threshold, and it is checkable in three rows.
 
 ### 11.7 The straddle, finally stated correctly — 6 of 6 on two quantities, with a dose–response
 
