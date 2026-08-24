@@ -725,7 +725,12 @@ both bounds. Orchestrator-verified arithmetic.
 | `linux` | 0.2854 → 0.2985 | ✓ | 3.1× → 1.3× | ✓ |
 | `protein` | 0.1478 → 0.9869 | ✓ | 5.5× → 0.1× | ✓ |
 
-**6 of 6 on both**, sign test **p = 0.031** each.
+**6 of 6 on both**, sign test **p = 0.031**.
+
+> ⚠ **The two rows are ONE result, not two.** β_lev rising and the ratio falling are the same weight
+> transfer seen from two sides — the ratio has β_lev in its denominator. **Do not report "p = 0.031
+> twice" or compound them**; quote one sign test and note that the second view agrees by
+> construction. Flagged by `[T06-subagent-01]` against its own finding.
 
 **The ratio is the better statement of the two.** It is a *within-model* comparison — β_size against
 β_lev inside one regression — so it is immune to any objection that β_lev moved because the response

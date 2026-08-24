@@ -1961,3 +1961,26 @@ a wrong result.** The comparison worth keeping is the retracted `43 s/graph` fig
 survived four attempts precisely because nobody was checking. **A high self-caught error rate on a
 system that catches them is a healthier state than a low one on a system that does not**, and the
 distinction between those two is the only thing the count actually measures.
+
+### 23.4 Mechanisms catch arithmetic. Framing still needs a second party
+
+Observed by `[T06-subagent-01]` and worth recording, because it bounds what §23's advice can achieve.
+
+Across today's ~10 corrections the division was clean:
+
+| caught by | class | examples |
+|---|---|---|
+| the **orchestrator** | **interpretive** | mixed-provenance claim (wrong), `computes everywhere` (wrong), the unresolved-fraction pooling, the exact-vs-bracket split, the dominance matrix's independence, β₁ without β_size |
+| the **subagent** | **arithmetic** | the landed-`ub` generalisation, log lines counted as cells, the stale-log β₁ set, the two-directory count, the record-vs-cell count |
+
+**Every mechanism built today targets the arithmetic column** — `--status`, `dedup_rho_rows`, the
+`n_permutations` filter, `render_beta1`. **Not one of them would have caught a wrong framing.**
+`render_beta1` can force β_size to appear beside β₁; it cannot notice that "the bracket is nearly a
+size measurement" is false because exact GED is nearly as size-dominated.
+
+**So the two roles are not redundant and should not be collapsed.** Mechanisation reduces the
+arithmetic surface toward zero; the interpretive surface is irreducible and needs a second reader who
+will contradict the first. Three of today's six killed framings were the orchestrator's own, caught
+by the subagent measuring them — which is the same argument in the other direction.
+
+**Implication for the siblings:** automate the counting, and budget a second party for the claims.
