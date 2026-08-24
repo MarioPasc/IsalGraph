@@ -1652,3 +1652,62 @@ contradicting CONTRACTS §4.1 and trap 9.
 > and without them on two contrasting datasets** — one zero-heavy (`iam_letter_low`), one
 > zero-light (`protein`, 15 of 161,581) — and report the delta. If it moves materially the PI must
 > see that before T-20 writes anything. This is a sensitivity, not a re-run: F0/F1 stand.
+
+### 18.10 The censoring size-stratum, and a confound it exposes in §17
+
+`[T06-subagent-01]` measured D14 censoring **by size stratum** rather than by dataset, and the
+result is sharper than the figure this ticket has been quoting.
+
+| `n` | graphs | censored | rate |
+|---|---|---|---|
+| ≤ 40 | 3,497 | 0 | **0.00 %** |
+| 41–60 | 384 | 12 | 3.12 % |
+| 61–80 | 118 | 58 | **49.15 %** |
+| 81+ | 41 | 31 | **75.61 %** |
+
+**Censoring is exactly zero below `n = 40`** and then rises monotonically to three quarters above 80.
+Censored graphs span `n = 45–98` against a kept median of 26.
+
+**Adopt this form.** "2.50 % of Mutagenicity" is that curve diluted by 3,497 small graphs, and
+"0.62 % cohort-wide" dilutes it again across nine datasets that censor nothing. Two averages, each
+hiding the structure the reader needs. The stratum supports D14's premise far more directly than
+either, and it is what the response letter should carry. `censoring.json` now refuses a cohort-level
+rate quoted without naming Mutagenicity.
+
+#### 🔴 The confound this exposes, and it must be measured before §17 is written up
+
+A censored graph is retained **with its greedy-min fallback string, which is not canonical** and is
+therefore outside the completeness theorem. So above `n ≈ 60`, roughly **half** of Mutagenicity's
+IsalGraph arm is not the canonical encoding at all.
+
+§17 reports that the within-`n` correlation collapses with size. **Part of that collapse may be the
+budget rather than the method** — an increasing fraction of large-`n` graphs being represented by a
+fallback string, not by `pruned_canonical_string`. Those are two different findings with two
+different response-letter sentences, and they are currently entangled:
+
+- *"the representation's structural fidelity degrades with graph size"* — a property of the method;
+- *"the 300 s budget forces a non-canonical fallback on large graphs, which correlates worse"* — a
+  property of the **compute budget**, and fixable by raising it.
+
+**Measurement, before T-20 quotes §17:** recompute the §17 within-`n` ρ on Mutagenicity **restricted
+to non-censored graphs**, and compare against the same strata unrestricted. The confound is confined
+to Mutagenicity — it is the only dataset that censors at all — so the check is cheap and exact.
+
+- If ρ is unchanged, censoring is **not** the driver, §17 stands as a statement about the method, and
+  that is a stronger claim than we can currently make.
+- If ρ improves materially, §17's collapse is **partly a budget artefact** and must say so.
+
+Either outcome is publishable; conflating them is not.
+
+#### A3's symmetry stratum — the substitution stands, but `|Aut|` needs no cluster
+
+The subagent could not emit the rate per **symmetry** stratum because no artifact this ticket holds
+carries `|Aut|`, and correctly recorded the size-stratum substitution *inside* `censoring.json`
+rather than presenting it as the stratum requested. That is the right handling.
+
+**But its cost estimate is wrong: `pynauty 2.8.8.1` is already importable in the environment and
+exposes `autgrp`.** Verified 2026-08-23. `|Aut|` over 21,720 graphs of `n ≤ 98` is what nauty is
+built for and is very unlikely to need a cluster. **Probe 200 graphs, time-boxed, before concluding
+anything about scale** — the same standard applied everywhere else in this ticket. If the probe is
+fast, emit the real symmetry stratum and discharge A3 as written; if it is genuinely slow, keep the
+substitution and record the measured reason rather than an estimate.
