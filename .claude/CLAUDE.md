@@ -82,7 +82,7 @@ $PY -m pip install -e ".[dev,native]"     # builds the extension
 | `$PY -m mypy src/isalgraph/` | Type check (strict) |
 | `$PY -m isalgraph.viz` | Regenerate `docs/figures/` |
 
-**Reference state (measured 2026-08-24, T-06):** **2,544 passed / 321 skipped**
+**Reference state (measured 2026-08-24, T-06 close):** **2,550 passed / 321 skipped**
 with the engine. A change that lowers either number needs an explanation.
 
 > ⚠ **This figure was stale by ~3.5× until 2026-08-24.** It read *"726 passed /
