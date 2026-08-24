@@ -167,6 +167,7 @@ wrong to use, and a reviewer who checks will find every one of them.**
 | *"shorter than competitors in 32 % of strata"* | **State the predicate in the sentence.** 32 % is "positive median gap, significance ignored"; the significant figure is **0 %**. Four different numbers describe the same 122 strata (0 / 32 / 42 / 58 %) and they are not interchangeable. |
 | Quoting `43 s/graph`, `≈ 520×`, `≥ 6.8 core-hours` | **Retracted as unprovenanced** (§11.4). The run that produced them left no artifact. |
 | *"the fallback does not affect the correlation"* | It **does** — censored-touching pairs score ρ 0.3273 against 0.6095 clean at `n > 40`. What is true is narrower: the fallback does not *explain the collapse*. Report all three numbers (§4.1), never the Δ alone. |
+| *"above n = 20, 91–99 % of strata are unresolved, so the field is indistinguishable"* | **Refuted by a five-minute test a reviewer will run.** "Unresolved" there is a statement about per-stratum **power**, not about equality — equal-`n` strata above 20 are thin. Pool them with a sign test and IsalGraph is significantly lower against **all four** admissible competitors: `min_dfs` 35 higher / 66 lower, p = 0.0027; `nauty_graph6` 43/67, p = 0.028; `sparse6_nauty` 30/80, **p = 2.0e-06**; `wl_subtree` 29/81, **p = 7.3e-07**. Many underpowered comparisons all leaning one way is *evidence*, not absence of evidence. |
 | Any F0/F1/F2 result restated more favourably than it came out | The confirmatory layer is pre-registered. Its value is precisely that it is reported unchanged; softening one sentence forfeits the protection for all of them. |
 
 **The general rule:** a scoped claim must carry its scope **in the same sentence**, not in a later
@@ -196,3 +197,44 @@ program**; no serialisation competitor is. That is a categorical difference rath
 it is where the novelty actually lives, and it is not adjudicated by ρ or by bit counts. If the
 comparison sections read as narrow, this is the paragraph that reframes the contribution — and it
 requires no scoping, because nothing else in the comparison set does it at all.
+
+---
+
+## 8. A framing that was proposed, tested, and must not be used
+
+Recorded because it is attractive, because it nearly reached the PI, and because the test that kills
+it is one any reviewer runs.
+
+**The proposal.** Within equal-`n` strata above `n = 20`, 91–99 % of every competitor's
+head-to-heads are *unresolved* — the marginal intervals overlap. Read one way this says: within a
+fixed size the field is noise, so IsalGraph is not clearly worse, and the pooled "9 losses" are the
+size channel rather than a real deficit.
+
+**Why it fails.** *Unresolved* there is a statement about **per-stratum power**, not about equality.
+Equal-`n` strata above 20 are thin — that is the same thinness §17 reports as "6 of 52 significant".
+Counting how many individual strata resolve is the wrong summary of many small, consistent effects.
+**Pool them and the picture reverses.** Sign test over per-stratum ρ differences, `n > 20`, UB
+reference:
+
+| competitor | strata | IsalGraph higher | lower | median Δρ | sign-test `p` |
+|---|---:|---:|---:|---:|---:|
+| `min_dfs` | 101 | 35 | 66 | −0.0521 | **0.0027** |
+| `nauty_graph6` | 110 | 43 | 67 | −0.0447 | **0.028** |
+| `sparse6_nauty` | 110 | 30 | 80 | −0.0723 | **2.0 × 10⁻⁶** |
+| `wl_subtree` | 110 | 29 | 81 | −0.0692 | **7.3 × 10⁻⁷** |
+
+**Significant against all four.** Strata within a dataset are disjoint graph sets, so the test is
+valid; it weights every stratum equally regardless of pair count, which if anything understates the
+large strata.
+
+**The principle worth carrying beyond this instance:** *many underpowered comparisons all leaning the
+same way is evidence, not absence of evidence.* Any framing that counts non-significant results as
+support must survive pooling before it is used. Two other numbers in this ticket have the same shape
+and were handled correctly — the `equal_n` size null being *undefined* rather than missing, and
+Claim A's four predicates over the same 122 strata.
+
+**What may be kept from it.** The observation itself is real and belongs in the paper as *description
+of the size channel*: the pooled `all_pairs` gap is larger than the within-`n` gap, so a meaningful
+part of the head-to-head deficit is size agreement rather than structure. That is worth one sentence.
+It is **not** a defence, and the median Δρ favouring the competitor in every single case must sit in
+the same sentence.
