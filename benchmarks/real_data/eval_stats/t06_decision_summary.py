@@ -422,17 +422,47 @@ def compactness_predicates(strata: dict[str, Any], above: int = 20) -> dict[str,
     }
 
 
-def claim_b_by_competitor(
-    profile: dict[str, Any], split_at: int = 20
-) -> list[dict[str, Any]]:
+def _sign_test(differences: Sequence[float]) -> dict[str, Any]:
+    """Two-sided exact sign test on per-stratum differences.
+
+    Args:
+        differences: One signed difference per stratum.
+
+    Returns:
+        The counts either side, ties dropped, and the exact binomial p-value.
+    """
+    from scipy import stats
+
+    higher = sum(1 for d in differences if d > 0)
+    lower = sum(1 for d in differences if d < 0)
+    trials = higher + lower
+    p_value = float(stats.binomtest(higher, trials, 0.5).pvalue) if trials else float("nan")
+    return {
+        "isalgraph_higher": higher,
+        "isalgraph_lower": lower,
+        "sign_test_p": p_value,
+    }
+
+
+def claim_b_by_competitor(profile: dict[str, Any], split_at: int = 20) -> list[dict[str, Any]]:
     """Claim B per competitor per size half, inside equal-``n`` strata.
 
-    **This is the conservative test, not the paired one.** Within a stratum the
-    two arms are compared by whether their graph-level intervals are disjoint;
-    non-overlap implies a difference, overlap does not imply none. Strata are
-    small, so most comparisons come back unresolved and a "tie" here means "this
-    stratum cannot separate them", not "they are equal". The paired instrument
-    lives in the head-to-head table above, which is why both are printed.
+    **Counting how many strata resolve is the WRONG summary and is not reported
+    as one.** Equal-``n`` strata above 20 are thin, so most individual
+    comparisons are unresolved at the graph-level interval --- but many
+    underpowered comparisons all leaning one way is evidence, not absence of it.
+    A sign test over the per-stratum rho differences pools them, and it reverses
+    the reading: the unresolved fraction exceeds 90 % against every competitor
+    while the sign test rejects against every competitor.
+
+    Strata within a dataset are disjoint graph sets, so the sign test is valid,
+    and it weights every stratum equally regardless of pair count --- if
+    anything understating the large ones. Both columns are printed so the
+    per-stratum count cannot be quoted on its own.
+
+    **``lb`` and ``ub`` are reported separately and never pooled.** They are two
+    bounds on the *same* pairs, so pooling them would enter every stratum twice
+    and break the independence the sign test needs.
 
     Args:
         profile: Parsed ``size_profile.json``.
@@ -448,13 +478,14 @@ def claim_b_by_competitor(
         key = (row["suite"], row["dataset"], row["reference"], row["n"])
         cells.setdefault(key, {})[row["representation"]] = row
 
-    tally: dict[tuple[str, str], Counter[str]] = {}
-    deltas: dict[tuple[str, str], list[float]] = {}
+    tally: dict[tuple[str, str, str], Counter[str]] = {}
+    deltas: dict[tuple[str, str, str], list[float]] = {}
     for key, block in cells.items():
         arm = block.get("isalgraph_pruned")
         if arm is None or arm["ci_lo"] is None:
             continue
         half = "n > 20" if int(key[3]) > split_at else "n <= 20"
+        reference = str(key[2])
         for name, rival in block.items():
             if name == "isalgraph_pruned" or rival["ci_lo"] is None:
                 continue
@@ -464,22 +495,26 @@ def claim_b_by_competitor(
                 outcome = "loss"
             else:
                 outcome = "unresolved"
-            tally.setdefault((name, half), Counter())[outcome] += 1
-            deltas.setdefault((name, half), []).append(float(arm["rho"]) - float(rival["rho"]))
+            tally.setdefault((name, half, reference), Counter())[outcome] += 1
+            deltas.setdefault((name, half, reference), []).append(
+                float(arm["rho"]) - float(rival["rho"])
+            )
 
     records: list[dict[str, Any]] = []
-    for (name, half), counter in sorted(tally.items()):
+    for (name, half, reference), counter in sorted(tally.items()):
         total = sum(counter.values())
         records.append(
             {
                 "competitor": name,
                 "half": half,
+                "reference": reference,
                 "strata": total,
                 "win": counter["win"],
                 "unresolved": counter["unresolved"],
                 "loss": counter["loss"],
                 "unresolved_fraction": counter["unresolved"] / total,
-                "median_delta_rho": float(np.median(deltas[name, half])),
+                "median_delta_rho": float(np.median(deltas[name, half, reference])),
+                **_sign_test(deltas[name, half, reference]),
             }
         )
     return records
@@ -668,39 +703,44 @@ def render(
         if per_rival:
             large = [r for r in per_rival if r["half"] == "n > 20"]
             worst = min((r["median_delta_rho"] for r in large), default=0.0)
-            unresolved = (
-                min(r["unresolved_fraction"] for r in large) if large else 0.0
-            )
             lines += [
                 "",
                 "### Claim B per competitor, inside equal-`n` strata",
                 "",
-                "**Conservative test:** two graph-level intervals, disjoint or not. Non-overlap "
-                "implies a difference; overlap does not imply none. Strata are small, so "
-                "`unresolved` means *this stratum cannot separate them*, not *they are equal*. "
-                "The paired instrument is the head-to-head table above.",
+                "**Read the sign test, not the unresolved count.** Strata above n = 20 are "
+                "thin, so most individual comparisons do not resolve at the graph-level "
+                "interval --- but many underpowered comparisons all leaning one way is "
+                "evidence, not absence of it. Pooling them by a sign test over the per-stratum "
+                "Δρ reverses the reading. Strata within a dataset are disjoint graph sets, so "
+                "the test is valid, and it weights every stratum equally regardless of pair "
+                "count.",
                 "",
-                "| competitor | n | strata | win | unresolved | loss | unresolved % | "
-                "median Δρ |",
-                "|---|---|---:|---:|---:|---:|---:|---:|",
+                "| competitor | n | ref | strata | unresolved % | IsalGraph higher | lower | "
+                "median Δρ | sign test `p` |",
+                "|---|---|---|---:|---:|---:|---:|---:|---:|",
             ]
             for r in per_rival:
                 lines.append(
-                    f"| {r['competitor']} | {r['half']} | {r['strata']} | {r['win']} | "
-                    f"{r['unresolved']} | {r['loss']} | "
-                    f"{100 * r['unresolved_fraction']:.0f} % | {r['median_delta_rho']:+.4f} |"
+                    f"| {r['competitor']} | {r['half']} | {r['reference']} | {r['strata']} | "
+                    f"{100 * r['unresolved_fraction']:.0f} % | {r['isalgraph_higher']} | "
+                    f"{r['isalgraph_lower']} | {r['median_delta_rho']:+.4f} | "
+                    f"{r['sign_test_p']:.2g} |"
                 )
+            rejected = [r for r in large if r["sign_test_p"] < 0.05]
             lines += [
                 "",
-                f"**Above n = 20 almost nothing resolves** --- at least "
-                f"{100 * unresolved:.0f} % of every competitor's strata are unresolved, which "
-                "is §17's collapse seen from another angle: where rho itself is near zero, no "
-                "representation is distinguishable from any other. The median difference still "
-                f"favours the competitor in every case (worst {worst:+.4f}), so the point "
-                "estimates lean against IsalGraph even where the strata cannot prove it. "
-                "**The clear losses in the head-to-head table come from the pooled `all_pairs` "
-                "view, which carries the size channel; within a fixed size, the field is "
-                "mostly noise.**",
+                f"**Above n = 20 the sign test rejects on {len(rejected)} of {len(large)} "
+                "(competitor, reference) arms**, even though over 90 % of the individual "
+                "strata are unresolved. The two columns say opposite things and the pooled "
+                "one is correct: IsalGraph is lower on the majority of strata, consistently "
+                f"enough to reject, with median Δρ down to {worst:+.4f}. **Do not read the "
+                "unresolved fraction as a tie** --- many underpowered comparisons all leaning "
+                "one way is evidence, not absence of it.",
+                "",
+                "What the comparison *does* show, as description rather than defence: the "
+                "pooled `all_pairs` gap exceeds the within-`n` gap, so a meaningful part of the "
+                "head-to-head deficit is size agreement rather than structure --- while the "
+                "within-`n` deficit itself remains real and significant.",
             ]
 
     lines += ["", "## Claim A --- information content, stratified by size", ""]
@@ -792,7 +832,8 @@ def render(
         ]
         for r in claim_a_by_competitor(strata):
             large = (
-                "—" if r["win_fraction_large_n"] is None
+                "—"
+                if r["win_fraction_large_n"] is None
                 else f"{100 * r['win_fraction_large_n']:.1f} %"
             )
             lines.append(
@@ -828,7 +869,7 @@ def render(
             "floor is Mutagenicity, and it is an artefact of `t06_completion` counting a "
             "censored graph as not completed --- D14 retains it with its greedy-min string, so "
             "it did produce an encoding and the manifest gate scores it 100 %. Either way the "
-            "conclusion is the same: **\"it computes everywhere\" separates IsalGraph from "
+            'conclusion is the same: **"it computes everywhere" separates IsalGraph from '
             "`agm_cam` and `min_dfs` only, not from the field.**",
         ]
 

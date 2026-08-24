@@ -169,6 +169,11 @@ class RhoRecord:
         excess_over_null: Paired ``rho - null_rho`` on the shared resample.
         difference_vs_reference_arm: Paired ``rho(IsalGraph) - rho(this)``.
         p_value: Bootstrap p-value of that difference.
+        reference_arm_rho_on_shared_pairs: The arm's rho on **this comparator's**
+            pair set, which is what the paired difference is taken against. It
+            differs from the arm's own reported rho whenever the comparator
+            covers fewer pairs, and printing both is what makes the difference
+            auditable rather than merely reported.
         row: The F2 row this record serves, or ``None`` when descriptive.
         in_family: Whether it carries a confirmatory cell.
         regime: ``exact`` or ``approximate``.
@@ -190,6 +195,7 @@ class RhoRecord:
     excess_over_null: dict[str, Any] | None = None
     difference_vs_reference_arm: dict[str, Any] | None = None
     p_value: float | None = None
+    reference_arm_rho_on_shared_pairs: float | None = None
     row: str | None = None
     in_family: bool = False
     regime: str = "exact"
@@ -213,6 +219,7 @@ class RhoRecord:
             "excess_over_size_null": self.excess_over_null,
             "difference_vs_reference_arm": self.difference_vs_reference_arm,
             "p_value": self.p_value,
+            "reference_arm_rho_on_shared_pairs": self.reference_arm_rho_on_shared_pairs,
             "row": self.row,
             "in_family": self.in_family,
             "regime": self.regime,
@@ -308,6 +315,7 @@ def run_correlation_group(
     group: CorrelationGroup,
     references: dict[str, npt.NDArray[Any]],
     replicates: int | None,
+    emit_arm: bool = False,
 ) -> list[RhoRecord]:
     """Bootstrap one group of comparators against every reference, paired.
 
@@ -326,9 +334,16 @@ def run_correlation_group(
         group: Comparators sharing a validity mask.
         references: Ground-truth matrices, ``exact`` or ``lb``/``ub``.
         replicates: Override for the frozen tier effort; ``None`` in production.
+        emit_arm: Whether to emit the reference arm's own record from this
+            group. **Only one group may do so.** A group's valid pair set is the
+            intersection of the arm's mask with its comparators', so the arm's
+            rho differs between groups: on Protein the ``agm_cam`` group holds
+            595 pairs against the others' 161,596, and an arm record emitted
+            there describes the arm on ``agm_cam``'s 6 % of the data. The caller
+            emits the arm once, from its own unrestricted pairs.
 
     Returns:
-        One record per (comparator, reference), plus one for the reference arm.
+        One record per (comparator, reference), plus the arm's when *emit_arm*.
     """
     matrices: dict[str, npt.NDArray[Any]] = {"__arm__": arm.distance}
     defined: dict[str, npt.NDArray[Any]] = {"__arm__": arm.defined}
@@ -391,21 +406,22 @@ def run_correlation_group(
 
     records: list[RhoRecord] = []
     for reference in references:
-        records.append(
-            _arm_record(
-                suite=suite,
-                dataset=dataset,
-                view=view,
-                reference=reference,
-                arm=arm,
-                variables=variables,
-                results=results,
-                diffs=diffs,
-                tier=tier.as_dict(),
-                nulls_defined=nulls_defined,
-                digest=group.digest,
+        if emit_arm:
+            records.append(
+                _arm_record(
+                    suite=suite,
+                    dataset=dataset,
+                    view=view,
+                    reference=reference,
+                    arm=arm,
+                    variables=variables,
+                    results=results,
+                    diffs=diffs,
+                    tier=tier.as_dict(),
+                    nulls_defined=nulls_defined,
+                    digest=group.digest,
+                )
             )
-        )
         for index, comparator in enumerate(group.comparators):
             records.append(
                 _comparator_record(
@@ -481,6 +497,7 @@ def _comparator_record(
     null = results.get(f"n{index}@{reference}")
     excess = diffs.get(f"excess{index}@{reference}")
     difference = diffs[f"diff{index}@{reference}"]
+    shared_arm = results[f"arm@{reference}"]
     in_family = comparator.representation in FAMILY_COMPARATORS
     row = None
     if in_family:
@@ -501,6 +518,7 @@ def _comparator_record(
         excess_over_null=None if excess is None else excess.interval.as_dict(),
         difference_vs_reference_arm=difference.interval.as_dict(),
         p_value=difference.p_value,
+        reference_arm_rho_on_shared_pairs=shared_arm.rho.point,
         row=row,
         in_family=in_family,
         regime=_reference_regime(reference),
@@ -550,6 +568,23 @@ def run_b_rows(
         ]
         groups = _group_by_mask(comparators)
         for view in views:
+            # The arm's OWN record, on its own unrestricted pairs. Emitted from a
+            # comparator-free group because every real group intersects the arm's
+            # mask with its comparators' -- on Protein the agm_cam group holds 595
+            # pairs against 161,596, and an arm rho taken from there describes the
+            # arm on 6 % of the data while looking like the headline number.
+            records.extend(
+                run_correlation_group(
+                    suite=suite,
+                    dataset=dataset,
+                    view=view,
+                    arm=arm,
+                    group=CorrelationGroup("arm_only", ()),
+                    references=references,
+                    replicates=replicates,
+                    emit_arm=True,
+                )
+            )
             for group in groups:
                 started = time.monotonic()
                 records.extend(
