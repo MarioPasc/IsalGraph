@@ -1857,3 +1857,55 @@ nobody had chosen deliberately.**
 > `t06.size_profile.1` and carries only `arm = "primary"`, so `load_rows` yields **1,553 rows and 582
 > aggregate points** — exactly §17's stated counts. Defect 3 was **latent, not live**: it would have
 > fired the moment anyone regenerated the profile with `--arm both`.
+
+---
+
+## 22. 🔴 THE HARDEST RESULT — the size null beats the arm on 4 of 5 Suite-1 datasets, against EXACT GED
+
+Measured at full cohort by `[T06-subagent-01]`, **independently reproduced by the orchestrator from
+the raw distance and GED matrices, to every digit.** 3,731,532 pairs.
+
+| dataset | pairs | ρ(Lev, **exact**) | size null | excess | |
+|---|---:|---:|---:|---:|---|
+| `iam_letter_low` | 695,610 | 0.9278 | 0.9139 | **+0.0139** | clears |
+| `iam_letter_med` | 784,378 | 0.8833 | 0.9146 | **−0.0313** | below |
+| `iam_letter_high` | 2,118,711 | 0.6660 | 0.9195 | **−0.2536** | below |
+| `linux` | 1,685 | 0.4850 | 0.7097 | **−0.2247** | below |
+| `aids` | 131,148 | 0.3266 | 0.7863 | **−0.4597** | below |
+
+**Against exact GED — no bound, no bracket, no interpolation — the trivial `|n_i − n_j|` baseline
+predicts graph edit distance better than the canonical string on four of five datasets.** The pilot
+found exactly this on the same four, with `iam_letter_low` the same lone exception; it now reproduces
+at full cohort rather than on a 200-graph draw.
+
+### 22.1 The correct wording is likely *worse* than "4 of 5", and we wait for the CIs
+
+The five records are not alike:
+
+- **Three are decisive**: `iam_letter_high` −0.2536, `linux` −0.2247, `aids` −0.4597.
+- **Two are near zero**: `iam_letter_low` **+0.0139**, `iam_letter_med` **−0.0313** — small enough
+  that the graph-level bootstrap may not resolve their *sign*.
+
+So the defensible statement is probably **"below the size null on 3 of 5 decisively, with 2 of 5
+indistinguishable from it"** — and note that reading is **worse for us on `iam_letter_low`**, which a
+flat count records as a win and the honest count records as a tie. **The wording is not fixed until
+the CIs land**, because which statement is correct is exactly what the bootstrap decides, and
+choosing now would be picking a number before its instrument.
+
+### 22.2 `iam_letter_low` clearing is not a rescue
+
+It clears by **0.0139 on a null of 0.9139**. Both arms are near-perfect on a dataset of very small
+graphs — the regime where §17 reports ρ = 1.0000 at `n = 3`. **Nothing about it generalises upward**,
+and quoting it as the counterexample would invite a reviewer to check exactly that.
+
+### 22.3 The excess is MONOTONE in size, and that unifies the ticket's two main findings
+
+Across the Letter family, holding dataset construction fixed and varying only graph size:
+
+**+0.0139 → −0.0313 → −0.2536** for LOW → MED → HIGH.
+
+**§17's within-`n` collapse and the size-null failure are the same finding measured two ways.** The
+size channel is doing the work; where there is less of it to do — larger graphs, more structure to
+distinguish — the representation has less left. That is a coherent mechanism rather than two
+independent negatives, and stating it as one finding is both more honest and more useful than
+reporting them separately.
