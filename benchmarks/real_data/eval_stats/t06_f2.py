@@ -77,11 +77,13 @@ from benchmarks.real_data.eval_stats.family import (
     admissible_cells,
     run_f2,
 )
-from benchmarks.real_data.eval_stats.multiplicity import _wilcoxon as wilcoxon_pair
 from benchmarks.real_data.eval_stats.multiplicity import (
+    Regime,
     benjamini_hochberg,
+    friedman_omnibus,
     wilcoxon_holm_posthoc,
 )
+from benchmarks.real_data.eval_stats.multiplicity import _wilcoxon as wilcoxon_pair
 from benchmarks.real_data.eval_stats.resampling import FDR_Q, SEED, bootstrap_tier
 from benchmarks.real_data.eval_stats.t06_f2_inputs import (
     BIT_CONVENTIONS,
@@ -826,9 +828,9 @@ def _metadata(out_dir: Path, extra: dict[str, Any]) -> dict[str, Any]:
 
 
 def assemble_p_values(
-    claim_a: Sequence[ClaimARecord],
-    rho_records: Sequence[RhoRecord],
-    mrm_fits: dict[tuple[str, str], MrmResult],
+    claim_a: Sequence[dict[str, Any]],
+    rho_records: Sequence[dict[str, Any]],
+    mrm_fits: dict[str, dict[str, Any]],
     inputs: ReductionInputs,
     *,
     view: str,
@@ -840,9 +842,9 @@ def assemble_p_values(
     anti-conservative direction.
 
     Args:
-        claim_a: A1 records.
-        rho_records: Every rho record.
-        mrm_fits: Suite-1 MRM fits keyed by ``(dataset, reference)``.
+        claim_a: A1 records, as emitted dicts.
+        rho_records: Every rho record, as emitted dicts.
+        mrm_fits: MRM fits keyed ``"{dataset}@{reference}"``.
         inputs: The frozen reduction terms.
         view: Which pair view supplies the B-row p-values.
 
@@ -852,21 +854,22 @@ def assemble_p_values(
     admissible = set(admissible_cells(inputs).admissible)
     values: dict[Cell, float] = {}
     for record in claim_a:
-        cell = Cell("A1", "suite2", record.dataset, record.representation)
-        if cell in admissible and record.arm == "primary":
-            values[cell] = record.iut_p
+        cell = Cell("A1", "suite2", record["dataset"], record["representation"])
+        if cell in admissible and record["arm"] == "primary":
+            values[cell] = float(record["iut_p"])
     for record in rho_records:
-        if record.row != "B1e" or record.view != view or record.p_value is None:
+        if record["row"] != "B1e" or record["view"] != view or record["p_value"] is None:
             continue
-        cell = Cell("B1e", "suite1", record.dataset, record.representation)
+        cell = Cell("B1e", "suite1", record["dataset"], record["representation"])
         if cell in admissible:
-            values[cell] = record.p_value
-    for (dataset, reference), fit in mrm_fits.items():
+            values[cell] = float(record["p_value"])
+    for key, fit in mrm_fits.items():
+        dataset, _, reference = key.rpartition("@")
         if reference != "exact":
             continue
         cell = Cell("B3e", "suite1", dataset, None)
         if cell in admissible:
-            values[cell] = fit.beta1_permutation_p
+            values[cell] = float(fit["beta1_permutation_p"])
     return values
 
 
@@ -896,6 +899,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--permutations", type=int, default=None, help="smoke override")
     ap.add_argument("--q", type=float, default=FDR_Q)
     ap.add_argument(
+        "--emit-partial",
+        type=Path,
+        default=None,
+        help="write this shard's raw records here and stop, for a sharded run",
+    )
+    ap.add_argument(
+        "--merge-partials",
+        type=Path,
+        default=None,
+        help="assemble the family from every partial JSON in this directory",
+    )
+    ap.add_argument(
         "--ged-zero-probes",
         default="suite1/iam_letter_low,suite2/iam_letter_low,suite2/protein",
         help=(
@@ -906,7 +921,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def descriptive_equal_n(rho_records: Sequence[RhoRecord], q: float) -> dict[str, Any]:
+def descriptive_equal_n(rho_records: Sequence[dict[str, Any]], q: float) -> dict[str, Any]:
     """Summarise the equal-``n`` arm as a descriptive block, not a BH column.
 
     The confirmatory view is ``all_pairs`` (design note 18.9). This arm is
@@ -926,10 +941,10 @@ def descriptive_equal_n(rho_records: Sequence[RhoRecord], q: float) -> dict[str,
     selected = [
         record
         for record in rho_records
-        if record.view == "equal_n" and record.p_value is not None and record.in_family
+        if record["view"] == "equal_n" and record["p_value"] is not None and record["in_family"]
     ]
     local = benjamini_hochberg(
-        [float(record.p_value) for record in selected if record.p_value is not None],
+        [float(record["p_value"]) for record in selected],
         family="descriptive equal_n arm, locally adjusted",
         q=q,
     )
@@ -947,13 +962,16 @@ def descriptive_equal_n(rho_records: Sequence[RhoRecord], q: float) -> dict[str,
         "local_fdr_adjustment": local.as_dict(),
         "records": [
             {
-                "suite": record.suite,
-                "dataset": record.dataset,
-                "representation": record.representation,
-                "reference": record.reference,
-                "rho": record.rho,
-                "difference_vs_reference_arm": record.difference_vs_reference_arm,
-                "p_value": record.p_value,
+                key: record[key]
+                for key in (
+                    "suite",
+                    "dataset",
+                    "representation",
+                    "reference",
+                    "rho",
+                    "difference_vs_reference_arm",
+                    "p_value",
+                )
             }
             for record in selected
         ],
@@ -1032,6 +1050,241 @@ def ged_zero_sensitivity(
     return records
 
 
+def collect(args: argparse.Namespace) -> dict[str, Any]:
+    """Run every measurement this shard owns and return its raw records.
+
+    Kept separate from assembly so a production run can be sharded per dataset:
+    each shard writes its own partial, a failure costs one dataset rather than
+    the whole campaign, and the shards run concurrently.
+
+    Args:
+        args: Parsed arguments.
+
+    Returns:
+        The shard's records, JSON-serialisable.
+    """
+    views = tuple(v.strip() for v in args.views.split(",") if v.strip())
+    suites = tuple(s.strip() for s in args.suites.split(",") if s.strip())
+    only = frozenset(d.strip() for d in args.datasets.split(",") if d.strip()) or None
+
+    claim_a: list[ClaimARecord] = []
+    medians: dict[str, dict[str, float]] = {}
+    if "suite2" in suites:
+        for arm in ("primary", "complete_case"):
+            records, block = run_claim_a(
+                encodings=args.encodings, suite="suite2", arm=arm, only=only
+            )
+            claim_a.extend(records)
+            if arm == "primary":
+                medians = block
+
+    rho_records: list[RhoRecord] = []
+    mrm_fits: dict[str, dict[str, Any]] = {}
+    for suite in suites:
+        rho_records.extend(
+            run_b_rows(
+                distances=args.distances,
+                ged_root=args.ged_root,
+                approx_root=args.approx_root,
+                suite=suite,
+                views=views,
+                replicates=args.replicates,
+                only=only,
+            )
+        )
+        for (dataset, reference), fit in run_mrm_rows(
+            distances=args.distances,
+            encodings=args.encodings,
+            ged_root=args.ged_root,
+            approx_root=args.approx_root,
+            suite=suite,
+            replicates=args.replicates,
+            permutations=args.permutations,
+            only=only,
+        ).items():
+            mrm_fits[f"{dataset}@{reference}"] = fit.as_dict() | {"suite": suite}
+
+    ged_zero = ged_zero_sensitivity(
+        distances=args.distances,
+        ged_root=args.ged_root,
+        approx_root=args.approx_root,
+        probes=tuple(
+            (suite, dataset)
+            for suite, dataset in (
+                pair.split("/", 1) for pair in args.ged_zero_probes.split(",") if pair.strip()
+            )
+            if suite in suites and (only is None or dataset in only)
+        ),
+    )
+    return {
+        "views": list(views),
+        "suites": list(suites),
+        "datasets": sorted(only) if only else [],
+        "a1_cells": [record.as_dict() for record in claim_a],
+        "claim_a_medians": medians,
+        "rho_rows": [record.as_dict() for record in rho_records],
+        "mrm": mrm_fits,
+        "ged_zero": ged_zero,
+    }
+
+
+def merge_partials(directory: Path) -> dict[str, Any]:
+    """Combine every shard's partial into one record set.
+
+    Args:
+        directory: Directory holding ``*.json`` partials.
+
+    Returns:
+        The merged records.
+
+    Raises:
+        F2DriverError: If the directory holds no partial.
+    """
+    partials = sorted(directory.glob("*.json"))
+    if not partials:
+        raise F2DriverError(f"no partials under {directory}")
+    merged: dict[str, Any] = {
+        "views": [],
+        "suites": [],
+        "datasets": [],
+        "a1_cells": [],
+        "claim_a_medians": {},
+        "rho_rows": [],
+        "mrm": {},
+        "ged_zero": [],
+        "shards": [],
+    }
+    for path in partials:
+        shard = json.loads(path.read_text())
+        merged["a1_cells"].extend(shard["a1_cells"])
+        merged["rho_rows"].extend(shard["rho_rows"])
+        merged["ged_zero"].extend(shard["ged_zero"])
+        merged["mrm"].update(shard["mrm"])
+        merged["claim_a_medians"].update(shard["claim_a_medians"])
+        for key in ("views", "suites", "datasets"):
+            merged[key] = sorted(set(merged[key]) | set(shard[key]))
+        merged["shards"].append(path.name)
+    LOGGER.info(
+        "merged %d partials: %d a1 cells, %d rho rows, %d mrm fits",
+        len(partials),
+        len(merged["a1_cells"]),
+        len(merged["rho_rows"]),
+        len(merged["mrm"]),
+    )
+    return merged
+
+
+def assemble(collected: dict[str, Any], args: argparse.Namespace) -> int:
+    """Turn the collected records into ``family_F2.json`` and ``rho_table.json``.
+
+    Args:
+        collected: Records from :func:`collect` or :func:`merge_partials`.
+        args: Parsed arguments.
+
+    Returns:
+        0 on success.
+    """
+    inputs, failing = build_reduction_inputs(
+        args.completion_rates,
+        excluded_representations=EXCLUDED_REPRESENTATIONS,
+        f0_demotes_approximate=True,
+    )
+    rho_rows = collected["rho_rows"]
+    medians = collected["claim_a_medians"]
+
+    omnibus: dict[str, tuple[npt.NDArray[Any], Sequence[str], bool]] = {}
+    posthoc: dict[str, Any] = {}
+    dropped_methods: tuple[str, ...] = ()
+    a2_p: float | None = None
+    if medians:
+        scores, methods, dropped_methods = _complete_blocks(medians)
+        omnibus["A2"] = (scores, methods, True)
+        posthoc["A2"] = wilcoxon_holm_posthoc(scores, methods).as_dict()
+        # A2 is an admissible cell, so it needs a p-value in the BH denominator.
+        # run_f2 runs the omnibus itself for reporting; the same test is computed
+        # here because the cell's p-value has to exist before BH is applied.
+        a2 = friedman_omnibus(scores, methods, Regime.APPROXIMATE, lower_is_better=True)
+        a2_p = a2.p_value if a2.ran else None
+
+    p_values = assemble_p_values(
+        collected["a1_cells"], rho_rows, collected["mrm"], inputs, view="all_pairs"
+    )
+    if a2_p is not None:
+        p_values[Cell("A2", None, None, None)] = a2_p
+
+    result = run_f2(p_values, inputs, q=args.q, omnibus_scores=omnibus)
+    meta = _metadata(
+        args.out_dir,
+        {
+            "views": collected["views"],
+            "suites": collected["suites"],
+            "shards": collected.get("shards", []),
+        },
+    )
+
+    payload: dict[str, Any] = {
+        "family": "F2",
+        "metadata": meta,
+        "primary_view": "all_pairs",
+        "view_ruling": (
+            "design note 18.9: preregistration section 4 names no pair view, and the "
+            "confirmatory view is all_pairs on three grounds -- A9's pair-accounting ladder "
+            "carries no equal-n rung; section 4.2's 'per Suite-1 dataset' is unqualified, and "
+            "the unmarked reading of rho over a dataset is over its pairs; and F0 and F1 have "
+            "already run on the full defined pair set, so a family whose gates and rows used "
+            "different pair sets would be incoherent."
+        ),
+        "descriptive_arms": {
+            "equal_n_view": descriptive_equal_n(rho_rows, args.q),
+            "ged_zero_pairs": {
+                "status": "SENSITIVITY. The pairs are kept; this measures what keeping them costs.",
+                "why": (
+                    "GED is legitimately 0 for isomorphic graphs and filtering those pairs would "
+                    "truncate the response at its most informative end (CONTRACTS.md 4.1, "
+                    "trap 9). They are nevertheless a large block of ties and Spearman is "
+                    "tie-sensitive, so the effect is measured on two contrasting datasets rather "
+                    "than assumed small."
+                ),
+                "records": collected["ged_zero"],
+            },
+        },
+        "claim_a_test": "intersection-union over both bit conventions; p = max (design note 18.8)",
+        "claim_a_bit_count_undefined": list(BIT_COUNT_UNDEFINED),
+        "a2_methods_dropped_for_complete_blocks": list(dropped_methods),
+        "posthoc_holm_not_in_bh": posthoc,
+        "mrm_view": "all_pairs",
+        "mrm_equal_n_reason": EQUAL_N_MRM_REASON,
+        "completion_rows_below_threshold": failing,
+        "a1_cells": collected["a1_cells"],
+        "mrm": collected["mrm"],
+        **result.as_dict(),
+    }
+    (args.out_dir / "family_F2.json").write_text(json.dumps(payload, indent=2, default=str))
+    (args.out_dir / "rho_table.json").write_text(
+        json.dumps(
+            {
+                "metadata": meta,
+                "resampling_unit": "graph",
+                "n_rows": len(rho_rows),
+                "rows": rho_rows,
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+    print(
+        f"\nF2: N_actual={result.cardinality.n_actual} "
+        f"closed_form={result.cardinality.closed_form} "
+        f"discrepancy={result.cardinality.discrepancy:+d}"
+    )
+    print(f"    cells with a p-value: {len(result.cells)} of {result.cardinality.n_actual}")
+    print(f"    BH over N_actual : {result.bh_primary.n_rejected} rejected at q={args.q}")
+    print(f"    BH over N_max=182: {result.bh_sensitivity.n_rejected} rejected at q={args.q}")
+    print(f"    rho records: {len(rho_rows)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point.
 
@@ -1044,11 +1297,11 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    views = tuple(v.strip() for v in args.views.split(",") if v.strip())
-    suites = tuple(s.strip() for s in args.suites.split(",") if s.strip())
-    only = frozenset(d.strip() for d in args.datasets.split(",") if d.strip()) or None
 
-    inputs, failing = build_reduction_inputs(
+    if args.merge_partials is not None:
+        return assemble(merge_partials(args.merge_partials), args)
+
+    inputs, _ = build_reduction_inputs(
         args.completion_rates,
         excluded_representations=EXCLUDED_REPRESENTATIONS,
         f0_demotes_approximate=True,
@@ -1064,139 +1317,17 @@ def main(argv: list[str] | None = None) -> int:
         card.c,
     )
 
-    claim_a: list[ClaimARecord] = []
-    medians: dict[str, dict[str, float]] = {}
-    if "suite2" in suites:
-        for arm in ("primary", "complete_case"):
-            records, block = run_claim_a(
-                encodings=args.encodings, suite="suite2", arm=arm, only=only
-            )
-            claim_a.extend(records)
-            if arm == "primary":
-                medians = block
-
-    rho_records: list[RhoRecord] = []
-    mrm_fits: dict[tuple[str, str], MrmResult] = {}
-    for suite in suites:
-        rho_records.extend(
-            run_b_rows(
-                distances=args.distances,
-                ged_root=args.ged_root,
-                approx_root=args.approx_root,
-                suite=suite,
-                views=views,
-                replicates=args.replicates,
-                only=only,
-            )
+    collected = collect(args)
+    if args.emit_partial is not None:
+        args.emit_partial.parent.mkdir(parents=True, exist_ok=True)
+        args.emit_partial.write_text(json.dumps(collected, indent=2, default=str))
+        print(
+            f"partial: {len(collected['rho_rows'])} rho rows, "
+            f"{len(collected['a1_cells'])} a1 cells, {len(collected['mrm'])} mrm fits "
+            f"-> {args.emit_partial}"
         )
-        mrm_fits.update(
-            {
-                (dataset, reference): fit
-                for (dataset, reference), fit in run_mrm_rows(
-                    distances=args.distances,
-                    encodings=args.encodings,
-                    ged_root=args.ged_root,
-                    approx_root=args.approx_root,
-                    suite=suite,
-                    replicates=args.replicates,
-                    permutations=args.permutations,
-                    only=only,
-                ).items()
-            }
-        )
-
-    ged_zero_records = ged_zero_sensitivity(
-        distances=args.distances,
-        ged_root=args.ged_root,
-        approx_root=args.approx_root,
-        probes=tuple(
-            (suite, dataset)
-            for suite, dataset in (
-                pair.split("/", 1) for pair in args.ged_zero_probes.split(",") if pair.strip()
-            )
-            if suite in suites
-        ),
-    )
-
-    omnibus: dict[str, tuple[npt.NDArray[Any], Sequence[str], bool]] = {}
-    posthoc: dict[str, Any] = {}
-    dropped_methods: tuple[str, ...] = ()
-    if medians:
-        scores, methods, dropped_methods = _complete_blocks(medians)
-        omnibus["A2"] = (scores, methods, True)
-        posthoc["A2"] = wilcoxon_holm_posthoc(scores, methods).as_dict()
-
-    result = run_f2(
-        assemble_p_values(claim_a, rho_records, mrm_fits, inputs, view="all_pairs"),
-        inputs,
-        q=args.q,
-        omnibus_scores=omnibus,
-    )
-
-    payload: dict[str, Any] = {
-        "family": "F2",
-        "metadata": _metadata(args.out_dir, {"views": list(views), "suites": list(suites)}),
-        "primary_view": "all_pairs",
-        "view_ruling": (
-            "design note 18.9: preregistration section 4 names no pair view, and the "
-            "confirmatory view is all_pairs on three grounds -- A9's pair-accounting ladder "
-            "carries no equal-n rung; section 4.2's 'per Suite-1 dataset' is unqualified, and "
-            "the unmarked reading of rho over a dataset is over its pairs; and F0 and F1 have "
-            "already run on the full defined pair set, so a family whose gates and rows used "
-            "different pair sets would be incoherent."
-        ),
-        "descriptive_arms": {
-            "equal_n_view": descriptive_equal_n(rho_records, args.q),
-            "ged_zero_pairs": {
-                "status": "SENSITIVITY. The pairs are kept; this measures what keeping them costs.",
-                "why": (
-                    "GED is legitimately 0 for isomorphic graphs and filtering those pairs would "
-                    "truncate the response at its most informative end (CONTRACTS.md 4.1, trap 9). "
-                    "They are nevertheless a large block of ties and Spearman is tie-sensitive, so "
-                    "the effect is measured on two contrasting datasets rather than assumed small."
-                ),
-                "records": ged_zero_records,
-            },
-        },
-        "claim_a_test": "intersection-union over both bit conventions; p = max (design note 18.8)",
-        "claim_a_bit_count_undefined": list(BIT_COUNT_UNDEFINED),
-        "a2_methods_dropped_for_complete_blocks": list(dropped_methods),
-        "posthoc_holm_not_in_bh": posthoc,
-        "mrm_view": "all_pairs",
-        "mrm_equal_n_reason": EQUAL_N_MRM_REASON,
-        "completion_rows_below_threshold": failing,
-        "a1_cells": [record.as_dict() for record in claim_a],
-        "mrm": {
-            f"{dataset}@{reference}": fit.as_dict()
-            for (dataset, reference), fit in mrm_fits.items()
-        },
-        **result.as_dict(),
-    }
-    (args.out_dir / "family_F2.json").write_text(json.dumps(payload, indent=2, default=str))
-
-    (args.out_dir / "rho_table.json").write_text(
-        json.dumps(
-            {
-                "metadata": _metadata(args.out_dir, {"views": list(views), "suites": list(suites)}),
-                "resampling_unit": "graph",
-                "n_rows": len(rho_records),
-                "rows": [record.as_dict() for record in rho_records],
-            },
-            indent=2,
-            default=str,
-        )
-    )
-
-    print(
-        f"\nF2: N_actual={result.cardinality.n_actual} "
-        f"closed_form={result.cardinality.closed_form} "
-        f"discrepancy={result.cardinality.discrepancy:+d}"
-    )
-    print(f"    cells with a p-value: {len(result.cells)} of {result.cardinality.n_actual}")
-    print(f"    BH over N_actual : {result.bh_primary.n_rejected} rejected at q={args.q}")
-    print(f"    BH over N_max=182: {result.bh_sensitivity.n_rejected} rejected at q={args.q}")
-    print(f"    rho records: {len(rho_records)}")
-    return 0
+        return 0
+    return assemble(collected, args)
 
 
 if __name__ == "__main__":
