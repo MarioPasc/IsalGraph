@@ -767,6 +767,43 @@ def render_beta1(record: dict[str, Any]) -> str:
     return f"{beta1:+.4f} vs β_size {size:+.4f}"
 
 
+def _b1e_direction_sentence(composition: dict[str, Any]) -> str:
+    """Describe B1e's rejection directions from the counts, never from memory.
+
+    This replaces a hard-coded sentence -- *"every rejected B1e cell is a cell
+    where IsalGraph's rho is lower"* -- which was true of the six cells that had
+    landed when it was written and false by the time all seventy-nine had. A
+    claim about data, frozen into prose, becomes a lie the moment the data
+    completes.
+
+    Args:
+        composition: Output of :func:`rejection_composition`.
+
+    Returns:
+        One sentence, computed.
+    """
+    split = composition["per_row_direction"].get("B1e", {})
+    favour = int(split.get("for IsalGraph", 0))
+    against = int(split.get("against IsalGraph", 0))
+    total = favour + against
+    if not total:
+        return "No B1e cell was rejected."
+    if favour == 0:
+        return (
+            f"**Every one of the {against} rejected B1e cells is a cell where IsalGraph's "
+            "rho is *lower*.**"
+        )
+    if against == 0:
+        return (
+            f"All {favour} rejected B1e cells favour IsalGraph."
+        )
+    return (
+        f"Of the {total} rejected B1e cells, **{against} are cells where IsalGraph's rho is "
+        f"lower** and {favour} where it is higher — so the correlation row is split, not "
+        "uniformly adverse."
+    )
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -1300,7 +1337,9 @@ def render(
             "",
             f"**{against} of the {against + favour} directional rejections are AGAINST "
             f"IsalGraph**, {favour} for it; the rest are omnibus or MRM cells with no "
-            "direction. Every rejected B1e cell is a cell where IsalGraph's rho is *lower*.",
+            "direction.",
+            "",
+            _b1e_direction_sentence(composition),
             "",
             "This is the pre-registered family and it is **not** what the tables above report: "
             "those are per-cell verdicts, unadjusted, meant for a methodology decision rather "
