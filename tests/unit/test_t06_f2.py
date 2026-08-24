@@ -19,9 +19,11 @@ encoding, and charging them to ``c`` would remove F2 cells on evidence we hold.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 import pytest
@@ -619,3 +621,78 @@ def test_collinearity_report_shape(tmp_path: Path) -> None:
     source = Path(driver.__file__).read_text()
     assert "worst <= 10.0" in source
     assert '"threshold": 10.0' in source
+
+
+def test_mrm_fits_are_deduplicated_across_partial_directories(tmp_path: Path) -> None:
+    """The campaign writes two partial trees and re-runs cells across them.
+
+    dedup_rho_rows guards the rho rows against exactly this and was never
+    extended to the MRM fits, which inflated every D4 count by the number of
+    duplicated cells -- 37 rows for 25 distinct fits.
+    """
+    from benchmarks.real_data.eval_stats import t06_decision_summary as summary
+
+    fit = {
+        "predictors": ["levenshtein", "delta_n", "delta_density"],
+        "standardised_betas": [0.25, 0.74, 0.01],
+        "r_squared": 0.99,
+        "beta1": 0.25,
+        "beta1_permutation_p": 0.0005,
+        "beta1_interval": {"ci_low": 0.24, "ci_high": 0.26},
+        "n_pairs": 1000,
+        "n_permutations": 9999,
+        "suite": "suite2",
+    }
+    for name in ("early", "main"):
+        d = tmp_path / f"f2_partials_{name}"
+        d.mkdir()
+        (d / "suite2__grec.json").write_text(json.dumps({"mrm": {"grec@lb": fit}}))
+
+    rows = summary.mrm_table(
+        [tmp_path / "f2_partials_early", tmp_path / "f2_partials_main"]
+    )
+    assert len(rows) == 1, "the same (dataset, reference) fit must count once"
+
+
+def test_a_fit_whose_point_estimate_escapes_its_own_ci_is_flagged() -> None:
+    """A percentile interval that misses its own point was computed on other data.
+
+    Under D15 tier 3 it literally is: the point estimate is fitted on every pair
+    while each bootstrap replicate is fitted on a 2 M subsample. All four tier-3
+    fits failed this and all thirty-three tier-1/tier-2 fits passed.
+    """
+    import tempfile
+
+    from benchmarks.real_data.eval_stats import t06_decision_summary as summary
+
+    def build(beta1: float, low: float, high: float) -> list[dict[str, Any]]:
+        root = Path(tempfile.mkdtemp())
+        d = root / "f2_partials"
+        d.mkdir()
+        (d / "suite2__mutagenicity.json").write_text(
+            json.dumps(
+                {
+                    "mrm": {
+                        "mutagenicity@lb": {
+                            "predictors": ["levenshtein", "delta_n", "delta_density"],
+                            "standardised_betas": [beta1, 0.36, 0.01],
+                            "r_squared": 0.94,
+                            "beta1": beta1,
+                            "beta1_permutation_p": 0.0005,
+                            "beta1_interval": {"ci_low": low, "ci_high": high},
+                            "n_pairs": 8158780,
+                            "n_permutations": 1999,
+                            "suite": "suite2",
+                        }
+                    }
+                }
+            )
+        )
+        return summary.mrm_table([d])
+
+    good = build(0.10, 0.092, 0.103)
+    assert good[0]["self_consistent"] is True
+
+    # The real measured values: point +0.5229 against a CI of [+0.092, +0.103].
+    bad = build(0.5229, 0.0919, 0.1028)
+    assert bad[0]["self_consistent"] is False

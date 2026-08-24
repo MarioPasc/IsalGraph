@@ -682,6 +682,17 @@ def mrm_table(
                         "r_squared": float(fit["r_squared"]),
                         "p_value": float(fit["beta1_permutation_p"]),
                         "n_pairs": int(fit["n_pairs"]),
+                        "beta1_ci_low": float(fit["beta1_interval"]["ci_low"]),
+                        "beta1_ci_high": float(fit["beta1_interval"]["ci_high"]),
+                        # A percentile interval that does not cover its own point
+                        # estimate means the two were computed on different data.
+                        # Under tier-3 subsampling they are: the point uses every
+                        # pair, each replicate uses a 2 M subsample.
+                        "self_consistent": bool(
+                            fit["beta1_interval"]["ci_low"]
+                            <= fit["beta1"]
+                            <= fit["beta1_interval"]["ci_high"]
+                        ),
                         "landed": True,
                     }
                 )
@@ -717,9 +728,29 @@ def mrm_table(
                         "r_squared": float("nan"),
                         "p_value": float(p_value),
                         "n_pairs": 0,
+                        "beta1_ci_low": float("nan"),
+                        "beta1_ci_high": float("nan"),
+                        "self_consistent": True,
                         "landed": False,
                     }
                 )
+    # The campaign writes two partial directories and the main run re-runs
+    # datasets the early pass already did, so the same (dataset, reference) fit
+    # arrives twice. dedup_rho_rows guards the rho rows against exactly this and
+    # was never extended here, which inflated every D4 count by the number of
+    # duplicated cells. Verified byte-identical across runs, so keeping either is
+    # correct -- keeping a landed one over a log-sourced one is not arbitrary.
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in records:
+        key = (record["dataset"], record["reference"])
+        incumbent = best.get(key)
+        if incumbent is None or (record["landed"] and not incumbent["landed"]):
+            best[key] = record
+    dropped = len(records) - len(best)
+    if dropped:
+        LOGGER.info("dropped %d duplicate MRM fits (same dataset and reference)", dropped)
+    records = list(best.values())
+
     identifiable: dict[str, bool] = {}
     if collinearity is not None and collinearity.exists():
         payload = json.loads(collinearity.read_text())
@@ -1144,8 +1175,13 @@ def render(
         # A fit whose predictors are collinear cannot support the beta1-vs-beta_size
         # comparison this section exists to make, however high its R^2. Kept in the
         # table, kept out of the counts.
-        landed = [r for r in landed_all if r.get("identifiable", True)]
+        landed = [
+            r
+            for r in landed_all
+            if r.get("identifiable", True) and r.get("self_consistent", True)
+        ]
         unidentifiable = [r for r in landed_all if not r.get("identifiable", True)]
+        inconsistent = [r for r in landed_all if not r.get("self_consistent", True)]
         pending = [r for r in mrm if not r["landed"]]
         significant = [r for r in landed if r["p_value"] < 0.05]
         size_wins = [
@@ -1178,7 +1214,11 @@ def render(
                 if np.isfinite(r["ratio_size_over_lev"])
                 else "—"
             )
-            flag = "" if r.get("identifiable", True) else " ⚠"
+            flag = ""
+            if not r.get("identifiable", True):
+                flag = " ⚠collinear"
+            elif not r.get("self_consistent", True):
+                flag = " ⚠CI"
             lines.append(
                 f"| {r['suite'][-1]} | {r['dataset']}{flag} | {r['reference']} | "
                 f"{r['beta_levenshtein']:+.4f} | {r['beta_delta_n']:+.4f} | "
@@ -1200,9 +1240,25 @@ def render(
                 "`aids_iam`/lb does not (+0.10 against +0.91, R² = 0.998) and is the more "
                 "dangerous of the two.",
             ]
+        if inconsistent:
+            names = sorted({r["dataset"] for r in inconsistent})
+            lines += [
+                "",
+                f"⚠ **{len(inconsistent)} fits on {len(names)} datasets "
+                f"(`{'`, `'.join(names)}`) are EXCLUDED: their β₁ point estimate falls "
+                "OUTSIDE its own bootstrap interval.** A percentile interval that does not "
+                "cover its own point means the two were computed on different data — and "
+                "under D15 tier 3 they are: the point estimate is fitted on every pair "
+                "(7.6–8.2 M) while each replicate is fitted on a 2 M subsample. The "
+                "separation is exact — all 4 tier-3 fits inconsistent, all 33 tier-1/tier-2 "
+                "fits consistent. On `mutagenicity`/lb the two differ fivefold "
+                "(β₁ = +0.5229 against a CI of [+0.092, +0.103]), which is enough to reverse "
+                "which predictor dominates. **The confirmatory family is untouched: B3e is "
+                "Suite-1 only and no Suite-1 dataset is tier 3.**",
+            ]
         lines += [
             "",
-            f"**β₁ is significant on {len(significant)} of {len(landed)} identifiable fits and "
+            f"**β₁ is significant on {len(significant)} of {len(landed)} usable fits and "
             "positive on every one — D4's β₁ does NOT collapse.** But **the size coefficient "
             f"exceeds Levenshtein's on {len(size_wins)} of {len(landed)}**"
             + (
