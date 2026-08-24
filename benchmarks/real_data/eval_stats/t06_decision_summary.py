@@ -735,6 +735,14 @@ def render(
                 "unresolved fraction as a tie** --- many underpowered comparisons all leaning "
                 "one way is evidence, not absence of it.",
                 "",
+                "**Every Claim B verdict is bracket-dependent, and both bounds are printed "
+                "for that reason.** Against `min_dfs` and `nauty_graph6` the sign test is a "
+                "**tie under LB and a loss under UB**; against `sparse6_nauty` it is a loss "
+                "under both. Reporting one bound would invert two of the four verdicts. This "
+                "is not a hedge --- a bracket wide enough to flip a competitor verdict on "
+                "21.7 M pairs is itself a finding, and it is F1's `d = 7 of 10` and the "
+                "size-null inversion arriving a third time.",
+                "",
                 "What the comparison *does* show, as description rather than defence: the "
                 "pooled `all_pairs` gap exceeds the within-`n` gap, so a meaningful part of the "
                 "head-to-head deficit is size agreement rather than structure --- while the "
