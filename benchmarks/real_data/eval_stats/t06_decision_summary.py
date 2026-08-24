@@ -224,6 +224,89 @@ def claim_a_by_size(strata: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
+def claim_a_by_competitor(strata: dict[str, Any], split_at: int = 20) -> list[dict[str, Any]]:
+    """Summarise the stratified Claim-A verdicts per competitor.
+
+    Split at *split_at* because the pooled rate hides the thing that matters:
+    ``agm_cam`` is refused above ``n = 12`` by its own scope guard, so every
+    stratum it appears in is a small one, and a pooled win rate against it is a
+    statement about small graphs wearing the clothes of a general one.
+
+    Args:
+        strata: Parsed ``claim_a_strata.json``.
+        split_at: Node count separating the two size halves.
+
+    Returns:
+        One record per competitor.
+    """
+    buckets: dict[str, dict[str, Counter[str]]] = {}
+    reach: dict[str, int] = {}
+    for row in strata["rows"]:
+        name = row["representation"]
+        half = "small" if int(row["n"]) <= split_at else "large"
+        bucket = buckets.setdefault(name, {"small": Counter(), "large": Counter()})
+        bucket[half][row["verdict"]] += 1
+        reach[name] = max(reach.get(name, 0), int(row["n"]))
+
+    records: list[dict[str, Any]] = []
+    for name, halves in buckets.items():
+        total = sum(sum(c.values()) for c in halves.values())
+        wins = sum(c["isalgraph_shorter"] for c in halves.values())
+        losses = sum(c["competitor_shorter"] for c in halves.values())
+        large_total = sum(halves["large"].values())
+        records.append(
+            {
+                "competitor": name,
+                "strata": total,
+                "win": wins,
+                "tie": total - wins - losses,
+                "loss": losses,
+                "win_fraction": wins / total if total else 0.0,
+                "win_fraction_large_n": (
+                    halves["large"]["isalgraph_shorter"] / large_total if large_total else None
+                ),
+                "max_n_reached": reach[name],
+            }
+        )
+    return sorted(records, key=lambda r: -r["win_fraction"])
+
+
+def delta_matrix(rows: Sequence[dict[str, Any]], view: str = "all_pairs") -> list[dict[str, Any]]:
+    """Return the paired delta-rho against **every** comparator, not just the best.
+
+    Args:
+        rows: Rho rows.
+        view: Which pair view to summarise.
+
+    Returns:
+        One record per ``(suite, dataset, reference, competitor)``.
+    """
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        difference = row.get("difference_vs_reference_arm")
+        if row["view"] != view or difference is None:
+            continue
+        if row["representation"] not in FAMILY_COMPARATORS:
+            continue
+        low, high = float(difference["ci_low"]), float(difference["ci_high"])
+        records.append(
+            {
+                "suite": row["suite"],
+                "dataset": row["dataset"],
+                "reference": row["reference"],
+                "competitor": row["representation"],
+                "competitor_rho": float(row["rho"]["point"]),
+                "delta": float(difference["point"]),
+                "ci_low": low,
+                "ci_high": high,
+                "verdict": "win" if low > 0 else ("loss" if high < 0 else "tie"),
+            }
+        )
+    return sorted(
+        records, key=lambda r: (r["suite"], r["dataset"], r["reference"], r["competitor"])
+    )
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -236,6 +319,8 @@ def render(
     strata: dict[str, Any] | None,
     claim_a_cells: dict[str, Any] | None,
     metadata: dict[str, Any],
+    rows: Sequence[dict[str, Any]] = (),
+    view: str = "all_pairs",
 ) -> str:
     """Render the summary as Markdown.
 
@@ -244,6 +329,8 @@ def render(
         strata: Parsed ``claim_a_strata.json``, or ``None``.
         claim_a_cells: Parsed ``family_F2.json``, or ``None``.
         metadata: Provenance to stamp on the document.
+        rows: The raw rho rows, for the every-competitor delta matrix.
+        view: Which pair view the tables report.
 
     Returns:
         The Markdown source.
@@ -301,6 +388,28 @@ def render(
             + ", ".join(f"`{v.suite[-1]}/{v.dataset}/{v.reference}`" for v in below_null),
         ]
 
+    matrix = delta_matrix(rows, view=view)
+    if matrix:
+        counts = Counter(r["verdict"] for r in matrix)
+        lines += [
+            "",
+            "### Every competitor, not only the best",
+            "",
+            f"**{counts['win']} win / {counts['tie']} tie / {counts['loss']} loss** over "
+            f"{len(matrix)} (dataset x competitor) head-to-heads. Paired delta, so a tie means "
+            "the interval covers zero.",
+            "",
+            "| suite | dataset | ref | competitor | its rho | Delta paired [95 % CI] | verdict |",
+            "|---|---|---|---|---:|---|---|",
+        ]
+        for r in matrix:
+            mark = {"win": "**win**", "tie": "tie", "loss": "**LOSS**"}[r["verdict"]]
+            lines.append(
+                f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | {r['competitor']} | "
+                f"{r['competitor_rho']:.4f} | {r['delta']:+.4f} "
+                f"[{r['ci_low']:+.4f}, {r['ci_high']:+.4f}] | {mark} |"
+            )
+
     lines += ["", "## Claim A --- information content, stratified by size", ""]
     if strata is None:
         lines.append("_`claim_a_strata.json` not found._")
@@ -337,6 +446,25 @@ def render(
             f"{strata.get('n_graphs_skipped_thin_strata', 0)} graphs sit in strata below "
             f"{strata.get('min_graphs_per_stratum')} graphs and are not tested.",
         ]
+        lines += [
+            "",
+            "### Claim A per competitor",
+            "",
+            "`max n` matters: a competitor refused above a size cannot be beaten above it, so a "
+            "pooled win rate against `agm_cam` is a statement about small graphs only.",
+            "",
+            "| competitor | strata | win | tie | loss | win % | win % at n > 20 | max n |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+        for r in claim_a_by_competitor(strata):
+            large = (
+                "—" if r["win_fraction_large_n"] is None
+                else f"{100 * r['win_fraction_large_n']:.1f} %"
+            )
+            lines.append(
+                f"| {r['competitor']} | {r['strata']} | {r['win']} | {r['tie']} | {r['loss']} | "
+                f"{100 * r['win_fraction']:.1f} % | {large} | {r['max_n_reached']} |"
+            )
 
     if claim_a_cells is not None:
         card = claim_a_cells.get("cardinality", {})
@@ -391,7 +519,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     family = json.loads(args.family.read_text()) if args.family and args.family.exists() else None
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(verdicts, strata, family, _metadata(args.out.parent, {})))
+    args.out.write_text(
+        render(verdicts, strata, family, _metadata(args.out.parent, {}), rows=rows, view=args.view)
+    )
 
     tally = Counter(v.verdict for v in verdicts)
     print(
