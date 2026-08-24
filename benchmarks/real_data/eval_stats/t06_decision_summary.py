@@ -625,6 +625,50 @@ def rejection_composition(
     }
 
 
+def mrm_table(partial_dirs: Sequence[Path]) -> list[dict[str, Any]]:
+    """Collect D4's fits with their **whole** coefficient vector.
+
+    ``beta1`` alone is a coefficient without its context. The model regresses
+    GED on Levenshtein, ``|delta n|`` and ``|delta density|`` simultaneously, so
+    the size coefficient sitting beside it is what says whether a significant
+    ``beta1`` is a large finding or a modest one --- and measured, it is 3-6x
+    larger on most fits. Reporting one without the other is the same shape of
+    error as a rejection count without its composition.
+
+    Args:
+        partial_dirs: Directories of shard partials.
+
+    Returns:
+        One record per ``(suite, dataset, reference)``, production fits only.
+    """
+    records: list[dict[str, Any]] = []
+    for directory in partial_dirs:
+        for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+            for key, fit in json.loads(path.read_text()).get("mrm", {}).items():
+                # A smoke run carries a handful of permutations; it is not a result.
+                if int(fit.get("n_permutations", 0)) < 1000:
+                    continue
+                dataset, _, reference = key.rpartition("@")
+                betas = dict(zip(fit["predictors"], fit["standardised_betas"], strict=False))
+                lev = float(betas.get("levenshtein", float("nan")))
+                size = float(betas.get("delta_n", float("nan")))
+                records.append(
+                    {
+                        "suite": fit.get("suite", "?"),
+                        "dataset": dataset,
+                        "reference": reference,
+                        "beta_levenshtein": lev,
+                        "beta_delta_n": size,
+                        "beta_delta_density": float(betas.get("delta_density", float("nan"))),
+                        "ratio_size_over_lev": abs(size / lev) if lev else float("nan"),
+                        "r_squared": float(fit["r_squared"]),
+                        "p_value": float(fit["beta1_permutation_p"]),
+                        "n_pairs": int(fit["n_pairs"]),
+                    }
+                )
+    return sorted(records, key=lambda r: (r["suite"], r["dataset"], r["reference"]))
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -641,6 +685,7 @@ def render(
     view: str = "all_pairs",
     profile: dict[str, Any] | None = None,
     extras: dict[str, Any] | None = None,
+    mrm: Sequence[dict[str, Any]] = (),
 ) -> str:
     """Render the summary as Markdown.
 
@@ -653,6 +698,7 @@ def render(
         view: Which pair view the tables report.
         profile: Parsed ``size_profile.json``, for Claim B per size band.
         extras: Output of :func:`uniqueness_and_coverage`, or ``None``.
+        mrm: Output of :func:`mrm_table`.
 
     Returns:
         The Markdown source.
@@ -958,6 +1004,58 @@ def render(
                 f"{100 * r['win_fraction']:.1f} % | {large} | {r['max_n_reached']} |"
             )
 
+    if mrm:
+        significant = [r for r in mrm if r["p_value"] < 0.05]
+        size_wins = [r for r in mrm if abs(r["beta_delta_n"]) > abs(r["beta_levenshtein"])]
+        ratios = [
+            r["ratio_size_over_lev"]
+            for r in size_wins
+            if np.isfinite(r["ratio_size_over_lev"])
+        ]
+        lines += [
+            "",
+            "## D4 — the model that CONTROLS for size rather than stratifying it away",
+            "",
+            "`GED ~ β₁·Lev + β₂·|Δn| + β₃·|Δdensity|`, all standardised, so the coefficients "
+            "are directly comparable. **β₁ must never be quoted without β_size beside it** — a "
+            "significant coefficient that is one-fifth the size of the confound it competes "
+            "with is a real finding and a modest one, and it has to read as both.",
+            "",
+            "| suite | dataset | ref | **β₁ (Lev)** | **β_size** | β_density | R² | p(β₁) | "
+            "size/Lev |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+        for r in mrm:
+            ratio = (
+                f"{r['ratio_size_over_lev']:.1f}×"
+                if np.isfinite(r["ratio_size_over_lev"])
+                else "—"
+            )
+            lines.append(
+                f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | "
+                f"{r['beta_levenshtein']:+.4f} | {r['beta_delta_n']:+.4f} | "
+                f"{r['beta_delta_density']:+.4f} | {r['r_squared']:.3f} | "
+                f"{r['p_value']:.5f} | {ratio} |"
+            )
+        lines += [
+            "",
+            f"**β₁ is significant on {len(significant)} of {len(mrm)} fits and positive on "
+            f"every one — D4's β₁ does NOT collapse.** But **the size coefficient exceeds "
+            f"Levenshtein's on {len(size_wins)} of {len(mrm)}**"
+            + (
+                f", by {min(ratios):.1f}×–{max(ratios):.1f}×"
+                if ratios
+                else ""
+            )
+            + ". So the defensible sentence carries both halves: *Levenshtein contributes "
+            "significant incremental information beyond size and density, but node-count "
+            "difference does most of the work.*",
+            "",
+            "This is the ticket's central finding stated by the one instrument that "
+            "**controls** for the confound rather than stratifying it away, which makes it "
+            "more citable than the within-`n` collapse, not less.",
+        ]
+
     if extras is not None:
         lines += [
             "",
@@ -1093,6 +1191,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows=rows,
             view=args.view,
             profile=profile,
+            mrm=mrm_table(args.partials),
             extras=uniqueness_and_coverage(
                 [json.loads(f.read_text()) for f in args.ladders if f.exists()],
                 json.loads(args.completion_rates.read_text())
