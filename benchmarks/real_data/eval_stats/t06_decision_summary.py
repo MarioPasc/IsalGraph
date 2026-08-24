@@ -422,6 +422,69 @@ def compactness_predicates(strata: dict[str, Any], above: int = 20) -> dict[str,
     }
 
 
+def claim_b_by_competitor(
+    profile: dict[str, Any], split_at: int = 20
+) -> list[dict[str, Any]]:
+    """Claim B per competitor per size half, inside equal-``n`` strata.
+
+    **This is the conservative test, not the paired one.** Within a stratum the
+    two arms are compared by whether their graph-level intervals are disjoint;
+    non-overlap implies a difference, overlap does not imply none. Strata are
+    small, so most comparisons come back unresolved and a "tie" here means "this
+    stratum cannot separate them", not "they are equal". The paired instrument
+    lives in the head-to-head table above, which is why both are printed.
+
+    Args:
+        profile: Parsed ``size_profile.json``.
+        split_at: Node count separating the two halves.
+
+    Returns:
+        One record per ``(competitor, half)``.
+    """
+    cells: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = {}
+    for row in profile["rows"]:
+        if row["rho"] is None or row.get("arm", "primary") != "primary":
+            continue
+        key = (row["suite"], row["dataset"], row["reference"], row["n"])
+        cells.setdefault(key, {})[row["representation"]] = row
+
+    tally: dict[tuple[str, str], Counter[str]] = {}
+    deltas: dict[tuple[str, str], list[float]] = {}
+    for key, block in cells.items():
+        arm = block.get("isalgraph_pruned")
+        if arm is None or arm["ci_lo"] is None:
+            continue
+        half = "n > 20" if int(key[3]) > split_at else "n <= 20"
+        for name, rival in block.items():
+            if name == "isalgraph_pruned" or rival["ci_lo"] is None:
+                continue
+            if arm["ci_lo"] > rival["ci_hi"]:
+                outcome = "win"
+            elif arm["ci_hi"] < rival["ci_lo"]:
+                outcome = "loss"
+            else:
+                outcome = "unresolved"
+            tally.setdefault((name, half), Counter())[outcome] += 1
+            deltas.setdefault((name, half), []).append(float(arm["rho"]) - float(rival["rho"]))
+
+    records: list[dict[str, Any]] = []
+    for (name, half), counter in sorted(tally.items()):
+        total = sum(counter.values())
+        records.append(
+            {
+                "competitor": name,
+                "half": half,
+                "strata": total,
+                "win": counter["win"],
+                "unresolved": counter["unresolved"],
+                "loss": counter["loss"],
+                "unresolved_fraction": counter["unresolved"] / total,
+                "median_delta_rho": float(np.median(deltas[name, half])),
+            }
+        )
+    return records
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -553,6 +616,46 @@ def render(
                 f"stratum in only {100 * min(r['best_fraction'] for r in bands):.1f}-"
                 f"{100 * max(r['best_fraction'] for r in bands):.1f} % of them at any size. "
                 "The pooled rho of about 0.93 is mostly the size channel.",
+            ]
+
+    if profile is not None:
+        per_rival = claim_b_by_competitor(profile)
+        if per_rival:
+            large = [r for r in per_rival if r["half"] == "n > 20"]
+            worst = min((r["median_delta_rho"] for r in large), default=0.0)
+            unresolved = (
+                min(r["unresolved_fraction"] for r in large) if large else 0.0
+            )
+            lines += [
+                "",
+                "### Claim B per competitor, inside equal-`n` strata",
+                "",
+                "**Conservative test:** two graph-level intervals, disjoint or not. Non-overlap "
+                "implies a difference; overlap does not imply none. Strata are small, so "
+                "`unresolved` means *this stratum cannot separate them*, not *they are equal*. "
+                "The paired instrument is the head-to-head table above.",
+                "",
+                "| competitor | n | strata | win | unresolved | loss | unresolved % | "
+                "median Δρ |",
+                "|---|---|---:|---:|---:|---:|---:|---:|",
+            ]
+            for r in per_rival:
+                lines.append(
+                    f"| {r['competitor']} | {r['half']} | {r['strata']} | {r['win']} | "
+                    f"{r['unresolved']} | {r['loss']} | "
+                    f"{100 * r['unresolved_fraction']:.0f} % | {r['median_delta_rho']:+.4f} |"
+                )
+            lines += [
+                "",
+                f"**Above n = 20 almost nothing resolves** --- at least "
+                f"{100 * unresolved:.0f} % of every competitor's strata are unresolved, which "
+                "is §17's collapse seen from another angle: where rho itself is near zero, no "
+                "representation is distinguishable from any other. The median difference still "
+                f"favours the competitor in every case (worst {worst:+.4f}), so the point "
+                "estimates lean against IsalGraph even where the strata cannot prove it. "
+                "**The clear losses in the head-to-head table come from the pooled `all_pairs` "
+                "view, which carries the size channel; within a fixed size, the field is "
+                "mostly noise.**",
             ]
 
     lines += ["", "## Claim A --- information content, stratified by size", ""]
