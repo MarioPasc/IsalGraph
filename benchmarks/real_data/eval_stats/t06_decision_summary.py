@@ -307,6 +307,62 @@ def delta_matrix(rows: Sequence[dict[str, Any]], view: str = "all_pairs") -> lis
     )
 
 
+def claim_b_by_size(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    """Summarise Claim B per size band, the direct analogue of Claim A's table.
+
+    The unit is an equal-``n`` stratum, where ``|n_i - n_j|`` is identically
+    zero so the size null has no denominator and raw rho *is* the structural
+    signal. Within each stratum the representations are ranked and the reference
+    arm either tops it or does not; across strata that gives a "best in what
+    fraction" beside the level of rho itself.
+
+    Args:
+        profile: Parsed ``size_profile.json``.
+
+    Returns:
+        One record per band.
+    """
+    contenders = set(FAMILY_COMPARATORS) | {"isalgraph_pruned"}
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in profile["rows"]:
+        if row["rho"] is None or row["representation"] not in contenders:
+            continue
+        if row.get("arm", "primary") != "primary":
+            continue
+        key = (row["suite"], row["dataset"], row["reference"], row["n"])
+        groups.setdefault(key, []).append(row)
+
+    tally: dict[str, Counter[str]] = {}
+    levels: dict[str, list[float]] = {}
+    for key, block in groups.items():
+        arm = next((r for r in block if r["representation"] == "isalgraph_pruned"), None)
+        if arm is None or len(block) < 2:
+            continue
+        band = _band(int(key[3]))
+        best = max(block, key=lambda r: float(r["rho"]))
+        counter = tally.setdefault(band, Counter())
+        counter["strata"] += 1
+        counter["isalgraph_best"] += int(best["representation"] == "isalgraph_pruned")
+        levels.setdefault(band, []).append(float(arm["rho"]))
+
+    records: list[dict[str, Any]] = []
+    for low, high in SIZE_BANDS:
+        band = f"{low + 1}-{high}" if high < 10**9 else f"{low + 1}+"
+        counter = tally.get(band)
+        if not counter:
+            continue
+        records.append(
+            {
+                "band": band,
+                "strata": counter["strata"],
+                "isalgraph_best": counter["isalgraph_best"],
+                "best_fraction": counter["isalgraph_best"] / counter["strata"],
+                "median_rho": float(np.median(levels[band])),
+            }
+        )
+    return records
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -321,6 +377,7 @@ def render(
     metadata: dict[str, Any],
     rows: Sequence[dict[str, Any]] = (),
     view: str = "all_pairs",
+    profile: dict[str, Any] | None = None,
 ) -> str:
     """Render the summary as Markdown.
 
@@ -331,6 +388,7 @@ def render(
         metadata: Provenance to stamp on the document.
         rows: The raw rho rows, for the every-competitor delta matrix.
         view: Which pair view the tables report.
+        profile: Parsed ``size_profile.json``, for Claim B per size band.
 
     Returns:
         The Markdown source.
@@ -409,6 +467,34 @@ def render(
                 f"{r['competitor_rho']:.4f} | {r['delta']:+.4f} "
                 f"[{r['ci_low']:+.4f}, {r['ci_high']:+.4f}] | {mark} |"
             )
+
+    if profile is not None:
+        bands = claim_b_by_size(profile)
+        if bands:
+            lines += [
+                "",
+                "### Claim B stratified by size",
+                "",
+                "Equal-`n` strata, where `|n_i - n_j|` is identically zero so the size null has "
+                "no denominator and raw rho IS the structural signal.",
+                "",
+                "| n | strata | IsalGraph best | best % | median rho (IsalGraph) |",
+                "|---|---:|---:|---:|---:|",
+            ]
+            for r in bands:
+                lines.append(
+                    f"| {r['band']} | {r['strata']} | {r['isalgraph_best']} | "
+                    f"{100 * r['best_fraction']:.1f} % | {r['median_rho']:.4f} |"
+                )
+            first, last = bands[0], bands[-1]
+            lines += [
+                "",
+                f"**rho collapses {first['median_rho']:.4f} at n {first['band']} to "
+                f"{last['median_rho']:.4f} at n {last['band']}**, and IsalGraph tops its "
+                f"stratum in only {100 * min(r['best_fraction'] for r in bands):.1f}-"
+                f"{100 * max(r['best_fraction'] for r in bands):.1f} % of them at any size. "
+                "The pooled rho of about 0.93 is mostly the size channel.",
+            ]
 
     lines += ["", "## Claim A --- information content, stratified by size", ""]
     if strata is None:
@@ -490,6 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--partials", type=Path, nargs="*", default=[])
     ap.add_argument("--claim-a-strata", type=Path, default=None)
     ap.add_argument("--family", type=Path, default=None)
+    ap.add_argument("--size-profile", type=Path, default=None)
     ap.add_argument("--view", default="all_pairs")
     ap.add_argument("--out", type=Path, required=True)
     return ap
@@ -519,8 +606,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     family = json.loads(args.family.read_text()) if args.family and args.family.exists() else None
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    profile = (
+        json.loads(args.size_profile.read_text())
+        if args.size_profile and args.size_profile.exists()
+        else None
+    )
     args.out.write_text(
-        render(verdicts, strata, family, _metadata(args.out.parent, {}), rows=rows, view=args.view)
+        render(
+            verdicts,
+            strata,
+            family,
+            _metadata(args.out.parent, {}),
+            rows=rows,
+            view=args.view,
+            profile=profile,
+        )
     )
 
     tally = Counter(v.verdict for v in verdicts)
