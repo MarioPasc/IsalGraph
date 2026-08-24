@@ -322,3 +322,54 @@ def test_the_p_value_map_never_names_an_inadmissible_cell() -> None:
     values = t06_f2.assemble_p_values([], rho_rows, {}, inputs, view="all_pairs")
     assert Cell("B1a", "suite2", "grec", "min_dfs") not in values
     assert not values
+
+
+# ---------------------------------------------------------------------------
+# One arm record per cell
+# ---------------------------------------------------------------------------
+
+
+def _row(representation: str, n_pairs: int, rho: float) -> dict[str, object]:
+    """Build a minimal rho row for the dedup tests."""
+    return {
+        "suite": "suite2",
+        "dataset": "protein",
+        "representation": representation,
+        "reference": "lb",
+        "view": "all_pairs",
+        "n_pairs": n_pairs,
+        "rho": {"point": rho},
+    }
+
+
+def test_dedup_keeps_the_widest_pair_set_not_the_first() -> None:
+    """The arm's own pairs win, whatever order the groups were emitted in.
+
+    Partials written before the arm was emitted once per cell carry one arm
+    record per mask group. On Protein the ``agm_cam`` group holds 595 pairs
+    against 161,596, so "keep the first" makes the surviving value depend on
+    emission order --- and a 595-pair record can stand in for the headline
+    number with nothing failing.
+    """
+    narrow = _row("isalgraph_pruned", 595, 0.5531)
+    wide = _row("isalgraph_pruned", 161_596, 0.7321)
+
+    for ordering in ([narrow, wide], [wide, narrow]):
+        kept = t06_f2.dedup_rho_rows(ordering)
+        assert len(kept) == 1
+        assert kept[0]["n_pairs"] == 161_596
+        assert kept[0]["rho"]["point"] == pytest.approx(0.7321)
+
+
+def test_dedup_is_a_no_op_on_well_formed_rows() -> None:
+    """Distinct cells all survive; the rule only collapses true duplicates."""
+    rows = [_row("isalgraph_pruned", 100, 0.5), _row("wl_subtree", 100, 0.6)]
+    assert len(t06_f2.dedup_rho_rows(rows)) == 2
+
+
+def test_only_one_group_may_emit_the_arm_record() -> None:
+    """``emit_arm`` defaults to False so a group cannot claim the arm by accident."""
+    import inspect
+
+    signature = inspect.signature(t06_f2.run_correlation_group)
+    assert signature.parameters["emit_arm"].default is False

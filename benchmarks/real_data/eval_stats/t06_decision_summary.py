@@ -106,14 +106,12 @@ def load_rho_rows(rho_table: Path | None, partial_dirs: Sequence[Path]) -> list[
         for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
             rows.extend(json.loads(path.read_text()).get("rho_rows", []))
 
-    seen: set[tuple[Any, ...]] = set()
-    unique: list[dict[str, Any]] = []
-    for row in rows:
-        key = (row["suite"], row["dataset"], row["representation"], row["reference"], row["view"])
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(row)
+    from benchmarks.real_data.eval_stats.t06_f2 import dedup_rho_rows
+
+    # Keeping "the first" would make the surviving value depend on emission
+    # order; partials written before the arm was emitted once per cell carry
+    # several arm records, on different pair sets, under one key.
+    unique = dedup_rho_rows(rows)
     if not unique:
         raise DecisionSummaryError("no rho rows found in the table or any partial directory")
     return unique

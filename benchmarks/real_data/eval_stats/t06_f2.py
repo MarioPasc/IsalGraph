@@ -1163,6 +1163,39 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def dedup_rho_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one row per identifying key, choosing the widest pair set.
+
+    Partials written before the reference arm was emitted once per cell carry
+    **several** arm records under the same key --- one per mask group, each on
+    that group's intersection. Keeping "the first" makes the surviving value
+    depend on emission order, which is how a 595-pair record can stand in for a
+    161,596-pair one without anything failing.
+
+    The widest pair set is the unambiguous choice: for the arm it is its own
+    unrestricted pairs, and for a comparator every candidate is identical
+    anyway, so the rule is a no-op on well-formed input.
+
+    Args:
+        rows: Rho rows, possibly with duplicates.
+
+    Returns:
+        One row per ``(suite, dataset, representation, reference, view)``.
+    """
+    best: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        key = (row["suite"], row["dataset"], row["representation"], row["reference"], row["view"])
+        incumbent = best.get(key)
+        if incumbent is None or int(row["n_pairs"]) > int(incumbent["n_pairs"]):
+            best[key] = row
+    dropped = len(rows) - len(best)
+    if dropped:
+        LOGGER.info(
+            "dropped %d duplicate rho rows, keeping the widest pair set for each cell", dropped
+        )
+    return list(best.values())
+
+
 def merge_partials(directory: Path) -> dict[str, Any]:
     """Combine every shard's partial into one record set.
 
@@ -1199,6 +1232,7 @@ def merge_partials(directory: Path) -> dict[str, Any]:
         for key in ("views", "suites", "datasets"):
             merged[key] = sorted(set(merged[key]) | set(shard[key]))
         merged["shards"].append(path.name)
+    merged["rho_rows"] = dedup_rho_rows(merged["rho_rows"])
     LOGGER.info(
         "merged %d partials: %d a1 cells, %d rho rows, %d mrm fits",
         len(partials),
