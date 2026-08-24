@@ -446,3 +446,76 @@ Two sentences, both true, and the first one must come first. **Leading with the 
 and leaving the Suite-1 result to a limitations section is exactly the move a reviewer checks for** —
 the exact-GED result is the cleaner measurement and burying the cleaner measurement is what makes an
 omission look deliberate.
+
+---
+
+## 11. 🔴 THE BENCHMARK IS SIZE-DOMINATED — and this reframes the whole comparison
+
+Found by `[T06-subagent-01]` while correcting an over-generalisation; **independently reproduced by
+the orchestrator from raw matrices, every cell.** It is the most consequential framing result in the
+ticket.
+
+### 11.1 The measurement
+
+`ρ(|n_i − n_j|, reference GED)` — the trivial baseline against ground truth, with no representation
+involved at all:
+
+| reference | range of the size null |
+|---|---|
+| **Suite-2 bracket** (10 datasets) | **0.8789 – 0.9971** — seven of ten exceed **0.96** |
+| **Suite-1 exact** (5 datasets) | **0.7097 – 0.9195** |
+
+On `coil_del`, **`|n_i − n_j|` alone predicts the GED bracket at ρ = 0.9971.** On the IAM Letter
+family it predicts **exact** GED at ρ ≈ 0.92.
+
+### 11.2 What follows, and it is a contribution rather than an excuse
+
+> **On the standard GED benchmarks this literature uses, node-count difference alone achieves
+> ρ = 0.71–0.997 against ground-truth graph edit distance. Any representation's correlation with GED
+> on these datasets is therefore measuring size agreement more than structural fidelity.**
+
+Three consequences, all defensible:
+
+1. **It explains why nothing beats the null.** Where the target is 99.7 % predicted by node count,
+   beating node count is close to tautologically hard. This does not excuse IsalGraph — it still
+   loses to competitors — but it means *no representation* looks good, and the benchmark cannot
+   distinguish much.
+2. **It explains the LB/UB inversion mechanically.** The UB tracks size *less* tightly than the LB, so
+   arms carrying structure look better against it. The inversion is not noise; it is the reference
+   becoming marginally less size-like.
+3. **It is a fifth, and the most direct, detection that Suite 2's bracket is uninformative.** F1's
+   `d = 7 of 10`, the competitor verdicts flipping, §10's pilot inversion and its full-cohort
+   reproduction all *infer* uninformativeness from disagreement between instruments. **This one
+   measures how much of the reference is explained by node count alone.**
+
+### 11.3 What it does NOT rescue
+
+**The Suite-1 exact result stands.** Even where the null is 0.71 (`linux`) and 0.79 (`aids`) rather
+than 0.99, IsalGraph is below it — by −0.2247 and −0.4597. A size-dominated benchmark makes the bar
+low; **we are still under it on four of five.** Say both.
+
+### 11.4 Frozen wording
+
+> *"On these benchmarks the reference itself is size-dominated: node-count difference alone attains
+> ρ = 0.71–0.997 against ground-truth GED, exceeding 0.96 on seven of ten Suite-2 datasets. Correlation
+> with GED on this data therefore measures size agreement more than structural fidelity — for every
+> representation, ours included. We report the within-`n` decomposition (§17) because it is the only
+> view in which the two can be separated."*
+
+**That paragraph does more for the paper than any comparison result in the ticket**, because it turns
+the central negative into a statement about the evaluation protocol — one that is true, measured on
+21.7 M pairs, and useful to everyone working on graph-distance surrogates. **It is also the strongest
+possible motivation for §17's within-`n` analysis**, which stops looking like a defensive slice and
+starts looking like the correct instrument.
+
+### 11.5 The correction that produced it, recorded because the lesson is general
+
+The subagent had reported *"all four `ub` records clear"* from **four landed cells that happened to be
+four inverters**; the three Letter datasets had not landed and do **not** invert. Computing all ten
+gives `lb` below on **10 of 10**, `ub` below on **3 of 10**, inverting on **7 of 10** — so the bracket
+argument rescues seven datasets and leaves the Letter family below its null under *every* reference,
+exact included.
+
+**Same shape as reading a rejection count without its composition**, flagged by the same agent hours
+earlier. The point estimates required no bootstrap and were available the whole time. **Characterise
+the complete set before describing any of it.**
