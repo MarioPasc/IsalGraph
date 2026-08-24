@@ -950,3 +950,70 @@ gone is the *graded magnitude*, which was the part that made it "a mechanism rat
 coincidence" (§11.7's own words). **Without the dose–response that argument is unavailable**, and the
 straddle should be presented as a consistent direction with a measured exception, not as a
 quantified law.
+
+### 12.8 🔴 RETRACTED — §12.6's `aids_iam` reading is not identifiable. Collinearity screen added
+
+**Caught by `[T06-subagent-01]` when `coil_del`/ub returned β_lev = +1.4892 with β_size = −0.5797** —
+a standardised coefficient above 1 with a sign flip on its competitor, which is collinearity rather
+than a finding. Screening all 15 datasets then retracted an earlier claim.
+
+**Orchestrator-verified** `r(Lev, |Δn|)` over the analysed pairs (VIF below is the subagent's
+full three-predictor figure; the two-predictor lower bound from `r` alone agrees):
+
+| dataset | pairs | r(Lev, \|Δn\|) | VIF lev | |
+|---|---:|---:|---:|---|
+| **`aids_iam`** | 1,638,955 | **+0.9612** | **15.28** | **SEVERE** |
+| **`coil_del`** | 7,603,050 | **+0.9355** | **11.15** | **SEVERE** |
+| `mutagenicity` | 8,158,780 | +0.8442 | 2.58 | ok |
+| `protein` | 161,596 | +0.7756 | 2.51 | ok |
+| the other 11 | — | +0.18 … +0.84 | 1.03–3.42 | ok |
+
+**Exactly 2 of 15 exceed the conventional VIF > 10 threshold — and they carried the two most-quoted
+D4 observations in this document.**
+
+#### What is retracted
+
+**§12.6 claimed `aids_iam`/lb was "not an outlier but the trend taken to its limit"** — β₁ = +0.0976
+against β_size = +0.9066 at R² = 0.998 — read as *"β₁ fails to clear because size leaves it nothing
+to explain"*. **With the predictors correlated at r = 0.96 and VIF 15.3, that split is not
+identifiable.** The model cannot separate them; assigning 0.91 to size and 0.10 to Levenshtein is
+one arbitrary point in a wide equivalence class. **The observation was real; the interpretation was
+not. §12.6 comes out.**
+
+`coil_del`/ub is the same defect wearing its obvious face — β_lev past 1, β_size negative, at
+R² = 0.918.
+
+#### What survives, and it is STRONGER
+
+Restricting to the **19 identifiable fits** (VIF ≤ 10):
+
+| | all 23 | **identifiable 19** |
+|---|---|---|
+| size > Lev | 20/23 | **17/19** |
+| β₁ significant | 22/23 | **19/19** |
+
+**β₁ is significant on 19 of 19 identifiable fits** — the one non-significant fit was `aids_iam`/lb,
+now excluded as unidentifiable. **Both halves of §12.1's headline get stronger, not weaker.**
+
+#### The straddle after BOTH corrections — one claim stands
+
+Restricted to the **7 identifiable bound-pairs**:
+
+| claim | count | sign-test p | |
+|---|---|---|---|
+| **R² falls lb → ub** | **7/7** | **0.0156** | ✅ **significant** |
+| β_lev rises lb → ub | 6/7 | 0.125 | ❌ |
+| ratio falls lb → ub | 6/7 | 0.125 | ❌ same test |
+
+> **After the identity artefact (§11.9) and now collinearity, exactly one straddle claim stands:
+> R² falls LB → UB on 7 of 7 identifiable pairs, p = 0.0156.** It is the half carrying the
+> BRANCH-FAST sentence, and **it is untouched by either defect because R² does not depend on how the
+> model splits credit between collinear predictors.**
+
+**Report the transfer descriptively, with no p-value and no dose–response.**
+
+#### Screen before interpreting any coefficient
+
+**Add a VIF column to every MRM table.** A standardised β above 1, or a sign flip on a competitor
+predictor, is a collinearity signature and not a result. `mutagenicity` is *not* collinear
+(VIF 2.58), so its fit is trustworthy when it lands.
