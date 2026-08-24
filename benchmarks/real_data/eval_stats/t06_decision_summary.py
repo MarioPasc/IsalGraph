@@ -708,6 +708,35 @@ def mrm_table(
     return sorted(records, key=lambda r: (r["suite"], r["dataset"], r["reference"]))
 
 
+def render_beta1(record: dict[str, Any]) -> str:
+    """Render beta1 in a form that **cannot** appear without its size coefficient.
+
+    ``beta1 never travels without beta_size`` was stated as a rule twice, after
+    two separate corrections, and both times it held only because someone
+    remembered it. A rule that needs restating should become something that
+    cannot be skipped --- so this is the only sanctioned way to put a beta1 into
+    the document, and when ``beta_delta_n`` is not finite it renders the absence
+    rather than the number alone.
+
+    The reason is not tidiness. A significant beta1 that is one-fifth the size of
+    the confound it competes with is a real finding and a modest one, and a
+    reader shown only the first half will draw the wrong conclusion --- which is
+    exactly what happened when a log-sourced beta1 set, carrying no size
+    coefficient, briefly read as a clean win.
+
+    Args:
+        record: A row from :func:`mrm_table`.
+
+    Returns:
+        Markdown for the coefficient cell.
+    """
+    beta1 = float(record["beta_levenshtein"])
+    size = float(record["beta_delta_n"])
+    if not np.isfinite(size):
+        return f"{beta1:+.4f} — **β_size UNMEASURED**"
+    return f"{beta1:+.4f} vs β_size {size:+.4f}"
+
+
 def _missing_cells(verdicts: Sequence[Verdict]) -> list[str]:
     """Return the ``suite/dataset`` cells with no verdict yet."""
     present = {(v.suite, v.dataset) for v in verdicts}
@@ -1120,15 +1149,22 @@ def render(
                 "landed in a partial**, so they are outside the counts above. Listed here "
                 "because a count that is going to move should say so before it moves:",
                 "",
-                "| suite | dataset | ref | β₁ (Lev) | p(β₁) | |",
-                "|---|---|---|---:|---:|---|",
+                "| suite | dataset | ref | β₁ (with β_size) | p(β₁) | |",
+                "|---|---|---|---|---:|---|",
             ]
             for r in pending:
                 mark = "**NOT significant**" if r["p_value"] >= 0.05 else "significant"
                 lines.append(
                     f"| {r['suite'][-1]} | {r['dataset']} | {r['reference']} | "
-                    f"{r['beta_levenshtein']:+.4f} | {r['p_value']:.5f} | {mark} |"
+                    f"{render_beta1(r)} | {r['p_value']:.5f} | {mark} |"
                 )
+            lines += [
+                "",
+                "A log line carries β₁ and no size coefficient, so these render as "
+                "**β_size UNMEASURED** rather than as a bare number. β₁ alone is the half of "
+                "the result that flatters; a reader shown only that half draws the wrong "
+                "conclusion, and this table cannot show only that half.",
+            ]
             if not_significant:
                 worst = min(not_significant, key=lambda r: abs(r["beta_levenshtein"]))
                 lines += [

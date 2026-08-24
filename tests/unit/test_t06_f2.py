@@ -509,3 +509,35 @@ def test_status_claims_not_started_only_when_it_can_see_logs(tmp_path: Path) -> 
     assert report["unknown_state"] == []
     assert "suite2__mutagenicity" in report["in_flight"]
     assert "suite2__grec" in report["not_started"]
+
+
+# ---------------------------------------------------------------------------
+# beta1 cannot be rendered without its size coefficient
+# ---------------------------------------------------------------------------
+
+
+def test_beta1_cannot_render_without_beta_size() -> None:
+    """The rule 'beta1 never travels without beta_size' is a mechanism, not a habit.
+
+    It was stated twice, after two separate corrections, and both times held only
+    because someone remembered. A significant beta1 that is one-fifth the size of
+    the confound it competes with is a real finding AND a modest one; a reader
+    shown only the first half draws the wrong conclusion, which is what happened
+    when a log-sourced beta1 set briefly read as a clean win.
+    """
+    from benchmarks.real_data.eval_stats import t06_decision_summary as summary
+
+    measured = summary.render_beta1(
+        {"beta_levenshtein": 0.2494, "beta_delta_n": 0.8161}
+    )
+    assert "+0.2494" in measured
+    assert "β_size" in measured and "+0.8161" in measured
+
+    # A log line carries beta1 and no size coefficient.
+    unmeasured = summary.render_beta1(
+        {"beta_levenshtein": 0.0976, "beta_delta_n": float("nan")}
+    )
+    assert "+0.0976" in unmeasured
+    assert "UNMEASURED" in unmeasured
+    # The bare number must never be the whole cell.
+    assert unmeasured.strip() != "+0.0976"
