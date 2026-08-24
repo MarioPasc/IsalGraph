@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 
 from benchmarks.real_data.eval_stats import t06_f2, t06_f2_inputs
-from benchmarks.real_data.eval_stats.family import Cell, cardinality
+from benchmarks.real_data.eval_stats.family import Cell, ReductionInputs, cardinality
 
 #: The frozen terms of design note 18.7, which F2 ran under.
 FROZEN_C: frozenset[tuple[str, str, str]] = frozenset(
@@ -373,3 +373,43 @@ def test_only_one_group_may_emit_the_arm_record() -> None:
 
     signature = inspect.signature(t06_f2.run_correlation_group)
     assert signature.parameters["emit_arm"].default is False
+
+
+# ---------------------------------------------------------------------------
+# The BH denominator survives an incomplete run
+# ---------------------------------------------------------------------------
+
+
+def test_bh_denominator_is_the_admissible_count_not_the_computed_count() -> None:
+    """Uncomputed is not inadmissible.
+
+    A campaign can be cut short, and the tempting "fix" is to run BH over the
+    cells that actually carry a p-value. That shrinks the denominator, weakens
+    the correction on every surviving test, and is the anti-conservative
+    direction --- the same pattern six earlier reductions took, and the only one
+    that would be a deliberate choice rather than an inherited defect.
+
+    The property is asserted here rather than left as a rule to remember,
+    because a rule someone has to remember is one someone can help past.
+    """
+    from benchmarks.real_data.eval_stats.family import run_f2
+
+    inputs = ReductionInputs(
+        excluded_representations=t06_f2.EXCLUDED_REPRESENTATIONS,
+        noncomputable=FROZEN_C,
+        f0_demotes_approximate=True,
+    )
+    card = cardinality(
+        excluded_representations=t06_f2.EXCLUDED_REPRESENTATIONS,
+        noncomputable=FROZEN_C,
+        f0_demotes_approximate=True,
+    )
+    # Only three of the seventy-nine cells carry a value, as if the campaign
+    # had been stopped early.
+    partial = {cell: 0.01 for cell in card.admissible[:3]}
+    result = run_f2(partial, inputs)
+
+    assert result.bh_primary.m == 79
+    assert result.cardinality.n_actual == 79
+    assert len(result.cells) == 3
+    assert result.bh_sensitivity.m == 182
