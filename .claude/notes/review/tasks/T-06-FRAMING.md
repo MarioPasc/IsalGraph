@@ -258,3 +258,89 @@ of the size channel*: the pooled `all_pairs` gap is larger than the within-`n` g
 part of the head-to-head deficit is size agreement rather than structure. That is worth one sentence.
 It is **not** a defence, and the median Δρ favouring the competitor in every single case must sit in
 the same sentence.
+
+---
+
+## 9. The no-dominance framing — measured. It is REAL but it is not clean
+
+Requested by the PI: *"we need not be best at everything — best against X on task A, worse against Y
+on A, but better than Y on B."* That is the Pareto / no-dominance argument, it is standard, and it is
+fair **if the data shows it**. So it was computed rather than assumed, including the
+competitor-vs-competitor comparisons nothing had measured before.
+
+Method: sign test over `(dataset, n)` strata at `n > 20`, α = 0.05 — the same test that refuted §8's
+framing, applied symmetrically so it cannot flatter us. Script:
+`.claude/notes/review/tasks/t06_dominance.py`.
+
+### 9.1 Claim A — compactness, row beats column
+
+| | isalgraph | min_dfs | nauty_g6 | sparse6_nauty | adjacency | graph6 | sparse6 |
+|---|---|---|---|---|---|---|---|
+| **isalgraph_pruned** | — | **WIN** | **WIN** | LOSS | **WIN** | **WIN** | LOSS |
+| min_dfs | LOSS | — | LOSS | LOSS | LOSS | LOSS | LOSS |
+| nauty_graph6 | LOSS | WIN | — | LOSS | LOSS | n/a | LOSS |
+| sparse6_nauty | WIN | WIN | WIN | — | WIN | WIN | LOSS |
+| sparse6 | WIN | WIN | WIN | WIN | WIN | WIN | — |
+
+### 9.2 Claim B — GED correlation, row beats column
+
+| | isalgraph | min_dfs | nauty_g6 | sparse6_nauty | wl_subtree |
+|---|---|---|---|---|---|
+| **isalgraph_pruned** | — | LOSS | **tie** | LOSS | LOSS |
+| min_dfs | WIN | — | WIN | tie | LOSS |
+| nauty_graph6 | tie | LOSS | — | LOSS | LOSS |
+| sparse6_nauty | WIN | tie | WIN | — | LOSS |
+| wl_subtree | WIN | WIN | WIN | WIN | — |
+
+### 9.3 What the two matrices give us — and what they take away
+
+**✅ The cross-over the PI described EXISTS, against the comparator that matters most:**
+
+> **Against `min_dfs` — which `competitors.md` §2 calls "the single most important comparator" — the
+> two representations trade: IsalGraph is decisively more compact (112 of 112 strata, +214.8 bits),
+> `min_dfs` correlates better with GED. Neither dominates the other.**
+
+**✅ And IsalGraph weakly dominates `nauty_graph6`:** wins compactness, ties correlation. That is a
+clean, defensible, unqualified statement about one named competitor.
+
+**❌ But `sparse6_nauty` dominates IsalGraph on both axes** — more compact *and* better correlated,
+both significant. It is also a complete invariant and carries an admissible metric. **This must be
+conceded in the paper. Do not build a Pareto claim that omits it**, because the matrix above is four
+lines of code for a reviewer holding our own artifacts.
+
+**So: IsalGraph is NOT on the Pareto frontier of (compactness, GED correlation) among
+metric-admissible representations at `n > 20`. `sparse6_nauty` is, alone.**
+
+### 9.4 The structural finding that rescues the framing, and it is genuinely interesting
+
+**Neither axis-leader is evaluable on the other axis.**
+
+- **`sparse6` is the best compressor** — it beats every representation including `sparse6_nauty` — and
+  it is **k-excluded**: no candidate distance passed the metric axioms (F3 = 1/50). It has **no
+  Claim B at all**.
+- **`wl_subtree` is the best correlator** — it beats every representation on Claim B — and it raises
+  **`BitCountUndefined`**. It has **no Claim A at all**.
+
+So the two winners each win an axis they can only be measured on because the *other* axis does not
+apply to them. **That is a real no-dominance result and it is about the field, not about us:**
+
+> **No representation is simultaneously best at both, and the two that lead each axis are undefined
+> on the other. Compactness, metric admissibility and bit-countability do not co-occur.**
+
+That sentence is true, it is measured, it is interesting, and it costs nothing to say. It positions
+the contribution as *a point on a trade-off surface* rather than a winner — which is exactly the PI's
+framing, honestly obtained.
+
+### 9.5 Frozen wording
+
+> *"No single representation leads on both axes. The most compact serialisation admits no metric
+> satisfying the distance axioms; the best-correlating representation admits no bit count. Among
+> those measurable on both, IsalGraph trades with min-DFS — decisively more compact, less well
+> correlated — and dominates nauty-graph6. It is itself dominated by nauty-sparse6, which is both
+> more compact and better correlated."*
+
+**Say the last clause.** A Pareto framing that omits the one representation dominating us is the most
+checkable dishonesty available in this paper, and conceding it is what makes the min-DFS trade read as
+a finding rather than a selection. **It is also why the differentiator has to be categorical**
+(§7's executable instruction string) rather than a point on this surface: on these two axes we are
+dominated, and no amount of scoping changes that.
