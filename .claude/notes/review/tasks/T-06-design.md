@@ -1515,3 +1515,34 @@ the "legitimate outcome" `approx_ged.md` §3 item 2 explicitly allows for.
 `UB` or conservative → 81 cells descriptive, `N_actual = 79`; `LB` → extension stays confirmatory,
 `N_actual = 92` with `d = 7`. Everything downstream — F2, T-20's claims, the AE.1 response — hangs
 on it.
+
+### 18.7 ✅ PI DECISION, 2026-08-23 — `GED_approx` is the **conservative** reading
+
+**Asked and answered.** `GED_approx` for F0 is the **worse of LB and UB** — whichever bound produces
+the larger `|point|`, i.e. whichever makes the approximation look *less* like a validated stand-in.
+This is the reading already implemented and already run, so no recomputation is needed.
+
+**Consequences, now frozen:**
+
+| | |
+|---|---|
+| F0 majority branch | **FIRES** (4 of 5) |
+| The 81 approximate-regime cells (70 B1a + 1 B2 + 10 B3a) | **descriptive only** |
+| `d` | **not applied at all** (§5.3) — F1's `d = 7` is reported but does not reduce `N_actual` |
+| `k` | removes only its **5 B1e cells per representation** |
+| `c` | **7** |
+| **`N_actual`** | **79** — enumeration and closed form agree, discrepancy 0 |
+| F2 | run over **79** admissible cells, with the BH-over-`N_max` = 182 sensitivity column printed |
+
+**Why this is the defensible choice**, recorded so the response letter can say it in one sentence:
+it cannot be accused of selecting the bound that flatters the extension, and it agrees with three
+independent measurements that all say the bracket is too wide at the sizes the extension needs —
+§17's within-`n` collapse, §10/§14.1's size-null inversion on 5 of 5, and §18.3's `d = 7`.
+
+**What this costs, stated plainly:** the large-`n` extension — the paper's scope claim — becomes
+**descriptive**. `approx_ged.md` §3 item 2 pre-declared that as a legitimate outcome, and it is the
+one that occurred.
+
+**F1's `d = 7` is still reported.** It does not enter `N_actual` under this branch, but it is the
+evidence that the bracket is uninformative on 7 of 10 datasets and it belongs in the letter beside
+F0.
