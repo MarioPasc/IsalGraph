@@ -1816,3 +1816,44 @@ the removed graphs are the most *symmetric* at their size, so the unchanged coll
 structural fidelity does not depend on symmetry. The countervailing half travels with it: censored
 pairs do correlate worse in isolation (0.3273 against 0.6095 at `n > 40`), and the pooled ρ exceeding
 both components is a Simpson-type effect that the Δ alone would hide.
+
+---
+
+## 21. A second recurring failure mode, named — the consumer that accepts too many rows
+
+§8.1 names the pattern that shrinks `N_actual`. **This is a different one, and it produced three
+defects in a single day.** Recording it because the next ticket and the sibling projects will meet it.
+
+| # | Defect | What the consumer accepted |
+|---|---|---|
+| 1 | `t06_ladder.py`'s `analysed` rung | `ged_positive & mask` — a **different** pair set from the one F0/F1 actually ran on, differing by exactly the GED = 0 pairs |
+| 2 | `run_correlation_group`'s arm records | **two contradictory records under one identifying key**; which survived depended on emission order *and* on the consumer's dedup direction |
+| 3 | `figures.py`'s `load_rows` | **both D14 arms** once P4 added the `arm` field — every §17 figure would have plotted the complete-case arm on top of the primary one, doubling `n` and biasing the curve |
+
+**The shared shape: the artifact looks right because the consumer silently accepted more rows, or
+different rows, than it should have.** None of the three raised an error. Two were caught only by
+cross-checking a landed value against an independent recomputation; the third by noticing that a
+producer had gained a field the consumer predated.
+
+**Why this class is worse than an exception.** A crash is self-reporting. These three each produced a
+*plausible number* — and in defect 2 the correct value survived by luck (`load_rho_rows` happened to
+keep the first record, which happened to be the full-mask one), while the subagent's own verification
+script kept the last and reported a phantom discrepancy. **Correctness depended on a dedup direction
+nobody had chosen deliberately.**
+
+**Mitigations adopted, in order of strength:**
+
+1. **Make the invariant a property, not a rule.** `assert bh_primary.m == cardinality.n_actual`
+   regardless of how many cells carry values — with a negative case constructed to have cells
+   deliberately absent. A property nobody *can* accidentally trim beats a rule someone must remember.
+2. **Test both orderings** whenever dedup decides which of two records survives. "Keep the first"
+   passes one ordering and fails the other, so a single-ordering test certifies the bug.
+3. **Fail loudly on an unknown enum value.** `load_rows` now raises on an unrecognised `arm` rather
+   than passing it through — a consumer that predates a producer's new field should stop, not guess.
+4. **Cross-check one landed cell per artifact type against an independent recomputation.** All three
+   of today's were found this way or would have been.
+
+> **Verified: nothing published moves.** The shipped `size_profile.json` is schema
+> `t06.size_profile.1` and carries only `arm = "primary"`, so `load_rows` yields **1,553 rows and 582
+> aggregate points** — exactly §17's stated counts. Defect 3 was **latent, not live**: it would have
+> fired the moment anyone regenerated the profile with `--arm both`.
