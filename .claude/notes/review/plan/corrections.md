@@ -80,6 +80,14 @@ Scope:
 | **E11** | generative-AI declaration commented out | restore; Elsevier compliance | **T-24** |
 | **E12** | orphaned figure PDFs; **`graphical_abtract.pdf` misspelt**, referenced under that spelling at `main.tex:131` | rename and re-reference | **T-24** |
 | **D19** | [28] Transformer / [29] LSTM claims unverified | **[29] is published** — read it. See §4 | T-07 |
+| **E13** | **Remark 2.7 (`methodology.tex:462`, `\label{rem:search-space}`) excludes half of its own search space.** It reads *"Only the identity of the uninserted neighbour chosen at each `V`/`v` step contributes to the search space"*, but Definition 2.6 three lines above defines `w*_G` over **any starting node** and `core/canonical.py` searches both. Found by T-09 while drawing the figure R3.7c asked for, which shows one subtree per start node and so **contradicts the prose it illustrates** | replace with: *"Two things are searched over: the starting node, and the identity of the uninserted neighbour chosen at each `V`/`v` step. The priority order […] and the minimum-displacement pair ordering […] are intrinsic to the algorithm definition and are not branched over."* One clause, no page cost. **The rest of the remark is correct and is what R3.7c is about** | **T-11** |
+
+**E13, measured, not argued**: on T-09's running example (`n = 6`, `|Aut(G)| = 1`), greedy
+`G2S` from the six starting nodes gives strings of length **9, 10, 9, 11, 10, 10** — six
+distinct strings, one of which attains `w*_G`. The starting node is the outer loop of the
+search, not a free choice, and Remark 2.7's word *"Only"* denies it. E8 (Example 2.3's
+printed self-correction) sits four hundred lines earlier in the same file and is also T-11's;
+**do both in one pass**. Evidence: [T-09 article notes](../tasks/T-09-article-notes.md) §1.
 
 **R3.4a, confirmed against the code**: Table 1 defines `C` = primary→secondary, `c` =
 secondary→primary. Algorithm 2's `C` guard tests `(ṽ₂,ṽ₁) ∈ E` and duplicate-checks

@@ -48,14 +48,43 @@ Related: [compliance](compliance.md) (the EiC checklist) · [corrections](correc
 | NEW | [28]/[29] inherited-modified-new | T-07 | 0.75 |
 | NEW | Pair-accounting ladder, per dataset | T-02 | 0.5 |
 | NEW | Calibration: bracket width, certification rate, ρ-gap vs `n` | T-05 | 0.75 |
-| NEW | Canonical search-space schematic | T-09 | 0.5 |
-| NEW | **S2G/G2S worked example** | T-09 | **0.75** |
-| reuse | Graphical abstract, regenerated from the two T-09 figures | T-09 → T-24 | **0** — submitted separately |
+| NEW | Canonical search-space schematic | ~~T-09~~ **done** | 0.5 |
+| ~~NEW~~ | ~~**S2G/G2S worked example**~~ → **four panels, not one** (see the T-09 RESULT below) | ~~T-09~~ **done** | ~~**0.75**~~ **T-26 re-prices** |
+| reuse | Graphical abstract — ~~regenerated from the two T-09 figures~~ **NOT regenerated; panel (b) carries numbers T-06 retired** | ~~T-09 →~~ **T-24** | **0** — submitted separately |
 | NEW | Label surplus / collision table | T-18 | 0.75 |
 | NEW | Critical-difference diagram (approximate regime only) | T-06 | 0.5 |
 | reinstate | Generative-AI declaration | T-24 | 0.2 |
 | reinstate | Acknowledgements | T-24 | 0.2 |
 | reinstate | Author biographies + photos | T-24 | 0.6 |
+
+
+> ## ✅ T-09 RESULT, 2026-08-25 — three inventory rows above are corrected in place
+>
+> **The schematic is done and answers R3.7c.** `canonical_search_tree.pdf`, 7.0 × 3.4 in,
+> drawn by the enumerator the canonicalisation itself uses, with one subtree per starting
+> node.
+>
+> **The worked example became four panels, not one.** S2G and G2S, each for the exhaustive
+> *and* the pruned canonical form of one running example; 7.0 × 2.84 in each. The `0.75`
+> priced above is stale — **T-26 owns re-pricing this row**, and the figure dimensions in
+> [T-09 article notes](../tasks/T-09-article-notes.md) §3 are dimensions, not page fractions.
+>
+> **§3.2's cut order still holds and is now cheaper to execute.** Items 10 (schematic) and
+> 11 (worked example) remain the only two no reviewer requires, and the four worked-example
+> panels are independent files, so the cut can be partial rather than all-or-nothing.
+>
+> **§3.1's recovery "Trim worked examples (Ex. 2.3, Rem. 2.6, Rem. 2.11), 0.5 p" is now
+> executable**: the S2G panel carries Example 2.3's content, and Example 2.3's own text
+> contains an in-line self-correction (*"so after 0 but before 1 in circular order --- actually
+> [0,2,1]"*, `methodology.tex:203`) that **T-11** should remove whether or not the figure lands.
+>
+> 🔴 **The graphical abstract is NOT regenerated, by decision.** `graphical_abtract.pdf`
+> panel (b) prints `Wins: 99.6 %`, `β = 0.537`, `R² = 0.947` and `14,108×` — all retired by
+> T-06, which withdrew Claim B at scale. Regenerating panel (a) alone would make the stale
+> half look freshly checked. **T-24 inherits it**, with the two panels for (a) already built.
+>
+> Artifacts: `…/results/reports/T-09-explanatory-figures/figures/`, five figures as `.pdf`
+> and `.png`. Full record: [T-09 article notes](../tasks/T-09-article-notes.md).
 
 **Gross addition ≈ 12–13 pages against 0 pages of headroom.**
 

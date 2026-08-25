@@ -82,7 +82,7 @@ Decided now so it is not decided under pressure on day 17.
 | 3 | **Exhaustive-canonical baseline at scale** | ~0.5 | ~0.5 | fails on 55 % of Protein graphs — report it as a bounded baseline in one row rather than a full arm |
 | 4 | **S2G/G2S worked example** (half of T-09) | 0.5–0.75 | **0.75** | author preference, **answers no demand**. ~9 % of the page gap |
 | 5 | **[labels](labels.md) Tier 1** collision table | ~0.4 | 0.75 | driver is R1.2/AE.3, **not** R1.3 — cut only if pages force it |
-| 6 | **Search-space schematic** (other half of T-09) | ~0.3 | 0.5 | **R3.7c, requested** — cut last among these; the renderer already exists |
+| ~~6~~ | ~~**Search-space schematic** (other half of T-09)~~ → **DONE 2026-08-25**, together with the worked example; T-09 is closed and no longer a cut candidate at the ticket level. Its four worked-example panels remain independently cuttable | ~~0.3~~ | ~~0.5~~ | **R3.7c, requested** — ~~cut last among these~~ delivered |
 
 **The list totals ~2 days against a 7.5-day lower-bound overrun. Cutting to fit will not work** —
 that is a finding, not an opinion, and it is why S-f recommends an extension plus staging T-03.

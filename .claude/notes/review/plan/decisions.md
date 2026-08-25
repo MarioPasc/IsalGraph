@@ -158,6 +158,25 @@ Neither is on the critical path.
 | **bliss / Traces backends** | **1.0 d** + a bibliography slot | **Cut.** Absent from the `ReprBackend` set; functionally duplicate nauty; produce no table row; requested by nobody | cheap insurance if `pynauty` fails to build, which would otherwise take the graph6 **and** AGM rows down with it |
 | **T-09 split** | **0.75 page** (the number that matters), 0.5–0.75 d | **Split the cut.** The search-space schematic answers **R3.7c** and its renderer already exists (~2–3 h); the S2G/G2S worked example answers **no demand at all**. Bundling protects the unasked-for figure behind the requested one | both feed the graphical abstract, which costs no manuscript pages — but **that argument does not distinguish them** |
 
+> ## ✅ S-g RESOLVED 2026-08-25 — **neither was cut**; both were built, and the split was unnecessary
+>
+> The recommendation was to split the cut: keep the schematic (R3.7c), drop the worked
+> example (no demand). Measured, the split had no cost to make and the "~2–3 h" estimate for
+> the schematic was the wrong half to worry about — its renderer already existed and needed
+> only re-pointing. The worked example was the work.
+>
+> **The counter-case is now decided, not by argument but by measurement.** The row noted that
+> "both feed the graphical abstract, which costs no manuscript pages — but that argument does
+> not distinguish them". It distinguishes nothing because **the graphical abstract was not
+> regenerated at all**: its panel (b) carries numbers T-06 retired, so it cannot be reprinted
+> in any form until T-24 rebuilds both panels. The no-page-cost argument supports neither
+> figure and should not be used for either.
+>
+> **What survives**: the cut order itself. [manuscript](manuscript.md) §3.2 items 10 and 11
+> are still the only two entries no reviewer requires, and item 11 is still first to go. The
+> four worked-example panels are independent files, so that cut is now partial rather than
+> all-or-nothing.
+
 ### S-h — bibliography
 
 Full arithmetic and a fitting 12-slot allocation: [compliance](compliance.md) §2.
