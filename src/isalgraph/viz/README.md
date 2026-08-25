@@ -78,7 +78,9 @@ Two further decisions worth knowing:
 ### Composites
 
 `composite.draw_column`, `single_card_figure`, `steps_figure`,
-`roundtrip_figure`; and `search_tree.canonical_search_tree_figure`.
+`roundtrip_figure`; `search_tree.canonical_search_tree_figure`; and the
+two manuscript panels, `worked_example.s2g_worked_example_figure` /
+`g2s_worked_example_figure`.
 
 Palettes are built once per figure from the final graph, and the layout is
 pinned by threading each column's returned layout into the next, so nodes
@@ -173,6 +175,61 @@ Two further rules:
 For a standalone card the progress mask conveys nothing, so
 `single_card_figure(..., color_whole_string=True)` (the default) colours
 every cell.
+
+## The two worked-example panels
+
+`worked_example` builds the S2G and G2S panels the manuscript lost --
+`fig_algorithm_overview.pdf` is still in the article source, commented
+out at `methodology.tex:379` with the note *"Figure commented out to
+meet the 35-page limit"*. Four decisions carry them.
+
+**One index for both.** S2G consumes one symbol per step; G2S emits a
+whole *group* per pass of its outer loop. Indexed by their own units the
+two panels would have different column counts and nothing to compare, so
+both are indexed by the **encoder's group boundaries**. For the running
+example that is `V | V | V | nv | PC | PV` -- six columns, no step
+omitted from either.
+
+**One renderer.** `draw_columns` is the only function that lays anything
+out. Both builders reduce their trace to a tuple of `ExampleColumn`, so
+the panels are identical in geometry by construction rather than by two
+builders being kept in step.
+
+**Ghosting is a conservation argument.** Ink moves between the strip and
+the graph in the direction the algorithm runs:
+
+| | strip | graph |
+|---|---|---|
+| **S2G** | starts solid, drains | starts ghosted, fills |
+| **G2S** | starts ghosted, fills | starts solid, drains |
+
+Making both panels fill in -- which the first draft did -- is what makes
+the two figures look like the same algorithm drawn twice. A ghost is a
+white disc with a dashed grey outline (the `IsalSR` idiom), so it
+recedes by carrying no ink rather than grey ink; the element the step
+moved between representations carries an accent halo in both panels.
+
+**The G2S panel is built from the encoder, not from a replay.** See the
+next section.
+
+## `encoder_trace`: what the G2S panel is drawn from
+
+`GraphToString.run_with_trace` replays the finished string, so a panel
+built from it is the S2G panel with its mask flipped. `encoder_trace`
+re-runs the encoder loop with the rejected displacement pairs recorded,
+in input-graph node ids.
+
+`core/graph_to_string.py` is frozen, so this is a mirror, and a mirror's
+hazard is drift. `tests/viz/test_encoder_trace.py` pins it: the mirror's
+string must equal `GraphToString`'s byte for byte, exhaustively on small
+graphs and on random larger and directed ones. Out of band it was checked
+on **134,609 `(graph, start)` pairs to n = 14, with zero mismatches**.
+
+`trace_execution(graph, target)` recovers the execution behind a *given*
+string by branching only on the uninserted-neighbour choice at `V`/`v` --
+the only freedom an execution has (Remark 2.7). That is what lets the
+**pruned** canonical string be drawn with the same encoder-side detail as
+the greedy one: no greedy run emits it.
 
 ## Canonical search tree
 

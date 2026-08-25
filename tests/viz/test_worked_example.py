@@ -159,15 +159,35 @@ def test_both_panels_produce_the_same_columns(instructions: str) -> None:
 
 
 @pytest.mark.parametrize("instructions", _BOTH_STRINGS)
-def test_columns_end_on_the_complete_structure(instructions: str) -> None:
-    """The last column of either panel has nothing ghosted left."""
+def test_the_two_panels_drain_in_opposite_directions(instructions: str) -> None:
+    """Ink is conserved, and each panel moves it the way its algorithm does.
+
+    S2G ends with the graph complete and the strip spent; G2S ends with
+    the strip complete and the graph spent. Getting this backwards is not
+    a cosmetic error -- it makes the encoder panel show a decoder, which
+    is what the first draft of these figures did.
+    """
     encoder = trace_execution(build_example_graph(), instructions)
     _, trace = decode_trace(instructions)
-    for columns in (s2g_columns(trace, encoder.groups), g2s_columns(encoder)):
-        last = columns[-1]
-        assert len(last.present_nodes) == RUNNING_EXAMPLE_N_NODES
-        assert len(last.present_edges) == len(RUNNING_EXAMPLE_EDGES)
-        assert last.consumed == len(instructions)
+
+    s2g = s2g_columns(trace, encoder.groups)
+    assert s2g[0].strip_solid_side == "suffix"
+    assert len(s2g[-1].present_nodes) == RUNNING_EXAMPLE_N_NODES
+    assert len(s2g[-1].present_edges) == len(RUNNING_EXAMPLE_EDGES)
+    for earlier, later in zip(s2g, s2g[1:], strict=False):
+        assert earlier.present_nodes <= later.present_nodes
+        assert earlier.present_edges <= later.present_edges
+
+    g2s = g2s_columns(encoder)
+    assert g2s[0].strip_solid_side == "prefix"
+    assert g2s[-1].present_nodes == frozenset()
+    assert g2s[-1].present_edges == frozenset()
+    for earlier, later in zip(g2s, g2s[1:], strict=False):
+        assert later.present_nodes <= earlier.present_nodes
+        assert later.present_edges <= earlier.present_edges
+
+    for columns in (s2g, g2s):
+        assert columns[-1].consumed == len(instructions)
 
 
 def test_columns_reject_groups_that_do_not_span_the_string() -> None:

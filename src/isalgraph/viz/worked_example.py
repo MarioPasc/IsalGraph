@@ -35,14 +35,27 @@ encoder, so its states are the S2G panel's with the grey mask flipped.
 :mod:`isalgraph.viz.encoder_trace` exists to avoid exactly that, and is
 pinned to the frozen encoder by test.
 
-Three element states, not two
------------------------------
-``composite`` ghosts with a filled grey disc. These figures use the
-sibling projects' convention instead: a ghost is a **white** disc with a
-dashed grey outline, so it recedes by carrying no ink rather than by
-carrying grey ink; the element the current step created carries an accent
-halo; and both directions **fill in** rather than one filling and one
-emptying, so the two panels are read the same way.
+Ghosting is a conservation argument
+-----------------------------------
+Ink is conserved between the strip and the graph, and the direction of
+the transfer is the direction of the algorithm:
+
+* **S2G** turns a string into a graph. The strip starts solid and empties
+  as symbols are consumed; the graph starts ghosted and fills in.
+* **G2S** turns a graph into a string. The graph starts solid and empties
+  as structure is captured; the strip starts ghosted and fills in.
+
+So each panel shows one thing draining and the other filling, and the two
+panels run in opposite directions. That is the property worth showing --
+the round trip -- and a reader can check it at a glance instead of being
+told. Inverting it, so both panels fill in, makes the two figures look
+like the same algorithm drawn twice.
+
+A ghost is a **white** disc with a dashed grey outline, the sibling
+projects' convention: it recedes by carrying no ink rather than by
+carrying grey ink, which is what survives at column scale. The element
+the current step moved between the two representations carries an accent
+halo in both.
 """
 
 from __future__ import annotations
@@ -167,6 +180,10 @@ class ExampleColumn:
         accent_nodes: Graph nodes carrying the created-this-step halo.
         accent_edges: Graph edges drawn in the accent colour.
         ring_accent: Ring payload created this step, if any.
+        strip_solid_side: ``"suffix"`` for S2G, whose strip drains as
+            symbols are consumed, and ``"prefix"`` for G2S, whose strip
+            fills as they are emitted. Paired with the graph panel's own
+            direction, this is what makes the ink conservation visible.
         caption: Up to two short lines drawn under the column.
     """
 
@@ -181,6 +198,7 @@ class ExampleColumn:
     accent_nodes: frozenset[NodeId] = frozenset()
     accent_edges: frozenset[Edge] = frozenset()
     ring_accent: NodeId | None = None
+    strip_solid_side: str = "prefix"
     caption: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -400,7 +418,7 @@ def draw_columns(
             fig.add_subplot(sub[2]),
             instructions,
             current_idx=column.consumed,
-            solid_side="prefix",
+            solid_side=column.strip_solid_side,
             executing_span=column.span,
             axis_width_inches=lay.fig_width / len(columns),
         )
@@ -540,6 +558,7 @@ def s2g_columns(
                 accent_nodes=accent_nodes,
                 accent_edges=frozenset(edge for _, edge in created),
                 ring_accent=max(accent_nodes) if accent_nodes else None,
+                strip_solid_side="suffix",
                 caption=(
                     _s2g_effect(trace.snapshots, lo, hi),
                     _pointer_line(snap.primary_node, snap.secondary_node),
@@ -578,6 +597,11 @@ def _g2s_effect_line(iteration: EncoderIteration) -> str:
 def g2s_columns(trace: EncoderTrace) -> tuple[ExampleColumn, ...]:
     """Reduce an encoder trace to one column per outer-loop pass.
 
+    The graph panel shows what is **not yet** encoded, which is the
+    inverse of the S2G panel's rule. G2S consumes the graph and produces
+    the string, so the graph is what drains; drawing the captured part
+    solid instead would make the encoder look like a decoder.
+
     Args:
         trace: The instrumented encoder trace.
 
@@ -585,6 +609,8 @@ def g2s_columns(trace: EncoderTrace) -> tuple[ExampleColumn, ...]:
         One column per iteration.
     """
     spans = group_spans(trace.groups)
+    all_nodes = frozenset(range(trace.graph.node_count()))
+    all_edges = frozenset(graph_edges(trace.graph))
     columns: list[ExampleColumn] = []
     for iteration, (lo, hi) in zip(trace.iterations, spans, strict=True):
         created_node = iteration.created_node
@@ -596,8 +622,8 @@ def g2s_columns(trace: EncoderTrace) -> tuple[ExampleColumn, ...]:
                 secondary=iteration.secondary_after,
                 consumed=hi,
                 span=(lo, hi),
-                present_nodes=frozenset(iteration.captured_nodes_after),
-                present_edges=frozenset(iteration.captured_edges_after),
+                present_nodes=all_nodes - frozenset(iteration.captured_nodes_after),
+                present_edges=all_edges - frozenset(iteration.captured_edges_after),
                 accent_nodes=frozenset() if created_node is None else frozenset({created_node}),
                 accent_edges=(
                     frozenset()
@@ -605,6 +631,7 @@ def g2s_columns(trace: EncoderTrace) -> tuple[ExampleColumn, ...]:
                     else frozenset({iteration.created_edge})
                 ),
                 ring_accent=created_node,
+                strip_solid_side="prefix",
                 caption=(_g2s_search_line(iteration), _g2s_effect_line(iteration)),
             )
         )

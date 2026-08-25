@@ -82,8 +82,10 @@ $PY -m pip install -e ".[dev,native]"     # builds the extension
 | `$PY -m mypy src/isalgraph/` | Type check (strict) |
 | `$PY -m isalgraph.viz` | Regenerate `docs/figures/` |
 
-**Reference state (measured 2026-08-24, T-06 close):** **2,550 passed / 321 skipped**
-with the engine. A change that lowers either number needs an explanation.
+**Reference state (measured 2026-08-25, T-09 close):** **2,583 passed / 321 skipped**
+with the engine, in 9 min 18 s. A change that lowers either number needs an explanation.
+T-09 added 33: `tests/viz/test_encoder_trace.py` (12) and `tests/viz/test_worked_example.py`
+(21). `testpaths = ["tests"]`, so unrelated work under `benchmarks/` cannot move this figure.
 
 > ⚠ **This figure was stale by ~3.5× until 2026-08-24.** It read *"726 passed /
 > 271 skipped (integration of wave 2026-08-10)"* while the suite had grown across
