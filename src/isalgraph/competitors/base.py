@@ -201,6 +201,19 @@ class ReprBackend(ABC):
     name: str = ""
     #: Declared properties.  See :class:`Capability`.
     capabilities: frozenset[Capability] = frozenset()
+    #: Name of the substitute encoding a campaign should record when this
+    #: backend exhausts its wall clock, or ``""`` for the campaign default.
+    #:
+    #: **Declarative only -- a backend never performs its own substitution.**
+    #: The substitution is D14, and D14 lives in exactly one place
+    #: (``benchmarks/real_data/eval_encoding/t06_encode.py``) so that a
+    #: censored graph cannot be dropped down one code path and retained down
+    #: another.  A backend that fell back internally would report
+    #: ``status="ok", fallback_used=False`` and launder a censored graph into
+    #: a completed one, which is the bias D14 exists to expose; it would also
+    #: never fire for a graph the parent *killed*, which is the case that
+    #: needs it most.
+    fallback_variant: str = ""
 
     @abstractmethod
     def encode(self, graph: nx.Graph, *, budget: Budget | None = None) -> Encoding:

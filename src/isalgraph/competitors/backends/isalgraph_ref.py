@@ -1,6 +1,6 @@
 """The reference arm: IsalGraph's own canonical and pruned-canonical strings.
 
-Two registered backends, because they are **not interchangeable** -- they
+Three registered backends, because they are **not interchangeable** -- they
 produce different strings and different bit counts, and their ceilings are
 in different places:
 
@@ -13,13 +13,38 @@ in different places:
   failures through AIDS-IAM, then **24/400 on Mutagenicity** (149 ms/graph)
   and **4/400 on Protein** (66 ms/graph) at a 2 s budget.  An earlier note
   claimed ``pruned`` was fine to ``n = 98``; on real graphs it is not.
+- ``isalgraph_exhaustive`` computes the same string as
+  ``isalgraph_canonical`` but **accepts both suites**, because the ceiling
+  the ``SUITE1_ONLY`` guard encodes is not the ceiling the engine has.
+
+**Why a third arm rather than lifting the guard on the second.**  The
+``n = 12`` refusal in ``isalgraph_canonical`` was calibrated at a **2 s
+budget on the pure-Python path** and is far too conservative on the C++
+engine.  Measured (``.claude/notes/review/tasks/t06_exhaustive_ceiling.py``):
+100 % completion through ``n = 20`` at a 60 s budget, median 9 ms against a
+33 s maximum; 75-100 % through ``n = 26`` at 20 s.  The exhaustive form is
+**8-12 % shorter** than the pruned form at ``n = 13-20`` and 12-22 % at
+``n = 23-26``, and over all 5,350 Suite-1 graphs the pruned form is
+**never** shorter (0 of 5,350,
+``.claude/notes/review/tasks/t06_pruned_vs_exhaustive.py``).
+
+``isalgraph_canonical`` keeps its guard: it is the frozen T-04 arm that
+already carries published numbers, and moving a published refusal would
+move a published failure rate.  The new arm carries the corrected ceiling.
+
+**The budget is not this module's to enforce.**  A graph that exhausts its
+budget raises, and the *campaign driver* substitutes a fallback string --
+see ``benchmarks/real_data/eval_encoding/t06_encode.py``, which applies D14
+in one place so that a censored graph cannot be dropped down one code path
+and retained down another.  :attr:`ReprBackend.fallback_variant` names the
+substitute this arm wants; it does not perform the substitution.
 
 **Timing note, which is a plan-level instruction.**  These run on the C++
 engine.  Timing a pure-Python competitor against it reproduces R1.1's own
 complaint inside our answer to it, so a language-matched mode is provided:
-:func:`encode_python` forces the pure-Python reference.  Fig. 2 must have
-both arms in the same language.  ``engine()`` is recorded in every smoke
-run header so a timing can never be quoted without it.
+passing ``engine="python"`` forces the pure-Python reference.  Fig. 2 must
+have both arms in the same language.  ``engine()`` is recorded in every
+smoke run header so a timing can never be quoted without it.
 """
 
 from __future__ import annotations
@@ -51,7 +76,7 @@ DEFAULT_TIMEOUT_S = 2.0
 SUITE1_MAX_NODES = 12
 
 
-def _to_sparse_graph(graph: nx.Graph) -> SparseGraph:
+def to_sparse_graph(graph: nx.Graph) -> SparseGraph:
     """Convert a ``networkx.Graph`` to a ``SparseGraph`` on sorted labels."""
     import networkx as nx
 
@@ -152,7 +177,7 @@ class _IsalGraphBackend(ReprBackend):
         self._check_scope(graph)
         timeout = DEFAULT_TIMEOUT_S if budget is None else budget.timeout_s
         self._check_budget_enforceable(timeout, engine)
-        text = self._encoder(backend=engine)(_to_sparse_graph(graph), timeout)
+        text = self._encoder(backend=engine)(to_sparse_graph(graph), timeout)
         return Encoding(
             backend=self.name,
             symbols=tuple(text),
@@ -220,7 +245,49 @@ class IsalGraphCanonical(_IsalGraphBackend):
     )
 
 
+class IsalGraphExhaustive(_IsalGraphBackend):
+    """``canonical_string`` on **both** suites, with a declared fallback.
+
+    The same string as :class:`IsalGraphCanonical` -- the true ``w*_G``, so
+    the same completeness theorem and the same alphabet -- without the
+    ``SUITE1_ONLY`` refusal, whose ``n = 12`` threshold was calibrated on
+    the pure-Python path at a 2 s budget and does not describe the engine.
+
+    A graph that exhausts its wall clock raises
+    ``CanonicalizationTimeoutError`` exactly as the other two arms do.  The
+    campaign driver then records it as ``status="censored"`` with the
+    :attr:`fallback_variant` string, so the column is never conditioned on
+    the graphs that happened to finish.  Substituting here instead would
+    report the row as ``ok``, which is the bias the refusal was written to
+    avoid in the first place.
+
+    ``pruned`` rather than the greedy-min string the other arms fall back
+    to: the pruned form is still a canonical form, so a substituted row
+    stays inside the completeness theorem, whereas a greedy-min row does
+    not.  The driver cascades to greedy-min only if pruned also exhausts
+    the budget, which is what keeps "never drop a graph" true.
+    """
+
+    name = "isalgraph_exhaustive"
+    variant = "canonical"
+    fallback_variant = "pruned"
+    capabilities = frozenset(
+        {
+            Capability.CANONICAL,
+            Capability.COMPLETE_INVARIANT,
+            Capability.REVERSIBLE,
+        }
+    )
+
+
 register_backend("isalgraph_pruned", IsalGraphPruned)
 register_backend("isalgraph_canonical", IsalGraphCanonical)
+register_backend("isalgraph_exhaustive", IsalGraphExhaustive)
 
-__all__ = ["ALPHABET_SIZE", "IsalGraphCanonical", "IsalGraphPruned"]
+__all__ = [
+    "ALPHABET_SIZE",
+    "IsalGraphCanonical",
+    "IsalGraphExhaustive",
+    "IsalGraphPruned",
+    "to_sparse_graph",
+]

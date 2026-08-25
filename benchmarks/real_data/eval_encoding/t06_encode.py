@@ -93,6 +93,7 @@ REPRESENTATIONS: tuple[str, ...] = (
     "min_dfs",
     "isalgraph_pruned",
     "isalgraph_canonical",
+    "isalgraph_exhaustive",
     "wl_subtree",
     "size_null",
     "sparse6_nauty",
@@ -378,18 +379,24 @@ def _apply_d14(
 
 
 def _stamp_fallback(target: dict[str, Any], fallback: dict[str, Any]) -> None:
-    """Overwrite a censored record with its greedy-min result.
+    """Overwrite a censored record with its substitute result.
 
     A censored graph never leaves with an empty encoding; if the fallback itself
     failed, the record stays an ``error`` so the invariant
     ``censored => encoding != ''`` cannot be violated.
 
+    The fallback's ``message`` is carried onto the target rather than dropped.
+    It names the cascade tier that produced the string -- ``pruned`` or
+    ``greedy`` -- and those are not the same datum: a pruned-tier row is still a
+    canonical form and stays inside the completeness theorem, a greedy-tier row
+    does not. A censoring rate that conflates them is not interpretable.
+
     Args:
         target: The censored primary record.
-        fallback: The greedy-min record.
+        fallback: The substitute record.
     """
     if fallback["status"] != "ok" or not fallback["encoding"]:
-        target["message"] += f" | greedy-min fallback also failed: {fallback['message']}"
+        target["message"] += f" | fallback cascade also failed: {fallback['message']}"
         return
     target.update(
         status="censored",
@@ -399,6 +406,7 @@ def _stamp_fallback(target: dict[str, Any], fallback: dict[str, Any]) -> None:
         length=fallback["length"],
         entropy_bits=fallback["entropy_bits"],
         realised_bits=fallback["realised_bits"],
+        message=fallback["message"],
     )
 
 
@@ -466,6 +474,32 @@ def _column(records: Iterable[dict[str, Any]], key: str, default: Any) -> list[A
     return [default if record[key] is None else record[key] for record in records]
 
 
+def fallback_tier_counts(records: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """Tally which cascade tier produced each substituted string.
+
+    The tier cannot become a column: ``schema._require_keys`` rejects a file
+    whose key set is not **exactly** ``ENCODINGS_KEYS``, so an extra array would
+    make every distance cell for this arm unreadable. It goes into
+    ``metadata.notes`` instead, which is free text and already in the contract.
+
+    Args:
+        records: Records in any order.
+
+    Returns:
+        Tier name -> count, over rows with ``fallback_used``. A pruned-tier row
+        is still a canonical form; a greedy-tier row is not, so the two are
+        reported apart rather than as one censoring rate.
+    """
+    out: dict[str, int] = {}
+    for record in records:
+        if not record.get("fallback_used"):
+            continue
+        message = str(record.get("message", ""))
+        tier = message.split("fallback_tier=", 1)[1] if "fallback_tier=" in message else "greedy"
+        out[tier] = out.get(tier, 0) + 1
+    return out
+
+
 def to_arrays(
     cfg: EncodeConfig, cohort: Cohort, records: dict[int, dict[str, Any]]
 ) -> dict[str, np.ndarray]:
@@ -491,6 +525,8 @@ def to_arrays(
         )
     ordered = [records[index] for index in range(len(cohort))]
     _check_invariants(ordered, symbol_sep(cfg.representation))
+    tiers = fallback_tier_counts(ordered)
+    notes = f"fallback_tiers={json.dumps(tiers, sort_keys=True)}" if tiers else ""
     return {
         "graph_ids": cohort.graph_ids.astype("<U16"),
         "node_counts": cohort.node_counts.astype(np.int32),
@@ -503,7 +539,7 @@ def to_arrays(
         "status": np.array(_column(ordered, "status", "error"), dtype="<U12"),
         "fallback_used": np.array(_column(ordered, "fallback_used", False), dtype=bool),
         "seconds": np.array(_column(ordered, "seconds", -1.0), dtype=np.float32),
-        "metadata": np.array(build_metadata(cfg, len(cohort)), dtype=np.str_),
+        "metadata": np.array(build_metadata(cfg, len(cohort), notes), dtype=np.str_),
     }
 
 

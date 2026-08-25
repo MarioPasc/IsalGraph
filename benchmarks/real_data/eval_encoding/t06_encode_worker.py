@@ -28,7 +28,7 @@ import logging
 import sys
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -48,8 +48,32 @@ LOGGER = logging.getLogger(__name__)
 ISALGRAPH_ALPHABET_SIZE = 9
 
 #: Representations whose encode is an IsalGraph string and therefore have a
-#: greedy-min fallback under D14.
-ISALGRAPH_ARMS: tuple[str, ...] = ("isalgraph_pruned", "isalgraph_canonical")
+#: fallback under D14.
+ISALGRAPH_ARMS: tuple[str, ...] = (
+    "isalgraph_pruned",
+    "isalgraph_canonical",
+    "isalgraph_exhaustive",
+)
+
+#: D14 fallback cascade, per representation. Each entry is tried in order and
+#: the first that produces a string wins; the last tier must be unbudgeted so
+#: that "a censored graph is retained, never dropped" is actually true.
+#:
+#: ``isalgraph_exhaustive`` prefers ``pruned`` over ``greedy``: the pruned form
+#: is still a *canonical* form, so a substituted row stays inside the
+#: completeness theorem, whereas a greedy-min row does not. Pruned has its own
+#: ceiling -- T-06 measured 24/400 on Mutagenicity and 4/400 on Protein at a 2 s
+#: budget -- so ``greedy`` still closes the cascade.
+#:
+#: The keys mirror ``ReprBackend.fallback_variant``; :func:`fallback_cascade`
+#: reads the backend and falls back to this table, and a test asserts the two
+#: agree rather than trusting either alone.
+FALLBACK_CASCADE: dict[str, tuple[str, ...]] = {
+    "isalgraph_exhaustive": ("pruned", "greedy"),
+}
+
+#: Cascade for any representation not named above.
+DEFAULT_CASCADE: tuple[str, ...] = ("greedy",)
 
 MODES: tuple[str, ...] = ("primary", "fallback")
 
@@ -323,22 +347,97 @@ def greedy_min_string(graph: nx.Graph) -> str:
     return GreedyMinG2S().encode(sparse)
 
 
-def _encode_fallback(name: str, graph: nx.Graph, index: int, graph_id: str) -> EncodeRecord:
-    """Produce the D14 greedy-min record.
+def pruned_fallback_string(graph: nx.Graph, timeout_s: float | None) -> str:
+    """The pruned canonical string, as a D14 substitute for the exhaustive arm.
+
+    Preferred over :func:`greedy_min_string` wherever it is affordable because
+    it is still a **canonical** form: a row substituted with it remains inside
+    the completeness theorem, whereas a greedy-min row does not.
+
+    Args:
+        graph: The graph.
+        timeout_s: Wall clock, or ``None`` to run unbounded.
+
+    Returns:
+        ``pruned_canonical_string`` of *graph*.
+
+    Raises:
+        CanonicalizationTimeoutError: when *timeout_s* runs out. The caller
+            cascades to the next tier; it never returns a partial string.
+    """
+    from isalgraph import pruned_canonical_string
+    from isalgraph.competitors.backends.isalgraph_ref import to_sparse_graph
+
+    return pruned_canonical_string(to_sparse_graph(graph), timeout_s=timeout_s)
+
+
+def fallback_cascade(representation: str) -> tuple[str, ...]:
+    """The ordered D14 substitute tiers for *representation*.
+
+    Args:
+        representation: Backend name.
+
+    Returns:
+        Tier names from :data:`FALLBACK_CASCADE`, or :data:`DEFAULT_CASCADE`.
+        The last tier is always ``"greedy"``, which is unbudgeted and always
+        terminates, so the cascade cannot end without a string.
+    """
+    return FALLBACK_CASCADE.get(representation, DEFAULT_CASCADE)
+
+
+def _fallback_text(representation: str, graph: nx.Graph, budget: Any) -> tuple[str, str]:
+    """Walk the cascade until a tier produces a string.
+
+    Args:
+        representation: Backend name the fallback stands in for.
+        graph: The graph.
+        budget: The in-process ``Budget``, or ``None``. Only ``pruned`` reads
+            it; ``greedy`` is deliberately unbudgeted.
+
+    Returns:
+        ``(text, tier)``, where *tier* names the tier that produced *text*.
+
+    Raises:
+        Exception: only if **every** tier fails, which ``greedy`` closing the
+            cascade makes unreachable in practice. Propagating is correct: the
+            driver then leaves the row an ``error`` rather than inventing one.
+    """
+    timeout_s = getattr(budget, "timeout_s", None)
+    tiers = fallback_cascade(representation)
+    last: Exception | None = None
+    for tier in tiers:
+        try:
+            if tier == "pruned":
+                return pruned_fallback_string(graph, timeout_s), tier
+            return greedy_min_string(graph), tier
+        except Exception as exc:  # noqa: BLE001 - a failed tier is a datum
+            last = exc
+            LOGGER.warning("fallback tier %r failed for %s: %s", tier, representation, exc)
+    raise last if last is not None else WorkerError("empty fallback cascade")
+
+
+def _encode_fallback(
+    name: str, graph: nx.Graph, index: int, graph_id: str, budget: Any = None
+) -> EncodeRecord:
+    """Produce the D14 substitute record.
 
     Args:
         name: Backend name the fallback stands in for.
         graph: The graph.
         index: Position in cohort order.
         graph_id: Cohort identifier.
+        budget: The in-process budget, read by the ``pruned`` tier only.
 
     Returns:
         A record with ``status == "ok"``; the driver stamps it ``censored``.
+        ``message`` names the tier that produced the string, because a
+        pruned-tier row and a greedy-tier row are not the same kind of datum
+        and a rate that conflates them is not interpretable.
     """
     from isalgraph.competitors.base import Encoding
 
     started = time.perf_counter()
-    text = greedy_min_string(graph)
+    text, tier = _fallback_text(name, graph, budget)
     encoding = Encoding(
         backend=name,
         symbols=tuple(text),
@@ -347,7 +446,7 @@ def _encode_fallback(name: str, graph: nx.Graph, index: int, graph_id: str) -> E
         n_edges=graph.number_of_edges(),
         text=text,
     )
-    return _record(
+    record = _record(
         index,
         graph_id,
         encoding.symbols,
@@ -356,6 +455,7 @@ def _encode_fallback(name: str, graph: nx.Graph, index: int, graph_id: str) -> E
         started,
         fallback_used=True,
     )
+    return replace(record, message=f"fallback_tier={tier}")
 
 
 def encode_one(
@@ -399,7 +499,7 @@ def _dispatch(
     """Route one graph to the fallback, vector or serialisation path."""
     graph = cohort.to_networkx(index)
     if mode == "fallback":
-        return _encode_fallback(representation, graph, index, graph_id)
+        return _encode_fallback(representation, graph, index, graph_id, budget)
     if representation == "wl_subtree":
         return _encode_vector(representation, graph, index, graph_id)
     return _encode_repr(representation, graph, index, graph_id, budget)

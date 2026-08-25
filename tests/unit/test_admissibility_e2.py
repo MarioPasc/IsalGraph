@@ -75,6 +75,21 @@ def _complete_invariants() -> list[str]:
     ]
 
 
+def _grid_backends() -> frozenset[str]:
+    """Backends covered by the **frozen** T-04a admissibility grid.
+
+    Part C classifies a representation from its F3 record in that grid, so a
+    backend added to the registry afterwards has no record and is reported
+    ``class = None`` with a reason -- which is the correct answer, not a
+    defect.  The grid is a pre-registered artifact and is not regenerated to
+    absorb a new arm; the assertion is scoped to what the grid covers instead.
+    """
+    import json
+
+    with open(e2.DEFAULT_GRID, encoding="utf-8") as handle:
+        return frozenset(json.load(handle).get("backends", ()))
+
+
 # --------------------------------------------------------------------------
 # Part A -- the witness
 # --------------------------------------------------------------------------
@@ -362,5 +377,17 @@ def test_quick_run_classifies_every_representation(tmp_path: Path) -> None:
     assert payload["escalations"] == []
     assert payload["part_a_witness"]["representations"]["wl_subtree"]["separates"] is False
     assert payload["part_c_classes"]["wl_subtree"]["class"] == "II"
-    for name in _complete_invariants():
+    covered = _grid_backends()
+    classified = [name for name in _complete_invariants() if name in covered]
+    assert classified, "no complete invariant is covered by the frozen grid; the test is vacuous"
+    for name in classified:
         assert payload["part_c_classes"][name]["class"] == "III"
+
+    # A complete invariant registered after the grid was frozen is unclassified,
+    # and must say so rather than defaulting into a class it has no evidence for.
+    for name in _complete_invariants():
+        if name in covered:
+            continue
+        entry = payload["part_c_classes"][name]
+        assert entry["class"] is None
+        assert "not classified" in entry["reason"]
