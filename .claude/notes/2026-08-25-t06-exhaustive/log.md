@@ -13,19 +13,44 @@ read-only for this ticket.** Nothing here writes into either.
 
 ## Status board
 
+> ## ⚠ DIRECTION CHANGE 2026-08-25 — no local compute
+>
+> PI decision, relayed mid-run: **everything compute-heavy runs on Picasso.**
+> The local encode was killed at 11 of 15 cells, its partial output left on disk
+> as a fallback, and the distance and F2 stages were never run locally. What
+> this ticket now delivers locally is **code and SLURM scripts only**; the
+> orchestrator owns every submission.
+
 | step | state | note |
 |---|---|---|
 | 0. read plan + contracts | DONE | |
 | 1. `isalgraph_exhaustive` backend + tests | DONE | `a691b57` |
 | 2. commit code | DONE | `4cbc6cd` stats knobs, `034b3b6` drivers |
-| 3. encode 15 cells @ 30 s | RUNNING | Suite 1 done: 5,350 graphs, 0 censored |
+| 3. local encode | **STOPPED** | killed at 11/15 by the direction change; output preserved |
 | 3b. `isalgraph_greedy` ablation arm | DONE | `b942247`, 35 tests green |
-| 3c. Picasso scripts (NOT submitted) | DONE | `b88e4b9` |
-| 4. encode the greedy arm, 15 cells | pending | after 3, to avoid contention |
-| 5. distances (new arms only) | pending | GED matrices reused verbatim |
-| 6. statistics + reduced view | pending | |
-| 7. ablation part A (atlas-exhaustive) | pending | competes for CPU; run after 3 |
-| 8. SUMMARY.md / manifest.json | pending | |
+| 3c. Picasso encode scripts | DONE | `b88e4b9`; submitted by the orchestrator as array 2102929 |
+| 4. Picasso distances + F2, chained | DONE | `598ceb1`, **not submitted** |
+| 5. run the campaign | orchestrator | |
+| 6. SUMMARY.md / manifest.json | blocked | needs the cluster tree |
+
+### What the local run completed before it was stopped
+
+Eleven cells, all `isalgraph_exhaustive`, preserved under
+`data/source/T06_exhaustive/encodings/`:
+
+- **Suite 1, all 5 cells** — 5,350 graphs, **0 censored, 0 error**.
+- **Suite 2, 6 of 10** — `linux`, `grec`, `protein`, `aids_graphedx`,
+  `iam_letter_low`, `iam_letter_med`.
+
+`suite2/protein` is the one cell where the canonical search actually bites:
+**1,873 s** and **320 graphs censored**, every one retained with a substitute
+string under the cascade. Every other completed cell finished in 0-1 s with zero
+censoring. That spread is the whole argument for the per-band reporting in
+`summarise.py` — a pooled completion rate over a cohort that is 65 % at
+`n <= 12` would have hidden it.
+
+**Not run locally, by instruction:** the greedy arm's 15 cells, every distance
+cell, F2, and the ablation's Part A.
 
 Base commit at launch: `6befc1a` (another session moved HEAD from `855e4ad`
 mid-work; re-checked before committing, per the standing rule).
