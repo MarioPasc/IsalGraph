@@ -94,6 +94,7 @@ REPRESENTATIONS: tuple[str, ...] = (
     "isalgraph_pruned",
     "isalgraph_canonical",
     "isalgraph_exhaustive",
+    "isalgraph_greedy",
     "wl_subtree",
     "size_null",
     "sparse6_nauty",

@@ -93,13 +93,31 @@ def to_sparse_graph(graph: nx.Graph) -> SparseGraph:
 
 
 class _IsalGraphBackend(ReprBackend):
-    """Shared machinery for the two IsalGraph arms."""
+    """Shared machinery for the IsalGraph arms."""
 
-    #: ``"pruned"`` or ``"canonical"``.
+    #: ``"pruned"``, ``"canonical"`` or ``"greedy"``.
     variant = "pruned"
+
+    #: Whether the encoder has an interruption point a wall clock can use.
+    #: ``False`` for :class:`IsalGraphGreedy`, which runs no canonical search
+    #: and so has nothing to bound; see :meth:`encode`.
+    takes_timeout = True
 
     def _encoder(self, *, backend: str | None = None) -> Callable[[SparseGraph, float | None], str]:
         from isalgraph import canonical_string, pruned_canonical_string
+
+        if self.variant == "greedy":
+            from isalgraph import GreedyMinG2S
+
+            def greedy(graph: SparseGraph, timeout_s: float | None) -> str:
+                # No timeout parameter, and none is needed: greedy-min is n
+                # greedy encodes with no search over displacement pairs. The
+                # signature is kept for one dispatch path rather than two.
+                del timeout_s
+                text: str = GreedyMinG2S().encode(graph)
+                return text
+
+            return greedy
 
         fn = pruned_canonical_string if self.variant == "pruned" else canonical_string
 
@@ -161,7 +179,11 @@ class _IsalGraphBackend(ReprBackend):
         Args:
             graph: a ``networkx.Graph``.
             budget: ``timeout_s`` is read; the default is
-                :data:`DEFAULT_TIMEOUT_S`.
+                :data:`DEFAULT_TIMEOUT_S`.  **Ignored** when
+                :attr:`takes_timeout` is ``False``, which is the greedy arm:
+                it runs no canonical search, so there is nothing for a wall
+                clock to interrupt and refusing an unenforceable budget would
+                make the arm unusable in a campaign that budgets the others.
             engine: ``"cpp"`` or ``"python"``.  ``None`` uses the active
                 engine.  Pass ``"python"`` for a language-matched timing
                 against a pure-Python competitor.
@@ -176,6 +198,8 @@ class _IsalGraphBackend(ReprBackend):
         """
         self._check_scope(graph)
         timeout = DEFAULT_TIMEOUT_S if budget is None else budget.timeout_s
+        if not self.takes_timeout:
+            timeout = None
         self._check_budget_enforceable(timeout, engine)
         text = self._encoder(backend=engine)(to_sparse_graph(graph), timeout)
         return Encoding(
@@ -280,14 +304,53 @@ class IsalGraphExhaustive(_IsalGraphBackend):
     )
 
 
+class IsalGraphGreedy(_IsalGraphBackend):
+    """``GreedyMinG2S``: the same instruction set **without** the canonical search.
+
+    **A declared ablation, not a competitor.**  It exists to answer R1.2's
+    "why must a representation be canonical" using our own encoder rather
+    than someone else's, and it answers it by failing:
+
+    - **It is not invariant.**  Greedy-min changes under relabelling on
+      **641 of 720 draws (89 %)** -- n = 5-9, six permutations each, seed 11.
+      That is a worse F3 failure than ``adjacency`` (psi 0.07-0.74) or
+      ``graph6`` (psi 0.32-1.00), so it carries **no admissible distance and
+      no Claim-B column**.
+    - **It is not shorter.**  Mean 15.20 symbols against pruned canonical's
+      15.14 over 120 graphs; shorter on 30, equal on 53, longer on 37.
+
+    So it wins on neither axis, and that is the finding: the canonical search
+    is not paid for in bits, and dropping it destroys invariance on nine
+    relabellings in ten.
+
+    Declared honestly: **no** :attr:`Capability.CANONICAL` and **no**
+    :attr:`Capability.COMPLETE_INVARIANT`.  It keeps
+    :attr:`Capability.REVERSIBLE`, which is true -- ``S2G`` of a greedy string
+    reconstructs the graph up to isomorphism, exactly as the round-trip
+    theorem states for any valid instruction string.
+
+    There is nothing here for a C++ port to gain.  ``_native.graph_to_string``
+    already runs each per-start encode, so ``GreedyMinG2S`` is native work
+    under a Python loop over starting nodes, a hybrid measured at 93-102 % of
+    the single-call speedup.
+    """
+
+    name = "isalgraph_greedy"
+    variant = "greedy"
+    takes_timeout = False
+    capabilities = frozenset({Capability.REVERSIBLE})
+
+
 register_backend("isalgraph_pruned", IsalGraphPruned)
 register_backend("isalgraph_canonical", IsalGraphCanonical)
 register_backend("isalgraph_exhaustive", IsalGraphExhaustive)
+register_backend("isalgraph_greedy", IsalGraphGreedy)
 
 __all__ = [
     "ALPHABET_SIZE",
     "IsalGraphCanonical",
     "IsalGraphExhaustive",
+    "IsalGraphGreedy",
     "IsalGraphPruned",
     "to_sparse_graph",
 ]

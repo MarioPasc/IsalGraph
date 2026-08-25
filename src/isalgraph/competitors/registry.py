@@ -53,6 +53,7 @@ _LAZY_MODULES: dict[str, str] = {
     "isalgraph_pruned": "isalgraph.competitors.backends.isalgraph_ref",
     "isalgraph_canonical": "isalgraph.competitors.backends.isalgraph_ref",
     "isalgraph_exhaustive": "isalgraph.competitors.backends.isalgraph_ref",
+    "isalgraph_greedy": "isalgraph.competitors.backends.isalgraph_ref",
     "size_null": "isalgraph.competitors.backends.size_null",
 }
 

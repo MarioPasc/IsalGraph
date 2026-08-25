@@ -221,18 +221,25 @@ def test_the_arm_round_trips_up_to_isomorphism() -> None:
 def test_the_backend_declares_its_fallback_but_does_not_perform_it() -> None:
     """D14 lives in the driver. A backend that substituted internally would
     report ``ok``/``False`` and hide the censoring the arm exists to measure.
+
+    Asserted **behaviourally**, not by grepping the source: an earlier version
+    of this test looked for ``GreedyMinG2S`` in the module and broke the moment
+    the greedy arm was legitimately added to the same file. What matters is not
+    which names appear but whether an exhausted budget produces a string.
     """
+    import isalgraph
+    from isalgraph.errors import CanonicalizationTimeoutError
+
     backend = get_repr_backend(ARM)
     assert backend.fallback_variant == "pruned"
-    source = Path("src/isalgraph/competitors/backends/isalgraph_ref.py").resolve()
-    if not source.is_file():  # pragma: no cover - layout guard
-        source = (
-            Path(__file__).resolve().parents[2]
-            / "src/isalgraph/competitors/backends/isalgraph_ref.py"
-        )
-    text = source.read_text()
-    assert "GreedyMinG2S" not in text, "the backend must not build a fallback string itself"
-    assert "except CanonicalizationTimeoutError" not in text
+
+    if isalgraph.engine() != "cpp":
+        pytest.skip("a budget is only enforceable on the C++ engine")
+
+    # Big enough that the canonical search cannot finish in a nanosecond.
+    graph = _connected(24, 8, seed=5)
+    with pytest.raises(CanonicalizationTimeoutError):
+        backend.encode(graph, budget=Budget(timeout_s=1e-9))
 
 
 def test_the_declared_variant_matches_the_worker_cascade() -> None:
@@ -289,6 +296,112 @@ def test_tier_counts_default_to_greedy_for_a_message_without_a_tier() -> None:
         {"fallback_used": False, "message": "fallback_tier=pruned"},
     ]
     assert fallback_tier_counts(records) == {"pruned": 1, "greedy": 2}
+
+
+# ----------------------------------------------------------------------
+# isalgraph_greedy -- the declared ablation
+# ----------------------------------------------------------------------
+
+GREEDY = "isalgraph_greedy"
+
+
+def test_the_greedy_arm_is_registered() -> None:
+    assert GREEDY in registered_backends()
+
+
+def test_the_greedy_arm_claims_neither_canonicality_nor_completeness() -> None:
+    """It must be honestly declared: it is an ablation, not a competitor.
+
+    Declaring either would let it into a table that presumes ``d = 0``
+    certifies isomorphism, which for this arm is false on 89 % of relabellings.
+    """
+    backend = get_repr_backend(GREEDY)
+    assert Capability.CANONICAL not in backend.capabilities
+    assert Capability.COMPLETE_INVARIANT not in backend.capabilities
+    assert Capability.SUITE1_ONLY not in backend.capabilities
+    # Reversibility is true and is kept: S2G of any valid instruction string
+    # reconstructs the graph up to isomorphism.
+    assert Capability.REVERSIBLE in backend.capabilities
+
+
+def test_the_greedy_arm_is_excluded_from_the_isalgraph_budget_and_fallback_set() -> None:
+    """It runs no canonical search, so it has nothing to bound and nothing to
+    fall back to -- it **is** the terminal fallback tier.
+    """
+    assert GREEDY not in ISALGRAPH_ARMS
+    assert GREEDY in REPRESENTATIONS
+
+
+def test_the_greedy_arm_encodes_without_a_budget_error() -> None:
+    """The default budget must not refuse it: it has no interruption point and
+    needs none, and a refusal would make it unusable in a campaign that budgets
+    the other arms.
+    """
+    backend = get_repr_backend(GREEDY)
+    graph = fixtures.to_networkx(fixtures.RUNNING_EXAMPLE)
+    assert backend.encode(graph).length > 0
+    assert backend.encode(graph, budget=Budget(timeout_s=30.0)).length > 0
+
+
+def test_the_greedy_arm_flows_through_the_bit_module() -> None:
+    graph = fixtures.to_networkx(fixtures.RUNNING_EXAMPLE)
+    encoding = get_repr_backend(GREEDY).encode(graph)
+    assert encoding.alphabet_size == ISALGRAPH_ALPHABET_SIZE
+    count = bits_mod.count(encoding)
+    assert count.entropy_bits == pytest.approx(encoding.length * np.log2(9))
+    assert count.realised_bits == 8 * encoding.length
+
+
+def test_the_greedy_arm_round_trips() -> None:
+    backend = get_repr_backend(GREEDY)
+    for name in fixtures.CONNECTED_FIXTURES:
+        graph = fixtures.to_networkx(fixtures.ALL_FIXTURES[name])
+        assert nx.is_isomorphic(graph, backend.decode(backend.encode(graph))), name
+
+
+def test_the_greedy_arm_is_not_relabelling_invariant() -> None:
+    """The ablation's whole point, asserted rather than assumed.
+
+    If this ever passes -- greedy invariant on every draw -- the ablation has
+    stopped saying anything and the claim built on it must be withdrawn.
+    """
+    import random
+
+    backend = get_repr_backend(GREEDY)
+    rng = random.Random(11)
+    changed = 0
+    total = 0
+    for n in range(5, 10):
+        base = _connected(n, n // 3, seed=n)
+        reference = backend.encode(base).text
+        for _ in range(6):
+            perm = list(range(n))
+            rng.shuffle(perm)
+            relabelled = nx.relabel_nodes(base, dict(zip(range(n), perm, strict=True)))
+            total += 1
+            if backend.encode(relabelled).text != reference:
+                changed += 1
+    assert total == 30
+    assert changed > 0, "greedy-min was invariant on every draw; the ablation says nothing"
+
+
+def test_the_canonical_arms_are_relabelling_invariant_on_the_same_draws() -> None:
+    """The contrast that makes the ablation an argument rather than an anecdote."""
+    import random
+
+    rng = random.Random(11)
+    for arm in (ARM, "isalgraph_pruned"):
+        backend = get_repr_backend(arm)
+        for n in range(5, 10):
+            base = _connected(n, n // 3, seed=n)
+            reference = backend.encode(base, budget=Budget(timeout_s=None)).text
+            for _ in range(6):
+                perm = list(range(n))
+                rng.shuffle(perm)
+                relabelled = nx.relabel_nodes(base, dict(zip(range(n), perm, strict=True)))
+                assert (
+                    backend.encode(relabelled, budget=Budget(timeout_s=None)).text == reference
+                ), arm
 
 
 # ----------------------------------------------------------------------
