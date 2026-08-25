@@ -27,7 +27,7 @@ DATA=${DATA:-/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data}
 NEW="$DATA/source/T06_exhaustive"
 OUT="$NEW/distances"
 JOBS=${JOBS:-8}
-REP=isalgraph_exhaustive
+REP=${REP:-isalgraph_exhaustive}
 
 SUITE2=(linux grec protein aids_graphedx iam_letter_low iam_letter_med
         aids_iam iam_letter_high coil_del mutagenicity)
