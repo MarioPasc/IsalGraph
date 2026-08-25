@@ -30,40 +30,36 @@ import numpy as np
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
 
+from benchmarks.real_data.eval_t06_figures import design
+
 LOGGER: Final = logging.getLogger(__name__)
 
-#: Above this node count exact GED stops being computable and the bracket takes
-#: over. Matches the registry scope guard measured in T-06-design 15.1.
-EXACT_CEILING: Final[int] = 12
+#: Re-exported from the single design source so these figures and the
+#: information-content figure cannot disagree about where the exact-GED regime
+#: ends or at what level the local correction runs.
+EXACT_CEILING: Final[int] = design.EXACT_CEILING
 
-FDR_Q: Final[float] = 0.05
+FDR_Q: Final[float] = design.FDR_Q
+
+#: Figure fractions the axes stop at and the legend hangs from. The gap
+#: between them is the x-label; anything more reads as a layout error.
+AXES_BOTTOM: Final[float] = 0.135
+LEGEND_Y: Final[float] = 0.055
 
 #: Above this many points in one series, draw the interval as a band rather
 #: than as error bars: a picket fence of caps hides the trend it qualifies.
 DENSE_SERIES: Final[int] = 20
 
-#: Drawn in this order so the reference arm is never hidden behind a comparator.
-REPRESENTATION_ORDER: Final[tuple[str, ...]] = (
-    "isalgraph_pruned",
-    "isalgraph_canonical",
-    "wl_subtree",
-    "min_dfs",
-    "agm_cam",
-    "nauty_graph6",
-    "sparse6_nauty",
-)
+#: Draw order and display names now come from the registry. They used to be
+#: duplicated here, and the colour was assigned by walking a palette over the
+#: representations *present in this call* -- so a representation's colour
+#: depended on which others had landed, and two figures of the same campaign
+#: could give one backend two colours.
+REPRESENTATION_ORDER: Final[tuple[str, ...]] = design.ORDER
 
 DATASET_MARKERS: Final[tuple[str, ...]] = ("o", "s", "^", "v", "D", "P", "X", "*", "<", ">")
 
-DISPLAY: Final[dict[str, str]] = {
-    "isalgraph_pruned": "IsalGraph (pruned)",
-    "isalgraph_canonical": "IsalGraph (canonical)",
-    "wl_subtree": "WL subtree (kernel)",
-    "min_dfs": "gSpan min-DFS",
-    "agm_cam": "AGM CAM",
-    "nauty_graph6": "nauty graph6",
-    "sparse6_nauty": "nauty sparse6",
-}
+DISPLAY: Final[dict[str, str]] = {r.key: r.short for r in design.REPRESENTATIONS}
 
 
 @dataclass(frozen=True)
@@ -212,30 +208,21 @@ def _style() -> Any:
     Returns:
         The ``matplotlib.pyplot`` module, styled.
     """
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    from benchmarks import plotting_styles
-
-    plotting_styles.apply_ieee_style()
-    return plt
+    return design.style()
 
 
 def _colours(names: tuple[str, ...]) -> dict[str, Any]:
-    """Assign a stable colour per representation.
+    """Return the pinned colour per representation.
 
     Args:
-        names: Representation names in draw order.
+        names: Representation names.
 
     Returns:
-        Mapping from representation to colour.
+        Mapping from representation to colour. Pinned in
+        :data:`design.REPRESENTATIONS`, so it does not depend on which other
+        representations are present in this call.
     """
-    from benchmarks import plotting_styles
-
-    palette = list(plotting_styles.PAUL_TOL_MUTED)
-    return {name: palette[i % len(palette)] for i, name in enumerate(names)}
+    return {name: design.BY_KEY[name].colour for name in names if name in design.BY_KEY}
 
 
 def _significance_note(n_points: int) -> str:
@@ -258,163 +245,197 @@ def _significance_note(n_points: int) -> str:
     )
 
 
-def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
-    """Figure 1 --- rho against graph size, aggregated over datasets.
+def _bracket_representations(points: list[AggregatePoint]) -> tuple[str, ...]:
+    """Return the representations carrying bracket data, in draw order.
+
+    Derived from the points rather than hard-coded, so a campaign that adds or
+    drops an arm re-renders without an edit to this module.
 
     Args:
         points: Aggregated points.
-        out: Output path without extension.
+
+    Returns:
+        Representation keys with at least one ``lb`` or ``ub`` point.
+    """
+    have = {p.representation for p in points if p.reference in ("lb", "ub")}
+    return tuple(r for r in design.ORDER if r in have)
+
+
+def _undetermined_onset(points: list[AggregatePoint]) -> int | None:
+    """Return the node count beyond which no bracket interval excludes zero.
+
+    Args:
+        points: Aggregated points.
+
+    Returns:
+        The onset node count, or ``None`` when every size still resolves.
+    """
+    bracket = [p for p in points if p.reference != "exact"]
+    resolved = {p.n for p in bracket if not p.ci_lo <= 0.0 <= p.ci_hi}
+    covered = sorted({p.n for p in bracket if p.ci_lo <= 0.0 <= p.ci_hi})
+    return next((n for n in covered if not any(m >= n for m in resolved)), None)
+
+
+def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
+    """Figure 1 --- the within-`n` collapse, per regime and per representation.
+
+    **Left, exact GED at ``n <= 12``.** Every representation, family-emphasised:
+    canonical codes solid at full weight, serialisations dashed and
+    half-transparent. Ground truth exists here and the head-to-head resolves, so
+    the per-representation detail is the content.
+
+    **Right, the bracket above ``n = 12``, as small multiples.** Fourteen series
+    on one axes was a texture rather than a figure, and collapsing them into a
+    single envelope answered that by discarding the per-representation detail.
+    The grid keeps both: one small panel per representation carrying bracket
+    data, each showing its own two bounds against the grey envelope of the whole
+    field, plus a final panel overlaying every arm. The grid is sized so its top
+    and bottom rows align with the exact-GED panel, so the two regimes read as
+    one figure.
+
+    Args:
+        points: Aggregated points.
+        out: Output path without an extension.
 
     Returns:
         Paths written.
     """
     plt = _style()
-    from benchmarks import plotting_styles
 
-    reps = tuple(r for r in REPRESENTATION_ORDER if any(p.representation == r for p in points))
-    colours = _colours(reps)
+    exact_reps = tuple(
+        r
+        for r in design.ORDER
+        if any(p.representation == r and p.reference == "exact" for p in points)
+    )
+    bracket_reps = _bracket_representations(points)
     flags = benjamini_hochberg([p.p_value for p in points])
     significant = {(p.representation, p.reference, p.n) for p, f in zip(points, flags) if f}
 
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(plotting_styles.IEEE_TEXT_WIDTH_INCHES, 3.6),
-        sharey=True,
-        gridspec_kw={"width_ratios": [1, 1.35], "wspace": 0.06},
+    ncols = 2
+    nrows = max(1, -(-(len(bracket_reps) + 1) // ncols))
+    fig = plt.figure(figsize=(design.text_width(), 1.15 * nrows + 0.95))
+    grid = fig.add_gridspec(
+        nrows,
+        1 + ncols,
+        width_ratios=[1.55, *([1.0] * ncols)],
+        wspace=0.13,
+        hspace=0.30,
     )
-    panels = (("exact",), ("lb", "ub"))
-    titles = (f"exact GED  (n ≤ {EXACT_CEILING})", f"GED bracket  (n > {EXACT_CEILING})")
-    styles = {"exact": "-", "lb": "--", "ub": "-"}
+    left = fig.add_subplot(grid[:, 0])
 
-    for ax, refs, title in zip(axes, panels, titles):
-        for rep in reps:
-            for ref in refs:
+    for key in exact_reps:
+        rep = design.BY_KEY.get(key)
+        if rep is None:
+            continue
+        sel = sorted(
+            (p for p in points if p.representation == key and p.reference == "exact"),
+            key=lambda p: p.n,
+        )
+        style = design.line_kwargs(rep, "exact")
+        left.errorbar(
+            [p.n for p in sel],
+            [p.rho for p in sel],
+            yerr=[[p.rho - p.ci_lo for p in sel], [p.ci_hi - p.rho for p in sel]],
+            elinewidth=0.55,
+            capsize=1.4,
+            label=rep.short,
+            **style,
+        )
+        marked = [(p.n, p.rho) for p in sel if (key, "exact", p.n) in significant]
+        if marked and (rep.family in design.PRIMARY_FAMILIES or rep.is_ours):
+            left.scatter(
+                [m[0] for m in marked],
+                [m[1] for m in marked],
+                s=design.MS_SIGNIFICANT,
+                facecolors="none",
+                edgecolors=rep.colour,
+                linewidths=0.85,
+                zorder=rep.zorder + 1,
+            )
+    left.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+    left.set_title(f"exact GED  ($n \\leq {EXACT_CEILING}$)", fontsize=design.FS_TITLE, pad=3)
+    design.finish_axes(
+        left,
+        xlabel="graph size $n$",
+        ylabel=r"Spearman $\rho$ (distance vs GED), within equal $n$",
+    )
+    left.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=10))
+    left.set_ylim(-0.75, 1.05)
+
+    envelope: dict[int, list[float]] = {}
+    for p in points:
+        if p.reference != "exact":
+            envelope.setdefault(p.n, []).append(p.rho)
+    span = sorted(envelope)
+    onset = _undetermined_onset(points)
+
+    panels = [*bracket_reps, None]
+    for index, key in enumerate(panels):
+        ax = fig.add_subplot(grid[index // ncols, 1 + index % ncols])
+        if span:
+            ax.fill_between(
+                span,
+                [min(envelope[n]) for n in span],
+                [max(envelope[n]) for n in span],
+                color="0.55",
+                alpha=0.20,
+                linewidth=0,
+                zorder=1,
+            )
+        keys = bracket_reps if key is None else (key,)
+        for one in keys:
+            rep = design.BY_KEY[one]
+            for ref, width in (("lb", 0.75), ("ub", 1.0)):
                 sel = sorted(
-                    (p for p in points if p.representation == rep and p.reference == ref),
+                    (p for p in points if p.representation == one and p.reference == ref),
                     key=lambda p: p.n,
                 )
                 if not sel:
                     continue
-                xs = [p.n for p in sel]
-                ys = [p.rho for p in sel]
-                lo = [p.rho - p.ci_lo for p in sel]
-                hi = [p.ci_hi - p.rho for p in sel]
-                label = f"{DISPLAY.get(rep, rep)}" + ("" if ref == "exact" else f" · {ref.upper()}")
-                alpha = 0.9 if ref != "lb" else 0.65
-                if len(xs) > DENSE_SERIES:
-                    # Error bars on a dense series produce a picket fence that
-                    # hides the trend they exist to qualify. A translucent band
-                    # carries the same interval and stays legible.
-                    ax.plot(
-                        xs,
-                        ys,
-                        color=colours[rep],
-                        linestyle=styles[ref],
-                        marker="o",
-                        markersize=2.0,
-                        linewidth=1.0,
-                        alpha=alpha,
-                        label=label,
-                    )
-                    ax.fill_between(
-                        xs,
-                        [p.ci_lo for p in sel],
-                        [p.ci_hi for p in sel],
-                        color=colours[rep],
-                        alpha=0.10,
-                        linewidth=0,
-                    )
-                else:
-                    ax.errorbar(
-                        xs,
-                        ys,
-                        yerr=[lo, hi],
-                        color=colours[rep],
-                        linestyle=styles[ref],
-                        marker="o",
-                        markersize=3.2,
-                        linewidth=1.2,
-                        elinewidth=0.6,
-                        capsize=1.5,
-                        alpha=alpha,
-                        label=label,
-                    )
-                marked = [(p.n, p.rho) for p in sel if (rep, ref, p.n) in significant]
-                if marked:
-                    ax.scatter(
-                        [m[0] for m in marked],
-                        [m[1] for m in marked],
-                        s=52,
-                        facecolors="none",
-                        edgecolors=colours[rep],
-                        linewidths=0.9,
-                        zorder=5,
-                    )
-        # Test emptiness BEFORE axhline, which would otherwise populate
-        # ax.lines and mask a genuinely empty regime.
-        drew = bool(ax.lines or ax.collections)
-        ax.axhline(0.0, color="0.35", linewidth=0.6, linestyle=":")
-        ax.set_title(title, fontsize=8)
-        ax.set_xlabel("graph size $n$", fontsize=7.5)
-        ax.grid(True, alpha=0.25, linewidth=0.4)
-        ax.tick_params(labelsize=6.5)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=12))
-        if not drew:
-            ax.text(
-                0.5,
-                0.5,
-                "no data in this regime",
-                transform=ax.transAxes,
-                ha="center",
-                va="center",
-                fontsize=7.5,
-                color="0.45",
-                style="italic",
-            )
-            ax.set_xticks([])
-            ax.set_xlabel("")
-
-    axes[0].set_ylabel(r"Spearman $\rho$ (distance vs GED)", fontsize=7.5)
-    axes[0].text(
-        0.03,
-        0.03,
-        _significance_note(len(points)),
-        transform=axes[0].transAxes,
-        fontsize=5.2,
-        va="bottom",
-        ha="left",
-        bbox={
-            "boxstyle": "round,pad=0.35",
-            "facecolor": "white",
-            "edgecolor": "0.6",
-            "linewidth": 0.5,
-            "alpha": 0.94,
-        },
-    )
-    # Harvest from whichever panel actually drew, so the legend never strands
-    # itself in an empty regime, and place it OUTSIDE the axes along the bottom.
-    seen: dict[str, Any] = {}
-    for ax in axes:
-        for handle, label in zip(*ax.get_legend_handles_labels()):
-            seen.setdefault(label.split(" · ")[0], handle)
-    if seen:
-        fig.legend(
-            list(seen.values()),
-            list(seen.keys()),
-            fontsize=6.2,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.03),
-            ncol=min(len(seen), 4),
-            frameon=False,
+                style = design.line_kwargs(rep, ref, primary=frozenset(design.Family))
+                style["marker"] = "None"
+                style["linewidth"] = (design.LW_REFERENCE if rep.is_ours else 0.95) * width
+                if key is None and not rep.is_ours:
+                    style["alpha"] = 0.55
+                ax.plot([p.n for p in sel], [p.rho for p in sel], **style)
+        if onset is not None and span:
+            ax.axvspan(onset - 0.5, max(span) + 1, color="0.85", alpha=0.6, zorder=0, linewidth=0)
+        ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+        ax.set_ylim(-0.75, 1.05)
+        ax.set_title(
+            "every arm" if key is None else design.BY_KEY[key].short,
+            fontsize=design.FS_TITLE - 0.7,
+            pad=2,
+            color="0.15" if key is None else design.BY_KEY[key].colour,
         )
-    fig.suptitle(
-        r"Within-$n$ correlation with GED: the size channel is removed by construction",
-        fontsize=9,
-        y=0.985,
+        ax.grid(True, alpha=design.GRID_ALPHA, linewidth=design.GRID_LW)
+        ax.tick_params(labelsize=design.FS_TICK - 0.8)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=4))
+        if index // ncols != nrows - 1:
+            ax.set_xticklabels([])
+        if index % ncols != 0:
+            ax.set_yticklabels([])
+        if index == len(panels) - 1:
+            ax.set_xlabel("graph size $n$", fontsize=design.FS_LABEL - 0.5)
+
+    header = f"GED bracket  ($n > {EXACT_CEILING}$)\ndashed LB, solid UB;  grey: the whole field"
+    if onset:
+        header += f";  shaded: $\\rho$ not separable from 0 ($n>{onset}$)"
+    fig.text(
+        0.695,
+        0.995,
+        header,
+        ha="center",
+        va="top",
+        fontsize=design.FS_TITLE - 0.6,
+        color="0.25",
+        linespacing=1.35,
     )
-    fig.tight_layout(rect=(0, 0.0, 1, 0.95))
-    saved = plotting_styles.save_figure(fig, str(out))
+
+    handles, labels = left.get_legend_handles_labels()
+    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    fig.subplots_adjust(left=0.075, right=0.99, top=0.875, bottom=AXES_BOTTOM)
+    saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
     return saved
 
@@ -431,8 +452,6 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
         Paths written.
     """
     plt = _style()
-    from benchmarks import plotting_styles
-
     reps = tuple(r for r in REPRESENTATION_ORDER if any(p.representation == r for p in points))
     colours = _colours(reps)
     datasets = sorted({r["dataset"] for r in rows})
@@ -445,7 +464,7 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(plotting_styles.IEEE_TEXT_WIDTH_INCHES, 2.5 * nrows),
+        figsize=(design.text_width(), 2.5 * nrows),
         sharex=True,
         sharey=True,
     )
@@ -498,17 +517,17 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
                 )
         ax.axhline(0.0, color="0.35", linewidth=0.6, linestyle=":")
         ax.axvline(EXACT_CEILING + 0.5, color="0.5", linewidth=0.7, linestyle="-.")
-        ax.set_title(DISPLAY.get(rep, rep), fontsize=8)
+        ax.set_title(DISPLAY.get(rep, rep), fontsize=design.FS_TITLE)
         ax.grid(True, alpha=0.25, linewidth=0.4)
-        ax.tick_params(labelsize=6.5)
+        ax.tick_params(labelsize=design.FS_TICK)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=12))
 
     for ax in flat[len(reps) :]:
         ax.axis("off")
     for ax in flat[max(0, len(reps) - ncols) : len(reps)]:
-        ax.set_xlabel("graph size $n$", fontsize=7.5)
+        ax.set_xlabel("graph size $n$", fontsize=design.FS_LABEL)
     for i in range(0, len(reps), ncols):
-        flat[i].set_ylabel(r"Spearman $\rho$", fontsize=7.5)
+        flat[i].set_ylabel(r"Spearman $\rho$", fontsize=design.FS_LABEL)
 
     marker_handles = [
         plt.Line2D([], [], marker=markers[d], linestyle="none", color="0.35", markersize=4, label=d)
@@ -518,21 +537,21 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
         handles=marker_handles,
         loc="upper center",
         ncol=min(len(datasets), 5),
-        fontsize=6.0,
+        fontsize=design.FS_LEGEND,
         frameon=False,
         title="dataset (faint markers); heavy line = aggregate",
-        title_fontsize=6.2,
+        title_fontsize=design.FS_LEGEND,
         bbox_to_anchor=(0.5, -0.02),
     )
     fig.suptitle(
         "Per-dataset spread behind each aggregate point"
         f"  (dash-dot: exact-GED ceiling at n = {EXACT_CEILING};"
         "  solid line = aggregate / UB, dashed = LB;  ○ = BH-significant)",
-        fontsize=8,
+        fontsize=design.FS_TITLE,
         y=0.995,
     )
     fig.tight_layout(rect=(0, 0.0, 1, 0.97))
-    saved = plotting_styles.save_figure(fig, str(out))
+    saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
     return saved
 
@@ -552,8 +571,6 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
         Paths written.
     """
     plt = _style()
-    from benchmarks import plotting_styles
-
     reps = tuple(r for r in REPRESENTATION_ORDER if any(x["representation"] == r for x in rows))
     colours = _colours(reps)
 
@@ -561,7 +578,7 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
         total = sum(w for _, w in values)
         return sum(v * w for v, w in values) / total if total else float("nan")
 
-    fig, ax = plt.subplots(figsize=(plotting_styles.IEEE_TEXT_WIDTH_INCHES, 3.8))
+    fig, ax = plt.subplots(figsize=(design.text_width(), 3.8))
     twin = ax.twinx()
 
     for rep in reps:
@@ -622,12 +639,14 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
         twin.plot(band_x, hi, color="0.15", linewidth=0.9, linestyle="-", zorder=4)
 
     ax.axvline(EXACT_CEILING + 0.5, color="0.5", linewidth=0.7, linestyle="-.")
-    ax.set_xlabel("graph size $n$  (both graphs in the pair)", fontsize=7.5)
-    ax.set_ylabel("mean representation distance  (symbols / kernel units)", fontsize=7.5)
-    twin.set_ylabel("mean GED  (unit cost model)", fontsize=7.5)
+    ax.set_xlabel("graph size $n$  (both graphs in the pair)", fontsize=design.FS_LABEL)
+    ax.set_ylabel(
+        "mean representation distance  (symbols / kernel units)", fontsize=design.FS_LABEL
+    )
+    twin.set_ylabel("mean GED  (unit cost model)", fontsize=design.FS_LABEL)
     ax.grid(True, alpha=0.25, linewidth=0.4)
-    ax.tick_params(labelsize=6.5)
-    twin.tick_params(labelsize=6.5)
+    ax.tick_params(labelsize=design.FS_TICK)
+    twin.tick_params(labelsize=design.FS_TICK)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=14))
 
     h1, l1 = ax.get_legend_handles_labels()
@@ -635,7 +654,7 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
     fig.legend(
         h1 + h2,
         l1 + l2,
-        fontsize=6.2,
+        fontsize=design.FS_LEGEND,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.02),
         ncol=min(len(l1 + l2), 4),
@@ -644,10 +663,10 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
     ax.set_title(
         "Absolute scale: representation distance (left) against GED (right).  "
         f"Above n = {EXACT_CEILING} the shaded band is the proven LB/UB bracket.",
-        fontsize=8,
+        fontsize=design.FS_TITLE,
     )
     fig.tight_layout(rect=(0, 0.0, 1, 0.97))
-    saved = plotting_styles.save_figure(fig, str(out))
+    saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
     return saved
 
