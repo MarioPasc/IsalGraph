@@ -82,10 +82,22 @@ $PY -m pip install -e ".[dev,native]"     # builds the extension
 | `$PY -m mypy src/isalgraph/` | Type check (strict) |
 | `$PY -m isalgraph.viz` | Regenerate `docs/figures/` |
 
-**Reference state (measured 2026-08-25, T-09 close):** **2,583 passed / 321 skipped**
-with the engine, in 9 min 18 s. A change that lowers either number needs an explanation.
-T-09 added 33: `tests/viz/test_encoder_trace.py` (12) and `tests/viz/test_worked_example.py`
-(21). `testpaths = ["tests"]`, so unrelated work under `benchmarks/` cannot move this figure.
+**Reference state (measured 2026-08-25, T06-exhaustive):** **2,618 passed / 321 skipped**
+with the engine, in 9 min 22 s. A change that lowers either number needs an explanation.
+T06-exhaustive added 35, all in `tests/unit/test_t06_exhaustive.py`: 27 for the
+`isalgraph_exhaustive` arm and 8 for the `isalgraph_greedy` ablation. The prior
+figure was T-09's 2,583. `testpaths = ["tests"]`, so unrelated work under
+`benchmarks/` cannot move this figure.
+
+> **Registering a backend can break a test that enumerates them.** Eight test
+> files sweep `available_backends()` / `registered_backends()`, and adding
+> `isalgraph_exhaustive` broke one of them:
+> `test_admissibility_e2::test_quick_run_classifies_every_representation`
+> asserted that every declared complete invariant is class III, but Part C
+> classifies from the F3 record in T-04a's **frozen** grid, so an arm registered
+> afterwards is correctly reported `class = None`. The fix scoped the assertion
+> to what the grid covers — **the frozen grid was not regenerated**, because it
+> is a pre-registered artifact. Run the full suite after adding any backend.
 
 > ⚠ **This figure was stale by ~3.5× until 2026-08-24.** It read *"726 passed /
 > 271 skipped (integration of wave 2026-08-10)"* while the suite had grown across
