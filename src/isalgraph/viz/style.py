@@ -146,6 +146,51 @@ DEFAULT_NODE_COLOR: str = PAUL_TOL_MUTED[1]
 
 
 # ---------------------------------------------------------------------------
+# Three element states for the worked-example figures
+# ---------------------------------------------------------------------------
+#
+# The step figures in ``composite`` distinguish two states, built and not
+# built, and render "not built" as a filled grey disc. In print at column
+# scale a filled grey disc competes with the coloured ones for attention,
+# which is the opposite of what a ghost should do.
+#
+# The worked-example figures use the sibling projects' three-state
+# convention instead (``IsalSR/viz/backends/matplotlib_dag.py``):
+#
+# * **ghost** -- white fill, dashed grey outline, grey glyph. Structure
+#   that exists in the target but has not been reached yet. It recedes
+#   because it carries no ink, not because it carries grey ink.
+# * **accent** -- an unfilled halo around the element the current step
+#   created. Additive, so it composes with any fill.
+# * **dim** -- present but no longer the subject of the step, drawn at
+#   :data:`CONSUMED_ALPHA`.
+#
+# Ghost and dim are deliberately not the same state. Collapsing them
+# loses the distinction between "not there yet" and "there, already
+# handled", which is the whole content of a step figure.
+
+#: Fill of a ghosted element: white, so the element reads as an outline.
+GHOST_FACE: str = "#FFFFFF"
+
+#: Outline of a ghosted element.
+GHOST_EDGE_COLOR: str = "#B9BEC7"
+
+#: Glyph colour inside a ghosted node.
+GHOST_TEXT_COLOR: str = "#8B939E"
+
+#: Dash pattern of a ghost outline, as a matplotlib ``(offset, onoff)``
+#: tuple. Dashes carry the "not yet real" reading on their own, so the
+#: ghost needs no alpha and stays crisp when the figure is scaled down.
+GHOST_DASH: tuple[float, tuple[float, float]] = (0.0, (2.6, 2.0))
+
+#: Halo colour marking the element created by the current step.
+ACCENT_COLOR: str = "#D9911F"
+
+#: Alpha for elements that are present but already handled.
+CONSUMED_ALPHA: float = 0.28
+
+
+# ---------------------------------------------------------------------------
 # Figure geometry (IEEE two-column)
 # ---------------------------------------------------------------------------
 
@@ -407,9 +452,15 @@ def save_figure(
 
 
 __all__ = [
+    "ACCENT_COLOR",
     "ACTIVE_ALPHA",
     "BASE_RCPARAMS",
+    "CONSUMED_ALPHA",
     "DEFAULT_NODE_COLOR",
+    "GHOST_DASH",
+    "GHOST_EDGE_COLOR",
+    "GHOST_FACE",
+    "GHOST_TEXT_COLOR",
     "GRAYED_ALPHA",
     "GRAYED_EDGE",
     "GRAYED_FACE",
