@@ -346,13 +346,38 @@ def _probe_pair(  # noqa: PLR0911, PLR0913  -- one return per cascade level is t
     return probe(REJECTED)
 
 
-def _apply(
+def uninserted_neighbours(
+    graph: SparseGraph,
+    node: NodeId,
+    i2o: dict[int, int],
+) -> tuple[NodeId, ...]:
+    """Return every neighbour of *node* not yet in the output graph.
+
+    The greedy encoder commits to the first of these; the exhaustive and
+    pruned canonicalisations branch over all of them. Per Remark 2.7 this
+    is the *only* choice inside one execution -- the displacement order
+    and the ``V`` / ``v`` / ``C`` / ``c`` priority are fixed -- so this
+    function delimits the entire branching factor.
+
+    Args:
+        graph: The input graph.
+        node: Input-graph node whose neighbours are scanned.
+        i2o: Input-to-output node map.
+
+    Returns:
+        Candidates, in ``SparseGraph.neighbors`` iteration order.
+    """
+    return tuple(n for n in graph.neighbors(node) if n not in i2o)
+
+
+def _apply(  # noqa: PLR0913  -- the commit needs the whole tentative state
     graph: SparseGraph,
     state: _MirrorState,
     probe: PairProbe,
     *,
     tentative_primary: int,
     tentative_secondary: int,
+    candidate: NodeId | None = None,
 ) -> tuple[str, NodeId | None, Edge | None]:
     """Commit the operation *probe* selected and return what it produced.
 
@@ -362,6 +387,10 @@ def _apply(
         probe: The winning probe.
         tentative_primary: CDLL slot the primary moves to.
         tentative_secondary: CDLL slot the secondary moves to.
+        candidate: Which uninserted neighbour a ``V``/``v`` inserts.
+            ``None`` takes the first, which is what the greedy encoder
+            does; a caller reconstructing a specific execution passes the
+            neighbour that execution chose.
 
     Returns:
         A ``(emitted_group, created_node, created_edge)`` triple, with the
@@ -381,7 +410,8 @@ def _apply(
         anchor_in = probe.primary_node if via_primary else probe.secondary_node
         anchor_out = pri_out if via_primary else sec_out
 
-        candidate = _first_uninserted_neighbour(graph, anchor_in, state.i2o)
+        if candidate is None:
+            candidate = _first_uninserted_neighbour(graph, anchor_in, state.i2o)
         if candidate is None:  # pragma: no cover -- probe already established it exists
             raise EncoderMirrorError(f"{probe.verdict} selected but no candidate at {anchor_in}")
         new_out = state.out.add_node()
@@ -540,6 +570,237 @@ def _trim_probes(probes: list[PairProbe], limit: int | None) -> tuple[PairProbe,
     return (*probes[: limit - 1], probes[-1])
 
 
+def _one_iteration(
+    graph: SparseGraph,
+    state: _MirrorState,
+    *,
+    nodes_left: int,
+) -> tuple[list[PairProbe], int, int]:
+    """Run the pair search for one iteration without committing anything.
+
+    Args:
+        graph: The input graph.
+        state: Current mirror state; not modified.
+        nodes_left: Input-graph nodes still to be inserted.
+
+    Returns:
+        The probes tested and the two tentative CDLL slots of the winner.
+
+    Raises:
+        EncoderMirrorError: If no pair admits an operation.
+    """
+    probes: list[PairProbe] = []
+    for displacement in generate_pairs_sorted_by_sum(state.out.node_count()):
+        a, b = displacement
+        tent_pri = state.move(state.primary, a)
+        tent_sec = state.move(state.secondary, b)
+        probe = _probe_pair(
+            graph,
+            state,
+            displacement,
+            nodes_left=nodes_left,
+            tentative_primary=tent_pri,
+            tentative_secondary=tent_sec,
+        )
+        probes.append(probe)
+        if probe.verdict != REJECTED:
+            return probes, tent_pri, tent_sec
+    raise EncoderMirrorError(f"no operation applies with {nodes_left} nodes left")
+
+
+def _record(  # noqa: PLR0913  -- assembling a frozen record needs its fields
+    *,
+    index: int,
+    before: _MirrorState,
+    ring_before: tuple[NodeId, ...],
+    primary_before: NodeId,
+    secondary_before: NodeId,
+    probes: tuple[PairProbe, ...],
+    emitted: str,
+    string_before: str,
+    captured_nodes: tuple[NodeId, ...],
+    captured_edges: tuple[Edge, ...],
+    created_node: NodeId | None,
+    created_edge: Edge | None,
+) -> EncoderIteration:
+    """Freeze one iteration's record after the state has been committed."""
+    return EncoderIteration(
+        index=index,
+        ring_before=ring_before,
+        primary_before=primary_before,
+        secondary_before=secondary_before,
+        probes=probes,
+        emitted=emitted,
+        string_before=string_before,
+        captured_nodes_before=captured_nodes,
+        captured_edges_before=captured_edges,
+        created_node=created_node,
+        created_edge=created_edge,
+        ring_after=before.ring(),
+        primary_after=before.input_node_at(before.primary),
+        secondary_after=before.input_node_at(before.secondary),
+    )
+
+
+def _search_execution(  # noqa: PLR0913  -- a DFS frame carries the whole state
+    graph: SparseGraph,
+    state: _MirrorState,
+    *,
+    target: str,
+    nodes_left: int,
+    edges_left: int,
+    emitted: str,
+    captured_nodes: tuple[NodeId, ...],
+    captured_edges: tuple[Edge, ...],
+    iterations: list[EncoderIteration],
+    max_probes: int | None,
+) -> list[EncoderIteration] | None:
+    """Depth-first search for the execution that emits *target*.
+
+    Only the uninserted-neighbour identity at a ``V``/``v`` step is
+    branched over, because that is the only thing an execution is free to
+    choose (Remark 2.7). The emitted symbol group does **not** depend on
+    the choice -- the displacement and the cascade level are already
+    fixed by the state -- so the choice is invisible in this iteration's
+    output and only steers later ones. That is exactly why the search
+    needs backtracking rather than a per-step decision rule.
+
+    Args:
+        graph: The input graph.
+        state: Mirror state at the top of the next iteration.
+        target: The instruction string to reproduce.
+        nodes_left: Nodes still to insert.
+        edges_left: Edges still to encode.
+        emitted: What has been emitted so far.
+        captured_nodes: Input-graph nodes encoded so far.
+        captured_edges: Input-graph edges encoded so far.
+        iterations: Records accumulated on this branch.
+        max_probes: Probe-record cap per iteration.
+
+    Returns:
+        The completed iteration list, or ``None`` if this branch cannot
+        reach *target*.
+    """
+    from copy import deepcopy
+
+    if nodes_left <= 0 and edges_left <= 0:
+        return list(iterations) if emitted == target else None
+
+    ring_before = state.ring()
+    primary_before = state.input_node_at(state.primary)
+    secondary_before = state.input_node_at(state.secondary)
+    probes, tent_pri, tent_sec = _one_iteration(graph, state, nodes_left=nodes_left)
+    winner = probes[-1]
+
+    if winner.verdict in {"V", "v"}:
+        anchor = winner.primary_node if winner.verdict == "V" else winner.secondary_node
+        candidates = uninserted_neighbours(graph, anchor, state.i2o)
+    else:
+        candidates = (None,)  # type: ignore[assignment]
+
+    for candidate in candidates:
+        branch = deepcopy(state)
+        group, created_node, created_edge = _apply(
+            graph,
+            branch,
+            winner,
+            tentative_primary=tent_pri,
+            tentative_secondary=tent_sec,
+            candidate=candidate,
+        )
+        if not target.startswith(emitted + group):
+            continue
+        record = _record(
+            index=len(iterations),
+            before=branch,
+            ring_before=ring_before,
+            primary_before=primary_before,
+            secondary_before=secondary_before,
+            probes=_trim_probes(list(probes), max_probes),
+            emitted=group,
+            string_before=emitted,
+            captured_nodes=captured_nodes,
+            captured_edges=captured_edges,
+            created_node=created_node,
+            created_edge=created_edge,
+        )
+        found = _search_execution(
+            graph,
+            branch,
+            target=target,
+            nodes_left=nodes_left - (1 if created_node is not None else 0),
+            edges_left=edges_left - (1 if created_edge is not None else 0),
+            emitted=emitted + group,
+            captured_nodes=record.captured_nodes_after,
+            captured_edges=record.captured_edges_after,
+            iterations=[*iterations, record],
+            max_probes=max_probes,
+        )
+        if found is not None:
+            return found
+    return None
+
+
+def trace_execution(
+    graph: SparseGraph,
+    target: str,
+    *,
+    start_node: NodeId | None = None,
+    max_probes_per_iteration: int | None = None,
+) -> EncoderTrace:
+    """Reconstruct the execution of ``GraphToString`` that emits *target*.
+
+    The greedy encoder commits to the first uninserted neighbour at every
+    ``V``/``v``; the canonical and pruned canonicalisations minimise over
+    all of them. A string produced by either canonicalisation is
+    therefore a valid ``GraphToString`` execution that greedy may never
+    reach, and this function recovers it, so the pruned form can be drawn
+    with the same encoder-side detail as the greedy one rather than as a
+    replay.
+
+    Args:
+        graph: The input graph.
+        target: The instruction string to reproduce.
+        start_node: Starting node. ``None`` searches every node and takes
+            the first that admits an execution emitting *target*.
+        max_probes_per_iteration: Probe-record cap; see
+            :func:`trace_encoder`.
+
+    Returns:
+        The instrumented trace, whose ``instruction_string`` is *target*.
+
+    Raises:
+        EncoderMirrorError: If no execution from any admissible start node
+            emits *target*.
+    """
+    starts = range(graph.node_count()) if start_node is None else (start_node,)
+    for start in starts:
+        state = _MirrorState(graph, start)
+        found = _search_execution(
+            graph,
+            state,
+            target=target,
+            nodes_left=graph.node_count() - 1,
+            edges_left=graph.logical_edge_count(),
+            emitted="",
+            captured_nodes=(start,),
+            captured_edges=(),
+            iterations=[],
+            max_probes=max_probes_per_iteration,
+        )
+        if found is not None:
+            return EncoderTrace(
+                graph=graph,
+                start_node=start,
+                instruction_string=target,
+                iterations=tuple(found),
+            )
+    raise EncoderMirrorError(
+        f"no execution of GraphToString emits {target!r} from "
+        + ("any start node" if start_node is None else f"node {start_node}")
+    )
+
+
 __all__ = [
     "REJECTED",
     "EncoderIteration",
@@ -547,4 +808,6 @@ __all__ = [
     "EncoderTrace",
     "PairProbe",
     "trace_encoder",
+    "trace_execution",
+    "uninserted_neighbours",
 ]

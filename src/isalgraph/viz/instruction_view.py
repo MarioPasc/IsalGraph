@@ -38,6 +38,11 @@ else:
     Axes = Any
     Patch = Any
 
+#: Stroke and caret colour marking the instruction currently executing.
+#: Near-black rather than a palette hue, so it reads as emphasis and does
+#: not collide with either the operation channel or the pointer channel.
+EXECUTING_STROKE: str = "#111111"
+
 
 def _auto_fontsize(n_cells: int, axis_width_inches: float) -> float:
     """Pick a label size that fits the cell, clamped to ``[3.0, 7.5]`` points.
@@ -50,7 +55,7 @@ def _auto_fontsize(n_cells: int, axis_width_inches: float) -> float:
     return max(3.0, min(7.5, axis_width_inches * 72.0 / n_cells * 0.80))
 
 
-def draw_instruction_strip(
+def draw_instruction_strip(  # noqa: PLR0913  -- one parameter per visual channel
     ax: Axes,
     instructions: str,
     *,
@@ -63,6 +68,9 @@ def draw_instruction_strip(
     label_fontsize: float | None = None,
     direction: str = "s2g",
     accent_lw: float = 1.6,
+    solid_side: str | None = None,
+    executing_idx: int | None = None,
+    executing_span: tuple[int, int] | None = None,
 ) -> None:
     """Draw the instruction strip on *ax*.
 
@@ -83,6 +91,23 @@ def draw_instruction_strip(
             and are the ones drawn in colour, fading as their structure
             materialises in the graph panel.
         accent_lw: Stroke width of the pointer-accent outline.
+        solid_side: ``"prefix"`` to colour cells before *current_idx*,
+            ``"suffix"`` to colour cells from it onward. Overrides
+            *direction*, which is the older way of saying the same thing
+            and stays the default so committed figures do not move.
+            ``"prefix"`` is what a worked example wants in **both**
+            directions: the strip fills in as the run progresses, whether
+            the symbols are being emitted or consumed.
+        executing_idx: Mark this cell as the one being executed, with a
+            heavier stroke and a caret beneath it. *direction* alone
+            splits the strip into past and future and leaves the present
+            unmarked, which in a worked example is the cell the reader
+            most needs.
+        executing_span: Mark a half-open ``[lo, hi)`` range of cells
+            instead of one. G2S emits a whole group per pass -- the
+            movement instructions for a displacement, then the operation
+            -- so its "current instruction" is a run of cells, not one.
+            Takes precedence over *executing_idx*.
     """
     from matplotlib.patches import FancyBboxPatch
 
@@ -104,12 +129,17 @@ def draw_instruction_strip(
         _strip_axes(ax, 0, cell_width, cell_height)
         return
 
+    side = solid_side if solid_side is not None else ("prefix" if direction == "g2s" else "suffix")
+    span = executing_span
+    if span is None and executing_idx is not None:
+        span = (executing_idx, executing_idx + 1)
     for i, symbol in enumerate(instructions):
         x = i * cell_width
-        is_active = i < current_idx if direction == "g2s" else i >= current_idx
-        face = color_for_instruction(symbol) if is_active else GRAYED_FACE
-        stroke = pointer_accent(symbol) if is_active else GRAYED_EDGE
-        alpha = ACTIVE_ALPHA if is_active else GRAYED_ALPHA
+        is_active = i < current_idx if side == "prefix" else i >= current_idx
+        is_executing = span is not None and span[0] <= i < span[1]
+        face = color_for_instruction(symbol) if is_active or is_executing else GRAYED_FACE
+        stroke = pointer_accent(symbol) if is_active or is_executing else GRAYED_EDGE
+        alpha = ACTIVE_ALPHA if is_active or is_executing else GRAYED_ALPHA
         ax.add_patch(
             FancyBboxPatch(
                 (x + 0.05, 0.05),
@@ -117,9 +147,10 @@ def draw_instruction_strip(
                 cell_height - 0.10,
                 boxstyle="round,pad=0.02,rounding_size=0.08",
                 facecolor=face,
-                edgecolor=stroke,
-                lw=accent_lw if is_active else 0.6,
+                edgecolor=EXECUTING_STROKE if is_executing else stroke,
+                lw=accent_lw * 1.6 if is_executing else (accent_lw if is_active else 0.6),
                 alpha=alpha,
+                zorder=2 if is_executing else 1,
             )
         )
         if show_labels:
@@ -129,20 +160,48 @@ def draw_instruction_strip(
                 symbol,
                 ha="center",
                 va="center",
-                fontsize=label_fontsize,
+                fontsize=label_fontsize * (1.15 if is_executing else 1.0),
                 fontfamily="monospace",
-                color="#111111" if is_active else "#666666",
+                fontweight="bold" if is_executing else "normal",
+                color="#111111" if is_active or is_executing else "#666666",
                 rotation=label_rotation,
                 zorder=3,
             )
 
-    _strip_axes(ax, n, cell_width, cell_height)
+    _strip_axes(ax, n, cell_width, cell_height, caret=span is not None)
+    if span is not None:
+        lo, hi = max(span[0], 0), min(span[1], n)
+        if lo < hi:
+            ax.plot(
+                [(lo + hi) / 2.0 * cell_width],
+                [-0.16],
+                marker="^",
+                markersize=3.4,
+                color=EXECUTING_STROKE,
+                clip_on=False,
+                zorder=4,
+            )
 
 
-def _strip_axes(ax: Axes, n: int, cell_width: float, cell_height: float) -> None:
-    """Set strip limits and hide ticks and spines."""
+def _strip_axes(
+    ax: Axes,
+    n: int,
+    cell_width: float,
+    cell_height: float,
+    *,
+    caret: bool = False,
+) -> None:
+    """Set strip limits and hide ticks and spines.
+
+    Args:
+        ax: Target axes.
+        n: Cell count.
+        cell_width: Cell width in axis units.
+        cell_height: Cell height in axis units.
+        caret: Leave room below the cells for the executing-cell caret.
+    """
     ax.set_xlim(-0.1, max(n, 1) * cell_width + 0.1)
-    ax.set_ylim(-0.05, cell_height + 0.05)
+    ax.set_ylim(-0.26 if caret else -0.05, cell_height + 0.05)
     ax.set_aspect("auto")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -186,4 +245,4 @@ def instruction_legend_handles(*, include_pointers: bool = True) -> list[Any]:
     return handles
 
 
-__all__ = ["draw_instruction_strip", "instruction_legend_handles"]
+__all__ = ["EXECUTING_STROKE", "draw_instruction_strip", "instruction_legend_handles"]

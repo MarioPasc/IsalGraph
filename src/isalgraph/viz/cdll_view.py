@@ -72,6 +72,7 @@ def draw_cdll_ring(
     secondary_ptr_idx: int,
     *,
     new_node_payload: int | None = None,
+    new_node_color: str | None = None,
     radius: float = 1.0,
     node_radius: float = 0.15,
     show_legend: bool = False,
@@ -86,6 +87,11 @@ def draw_cdll_ring(
             and not a graph node id.
         secondary_ptr_idx: Ring position of the secondary pointer.
         new_node_payload: Highlight this payload as newly created.
+        new_node_color: Colour for that highlight. Defaults to
+            :data:`NEW_NODE_COLOR`, which the benchmark figure scripts
+            already use; the worked-example figures pass the accent
+            colour instead so the ring and the graph panel mark "created
+            by this step" in one colour rather than two.
         radius: Ring radius.
         node_radius: Node circle radius.
         show_legend: Draw a per-panel legend instead of relying on a
@@ -113,7 +119,7 @@ def draw_cdll_ring(
     for i, (x, y) in enumerate(positions):
         payload = cdll_order[i]
         if new_node_payload is not None and payload == new_node_payload:
-            color = NEW_NODE_COLOR
+            color = new_node_color if new_node_color is not None else NEW_NODE_COLOR
         elif i == primary_ptr_idx and i == secondary_ptr_idx:
             color = POINTER_OVERLAP_COLOR
         elif i == primary_ptr_idx:
@@ -130,11 +136,15 @@ def draw_cdll_ring(
             x, y, str(payload), ha="center", va="center", fontsize=7, fontweight="bold", zorder=4
         )
 
-    arrow_radius = radius + 0.35
+    # The arrow tail must clear the node disc with room left over, or the
+    # head is all that survives: the old offset of 0.35 axis units was
+    # shorter than the point-space shrink applied at the head, so the body
+    # was drawn with negative length and disappeared.
+    arrow_radius = radius + node_radius + 0.60
     _draw_pointer_arrow(
         ax,
-        positions[primary_ptr_idx],
         angles[primary_ptr_idx],
+        radius,
         arrow_radius,
         node_radius,
         PRIMARY_COLOR,
@@ -149,8 +159,8 @@ def draw_cdll_ring(
     )
     _draw_pointer_arrow(
         ax,
-        positions[secondary_ptr_idx],
         secondary_angle,
+        radius,
         arrow_radius,
         node_radius,
         SECONDARY_COLOR,
@@ -173,32 +183,49 @@ def draw_cdll_ring(
     ax.axis("off")
 
 
-def _draw_pointer_arrow(
+def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
     ax: Axes,
-    target_pos: tuple[float, float],
     angle: float,
+    ring_radius: float,
     arrow_radius: float,
     node_radius: float,
     color: str,
     label: str,
 ) -> None:
-    """Draw one labelled pointer arrow from outside the ring toward a node."""
-    start_x = arrow_radius * math.cos(angle)
-    start_y = arrow_radius * math.sin(angle)
+    """Draw one labelled pointer arrow from outside the ring toward a node.
+
+    Both endpoints are computed in data coordinates and no shrink is
+    applied. Shrink is measured in points, so mixing it with a tail
+    offset measured in axis units makes the visible body length depend on
+    the rendered figure size -- which is how the body came to vanish at
+    column scale while looking correct at the default size.
+
+    Args:
+        ax: Target axes.
+        angle: Polar angle of the target node, in radians.
+        ring_radius: Distance from the ring centre to the node centres.
+        arrow_radius: Distance from the ring centre to the arrow tail.
+        node_radius: Node disc radius; the head stops just outside it.
+        color: Arrow and label colour.
+        label: Text drawn beyond the tail.
+    """
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    tip = ring_radius + node_radius * 1.10
     ax.annotate(
         "",
-        xy=target_pos,
-        xytext=(start_x, start_y),
+        xy=(tip * cos_a, tip * sin_a),
+        xytext=(arrow_radius * cos_a, arrow_radius * sin_a),
         arrowprops={
             "arrowstyle": "-|>",
             "color": color,
-            "linewidth": 1.5,
+            "linewidth": 1.4,
+            "mutation_scale": 9,
             "shrinkA": 0,
-            "shrinkB": node_radius * 72,  # axis units to points
+            "shrinkB": 0,
         },
     )
-    label_x = (arrow_radius + 0.25) * math.cos(angle)
-    label_y = (arrow_radius + 0.25) * math.sin(angle)
+    label_x = (arrow_radius + 0.26) * cos_a
+    label_y = (arrow_radius + 0.26) * sin_a
     ax.text(
         label_x,
         label_y,
@@ -216,6 +243,7 @@ def draw_cdll_ring_for_snapshot(
     snapshot: StepSnapshot,
     *,
     highlight_new_node: bool = True,
+    new_node_color: str | None = None,
     radius: float = 1.0,
     node_radius: float = 0.15,
     show_legend: bool = False,
@@ -231,6 +259,8 @@ def draw_cdll_ring_for_snapshot(
         snapshot: The step to render.
         highlight_new_node: Colour the node created by this step, taken
             from ``snapshot.created_edge`` on a ``V``/``v`` instruction.
+        new_node_color: Colour for that highlight; see
+            :func:`draw_cdll_ring`.
         radius: Ring radius.
         node_radius: Node circle radius.
         show_legend: Draw a per-panel legend.
@@ -256,6 +286,7 @@ def draw_cdll_ring_for_snapshot(
         primary_idx,
         secondary_idx,
         new_node_payload=new_payload,
+        new_node_color=new_node_color,
         radius=radius,
         node_radius=node_radius,
         show_legend=show_legend,

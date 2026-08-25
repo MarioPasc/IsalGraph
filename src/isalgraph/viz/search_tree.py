@@ -44,6 +44,7 @@ from isalgraph.core.canonical import canonical_string
 from isalgraph.core.cdll import CircularDoublyLinkedList
 from isalgraph.core.graph_to_string import generate_pairs_sorted_by_sum
 from isalgraph.core.sparse_graph import SparseGraph
+from isalgraph.types import NodeId
 from isalgraph.viz.style import (
     GRAYED_EDGE,
     INSTRUCTION_PALETTE,
@@ -629,6 +630,7 @@ def canonical_search_tree_figure(
     figsize: tuple[float, float] = (7.0, 3.6),
     title: str | None = None,
     show_graph_inset: bool = True,
+    inset_positions: dict[NodeId, tuple[float, float]] | None = None,
     backend: str = "matplotlib",
 ) -> Figure:
     """Build the canonical-search-space schematic for *graph*.
@@ -642,6 +644,9 @@ def canonical_search_tree_figure(
         figsize: Figure size in inches; the default is IEEE text width.
         title: Figure suptitle.
         show_graph_inset: Draw the source graph as an inset panel.
+        inset_positions: Pinned coordinates for the inset. When given,
+            the inset is drawn in the worked-example figures' idiom so
+            the same graph reads identically across the figure set.
         backend: Backend for the inset graph.
 
     Returns:
@@ -670,13 +675,32 @@ def canonical_search_tree_figure(
     )
     if show_graph_inset:
         ax_inset = fig.add_subplot(gs[0, 0])
-        draw_graph(
-            ax_inset,
-            graph,
-            backend=backend,
-            node_colors=build_node_palette(graph.node_count()),
-            edge_colors=build_edge_palette(graph_edges(graph)),
-        )
+        if inset_positions is None:
+            draw_graph(
+                ax_inset,
+                graph,
+                backend=backend,
+                node_colors=build_node_palette(graph.node_count()),
+                edge_colors=build_edge_palette(graph_edges(graph)),
+            )
+        else:
+            # Draw the inset in the worked-example figures' idiom and at
+            # their pinned coordinates, so the running example is the same
+            # picture in all three figures. The per-node identity palette
+            # is the right default for an arbitrary graph and the wrong one
+            # here: it makes the same graph look different in each figure.
+            from isalgraph.viz.worked_example import draw_state_graph
+
+            everything = frozenset(range(graph.node_count()))
+            draw_state_graph(
+                ax_inset,
+                graph,
+                inset_positions,
+                present_nodes=everything,
+                present_edges=frozenset(graph_edges(graph)),
+                node_radius=0.20,
+                label_fontsize=6.5,
+            )
         ax_inset.set_title("Input graph $G$", fontsize=7.5)
     ax_tree = fig.add_subplot(gs[0, 1])
     draw_search_tree(ax_tree, tree)
@@ -690,11 +714,12 @@ def canonical_search_tree_figure(
 
     ax_legend = fig.add_subplot(gs[1, :])
     ax_legend.axis("off")
+    handles = _legend_handles(complete=any(node.terminal for node in tree.nodes))
     ax_legend.legend(
-        handles=_legend_handles(),
+        handles=handles,
         loc="center",
         fontsize=6.5,
-        ncol=5,
+        ncol=len(handles),
         frameon=False,
         handlelength=2.2,
         columnspacing=1.4,
@@ -704,11 +729,21 @@ def canonical_search_tree_figure(
     return fig
 
 
-def _legend_handles() -> list[Any]:
-    """Return handles distinguishing branching edges from forced ones."""
+def _legend_handles(*, complete: bool = True) -> list[Any]:
+    """Return handles distinguishing branching edges from forced ones.
+
+    Args:
+        complete: Whether any drawn node finished its encoding. When the
+            tree is truncated before any leaf completes, the swatch has
+            nothing in the figure to point at, and a legend entry with no
+            referent is worse than a missing one.
+
+    Returns:
+        Handles for ``ax.legend``.
+    """
     from matplotlib.lines import Line2D
 
-    return [
+    handles = [
         Line2D([0], [0], color=POINTER_PALETTE[0], lw=1.5, label="branch at $V$ (π primary)"),
         Line2D([0], [0], color=POINTER_PALETTE[1], lw=1.5, label="branch at $v$ (σ secondary)"),
         Line2D(
@@ -720,17 +755,21 @@ def _legend_handles() -> list[Any]:
             label="forced step (no branching)",
         ),
         Line2D([0], [0], color=CANONICAL_HALO, lw=4.0, alpha=0.85, label="canonical path $w^*_G$"),
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="none",
-            markerfacecolor="#228833",
-            markeredgecolor="0.3",
-            markersize=6,
-            label="encoding complete",
-        ),
     ]
+    if complete:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="none",
+                markerfacecolor="#228833",
+                markeredgecolor="0.3",
+                markersize=6,
+                label="encoding complete",
+            )
+        )
+    return handles
 
 
 __all__ = [
