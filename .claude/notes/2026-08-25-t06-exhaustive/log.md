@@ -16,12 +16,16 @@ read-only for this ticket.** Nothing here writes into either.
 | step | state | note |
 |---|---|---|
 | 0. read plan + contracts | DONE | |
-| 1. `isalgraph_exhaustive` backend + tests | DONE | 27 new tests, all green |
-| 2. commit code | DONE | `a691b57` backend, `4cbc6cd` stats |
+| 1. `isalgraph_exhaustive` backend + tests | DONE | `a691b57` |
+| 2. commit code | DONE | `4cbc6cd` stats knobs, `034b3b6` drivers |
 | 3. encode 15 cells @ 30 s | RUNNING | Suite 1 done: 5,350 graphs, 0 censored |
-| 4. distances (new arm only) | pending | GED matrices reused verbatim |
-| 5. statistics + reduced view | pending | |
-| 6. SUMMARY.md / manifest.json | pending | |
+| 3b. `isalgraph_greedy` ablation arm | DONE | `b942247`, 35 tests green |
+| 3c. Picasso scripts (NOT submitted) | DONE | `b88e4b9` |
+| 4. encode the greedy arm, 15 cells | pending | after 3, to avoid contention |
+| 5. distances (new arms only) | pending | GED matrices reused verbatim |
+| 6. statistics + reduced view | pending | |
+| 7. ablation part A (atlas-exhaustive) | pending | competes for CPU; run after 3 |
+| 8. SUMMARY.md / manifest.json | pending | |
 
 Base commit at launch: `6befc1a` (another session moved HEAD from `855e4ad`
 mid-work; re-checked before committing, per the standing rule).
@@ -112,6 +116,39 @@ cells are skipped rather than recomputed.
 | X3 | budget 30 s, recorded in every cell's `metadata.encode_budget_s` | a censoring rate is a property of its budget |
 | X4 | every competitor stays in the data; reduced view is a flag | dropping from the campaign changes a pre-registered family's cardinality (`N_actual = 79`) |
 | X5 | distances symlinked from T06 | F5 |
+| X6 | `isalgraph_greedy` is NOT in `ISALGRAPH_ARMS` | that tuple governs the wall clock and the D14 fallback; greedy needs neither — no search to interrupt, and it *is* the terminal fallback tier |
+| X7 | `takes_timeout = False` on the greedy arm | otherwise the default budget is refused as unenforceable and the arm is unusable in a campaign that budgets the others |
+| X8 | Picasso worker sets `PYTHONPATH=$REPO`, **not** `$REPO/src` | the `picasso-sbatch` template says src-first; for this project that shadows the installed package and silently drops to pure Python. CLAUDE.md wins over the skill template |
+| X9 | Picasso array sized in tasks, not units | SCBI's 2 h floor; unit cost is uneven enough that one task per unit would be two dozen seconds-long jobs |
+
+---
+
+## The canonicalisation ablation, measured
+
+`invariance_ablation.py`, 720 relabelling draws over 120 graphs, seed 42.
+
+| non-invariance | n=5 | n=6 | n=7 | n=8 | n=9 |
+|---|---|---|---|---|---|
+| `isalgraph_greedy` | 50.7 % | 68.8 % | 81.2 % | **91.0 %** | 84.7 % |
+| `isalgraph_exhaustive` | 0 % | 0 % | 0 % | 0 % | 0 % |
+| `isalgraph_pruned` | 0 % | 0 % | 0 % | 0 % | 0 % |
+
+0 of 144 draws at every `n` for both canonical arms.
+
+| paired length | mean | greedy shorter / equal / longer |
+|---|---|---|
+| `isalgraph_greedy` | 11.46 | — |
+| vs `isalgraph_exhaustive` | 11.10 | **0 / 85 / 35** |
+| vs `isalgraph_pruned` | 11.43 | 17 / 86 / 17 |
+
+**Two things this says that the brief's framing did not.** Against the
+*exhaustive* arm greedy is **never shorter** — 0 of 120 — and longer on 35; the
+"mean 15.20 vs 15.14 wash" holds only against *pruned*. And non-invariance
+**rises with n**, so it is not a small-graph artefact.
+
+So the sentence for R1.2 is: dropping the canonical search buys nothing in bits
+against the true `w*_G` and costs invariance on half to nine tenths of
+relabellings.
 
 ---
 
