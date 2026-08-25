@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -40,7 +41,14 @@ from benchmarks.real_data.eval_stats.t06_gates import APPROX_ALIAS, _subset_on_i
 LOGGER: Final = logging.getLogger(__name__)
 
 #: The reference arm, frozen by measurement in the design note (F-1).
-REFERENCE_ARM: Final[str] = "isalgraph_pruned"
+#:
+#: ``T06_REFERENCE_ARM`` re-points it at another IsalGraph arm for a campaign
+#: run against a different canonical form -- ``isalgraph_exhaustive`` computes
+#: the true ``w*_G`` rather than the length-suboptimal pruned form. **The
+#: default is unchanged**, so every existing artifact reproduces byte-identically
+#: and the pre-registered family keeps its cardinality; the override is recorded
+#: in the campaign manifest so a number can never be quoted without its arm.
+REFERENCE_ARM: Final[str] = os.environ.get("T06_REFERENCE_ARM", "isalgraph_pruned")
 
 #: The two bit conventions F-5 requires to be reported together.
 BIT_CONVENTIONS: Final[tuple[str, str]] = ("entropy_bits", "realised_bits")

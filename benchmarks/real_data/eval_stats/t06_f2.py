@@ -128,6 +128,53 @@ CLAIM_A_COMPARATORS: Final[tuple[str, ...]] = (
 #: a number: a feature-vector "bit cost" measures the vectoriser, not the graph.
 BIT_COUNT_UNDEFINED: Final[tuple[str, ...]] = ("wl_subtree", "size_null")
 
+#: The reduced reporting view: the nauty-canonicalised and mining comparators
+#: only, dropping the three non-nauty serialisations from the **printed table**.
+#:
+#: This is a *view*, selected by ``--comparator-set reduced``, and deliberately
+#: not a change to what the campaign computes. Dropping a competitor from a
+#: table costs nothing and needs no re-run; dropping it from the campaign
+#: destroys optionality and changes the cardinality of a **pre-registered**
+#: confirmatory family --- ``preregistration`` 4.1 froze six serialisations and
+#: ``N_actual = 79`` is a function of them. So every competitor stays in the
+#: data and the reporting choice costs a flag.
+#:
+#: ``graph6`` in particular is not redundant *evidence* even though it is
+#: redundant *reporting*: its bit count is identical to ``nauty_graph6`` by
+#: construction, because graph6's length is a function of ``n`` alone. That
+#: identity is asserted in ``tests/unit/test_t06_exhaustive.py`` rather than
+#: rediscovered in a results table.
+REDUCED_COMPARATORS: Final[frozenset[str]] = frozenset(
+    {"min_dfs", "agm_cam", "nauty_graph6", "sparse6_nauty", "wl_subtree"}
+)
+
+#: Comparator-set views this driver can emit.
+COMPARATOR_SETS: Final[tuple[str, str]] = ("full", "reduced")
+
+
+def comparators_for(names: Sequence[str], comparator_set: str) -> tuple[str, ...]:
+    """Filter *names* to the requested comparator view.
+
+    Args:
+        names: Comparator names in their frozen order.
+        comparator_set: ``"full"`` or ``"reduced"``.
+
+    Returns:
+        The names to report, order preserved.
+
+    Raises:
+        F2DriverError: On an unknown view, rather than silently reporting the
+            full set under a reduced label.
+    """
+    if comparator_set == "full":
+        return tuple(names)
+    if comparator_set != "reduced":
+        raise F2DriverError(
+            f"unknown comparator set {comparator_set!r}; expected one of {COMPARATOR_SETS}"
+        )
+    return tuple(name for name in names if name in REDUCED_COMPARATORS)
+
+
 #: The two pair views. ``all_pairs`` is what F0 and F1 ran on.
 VIEWS: Final[tuple[str, str]] = ("all_pairs", "equal_n")
 
@@ -535,6 +582,7 @@ def run_b_rows(
     views: Sequence[str],
     replicates: int | None,
     only: frozenset[str] | None = None,
+    comparator_set: str = "full",
 ) -> list[RhoRecord]:
     """Run every B-row correlation for one suite, in both views.
 
@@ -545,12 +593,15 @@ def run_b_rows(
         suite: Suite key.
         views: Pair views to compute.
         replicates: Override for the frozen tier effort.
+        comparator_set: ``"full"`` or ``"reduced"``; see
+            :data:`REDUCED_COMPARATORS`. A reporting view only -- the campaign
+            still computes every competitor.
 
     Returns:
         Every rho record for the suite.
     """
     datasets = _select(SUITE1 if suite == "suite1" else SUITE2, only)
-    wanted = (*FAMILY_COMPARATORS, *DESCRIPTIVE_COMPARATORS)
+    wanted = comparators_for((*FAMILY_COMPARATORS, *DESCRIPTIVE_COMPARATORS), comparator_set)
     records: list[RhoRecord] = []
     for dataset in datasets:
         arm = load_arm(distances, suite, dataset, REFERENCE_ARM)
@@ -747,6 +798,7 @@ def run_claim_a(
     suite: str,
     arm: str = "primary",
     only: frozenset[str] | None = None,
+    comparator_set: str = "full",
 ) -> tuple[list[ClaimARecord], dict[str, dict[str, float]]]:
     """Run A1 for every ``(dataset, comparator)`` and collect A2's blocks.
 
@@ -755,6 +807,11 @@ def run_claim_a(
         suite: Suite key.
         arm: ``primary`` (D14 graphs retained with their fallback string) or
             ``complete_case``.
+        comparator_set: ``"full"`` keeps the six pre-registered serialisations;
+            ``"reduced"`` restricts the **printed** set to
+            :data:`REDUCED_COMPARATORS`. The reduced view drops ``graph6``,
+            whose bit count is identical to ``nauty_graph6`` by construction,
+            and ``sparse6`` and ``adjacency``, which already fail F3.
 
     Returns:
         ``(records, medians)`` where *medians* maps dataset to the median bit
@@ -771,7 +828,7 @@ def run_claim_a(
         block: dict[str, float] = {}
         usable = reference.usable(arm)
         block[REFERENCE_ARM] = float(np.median(reference.bits["entropy_bits"][usable]))
-        for name in CLAIM_A_COMPARATORS:
+        for name in comparators_for(CLAIM_A_COMPARATORS, comparator_set):
             competitor = load_encodings(encodings, suite, dataset, name)
             if competitor is None:
                 continue
@@ -1170,6 +1227,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--views", default=",".join(VIEWS))
     ap.add_argument(
+        "--comparator-set",
+        default="full",
+        choices=COMPARATOR_SETS,
+        help=(
+            "which comparators enter the REPORT. 'full' keeps the six pre-registered "
+            "serialisations; 'reduced' restricts to the nauty and mining comparators. "
+            "A reporting view only -- the campaign computes every competitor either way, "
+            "because dropping one from the data would change the cardinality of a "
+            "pre-registered confirmatory family"
+        ),
+    )
+    ap.add_argument(
         "--datasets",
         default="",
         help="comma-separated dataset filter; empty means every dataset of the named suites",
@@ -1376,7 +1445,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     if "suite2" in suites:
         for arm in ("primary", "complete_case"):
             records, block = run_claim_a(
-                encodings=args.encodings, suite="suite2", arm=arm, only=only
+                encodings=args.encodings,
+                suite="suite2",
+                arm=arm,
+                only=only,
+                comparator_set=args.comparator_set,
             )
             claim_a.extend(records)
             if arm == "primary":
@@ -1394,6 +1467,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 views=views,
                 replicates=args.replicates,
                 only=only,
+                comparator_set=args.comparator_set,
             )
         )
         for (dataset, reference), fit in run_mrm_rows(

@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -50,7 +51,7 @@ from benchmarks.real_data.eval_stats.resampling import (
 
 LOGGER: Final = logging.getLogger(__name__)
 
-REFERENCE_ARM: Final[str] = "isalgraph_pruned"
+REFERENCE_ARM: Final[str] = os.environ.get("T06_REFERENCE_ARM", "isalgraph_pruned")
 
 #: Suite-1 datasets whose approximate matrices live under a different key.
 APPROX_ALIAS: Final[dict[str, str]] = {"aids": "aids_graphedx"}

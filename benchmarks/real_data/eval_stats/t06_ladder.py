@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -46,7 +47,7 @@ import numpy as np
 LOGGER: Final = logging.getLogger(__name__)
 
 #: The arm the ladder accounts for.
-REFERENCE_ARM: Final[str] = "isalgraph_pruned"
+REFERENCE_ARM: Final[str] = os.environ.get("T06_REFERENCE_ARM", "isalgraph_pruned")
 
 
 class LadderError(Exception):

@@ -30,6 +30,7 @@ import argparse
 import json
 import logging
 import math
+import os
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -43,7 +44,7 @@ LOGGER: Final = logging.getLogger(__name__)
 
 #: The arm D14 governs. Only the reference arm censors; a comparator that failed
 #: is an ``error``, which is a different disposition.
-REFERENCE_ARM: Final[str] = "isalgraph_pruned"
+REFERENCE_ARM: Final[str] = os.environ.get("T06_REFERENCE_ARM", "isalgraph_pruned")
 
 #: The frozen per-graph budget (F-3), enforced by a killed subprocess.
 ENCODE_BUDGET_S: Final[float] = 300.0
