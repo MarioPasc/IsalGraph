@@ -112,6 +112,13 @@ if [ "${#MY_UNITS[@]}" -eq 0 ]; then
     echo "[decode] empty slice; nothing to do"; exit 0
 fi
 
+if [ -z "${COHORT_ROOT:-}" ] || [ ! -d "${COHORT_ROOT}/exported_suite2" ]; then
+    echo "[FATAL] COHORT_ROOT unset or missing exported_suite2/: '${COHORT_ROOT:-}'" >&2
+    echo "        Without it t06_cohort falls back to a workstation path and every" >&2
+    echo "        unit dies with 'cohort export not found' naming /media/..." >&2
+    exit 2
+fi
+
 OUT="${OUT_ROOT}"
 mkdir -p "${OUT}/encodings/suite1" "${OUT}/encodings/suite2" "${OUT}/logs"
 
@@ -140,6 +147,7 @@ for (( i = 0; i < ${#MY_UNITS[@]}; i++ )); do
     t0=$(date +%s)
     if "$PY" -m benchmarks.real_data.eval_encoding.t06_encode \
          --suite "${suite}" --dataset "${dataset}" --representation "${rep}" \
+         --cohort-root "${COHORT_ROOT}" \
          --out "${OUT}" --budget-s "${BUDGET_S}" --jobs "${ENCODE_JOBS}" --require-cpp
     then
         t1=$(date +%s); ok=$(( ok + 1 )); echo "    [ok] in $(( t1 - t0 )) s"

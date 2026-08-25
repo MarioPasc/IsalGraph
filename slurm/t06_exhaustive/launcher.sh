@@ -42,6 +42,12 @@ FSCRATCH="/mnt/home/users/tic_163_uma/mpascual/fscratch"
 export CONDA_PREFIX_DIR="${CONDA_PREFIX_DIR:-${FSCRATCH}/conda_envs/isalgraph}"
 export REPO_DIR="${REPO_DIR:-${FSCRATCH}/repos/IsalGraph}"
 export OUT_ROOT="${OUT_ROOT:-${FSCRATCH}/datasets/isalgraph/T06_exhaustive}"
+# The cohort root MUST travel. t06_cohort.DEFAULT_COHORT_ROOT is a local
+# workstation path that does not exist here, and it is only reached when
+# neither --cohort-root nor the environment override is set -- so an unset
+# value fails at the first cell with a confusing "cohort export not found"
+# naming a /media path. Submitted array 2102923 died this way, 6/6 units.
+export COHORT_ROOT="${COHORT_ROOT:-${FSCRATCH}/datasets/isalgraph}"
 LOGS_DIR="${LOGS_DIR:-${HOME}/execs/isalgraph/logs}"
 ACCOUNT="${ACCOUNT:-tic_163_uma}"
 
@@ -119,7 +125,7 @@ SBATCH_ARGS=(
   --chdir="${REPO_DIR}"
   --output="${LOGS_DIR}/t06exh_%A_%a.out"
   --error="${LOGS_DIR}/t06exh_%A_%a.err"
-  --export="ALL,CONDA_PREFIX_DIR=${CONDA_PREFIX_DIR},REPO_DIR=${REPO_DIR},OUT_ROOT=${OUT_ROOT},BUDGET_S=${BUDGET_S},ENCODE_JOBS=${ENCODE_JOBS},START_CUTOFF_S=${START_CUTOFF_S},N_TASKS=${N_TASKS},UNIT_LIST=${UNIT_LIST}"
+  --export="ALL,CONDA_PREFIX_DIR=${CONDA_PREFIX_DIR},REPO_DIR=${REPO_DIR},OUT_ROOT=${OUT_ROOT},COHORT_ROOT=${COHORT_ROOT},BUDGET_S=${BUDGET_S},ENCODE_JOBS=${ENCODE_JOBS},START_CUTOFF_S=${START_CUTOFF_S},N_TASKS=${N_TASKS},UNIT_LIST=${UNIT_LIST}"
   "${SCRIPT_DIR}/worker.sh"
 )
 
@@ -127,6 +133,7 @@ echo "units:        ${N_UNITS}  (15 cells x ${#ARMS[@]} arms)"
 echo "tasks:        ${N_TASKS} (throttle ${MAX_CONCURRENT}), ~$(( N_UNITS / N_TASKS )) units each"
 echo "budget:       ${BUDGET_S} s per graph, ${ENCODE_JOBS} encode jobs on ${CPUS} cores"
 echo "out:          ${OUT_ROOT}"
+echo "cohorts:      ${COHORT_ROOT}"
 echo "logs:         ${LOGS_DIR}/t06exh_%A_%a.out"
 
 if ${DRY_RUN}; then
