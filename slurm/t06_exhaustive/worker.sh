@@ -93,15 +93,22 @@ IFS=':' read -r -a UNITS <<< "${UNIT_LIST}"
 N_UNITS=${#UNITS[@]}
 TASK_IDX=$(( ${SLURM_ARRAY_TASK_ID:-0} ))
 
-# Even split, never fixed blocks with a ragged tail -- a short remainder task is
-# exactly what the 2 h floor exists to eliminate.
-Q=$(( N_UNITS / N_TASKS ))
-R=$(( N_UNITS % N_TASKS ))
-LO=$(( TASK_IDX * Q + (TASK_IDX < R ? TASK_IDX : R) ))
-HI=$(( LO + Q + (TASK_IDX < R ? 1 : 0) ))
+# STRIDED, not contiguous. An equal split by COUNT is not an equal split by
+# WORK here: the launcher orders units expensive-first, so contiguous blocks
+# hand task 0 every expensive cell (protein, coil-del, mutagenicity, aids-iam,
+# ... all exhaustive) and task 4 six greedy cells that finish in seconds. Task 0
+# would then race the wall clock while four tasks idle.
+#
+# Striding over an expensive-first list deals the costly units round-robin, so
+# each task gets at most one of the top-N. Counts stay within one unit of each
+# other, which is what the 2 h floor actually needs.
+MY_UNITS=()
+for (( i = TASK_IDX; i < N_UNITS; i += N_TASKS )); do
+    MY_UNITS+=( "${UNITS[$i]}" )
+done
 
-echo "[decode] ${N_UNITS} units, ${N_TASKS} tasks -> this task runs [${LO}, ${HI})"
-if [ "${LO}" -ge "${HI}" ]; then
+echo "[decode] ${N_UNITS} units, ${N_TASKS} tasks -> this task runs ${#MY_UNITS[@]}: ${MY_UNITS[*]}"
+if [ "${#MY_UNITS[@]}" -eq 0 ]; then
     echo "[decode] empty slice; nothing to do"; exit 0
 fi
 
@@ -109,8 +116,8 @@ OUT="${OUT_ROOT}"
 mkdir -p "${OUT}/encodings/suite1" "${OUT}/encodings/suite2" "${OUT}/logs"
 
 fail=0; ok=0; skip=0
-for (( i = LO; i < HI; i++ )); do
-    unit="${UNITS[$i]}"
+for (( i = 0; i < ${#MY_UNITS[@]}; i++ )); do
+    unit="${MY_UNITS[$i]}"
     suite="${unit%%/*}"; rest="${unit#*/}"
     dataset="${rest%%/*}"; rep="${rest##*/}"
     echo "--- unit ${i}: ${suite}/${dataset}/${rep}"
@@ -125,7 +132,7 @@ for (( i = LO; i < HI; i++ )); do
     # alone exceeds the cutoff defers its whole slice, a resume pass derives the
     # same slice and defers it again, and the array livelocks.
     ELAPSED=$(( $(date +%s) - START_TIME ))
-    if [ "$i" -gt "${LO}" ] && [ "${ELAPSED}" -ge "${START_CUTOFF_S}" ]; then
+    if [ "$i" -gt 0 ] && [ "${ELAPSED}" -ge "${START_CUTOFF_S}" ]; then
         echo "    [defer] ${ELAPSED}s elapsed >= ${START_CUTOFF_S}s cutoff; a resume pass takes it"
         continue
     fi
