@@ -317,9 +317,15 @@ them and we need to know which.
 ### fscratch quota: it is a FILE COUNT limit, not a space limit
 
 ```
-fscratch  0.48TB / 1.40TB space   <- fine
-          399.7k / 250.0k files   <- EXCEEDED, hard limit 400.0k
+fscratch  0.47TB / 1.40TB space   <- fine
+          227.2k / 250.0k files   <- under the soft limit, hard limit 400.0k
 ```
+
+> **Re-measured 2026-08-25.** This block read ~~`399.7k / 250.0k files <- EXCEEDED`~~ and is no
+> longer true: the GEDLIB build trees have been pruned and there are now ~23k files of headroom
+> under the soft limit and ~173k under the hard one. **The mechanism below is unchanged and still
+> the thing to watch** — the limit is a file *count*, one GEDLIB build is 50-90k files, and two
+> would still exceed it. Re-run `quota -s` before any build; do not trust either number here.
 
 A GEDLIB build creates **50,000-90,000 small files** (headers, objects). Two builds will hit the
 hard limit and the failure surfaces as a confusing `shutil.Error: [Errno 122] Disk quota exceeded`
