@@ -130,6 +130,20 @@ class Record:
             from the realised ``n`` (a hypercube snaps to a power of two).
         replicate: replicate index for a random family, ``0`` for a
             deterministic one, ``None`` for cohort rows.
+        params: the family's construction parameters, rendered as
+            ``"swaps=3,base=hypercube"``.  ``None`` for cohort rows.
+
+            **This field is what makes the primary analysis possible.**  Design
+            note rule 7 establishes the ``|Aut|`` law from the
+            ``symmetry_ladder`` within-``(n, m)`` contrast, which means
+            ordering the rungs by their swap count ``k``.  Every rung of one
+            ladder shares ``family``, ``n_target``, ``replicate``, ``n`` and
+            ``m`` -- holding ``(n, m)`` exactly constant is the entire point of
+            the design -- so without ``params`` the rungs are indistinguishable
+            in the record and the contrast cannot be computed at all.  Integer
+            parameter values that index a table (the ladder's ``base``) are
+            resolved to their names at write time, so a shard file stays
+            readable without ``families.py``.
         dataset: cohort name, ``None`` for constructed rows.
         graph_index: index into ``datasets.load(dataset).graphs``, ``None`` for
             constructed rows.
@@ -196,6 +210,7 @@ class Record:
     family: str | None
     n_target: int | None
     replicate: int | None
+    params: str | None
     dataset: str | None
     graph_index: int | None
     graph_id: str | None

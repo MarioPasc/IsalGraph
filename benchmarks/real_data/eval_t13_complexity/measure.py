@@ -63,6 +63,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib
 import json
 import logging
 import os
@@ -73,9 +74,12 @@ import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Protocol
+from typing import TYPE_CHECKING, Any, Final, Protocol, cast
+
+#: ``datetime.UTC`` is 3.11+; the project's mypy target is 3.10.
+UTC = timezone.utc
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import networkx as nx
@@ -404,10 +408,7 @@ def engine_arm(arm: str, *, native: _NativeToggles | None = None) -> Iterator[No
     """
     memo, bnb = arm_settings(arm)
     if native is None:
-        from isalgraph.core import _native as native_module
-
-        native = native_module  # type: ignore[assignment]
-    assert native is not None
+        native = cast("_NativeToggles", importlib.import_module("isalgraph.core._native"))
     try:
         native.set_pairs_memo(memo)
         native.set_branch_and_bound(bnb)
@@ -461,6 +462,19 @@ def shard_of(key: str, n_shards: int) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _ladder_bases() -> tuple[str, ...]:
+    """Return ``families.LADDER_BASES``, or an empty tuple when track A is absent.
+
+    Returns:
+        The base names the ``symmetry_ladder`` indexes into.
+    """
+    try:
+        families = importlib.import_module(f"{__package__}.families")
+    except ImportError:
+        return ()
+    return tuple(getattr(families, "LADDER_BASES", ()))
+
+
 @dataclass(frozen=True, slots=True)
 class GraphSpec:
     """The address of one graph, independent of how it is measured.
@@ -481,11 +495,57 @@ class GraphSpec:
 
     @property
     def key(self) -> str:
-        """A stable string address, used for hashing and for resume."""
+        """A stable string address, used for hashing and for resume.
+
+        Built from the raw integer ``params``, never from the rendered form:
+        the rendering resolves table indices to names, and a name that a later
+        edit reorders would silently move every unit to a different shard.
+        """
         params = ",".join(f"{k}={v}" for k, v in self.params)
         return (
             f"{self.source}|{self.family}|{self.n_target}|{self.replicate}|{params}"
             f"|{self.dataset}|{self.graph_index}"
+        )
+
+    def rendered_params(self) -> str | None:
+        """Return ``params`` for the record, with table indices resolved.
+
+        ``FamilySpec.params`` is typed ``tuple[tuple[str, int], ...]``, so the
+        ladder's base arrives as an **index** into ``families.LADDER_BASES``
+        rather than as a name.  An index is unreadable in a shard file and
+        meaningless if the table is ever reordered, so it is resolved here,
+        once, at write time.  When ``families`` is absent the raw integer is
+        kept -- a legible fallback beats a crash in the one column the ladder
+        analysis reads.
+
+        Returns:
+            ``"swaps=3,base=hypercube"``, or ``None`` for a cohort row.
+        """
+        if self.source != "constructed":
+            return None
+        bases = _ladder_bases()
+        parts: list[str] = []
+        for name, value in self.params:
+            if name == "base" and 0 <= value < len(bases):
+                parts.append(f"{name}={bases[value]}")
+            else:
+                parts.append(f"{name}={value}")
+        return ",".join(parts)
+
+    @property
+    def record_key(self) -> str:
+        """A stable address built from the fields the **record** carries.
+
+        Distinct from :attr:`key` on purpose.  :attr:`key` hashes the raw
+        integer ``params`` and decides shard membership; this one is
+        reconstructible from a written row, which is what resume needs.  Using
+        one string for both would force resume to invert the base-index
+        rendering, and a rendering that must round-trip is a rendering that
+        cannot be improved.
+        """
+        return (
+            f"{self.source}|{self.family}|{self.n_target}|{self.replicate}"
+            f"|{self.rendered_params()}|{self.dataset}|{self.graph_index}"
         )
 
 
@@ -499,8 +559,13 @@ class WorkUnit:
 
     @property
     def key(self) -> str:
-        """A stable string address for hashing, sharding and resume."""
+        """A stable string address for hashing and sharding."""
         return f"{self.graph.key}|{self.representation}|{self.arm}"
+
+    @property
+    def record_key(self) -> str:
+        """The same unit, addressed by what a written row carries.  For resume."""
+        return f"{self.graph.record_key}|{self.representation}|{self.arm}"
 
 
 def ablation_stratum(spec: GraphSpec, n_nodes: int) -> str:
@@ -646,7 +711,7 @@ def _constructed_entries(seed: int) -> tuple[GridEntry, ...]:
         TrackAMissingError: when ``families.py`` is not in this checkout.
     """
     try:
-        from benchmarks.real_data.eval_t13_complexity import families
+        families = importlib.import_module(f"{__package__}.families")
     except ImportError as exc:  # pragma: no cover - depends on track A
         raise TrackAMissingError(
             "--source constructed needs families.py, which is track A's module and is "
@@ -738,9 +803,9 @@ def symmetry_fields(graph: nx.Graph, *, available: bool) -> dict[str, Any]:
     """
     if not available:
         return dict.fromkeys(schema.SYMMETRY_FIELDS)
-    from benchmarks.real_data.eval_t13_complexity import symmetry
+    symmetry = importlib.import_module(f"{__package__}.symmetry")
 
-    record = dict(symmetry.resolution_record(graph))
+    record: dict[str, Any] = dict(symmetry.resolution_record(graph))
     if set(record) != set(schema.SYMMETRY_FIELDS):
         raise TrackAMissingError(
             f"symmetry.resolution_record returned keys {sorted(record)}, expected "
@@ -756,7 +821,7 @@ def symmetry_available() -> bool:
         ``True`` when ``resolution_record`` is importable.
     """
     try:
-        from benchmarks.real_data.eval_t13_complexity import symmetry
+        symmetry = importlib.import_module(f"{__package__}.symmetry")
     except ImportError:
         return False
     return hasattr(symmetry, "resolution_record")
@@ -1145,6 +1210,7 @@ def assemble_record(
         "family": spec.family,
         "n_target": spec.n_target,
         "replicate": spec.replicate,
+        "params": spec.rendered_params(),
         "dataset": spec.dataset,
         "graph_index": spec.graph_index,
         "graph_id": spec.graph_id,
@@ -1284,15 +1350,11 @@ def existing_unit_keys(path: Path) -> set[str]:
                 continue
             if row.get("record_kind") == "header":
                 continue
-            spec = GraphSpec(
-                source=row["source"],
-                family=row["family"],
-                n_target=row["n_target"],
-                replicate=row["replicate"],
-                dataset=row["dataset"],
-                graph_index=row["graph_index"],
+            keys.add(
+                f"{row['source']}|{row['family']}|{row['n_target']}|{row['replicate']}"
+                f"|{row['params']}|{row['dataset']}|{row['graph_index']}"
+                f"|{row['representation']}|{row['arm']}"
             )
-            keys.add(WorkUnit(spec, row["representation"], row["arm"]).key)
     return keys
 
 
@@ -1395,7 +1457,8 @@ def run_shard(config: RunConfig) -> dict[str, int]:
                     arms=config.arms,
                     ablation_keys=ablation_keys,
                 )
-                if shard_of(unit.key, config.n_shards) == config.shard and unit.key not in done
+                if shard_of(unit.key, config.n_shards) == config.shard
+                and unit.record_key not in done
             ]
             if not units:
                 continue
