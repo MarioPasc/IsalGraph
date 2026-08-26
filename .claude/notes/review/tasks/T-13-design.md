@@ -436,12 +436,42 @@ separable.**
   right, and it is Corollary 2 measured: the triplet key removes every branch it can distinguish,
   and what it cannot distinguish is exactly the orbits, so the residual work is orbit redundancy.
 
-So the paper's sentence becomes two named parameters rather than one hedge:
+~~So the paper's sentence becomes two named parameters rather than one hedge:~~
 
-> **The unpruned canonical search's cost is governed by the degree sequence; the pruned search's
+> ~~**The unpruned canonical search's cost is governed by the degree sequence; the pruned search's
 > cost is governed by the automorphism group.** Measured on a ladder holding `n`, `m` and the degree
 > sequence fixed, the unpruned arm varies by 1.10× across 4.3 orders of magnitude in `|Aut|` while
-> the pruned arm varies by 127×.
+> the pruned arm varies by 127×.~~
+
+> ## 🔴 RETRACTED 2026-08-26 by the campaign (array 2108126). Do not use this sentence.
+>
+> It was drafted from a **20 s pilot on one ladder** and generalised a cell into a law. At the
+> frozen 300 s budget over all 21 cells, the unpruned arm's flatness is a property of **sparse**
+> ladders, not of the unpruned algorithm:
+>
+> | ladder | `\|Aut\|` span | exhaustive fold |
+> |---|---:|---:|
+> | spider (tree) n = 31 / 33 / 65 | 3.7 / 4.3 / 4.6 | **1.11× / 1.14× / 1.09×** |
+> | complete bipartite n = 8 / 10 / 12 / 14 | 2.5 / 4.5 / 6.0 / 7.7 | 1.76× / 3.58× / 6.96× / **14.78×** |
+>
+> and its rule-7 outcome is **ρ = +0.300, 7 of 9 cells, p = 0.18 — not significant**, on a sample
+> **57.6 % censored**. The pilot cell reproduced exactly (1.14×); the generalisation did not.
+>
+> **What survives, and it is still Corollary 2.** Pruning does not make easy graphs faster — on the
+> 56 graphs where both arms complete the median ratio is **1.00×**. It converts *censored* graphs
+> into *completed* ones: **56 → 73 completions (+30 %)**, with the pruned arm's per-ladder dynamic
+> range reaching **46,170×** against the exhaustive arm's 14.8×. Pruning removes what the invariant
+> can discriminate, so what remains is automorphic redundancy and the `|Aut|` dependence gets
+> **sharper**.
+>
+> **The confirmatory result is `isalgraph_pruned`: ρ = +0.892, 11 of 12 cells, p = 0.0064**, with
+> the five search-free arms flat at fold 1.0–1.1× as the null.
+>
+> **And the pilot's unexplained nauty jump was real, not contention.** Measured on an exclusive
+> node, `nauty_graph6` and `sparse6_nauty` correlate **negatively** (median ρ ≈ −0.61, 18 of 20
+> cells) and complete 94.7 % against our 55.3 %. That is Corollary 3 confirmed: the one family
+> implementing automorphism detection is the one that escapes the law. Full interpretation:
+> `results/reports/T-13-complexity/T-13-FRAMING.md`.
 
 That is a stronger answer to R3.7d than "the worst case is `|Aut|`-governed", because it says which
 variant obeys which parameter and why, and it is the reason the pruned form is the one the paper
