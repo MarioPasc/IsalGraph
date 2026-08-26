@@ -698,7 +698,7 @@ def _cohort_entries(datasets: Sequence[str] | None) -> tuple[GridEntry, ...]:
     return tuple(entries)
 
 
-def _constructed_entries(seed: int) -> tuple[GridEntry, ...]:
+def _constructed_entries(seed: int, replicates: int | None = None) -> tuple[GridEntry, ...]:
     """Build the constructed half of the grid via track A's ``families``.
 
     Args:
@@ -720,7 +720,9 @@ def _constructed_entries(seed: int) -> tuple[GridEntry, ...]:
 
     entries: list[GridEntry] = []
     for spec in families.enumerate_grid(
-        sizes=families.SIZES, replicates=families.REPLICATES, seed=seed
+        sizes=families.SIZES,
+        replicates=families.REPLICATES if replicates is None else replicates,
+        seed=seed,
     ):
         entries.append(
             GridEntry(
@@ -737,12 +739,25 @@ def _constructed_entries(seed: int) -> tuple[GridEntry, ...]:
     return tuple(entries)
 
 
-def build_grid(source: str, *, datasets: Sequence[str] | None, seed: int) -> tuple[GridEntry, ...]:
+def build_grid(
+    source: str,
+    *,
+    datasets: Sequence[str] | None,
+    seed: int,
+    families_filter: Sequence[str] | None = None,
+    replicates: int | None = None,
+) -> tuple[GridEntry, ...]:
     """Build every graph of the requested half of the grid.
 
     Args:
         source: ``"constructed"`` or ``"cohort"``.
         datasets: cohort names, ignored for the constructed source.
+        families_filter: constructed family names to keep, or ``None`` for all.
+            Ignored for the cohort source.  The campaign runs the three ladder
+            families alone, because design rule 7 makes the within-``(n, m)``
+            ladder contrast the primary evidence and the other nine families
+            are supporting; restricting here keeps the grid honest, since the
+            selection is by family name and never by an observed timing.
         seed: campaign seed.
 
     Returns:
@@ -754,7 +769,14 @@ def build_grid(source: str, *, datasets: Sequence[str] | None, seed: int) -> tup
     if source == "cohort":
         return _cohort_entries(datasets)
     if source == "constructed":
-        return _constructed_entries(seed)
+        entries = _constructed_entries(seed, replicates)
+        if families_filter is None:
+            return entries
+        keep = frozenset(families_filter)
+        unknown = keep - {entry.spec.family for entry in entries if entry.spec.family}
+        if unknown:
+            raise ValueError(f"unknown constructed families: {sorted(unknown)}")
+        return tuple(entry for entry in entries if entry.spec.family in keep)
     raise ValueError(f"unknown source {source!r}; known: {list(schema.SOURCES)}")
 
 
@@ -1371,6 +1393,8 @@ class RunConfig:
     shard: int
     n_shards: int
     datasets: tuple[str, ...] | None
+    families: tuple[str, ...] | None
+    replicates: int | None
     arms: tuple[str, ...]
     representations: tuple[str, ...]
     budget_s: float
@@ -1410,7 +1434,13 @@ def run_shard(config: RunConfig) -> dict[str, int]:
             "and no row of this shard may enter the |Aut| regression"
         )
 
-    entries = build_grid(config.source, datasets=config.datasets, seed=config.seed)
+    entries = build_grid(
+        config.source,
+        datasets=config.datasets,
+        seed=config.seed,
+        families_filter=config.families,
+        replicates=config.replicates,
+    )
     LOGGER.info("grid: %d graphs from source=%s", len(entries), config.source)
 
     properties = {entry.spec.key: graph_properties(entry.graph) for entry in entries}
@@ -1556,6 +1586,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="cohort name; repeatable. Default: every dataset present.",
     )
     parser.add_argument(
+        "--families",
+        default=None,
+        help=(
+            "comma-separated constructed family names to keep. Default: all. "
+            "The campaign uses the three ladder families."
+        ),
+    )
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=None,
+        help=(
+            "replicates per random cell. Default: families.REPLICATES (5). "
+            "The campaign uses 1."
+        ),
+    )
+    parser.add_argument(
         "--arms",
         default="default",
         help=f"comma-separated, from {list(schema.ARMS)}",
@@ -1616,6 +1663,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         shard=int(args.shard),
         n_shards=int(args.n_shards),
         datasets=tuple(args.dataset) if args.dataset else None,
+        families=(
+            tuple(f.strip() for f in str(args.families).split(",") if f.strip())
+            if args.families
+            else None
+        ),
+        replicates=None if args.replicates is None else int(args.replicates),
         arms=arms,
         representations=representations,
         budget_s=float(args.budget_s),

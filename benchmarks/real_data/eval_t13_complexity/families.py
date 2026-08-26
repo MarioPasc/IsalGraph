@@ -158,6 +158,13 @@ FAMILIES: tuple[str, ...] = (
 #: family snaps these to its nearest realisable order.
 SIZES: tuple[int, ...] = (8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 64)
 
+#: Replicates per cell for the *random* families; the deterministic ones ignore
+#: it and emit one instance.  Frozen at 5 by `CONTRACTS.md` §3 before the
+#: campaign ran, and it is the value that produces the 664-spec grid the design
+#: note records.  It lives here, beside :data:`SIZES`, so that the whole grid
+#: definition is one module rather than a constant a caller has to remember.
+REPLICATES: int = 5
+
 #: Ladder bases, indexed by the integer stored under ``params["base"]``.
 #: ``params`` values must be ints so that a :class:`FamilySpec` stays hashable
 #: under its declared type, so the base is carried as its index here.

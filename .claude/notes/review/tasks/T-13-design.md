@@ -281,3 +281,119 @@ budget. The cost is entirely in the censored tail, which is bounded by construct
 `700 × 13 × 300 s = 758 core-h` if everything censored; realistically the search-free arms are
 microseconds and only the high-`|Aut|` cells of the search-based arms censor. **Estimate 400–700
 core-h**, one whole-node array on `cpu_partition`, ≥ 2 h per task (SCBI floor).
+
+### 6.1 Amendment, 2026-08-26 — the RV arm does not re-time the whole cohort
+
+**Frozen before any campaign runs.** Inspecting T-06's per-graph arrays
+(`data/source/T06{,_exhaustive}/encodings/{suite1,suite2}/*.npz`) shows they already carry
+`graph_ids, node_counts, edge_counts, length, status, fallback_used, seconds` for every
+(graph, representation). Measured on Mutagenicity (4,040 graphs):
+
+| arm | median `seconds` | max | censored |
+|---|---:|---:|---:|
+| `isalgraph_exhaustive` | 0.400 s | **31.3 s** | 888 (22.0 %) |
+| `isalgraph_pruned` | 0.000771 s | **300.0 s** | 101 (**2.50 %** — reproduces T-06's headline) |
+
+So T-06's exhaustive arm ran at a **≈ 30 s** budget and its pruned arm at **300 s**. Re-timing the
+full cohort at a uniform 300 s would cost ≈ 74 core-h on Mutagenicity's exhaustive arm alone, to
+reproduce numbers that already exist.
+
+**Revised RV arm, in three parts:**
+
+1. **Symmetry columns over all 16,370 graphs** — `log10|Aut|`, orbits, the triplet / 1-WL / orbit
+   partitions and both refinement tests — joined onto T-06's existing per-graph records by
+   `(dataset, graph_id)`. Cheap (`pynauty` plus pure-Python refinement). This is what generalises
+   T-06's Mutagenicity-only `|Aut|` step function to all ten datasets.
+2. **A controlled re-timing of a stratified subsample** (~2,000 graphs, strata crossed on
+   `n`-band × `log10|Aut|`-band), run under the §3 timing rule on an exclusive node. Its purpose is
+   to **bound the bias** in T-06's timings, which were produced under 5-way local concurrency: the
+   ratio distribution `t_T13 / t_T06` is reported per stratum. A bias that is flat across `|Aut|`
+   bands leaves T-06's records usable as descriptive support; one that is not, retires them.
+3. **T-06's records are descriptive support, never primary**, and every figure drawn from them says
+   so. The primary evidence remains CE.
+
+**Revised estimate: 150–400 core-h.** Unchanged conclusion: no escalation needed (threshold 5,000).
+
+### 6.2 Amendment, 2026-08-26 — which exhaustive arm, and the budget object
+
+Two defects in CONTRACTS §5.2, both found by track-C and verified by the orchestrator in the source.
+
+**1. `isalgraph_exhaustive`, not `isalgraph_canonical`, is the exhaustive arm above `n = 12`.**
+`isalgraph_canonical` carries `Capability.SUITE1_ONLY` (`isalgraph_ref.py:267`) and
+`_check_scope` raises `SuiteScopeError` above `n = 12` (`:163`), so the arm originally designated
+primary cannot report a timing on most of the constructed grid. The two arms share one `encode`
+path (`:196–212`) with no `except` and no reference to `fallback_variant` — **the D14 fallback is
+declarative and is performed by the campaign driver, not by the backend** — so inside `measure.py`
+they are behaviourally identical and differ only in that guard. The guard encodes a *cohort policy*
+derived from T-04's finding that `canonical_string` costs 342 ms/graph with 12/400 timeouts on
+Suite-2 AIDS; T-13 exists to characterise exactly that, so a guard encoding the conclusion may not
+censor the experiment establishing it. Using `isalgraph_exhaustive` also keeps T-13 joinable to
+T-06's Suite-2 records, which the RV arm needs.
+**Consistency gate**: at `n ≤ 12` both arms run and must agree on `status` and `length_chars`.
+
+Consequence for the record: `fallback_used` is **never `true`** under `measure.py`, because the
+runner does not implement D14. It is `null` where no fallback is declared and `false` otherwise, and
+a future `true` means someone added a substitution.
+
+**2. One fully-populated `Budget` is threaded through every backend.** `base.py:180–194` documents
+it as heterogeneous — *"only the fields a backend declares are read"*. Passing `budget=None` to the
+non-IsalGraph arms would leave `max_projections` unset, and `min_dfs.py:372` reads
+`cap = MAX_PROJECTIONS if budget is None else budget.max_projections`, so an incompletely
+populated budget makes min-DFS **unbounded** and re-opens the OOM that killed the first Suite-2 run.
+`max_projections = 50,000` is a **memory** cap, not a speed knob, and must stay set.
+The resolved budget is serialised into the record as `budget_spec`: T-27 established for this
+project that a method name without its options string is not a specification, and a censoring rate
+is meaningless without the caps that produced it. Min-DFS truncation at the projection cap is
+recorded `status="censored"`, `error_kind="max_projections"` — a different mechanism from a
+wall-clock kill, and the analysis may not pool them.
+
+### 6.3 Amendment, 2026-08-26 — the pilot sharpens Corollary 2 into a two-parameter statement
+
+**Recorded before the campaign. Orchestrator's own pilot** on track-A's `spider_ladder` at `n = 33`
+(a tree: `m = 32`, 8 legs of length 4, `n`, `m` **and the degree sequence** fixed across all four
+rungs; workstation, `engine() == "cpp"`, 20 s budget). Times in ms:
+
+| rung | `log10\|Aut\|` | `isalgraph_exhaustive` | `isalgraph_pruned` | `isalgraph_greedy` | `min_dfs` | `graph6` |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 4.606 | 476.7 | **380.7** | 0.5 | **4471.7** | 0.4 |
+| 1 | 2.857 | 487.3 | **74.1** | 0.5 | 75.9 | 0.4 |
+| 2 | 1.380 | 515.1 | **14.7** | 0.5 | 10.9 | 0.4 |
+| 3 | 0.301 | 468.2 | **3.0** | 0.5 | 8.6 | 0.4 |
+
+**The two search arms separate the two governing parameters, and the ladder is what makes them
+separable.**
+
+- **The unpruned arm is flat**: 1.10× across a 4.3-order range in `|Aut|`. Mechanistically right —
+  the unpruned search expands every branch, so its leaf count is `≤ n · Π_f b_f` where the `b_f`
+  are neighbour-choice branching factors. Those are determined by the **degree sequence**, which
+  the ladder holds fixed. Symmetry is invisible to it because it prunes nothing.
+- **The pruned arm falls 127×** and is monotone in `|Aut|` on all four rungs. Also mechanistically
+  right, and it is Corollary 2 measured: the triplet key removes every branch it can distinguish,
+  and what it cannot distinguish is exactly the orbits, so the residual work is orbit redundancy.
+
+So the paper's sentence becomes two named parameters rather than one hedge:
+
+> **The unpruned canonical search's cost is governed by the degree sequence; the pruned search's
+> cost is governed by the automorphism group.** Measured on a ladder holding `n`, `m` and the degree
+> sequence fixed, the unpruned arm varies by 1.10× across 4.3 orders of magnitude in `|Aut|` while
+> the pruned arm varies by 127×.
+
+That is a stronger answer to R3.7d than "the worst case is `|Aut|`-governed", because it says which
+variant obeys which parameter and why, and it is the reason the pruned form is the one the paper
+ships.
+
+**Two consequences for the campaign, frozen here:**
+
+1. The **exhaustive-versus-pruned contrast is a primary comparison**, not incidental. Both arms run
+   on every ladder rung.
+2. The **`no_bnb` ablation gains importance**: branch-and-bound exists only in the C++ engine
+   (`native/src/canonical.cpp:193`) and has no counterpart in the manuscript's algorithm, so if the
+   unpruned arm's flatness is a property of the *algorithm* it must survive `set_branch_and_bound(False)`.
+   Run the ablation on every ladder rung, not only on a stratified subsample.
+
+**Not carried forward from the pilot**: `nauty_graph6` and `sparse6_nauty` read 1.3 / 1.0 / 318.4 /
+158.5 ms across the four rungs — a 300× jump between rungs 1 and 2 that both arms show together.
+Two wave agents were running concurrently on this workstation during the pilot, so this is most
+likely contention, not a nauty pathology. **It is not reported and must be re-measured under
+exclusive allocation.** It is also the direct justification for the whole-node `--exclusive`
+requirement in §3 rule 2.
