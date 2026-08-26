@@ -172,3 +172,52 @@ preamble at `mail.txt:83` — at no marginal cost ([demands](../plan/demands.md)
 - **T-17**'s comparison table.
 - Restoring `docs/references/` — recorded as a defect, fixed by whoever owns the repo hygiene ticket.
 - Any manuscript edit. T-07 emits fragments; `review-answer` lands them.
+
+---
+
+## 7. Amendments during execution
+
+### A1 — 2026-08-26. Both blocking premises about the sources were wrong, in opposite directions
+
+Recorded in §1 items 1 and 2 before any agent ran. [28]'s in-repo PDF path is dead and the file was
+recovered from `a23acbf`; [29] turned out to be CC BY on PMC12344769 rather than reachable only
+through its abstract. **The ticket would have stalled on the first and been weaker on the second.**
+
+### A2 — 2026-08-26. The Verdict column was built, measured, and then removed on PI instruction
+
+§3.3 froze a five-column table with an explicit verdict column, per the PI's answer of the same day.
+It was built and measured at **0.65 p**, inside budget. The PI then directed that the verdict column
+be removed regardless.
+
+**Done.** Tab. 3 is four columns. R3.1a(i) asks us to *identify* which components are inherited,
+modified or genuinely new, so that identification is carried by **three grouped row blocks** instead
+— no column, narrower than before, and the demand stays discharged. Final measurement **0.67 p**
+(the grouping costs three rows, which is why it is above the five-column 0.65 p).
+
+**A measurement worth keeping**, because it contradicts the intuition that motivated the change: the
+narrow verdict column cost **nothing**. Variants with and without it both measured **310.4 pt** of
+table body. The saving came entirely from the prose columns being wider and wrapping less, not from
+deleting the column. The page cost of Tab. 3 is driven by `review`'s `\@blstr{1.5}`
+(`elsarticle.cls:73`), which stretches every table line by 1.5×; `\linespread{1}` inside the float
+takes the table from **over a full page to 0.67 p** and is the only lever that matters.
+
+### A3 — 2026-08-26. Stop-and-ask 1 did not fire; stop-and-ask 2 fired but is inert
+
+- **Condition 1** — *"a predecessor already contains a completeness theorem"*. **Did not fire, and
+  the negative is now evidenced**: `theorem`, `proof`, `lemma`, `proposition` each occur **0 times**
+  in both [28] and [29]. Theorem 2.12 is genuinely new.
+- **Condition 2** — *"the code contradicts the paper on the CDLL or the normalisation"*. **Fired on
+  the normalisation, and is inert for this ticket.** [29] claims exhaustiveness over Algorithm 2's
+  steps 7 and 9; the BioC text has all three algorithm bodies stripped, so what those steps range
+  over cannot be read; the public implementation enumerates the starting heavy atom only. Under
+  frozen rule 3.2.4 the paper governs, and **no printed cell depends on the disagreement** — Tab. 3
+  attributes only the ordering criterion, which both sources confirm verbatim. Escalated as a PI
+  note in `REPORT.md` §4 rather than as a blocker, because there is nothing to decide: the table is
+  correct either way.
+
+### A4 — the conservative rule cost us rows, as designed
+
+Nine components: **three inherited, five modified, one new**. Every generalisation was recorded as
+*modified*, and the metric corollary was folded into the theorem row rather than counted as a second
+novelty. The table understates rather than overstates, which is the correct posture for an artifact
+answering R3.1a.
