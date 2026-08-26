@@ -103,9 +103,22 @@ from benchmarks.real_data.eval_t13_complexity import measure
 info = measure.assert_engine()
 sys.stderr.write(
     f"[engine] {isalgraph.engine()} build_hash={info['build_hash']} "
-    f"compiler={info.get('compiler')} isa={info.get('isa')}\n"
+    f"compiler={info.get('compiler')} isa={info.get('isa_level')} "
+    f"avx2={info.get('avx2')} avx512f={info.get('avx512f')}\n"
 )
 ENGINE_CHECK
+
+# pynauty's vendored nauty was built on the Intel/AVX-512 login node and dies
+# with SIGILL on the AMD families, which have no AVX-512. It IMPORTS cleanly
+# there and faults only inside autgrp, so this must CALL it, not import it.
+"${PY}" - <<'PYEOF' || { echo "[FATAL] pynauty.autgrp SIGILLs on $(hostname) -- wrong node family for this build" >&2; exit 78; }
+import pynauty
+g = pynauty.Graph(4)
+g.connect_vertex(0, [1, 2, 3])
+mantissa, exponent = pynauty.autgrp(g)[1], pynauty.autgrp(g)[2]
+assert abs(mantissa * 10 ** exponent - 6.0) < 1e-9, (mantissa, exponent)
+print("[pynauty] autgrp OK on this ISA (K_{1,3} -> 6)")
+PYEOF
 
 # ---------------------------------------------------------------------------
 # LOCALSCRATCH staging
