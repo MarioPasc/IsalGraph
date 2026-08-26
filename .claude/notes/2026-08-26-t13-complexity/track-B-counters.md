@@ -35,9 +35,14 @@ Public surface:
 | `canonical_counts(g)` | mirrors `canonical.canonical_string(g)` |
 | `pruned_counts(g)` | mirrors `canonical_pruned.pruned_canonical_string(g)` |
 | `greedy_min_counts(g)` | mirrors `GreedyMinG2S` — the registered `isalgraph_greedy` unit of work |
-| `greedy_detail` / `canonical_detail` / `pruned_detail` | as above, plus the `FrameRecord` list |
+| `canonical_profile(g, *, pruned)` | counts plus `SearchProfile(candidates_seen, candidates_expanded)`; `.prunes` answers "did the triplet key remove anything" as a scalar, so it scales to any graph |
+| `greedy_detail` / `canonical_detail` / `pruned_detail` | as above, plus the `FrameRecord` list — **small graphs only** |
 | `pair_generation_work(m)` | `(pairs, sort_comparisons, P·log₂P)` for one `generate_pairs_sorted_by_sum(m)` call |
 | `InstrumentationError` | raised where the reference raises `RuntimeError` |
+
+**Memory contract.** `*_counts` and `canonical_profile` keep running scalars and retain **nothing**
+per frame. Only `*_detail` materialises the `FrameRecord` list. That separation is not cosmetic —
+see *Defects* below.
 
 The exhaustive and pruned searches share one driver, `_step_counted`, selected by
 `ctx.triplets is None` — the two frozen functions differ only in the triplet filter applied to the
@@ -335,7 +340,23 @@ The derivation is right and I was wrong. The lemma is still worth stating in the
 because without it the formula reads as an error to a careful reviewer — which is exactly what
 happened here.
 
-**A second, smaller correction, to my own test rather than to the brief.** I first asserted that
+**A defect in my own first implementation, worth recording because it bites track C.** The recorder
+originally appended one `FrameRecord` per frame unconditionally. A greedy encode has `m` frames, so
+that is harmless; the canonical search tree is super-exponential in the branching factor, so it is
+not. **The first parity sweep was OOM-killed part-way through the canonical arm** — silently, with
+no traceback and no exit code, which is exactly the failure mode that looks like a hang. The fix
+splits the two paths: `*_counts` and `canonical_profile` keep running scalars (`frame_count`,
+`scan_depth_max`, `candidates_seen`, `candidates_expanded`) and retain nothing; `*_detail` collects,
+and its docstring says small graphs only.
+`test_counting_and_collecting_paths_agree` keeps the two in step, asserting equal strings, equal
+`OperationCounts`, `frames == len(frame_list)` and `scan_depth_max == max(f.pair_trials)`.
+
+**Track C: `measure.py` must call `canonical_counts` / `canonical_profile`, never `canonical_detail`,
+on the constructed families.** CONTRACTS §5.3 censors on a 300 s budget in a killed subprocess,
+which contains an OOM, but a shard that dies on memory rather than on the budget records nothing and
+looks like a hang.
+
+**A third item, a correction to my own test rather than to the brief.** I first asserted that
 the canonical arms perform *more* neighbour checks per pair trial than greedy, on the strength of
 §2.1's "`_find_new_neighbor` (first match, `O(deg)`); canonical materialises all candidates". They
 do not, in aggregate: on the same graph, exhaustive canonical ran 2.56 checks per trial against
