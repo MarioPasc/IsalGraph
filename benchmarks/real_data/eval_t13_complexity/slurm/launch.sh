@@ -75,6 +75,13 @@ NODE_FAMILY="${T13_NODE_FAMILY:-sr}"
 SHARDS_PER_TASK="${T13_SHARDS_PER_TASK:-128}"
 N_SHARDS="${T13_N_SHARDS:-128}"
 BUDGET_S="${T13_BUDGET_S:-300}"
+# Picasso's Lua sbatch wrapper REFUSES a job that specifies neither --mem nor
+# --mem-per-cpu, and --exclusive does not satisfy it: the request fails with
+# "allocation failure: Memory required by task is not available". Caught by
+# sbatch --test-only, 2026-08-26; a live submission would have sat PENDING and
+# looked like queue pressure. sr has 439 GB usable, so 200 G is generous for
+# eight single-threaded shards and still far inside the family ceiling.
+MEM="${T13_MEM:-200G}"
 SEED="${T13_SEED:-13}"
 ARMS="${T13_ARMS:-default}"
 # The campaign runs the ladders alone at one replicate: design rule 7 makes the
@@ -96,6 +103,7 @@ while [[ $# -gt 0 ]]; do
         --families)        FAMILIES="$2"; shift 2 ;;
         --replicates)      REPLICATES="$2"; shift 2 ;;
         --budget-s)        BUDGET_S="$2"; shift 2 ;;
+        --mem)             MEM="$2"; shift 2 ;;
         --seed)            SEED="$2"; shift 2 ;;
         --node-family)     NODE_FAMILY="$2"; shift 2 ;;
         --time)            TIME_LIMIT="$2"; shift 2 ;;
@@ -156,6 +164,7 @@ echo "Shards:          ${N_SHARDS} (${SHARDS_PER_TASK} per task, one per core)"
 echo "Array tasks:     ${N_TASKS} (indices 0-${ARRAY_MAX})"
 echo "Node family:     ${NODE_FAMILY} (pinned: wall clock is the reported quantity)"
 echo "Budget:          ${BUDGET_S} s per (graph, representation, arm)"
+echo "Memory:          ${MEM}"
 echo "Wallclock:       ${TIME_LIMIT}"
 echo "Repo:            ${REPO_DIR}"
 echo "Env:             ${CONDA_ENV_PATH}"
@@ -171,6 +180,7 @@ SBATCH_ARGS=(
     --nodes=1
     --ntasks=1
     --exclusive
+    --mem="${MEM}"
     --constraint="${NODE_FAMILY}"
     --account="${ACCOUNT}"
     --chdir="${REPO_DIR}"
