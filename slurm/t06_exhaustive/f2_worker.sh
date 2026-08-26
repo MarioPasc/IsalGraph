@@ -98,8 +98,78 @@ if ! ls "${DIST}/suite1/"*"__${T06_REFERENCE_ARM}__levenshtein.npz" >/dev/null 2
     exit 2
 fi
 
+# The same failure on the other axis, and it is the one that actually happened.
+# Run 1 (2106063/2106064, 2026-08-26) staged distances/ and NOT encodings/: the
+# tree held only the 30 cells the encode array wrote. Claim B read distances/ and
+# was complete; Claim A read encodings/, found the reference arm alone, and all
+# 15 shards wrote `a1_cells: []` while reporting ok=3 fail=0. The merge died
+# 6 h 50 m later in the A2 post-hoc with "need >= 2 named methods, got 1".
+#
+# A1 emits one cell per COMPARATOR, never per IsalGraph arm -- measured on
+# suite2/linux, the 12 cells are 6 competitors (adjacency, agm_cam, graph6,
+# min_dfs, nauty_graph6, sparse6) x 2 arms (primary, complete_case). So the test
+# is not "how many representations" -- run 1 had two and still emitted nothing --
+# it is "is there anything here that is not one of ours".
+#
+# `find`, not `ls`: a cell may legitimately be a symlink into T06/encodings/, and
+# an `ls` that renders "name -> target" would feed the target path to sed and
+# count nonsense. find prints the path and nothing else.
+ENC_REPS=$(find "${ENC}" -maxdepth 2 -name '*__*.npz' 2>/dev/null \
+    | sed 's/.*__//; s/\.npz$//' | sort -u)
+# awk 'NF', not grep -c: an empty ENC_REPS still makes printf emit one blank
+# line, and `grep -cv '^isalgraph_'` counts that blank as a comparator -- so an
+# EMPTY encodings tree, the worst case of all, would sail past this guard.
+N_ENC_REPS=$(printf '%s\n' "${ENC_REPS}" | awk 'NF' | wc -l)
+N_ENC_COMPARATORS=$(printf '%s\n' "${ENC_REPS}" | awk 'NF && $0 !~ /^isalgraph_/' | wc -l)
+if [ "${N_ENC_COMPARATORS}" -lt 1 ]; then
+    echo "[FATAL] ${N_ENC_REPS} representation(s) under ${ENC} and NOT ONE comparator." >&2
+    echo "        Claim A emits one cell per comparator, so every shard would write" >&2
+    echo "        a1_cells=[] and still report ok, and the merge would fail hours" >&2
+    echo "        later in the A2 post-hoc with 'need >= 2 named methods, got 1'." >&2
+    echo "        Stage the competitor encodings with 'rsync -aL' so the Sandisk" >&2
+    echo "        symlinks into T06/encodings/ resolve into real files here." >&2
+    exit 2
+fi
+echo "[input] encodings: ${N_ENC_REPS} representations, ${N_ENC_COMPARATORS} comparators"
+
 # Completion rates describe THIS arm. The T-06 file describes the pruned arm and
 # would silently mis-describe this one.
+#
+# 🔴 AND THEY DESCRIBE WHATEVER ENC HELD WHEN THEY WERE WRITTEN. A plain
+# `[ ! -s ]` test reuses a file built from a smaller tree, which is how run 2
+# (2106210/2106211, 2026-08-26) reported N_actual=86: the file had been generated
+# during run 1 when ENC held only the 30 new cells, so it carried rows for
+# isalgraph_exhaustive and isalgraph_greedy ALONE. `c` is the count of cells
+# excluded for completion, computed at merge time from this file -- with no
+# competitor row present, nothing could be excluded and c came out 0 against
+# T-06's 7. The family was internally consistent (discrepancy=0) and wrong.
+#
+# So: regenerate whenever the file covers fewer representations than ENC does.
+if [ -s "${COMPLETION}" ]; then
+    N_COMP_REPS=$("$PY" - "${COMPLETION}" <<'PYEOF' 2>/dev/null || echo 0
+import json, sys
+reps = set()
+def walk(o):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k == "representation" and isinstance(v, str):
+                reps.add(v)
+            walk(v)
+    elif isinstance(o, list):
+        for v in o:
+            walk(v)
+walk(json.load(open(sys.argv[1])))
+print(len(reps))
+PYEOF
+)
+    if [ "${N_COMP_REPS}" -lt "${N_ENC_REPS}" ]; then
+        echo "[stale] ${COMPLETION} covers ${N_COMP_REPS} representations but ${ENC}" >&2
+        echo "        holds ${N_ENC_REPS}. Regenerating; a short completion table makes" >&2
+        echo "        c too small and N_actual too large, with discrepancy still 0." >&2
+        mv "${COMPLETION}" "${COMPLETION%.json}_stale_$(date +%Y%m%dT%H%M%SZ).json"
+    fi
+fi
+
 if [ ! -s "${COMPLETION}" ]; then
     "$PY" -m benchmarks.real_data.eval_encoding.t06_completion \
         --encodings "${ENC}" --out "${COMPLETION}" \
