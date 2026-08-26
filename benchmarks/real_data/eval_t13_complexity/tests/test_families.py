@@ -34,7 +34,14 @@ def grid() -> tuple[families.FamilySpec, ...]:
 # ----------------------------------------------------------------------------
 
 
-def test_families_tuple_is_the_frozen_ten() -> None:
+def test_families_tuple() -> None:
+    """CONTRACTS §3's ten, plus ``spider_ladder``.
+
+    The eleventh was added mid-wave on the orchestrator's instruction: the two
+    original ladder bases with factorial groups are dense (``K_{a,a}``) or
+    medium (``Q_d``), and a cost law demonstrated only there would not transfer
+    to the sparse IAM cohort.
+    """
     assert families.FAMILIES == (
         "path",
         "cycle",
@@ -46,6 +53,7 @@ def test_families_tuple_is_the_frozen_ten() -> None:
         "caterpillar",
         "rigid_er",
         "symmetry_ladder",
+        "spider_ladder",
     )
 
 
@@ -332,14 +340,16 @@ def test_symmetry_ladder_spans_are_measured(grid: tuple[families.FamilySpec, ...
     ``(n, m)``; the analysis must not read a slope off them alone.
     """
     spans = families.ladder_spans(grid, seed=_SEED)
-    assert len(spans) == 16
+    assert len(spans) == 16 + len(families.SPIDER_CELLS)
     short = {key for key, span in spans.items() if span < 3.0}
     assert short == {
         (8, "complete_bipartite"),
         (8, "hypercube"),
         (16, "hypercube"),
+        (10, "spider_k3"),  # the n <= 12 consistency gate; span log10(3!) = 0.778
     }
     assert spans[(64, "complete_bipartite")] > 60.0
+    assert spans[(61, "spider_k10")] == pytest.approx(math.log10(math.factorial(10)), abs=1e-9)
 
 
 def test_symmetry_ladder_rung_zero_is_the_closed_form_base(
@@ -361,6 +371,120 @@ def test_symmetry_ladder_rung_zero_is_the_closed_form_base(
         )
         graph = families.build(spec, seed=_SEED)
         assert symmetry.log10_aut(graph) == pytest.approx(expected, abs=families.AUT_TOLERANCE)
+
+
+# ----------------------------------------------------------------------------
+# spider_ladder -- the sparse matched design
+# ----------------------------------------------------------------------------
+
+
+def _spider(grid: tuple[families.FamilySpec, ...], k: int, leg: int) -> list[families.FamilySpec]:
+    """Every rung of one spider ladder, in rung order."""
+    specs = [
+        s
+        for s in grid
+        if s.family == "spider_ladder"
+        and dict(s.params)["legs"] == k
+        and dict(s.params)["leg"] == leg
+    ]
+    specs.sort(key=lambda s: dict(s.params)["rung"])
+    return specs
+
+
+@pytest.mark.parametrize(("k", "leg"), families.SPIDER_CELLS)
+def test_spider_ladder_holds_n_m_and_the_degree_sequence(
+    grid: tuple[families.FamilySpec, ...], k: int, leg: int
+) -> None:
+    """The three confounds, fixed by construction rather than by a swap.
+
+    ``n = 1 + sum L_i`` is invariant because :func:`~...families.spider_legs`
+    displaces lengths antisymmetrically; ``m = n - 1`` because every spider is a
+    tree; and the degree sequence is ``(k, 2^(n-1-k), 1^k)`` whatever the leg
+    partition, because the hub always has degree ``k``, there are always ``k``
+    leaves, and ``sum_i (L_i - 1) = (n - 1) - k`` does not depend on how the
+    lengths are distributed.
+    """
+    ladder = [families.build(s, seed=_SEED) for s in _spider(grid, k, leg)]
+    assert len(ladder) == len(families.spider_rungs(k, leg)) >= 2
+
+    assert len({(g.number_of_nodes(), g.number_of_edges()) for g in ladder}) == 1
+    assert all(nx.is_connected(g) for g in ladder)
+    assert all(nx.is_tree(g) for g in ladder)
+
+    sequences = {tuple(sorted((d for _v, d in g.degree()), reverse=True)) for g in ladder}
+    assert len(sequences) == 1
+    n = ladder[0].number_of_nodes()
+    assert sequences.pop() == tuple([k] + [2] * (n - 1 - k) + [1] * k)
+
+
+@pytest.mark.parametrize(("k", "leg"), families.SPIDER_CELLS)
+def test_spider_ladder_matches_its_closed_form(
+    grid: tuple[families.FamilySpec, ...], k: int, leg: int
+) -> None:
+    """``|Aut| = prod_d (m_d)!``, and rung ``j`` leaves ``k - 2j`` legs equal.
+
+    Unlike ``symmetry_ladder``, whose ``|Aut|`` can only be measured, every
+    spider rung is predicted exactly -- so ``build`` verifies this ladder the
+    same way it verifies ``complete``.
+    """
+    for spec in _spider(grid, k, leg):
+        rung = dict(spec.params)["rung"]
+        lengths = families.spider_legs(k, leg, rung)
+        assert sum(lengths) == k * leg
+        assert min(lengths) >= 1
+        assert spec.log10_aut_expected == pytest.approx(
+            math.log10(math.factorial(k - 2 * rung)), abs=1e-9
+        )
+        graph = families.build(spec, seed=_SEED)
+        assert symmetry.log10_aut(graph) == pytest.approx(
+            spec.log10_aut_expected, abs=families.AUT_TOLERANCE
+        )
+
+
+def test_spider_ladder_is_the_sparse_arm(grid: tuple[families.FamilySpec, ...]) -> None:
+    """Its density is far below both regular ladders', which is why it exists.
+
+    A tree is the sparsest connected graph, so the three ladders give the
+    matched design three separated densities and let the analysis answer "is it
+    really density?" instead of conceding it.
+    """
+
+    def density(spec: families.FamilySpec) -> float:
+        return 2.0 * (spec.n - 1) / (spec.n * (spec.n - 1))
+
+    spiders = [s for s in grid if s.family == "spider_ladder"]
+    assert spiders
+    assert max(density(s) for s in spiders) <= 0.20
+    # K_{32,32} at n = 64 for contrast: m = 1024, density ~0.508.
+    assert 2.0 * 1024 / (64 * 63) > 0.5
+
+
+def test_spider_legs_rejects_a_two_legged_spider() -> None:
+    """At ``k = 2`` the hub has degree 2, the spider is a path, and ``|Aut| = 2``
+    however unequal the legs are -- so the ladder would have no rungs."""
+    with pytest.raises(families.FamilyVerificationError, match="k >= 3"):
+        families.spider_legs(2, 4, 0)
+    path = nx.path_graph(9)
+    assert symmetry.log10_aut(path) == pytest.approx(math.log10(2.0), abs=1e-9)
+
+
+def test_spider_legs_rejects_a_rung_that_would_empty_a_leg() -> None:
+    assert families.spider_rungs(8, 4) == (0, 1, 2, 3)
+    assert families.spider_rungs(8, 8) == (0, 1, 2, 3, 4)
+    assert families.spider_rungs(10, 3) == (0, 1, 2)
+    with pytest.raises(families.FamilyVerificationError, match="out of range"):
+        families.spider_legs(8, 4, 4)  # would need a leg of length 0
+
+
+def test_spider_ladder_reaches_rigid_where_the_legs_allow_it(
+    grid: tuple[families.FamilySpec, ...],
+) -> None:
+    """When ``leg > k // 2`` the last rung makes every leg length distinct."""
+    for k, leg in ((10, 6), (8, 8)):
+        last = _spider(grid, k, leg)[-1]
+        assert last.log10_aut_expected == pytest.approx(0.0, abs=1e-12)
+        lengths = families.spider_legs(k, leg, dict(last.params)["rung"])
+        assert len(set(lengths)) == k
 
 
 def test_ladder_base_rejects_an_unrealisable_order() -> None:

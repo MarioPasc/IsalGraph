@@ -14,12 +14,24 @@ returns** -- a family whose measured ``|Aut|`` disagrees with its formula is a
 bug in this file, not a datum, and raises :class:`FamilyVerificationError`
 (`T-13-design.md` §3 rule 6).
 
-The matched design: ``symmetry_ladder``
----------------------------------------
+The matched designs: ``symmetry_ladder`` and ``spider_ladder``
+--------------------------------------------------------------
 
-The other nine families each break one confound.  ``symmetry_ladder`` breaks all
-of them at once and is the arm the primary analysis rule (§3 rule 7) is written
-against.  A ladder starts from a ``d``-regular base with a large closed-form
+The other nine families each break one confound.  The two ladders break all of
+them at once and are the arms the primary analysis rule (§3 rule 7) is written
+against: along a ladder ``n``, ``m`` and the whole degree sequence are held
+exactly while ``|Aut|`` falls.  They reach that the same guarantee by different
+routes and, critically, **at different densities** -- ``spider_ladder`` is a
+tree (``m = n - 1``), ``Q_d`` has ``m/n = d/2``, ``K_{a,a}`` has ``m = n^2/4``.
+Three ladders at matched ``n`` and three densities turn *"is the effect really
+density?"* from an objection into a measured answer, which matters because the
+real cohort is sparse (IAM mean density 0.094-0.607) and a law shown only on
+dense graphs would not transfer.
+
+``symmetry_ladder``
+~~~~~~~~~~~~~~~~~~~
+
+A ladder starts from a ``d``-regular base with a large closed-form
 ``|Aut|`` and applies ``k = 0, 1, 2, 4, 8, 16, 32`` **degree-preserving double
 edge swaps**, rejecting any swap that disconnects the graph.  Along a ladder
 ``n``, ``m`` **and the entire degree sequence** are exactly constant while
@@ -45,6 +57,32 @@ Two consequences of that, both deliberate:
 recorded as measured.  Discarding it would select on the outcome, which is the
 one thing this ticket cannot afford.
 
+``spider_ladder`` -- the sparse matched design
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A spider is a hub with ``k >= 3`` disjoint paths ("legs") of lengths
+``L_1..L_k`` summing to ``n - 1``.  It is the sparsest connected graph there is
+and still reaches a factorial group, which no regular base does at these orders.
+
+The three quantities are fixed **by construction, not by a check**, which is
+what makes this ladder stronger than a swap-driven one:
+
+- ``n = 1 + sum L_i``, and :func:`spider_legs` displaces leg lengths
+  antisymmetrically, so the sum is invariant;
+- ``m = n - 1``, because every spider is a tree;
+- the **degree sequence** is ``(k, 2^(n-1-k), 1^k)`` at every rung: the hub
+  always has degree ``k``, there are always exactly ``k`` leaves, and the
+  degree-2 count is ``sum_i (L_i - 1) = (n - 1) - k`` **whatever the
+  partition**.
+
+``|Aut| = prod_d (m_d)!`` where ``m_d`` counts the legs of length ``d``: for
+``k >= 3`` the hub is the unique vertex of degree ``>= 3`` and hence fixed, each
+leg is rigid once the hub is, so an automorphism is exactly a length-preserving
+permutation of legs.  Rung ``j`` leaves ``k - 2j`` legs equal, giving
+``|Aut| = (k - 2j)!`` and a span of ``log10(k!)``: 4.61 at ``k = 8``, 6.56 at
+``k = 10``.  ``k = 2`` is excluded -- the hub would have degree 2, the spider is
+a path, and ``|Aut| = 2`` however unequal the legs are.
+
 Determinism
 -----------
 
@@ -60,6 +98,7 @@ import hashlib
 import logging
 import math
 import random
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -75,11 +114,14 @@ __all__ = [
     "LADDER_BASES",
     "LADDER_SWAPS",
     "SIZES",
+    "SPIDER_CELLS",
     "FamilySpec",
     "FamilyVerificationError",
     "build",
     "enumerate_grid",
     "ladder_spans",
+    "spider_legs",
+    "spider_rungs",
 ]
 
 
@@ -94,7 +136,10 @@ class FamilyVerificationError(RuntimeError):
     """
 
 
-#: The ten families, in the order the design note tabulates them.
+#: The families, in the order the design note tabulates them.  ``spider_ladder``
+#: is not in `T-13-design.md` §2.3's table: it was added mid-wave, on the
+#: orchestrator's instruction, to give the matched design a **tree-density** arm
+#: (see the module docstring).
 FAMILIES: tuple[str, ...] = (
     "path",
     "cycle",
@@ -106,6 +151,7 @@ FAMILIES: tuple[str, ...] = (
     "caterpillar",
     "rigid_er",
     "symmetry_ladder",
+    "spider_ladder",
 )
 
 #: The requested orders of the factorial grid (`T-13-design.md` §2.3).  Each
@@ -120,6 +166,15 @@ LADDER_BASES: tuple[str, ...] = ("complete_bipartite", "hypercube")
 #: Swap counts per ladder.  Geometric rather than consecutive because ``|Aut|``
 #: falls fast at first and then plateaus, so the informative rungs are early.
 LADDER_SWAPS: tuple[int, ...] = (0, 1, 2, 4, 8, 16, 32)
+
+#: ``(legs, leg_length)`` of each ``spider_ladder``, realising ``n = k * L + 1``.
+#: A **fixed design**, not a size sweep: a spider's order is ``k * L + 1``, so
+#: snapping it to a requested size would have to move ``k`` (which changes the
+#: span, ``log10(k!)``) or ``L`` (which changes the density).  Neither is a free
+#: parameter here, so :func:`enumerate_grid` emits these cells whatever *sizes*
+#: it is given.  ``(3, 3)`` realises ``n = 10`` and is the ``n <= 12``
+#: consistency gate, where exhaustive search and exact GED are both tractable.
+SPIDER_CELLS: tuple[tuple[int, int], ...] = ((3, 3), (10, 3), (8, 4), (10, 6), (8, 8))
 
 #: Edge probability for ``rigid_er``, in percent (``params`` carries ints).
 #: ``G(n, 0.5)`` is the maximum-entropy draw at fixed ``n`` and is rigid with
@@ -256,6 +311,83 @@ def _build_caterpillar(spine: int, doubles: int) -> nx.Graph:
     for i in range(doubles):
         for _ in range(2):
             graph.add_edge(i, nxt)
+            nxt += 1
+    return graph
+
+
+def spider_legs(k: int, leg: int, rung: int) -> tuple[int, ...]:
+    """Leg lengths of one ``spider_ladder`` rung.
+
+    Rung ``j`` lengthens the first ``j`` legs to ``L+j, ..., L+1`` and shortens
+    the next ``j`` to ``L-1, ..., L-j``, leaving ``k - 2j`` legs at ``L``.  The
+    displacement is antisymmetric, so ``sum(lengths) = k * L`` at every rung and
+    ``n`` is fixed by construction rather than by a check.  ``|Aut|`` falls as
+    ``(k - 2j)!`` because exactly that many legs remain interchangeable.
+
+    Args:
+        k: number of legs.  Must be ``>= 3``: at ``k = 2`` the hub has degree 2,
+            the spider is a path, and ``|Aut| = 2`` regardless of the partition.
+        leg: the balanced leg length, i.e. rung 0's.
+        rung: the rung index ``j``.
+
+    Returns:
+        The ``k`` leg lengths, all ``>= 1``.
+
+    Raises:
+        FamilyVerificationError: if the parameters are out of range, in
+            particular if ``rung`` would drive a leg to length 0.
+    """
+    if k < 3:
+        raise FamilyVerificationError(f"a spider needs k >= 3 legs; k = {k} is a path")
+    if leg < 1:
+        raise FamilyVerificationError(f"spider leg length must be >= 1, got {leg}")
+    if rung < 0 or 2 * rung > k or rung > leg - 1:
+        raise FamilyVerificationError(
+            f"spider rung {rung} is out of range for k={k}, leg={leg}; "
+            f"the ladder has rungs 0..{min(k // 2, leg - 1)}"
+        )
+    lengths = [leg] * k
+    for i in range(rung):
+        lengths[i] = leg + (rung - i)
+        lengths[rung + i] = leg - (i + 1)
+    return tuple(lengths)
+
+
+def spider_rungs(k: int, leg: int) -> tuple[int, ...]:
+    """The rung indices a ``(k, leg)`` spider ladder admits."""
+    return tuple(range(min(k // 2, leg - 1) + 1))
+
+
+def _log10_spider_aut(lengths: Sequence[int]) -> float:
+    """``log10|Aut|`` of a spider, in closed form.
+
+    For ``k >= 3`` the hub is the unique vertex of degree ``>= 3`` and is fixed
+    by every automorphism; each leg is a path attached at one end, so it has no
+    internal automorphism once the hub is fixed.  An automorphism is therefore
+    exactly a permutation of the legs that preserves length, giving
+    ``|Aut| = prod_d (m_d)!`` where ``m_d`` counts the legs of length ``d``.
+    Verified against nauty on every rung of every cell.
+
+    Args:
+        lengths: the leg lengths.
+
+    Returns:
+        ``log10(prod_d m_d!)``.
+    """
+    counts = Counter(lengths)
+    return sum(_log10_factorial(m) for m in counts.values())
+
+
+def _build_spider(lengths: Sequence[int]) -> nx.Graph:
+    """A spider: a hub with disjoint paths of the given lengths attached."""
+    graph = nx.Graph()
+    graph.add_node(0)
+    nxt = 1
+    for length in lengths:
+        previous = 0
+        for _ in range(length):
+            graph.add_edge(previous, nxt)
+            previous = nxt
             nxt += 1
     return graph
 
@@ -410,6 +542,10 @@ def _construct(spec: FamilySpec, rng: random.Random) -> nx.Graph:
     if spec.family == "symmetry_ladder":
         base = _ladder_base(LADDER_BASES[_param(spec, "base")], n)
         return _apply_swaps(base, _param(spec, "swaps"), rng)
+    if spec.family == "spider_ladder":
+        return _build_spider(
+            spider_legs(_param(spec, "legs"), _param(spec, "leg"), _param(spec, "rung"))
+        )
     raise FamilyVerificationError(f"unknown family {spec.family!r}; known: {FAMILIES}")
 
 
@@ -465,6 +601,22 @@ def build(spec: FamilySpec, *, seed: int) -> nx.Graph:
             raise FamilyVerificationError(
                 f"symmetry_ladder n={spec.n} moved m from {base.number_of_edges()} to "
                 f"{graph.number_of_edges()}"
+            )
+
+    if spec.family == "spider_ladder":
+        k = _param(spec, "legs")
+        degrees = sorted((d for _v, d in graph.degree()), reverse=True)
+        # (k, 2^(n-1-k), 1^k) at every rung, whatever the leg partition.
+        expected_degrees = [k] + [2] * (spec.n - 1 - k) + [1] * k
+        if degrees != expected_degrees:
+            raise FamilyVerificationError(
+                f"spider_ladder n={spec.n} params={spec.params} has degree sequence "
+                f"{degrees}, not the invariant {expected_degrees}"
+            )
+        if int(graph.number_of_edges()) != spec.n - 1:
+            raise FamilyVerificationError(
+                f"spider_ladder n={spec.n} has {graph.number_of_edges()} edges, not the "
+                f"{spec.n - 1} a tree must have"
             )
 
     if spec.family == "rigid_er":
@@ -587,6 +739,23 @@ def _spec_ladder(n: int, base_index: int, swaps: int, replicate: int) -> FamilyS
     )
 
 
+def _spec_spider(k: int, leg: int, rung: int) -> FamilySpec:
+    """One ``spider_ladder`` rung, with its closed-form ``|Aut|``.
+
+    Unlike ``symmetry_ladder``, whose ``|Aut|`` can only be measured, every
+    spider rung has an exact formula, so :func:`build` verifies this ladder the
+    same way it verifies ``complete`` or ``hypercube``.
+    """
+    lengths = spider_legs(k, leg, rung)
+    return FamilySpec(
+        "spider_ladder",
+        1 + sum(lengths),
+        0,
+        _params(leg=leg, legs=k, rung=rung),
+        _log10_spider_aut(lengths),
+    )
+
+
 def enumerate_grid(*, sizes: Sequence[int], replicates: int, seed: int) -> tuple[FamilySpec, ...]:
     """The full constructed grid, de-duplicated and in a deterministic order.
 
@@ -640,6 +809,11 @@ def enumerate_grid(*, sizes: Sequence[int], replicates: int, seed: int) -> tuple
                     if ladder is not None:
                         specs.append(ladder)
 
+    # A spider's order is k * L + 1, so its cells are a fixed design rather than
+    # a snap of `sizes`; see SPIDER_CELLS.
+    for k, leg in SPIDER_CELLS:
+        specs.extend(_spec_spider(k, leg, rung) for rung in spider_rungs(k, leg))
+
     unique = dict.fromkeys(specs)
     family_rank = {name: i for i, name in enumerate(FAMILIES)}
     return tuple(sorted(unique, key=lambda s: (family_rank[s.family], s.n, s.params, s.replicate)))
@@ -660,17 +834,24 @@ def ladder_spans(grid: Sequence[FamilySpec], *, seed: int) -> dict[tuple[int, st
 
     Returns:
         ``{(n, base_name): max(log10|Aut|) - min(log10|Aut|)}`` over the rungs
-        present in *grid*, taking the best replicate at each rung (the swaps are
-        a random search for asymmetry, so the *lowest* ``|Aut|`` reached at a
-        rung is the one the ladder attains).
+        present in *grid*, taking the best replicate at each rung (a
+        ``symmetry_ladder`` swap is a random search for asymmetry, so the
+        *lowest* ``|Aut|`` reached at a rung is the one that ladder attains; a
+        ``spider_ladder`` rung is deterministic and the minimum is the value).
+        ``base_name`` is the ladder base for ``symmetry_ladder`` and
+        ``"spider_k<k>"`` for ``spider_ladder``.
     """
     reached: dict[tuple[int, str], dict[int, float]] = {}
     for spec in grid:
-        if spec.family != "symmetry_ladder":
+        if spec.family == "symmetry_ladder":
+            key = (spec.n, LADDER_BASES[_param(spec, "base")])
+            rung = _param(spec, "swaps")
+        elif spec.family == "spider_ladder":
+            key = (spec.n, f"spider_k{_param(spec, 'legs')}")
+            rung = _param(spec, "rung")
+        else:
             continue
-        key = (spec.n, LADDER_BASES[_param(spec, "base")])
-        swaps = _param(spec, "swaps")
         value = symmetry.log10_aut(build(spec, seed=seed))
         rungs = reached.setdefault(key, {})
-        rungs[swaps] = min(rungs.get(swaps, value), value)
+        rungs[rung] = min(rungs.get(rung, value), value)
     return {key: max(rungs.values()) - min(rungs.values()) for key, rungs in reached.items()}
