@@ -1,0 +1,467 @@
+# track-B-counters — wave `2026-08-26-t13-complexity`
+
+Branch `worktree-agent-af43748d6b39c8a02`, base `1ace4f9`.
+
+## Mission
+
+Build an instrumented mirror of the frozen IsalGraph encoder that counts the four operations
+Reviewer 3's comment R3.4b asks to see costed — pair scanning, pointer walking, neighbour checks
+and canonical backtracking — and prove it emits byte-identical output to the pure-Python
+reference. The counts are what turn the T-13 §2.1 derivation from an assertion into a validated
+one. Timings are not mine; the orchestrator runs those on the cluster.
+
+`src/isalgraph/` is untouched: `git diff --name-only 1ace4f9..HEAD -- src/ | wc -l` → `0`.
+
+---
+
+## What I built
+
+### `benchmarks/real_data/eval_t13_complexity/instrumented.py`
+
+A line-by-line transcription of the three frozen encoders with counter increments interleaved —
+the same device `viz/encoder_trace.py` used for T-09. It shares every data structure and helper
+with the reference (`SparseGraph`, `CircularDoublyLinkedList`, `generate_pairs_sorted_by_sum`,
+`_primary_moves`, `_secondary_moves`, `_undo_edge`, `_undo_node`, `_is_reachable`,
+`compute_structural_triplets`) rather than re-deriving them, so the only difference between mirror
+and reference is the counting.
+
+Public surface:
+
+| symbol | role |
+|---|---|
+| `OperationCounts` | frozen-slots dataclass, exactly the nine fields of CONTRACTS §4 |
+| `FrameRecord` | per-frame detail (`pair_scope`, `pairs_generated`, `pair_trials`, `pointer_steps`, `neighbour_checks`, `opcode`, `a`, `b`, `disp_emitted`, `n_cands`, `branch_factor`, `depth`, `start_node`) — the material the derivation checks need; not part of the frozen contract |
+| `greedy_counts(g, start)` | mirrors `GraphToString(g).run(start)[0]` |
+| `canonical_counts(g)` | mirrors `canonical.canonical_string(g)` |
+| `pruned_counts(g)` | mirrors `canonical_pruned.pruned_canonical_string(g)` |
+| `greedy_min_counts(g)` | mirrors `GreedyMinG2S` — the registered `isalgraph_greedy` unit of work |
+| `canonical_profile(g, *, pruned)` | counts plus `SearchProfile(candidates_seen, candidates_expanded)`; `.prunes` answers "did the triplet key remove anything" as a scalar, so it scales to any graph |
+| `greedy_detail` / `canonical_detail` / `pruned_detail` | as above, plus the `FrameRecord` list — **small graphs only** |
+| `pair_generation_work(m)` | `(pairs, sort_comparisons, P·log₂P)` for one `generate_pairs_sorted_by_sum(m)` call |
+| `InstrumentationError` | raised where the reference raises `RuntimeError` |
+
+**Memory contract.** `*_counts` and `canonical_profile` keep running scalars and retain **nothing**
+per frame. Only `*_detail` materialises the `FrameRecord` list. That separation is not cosmetic —
+see *Defects* below.
+
+The exhaustive and pruned searches share one driver, `_step_counted`, selected by
+`ctx.triplets is None` — the two frozen functions differ only in the triplet filter applied to the
+candidate list, and duplicating 150 lines to mirror that would have been a second place for the
+mirror to drift.
+
+**Counting conventions**, fixed in the module docstring so they cannot drift:
+
+- `frames` — payload instructions emitted. Greedy: one per `while` iteration. Canonical arms:
+  summed over the whole search tree and every reachable start, and equal to
+  `backtrack_nodes − search_leaves`.
+- `pair_trials` / `scan_depth_total` — iterations of `for (a, b) in pairs`, accepted pair
+  included. `scan_depth_max` is the per-frame maximum of the same quantity.
+- `pointer_steps` — executions of the loop body inside `_move_pointer` / `_walk`. A trial of
+  `(a, b)` costs `|a|` always and `|b|` **only when control reaches the secondary walk**: a `V`
+  acceptance returns before the secondary pointer moves, and the count reflects that.
+- `neighbour_checks` — greedy's `_find_new_neighbor` short-circuits, so one check per neighbour
+  *examined*; the canonical arms materialise the candidate list, so one check per neighbour of the
+  node. The `C`/`c` guards contribute one check per membership test actually evaluated, so the
+  count short-circuits exactly as Python's `and` does.
+- `backtrack_nodes` — `_step` invocations entered, roots and terminals included. `0` for greedy.
+- `search_leaves` — invocations reaching the terminal `nleft <= 0 and eleft <= 0` branch. `0` for
+  greedy, which produces its string without a search.
+
+### `benchmarks/real_data/eval_t13_complexity/counters.py`
+
+The `t13c.1` CLI. Emits one JSONL row per `(graph, encoder)` with exactly the twenty fields
+CONTRACTS §4 names, `parity_ok` computed per row against the pure-Python reference, and a non-zero
+exit status if any row fails.
+
+`--spec-file` rows carry the graph **explicitly** (`n`, `edges`) plus optional provenance
+(`source`, `family`, `n_target`, `replicate`, `dataset`, `graph_index`, `directed`), copied verbatim
+into the output. That keeps this module independent of track A's `families.py`, which the brief
+forbids me to import. **Approved by the orchestrator**, who generates the spec file at campaign time
+from `families.enumerate_grid` / `families.build` and passes provenance through the optional fields.
+
+`--self-test K` replaces the spec file with a deterministic pool, so the CLI is runnable standalone.
+`random_connected_graphs(...)` and `to_sparse(...)` are exported for the tests and the offline
+sweep.
+
+**`encoder` takes four values, not three** — a CONTRACTS §4 amendment made by the orchestrator on my
+report of the hazard:
+
+| value | object priced | frame accounting |
+|---|---|---|
+| `greedy_single` | one greedy encode from node `0` | `frames == m` |
+| `greedy_min` | the whole `GreedyMinG2S` unit — one encode per start node, lexmin shortest kept; what the registered `isalgraph_greedy` arm times | `frames == n · m` |
+| `canonical` | `canonical_string` | summed over the search tree |
+| `pruned` | `pruned_canonical_string` | summed over the search tree |
+
+The two greedy rows price different objects, so the distinction travels **in the data**. A single
+`greedy` value plus an invocation-time flag was the earlier design and was a trap: a consumer
+asserting `frames == m` on the wrong row would have got a wrong answer with no error.
+`--greedy-mode {min,single,both}` selects which greedy rows are emitted; default `greedy_min`,
+because counts and timings must price the same object.
+
+### `benchmarks/real_data/eval_t13_complexity/tests/test_instrumented.py`
+
+21 tests: parity for all four entry points, the CONTRACTS §4 structural invariants, the §2.1
+derivation checks, and two CLI round-trips.
+
+### Stubs I had to create (expect a trivial merge conflict)
+
+`benchmarks/real_data/eval_t13_complexity/__init__.py` and `tests/__init__.py` are **track A's**.
+They did not exist on my branch, so I created one-line docstring stubs that export nothing, as the
+brief instructs. Take track A's version on merge.
+
+---
+
+## Acceptance criteria
+
+| # | criterion | verdict | command and output |
+|---|---|---|---|
+| 1 | `OperationCounts`, `greedy_counts`, `canonical_counts`, `pruned_counts` with the CONTRACTS §4 signatures and field names | **PASS** | field set asserted in `test_cli_self_test_emits_the_frozen_schema`; all nine names present, no extras |
+| 2 | strings byte-identical to the **pure-Python** reference, imported from `isalgraph.core.*` | **PASS** | `counters.reference_string` imports `GraphToString`, `canonical_string`, `pruned_canonical_string` from `isalgraph.core.{graph_to_string,canonical,canonical_pruned}`; the top-level dispatching package is never imported |
+| 3 | ≥ 50,000 (graph, start) parity pairs, 0 mismatches, connected, 2 ≤ n ≤ 12, fixed seed | **PASS** | **178,886 pairs, 0 mismatches** — greedy 50,820, canonical 64,033, pruned 64,033. See *Parity evidence* |
+| 4 | structural invariants on every graph in the sweep | **PASS** | `frames == m` 50,820/50,820 greedy; `pair_trials >= frames`, `pointer_steps >= 0`, `backtrack_nodes >= search_leaves >= 1` on 14,077/14,077 canonical-arm graphs, 0 violations |
+| 5 | derivation checks (a)–(d) | **PASS, all four** | see *Derivation checks*; one prior of my own was refuted en route |
+| 6 | CLI emits the `t13c.1` schema with `parity_ok` true in every row | **PASS** | `$PY -m benchmarks.eval_t13_complexity.counters --help` renders (verified through a transient symlink; the symlink itself is track C's file and is **not** in my diff). `--self-test 3 --greedy-mode both` wrote 48 rows across all four encoder values, `0 parity failures`; `greedy_single` satisfies `frames == m` and `greedy_min` satisfies `frames == n·m` on every row |
+| 7 | `pytest .../tests/test_instrumented.py -q` | **PASS** | `23 passed in 8.80s` |
+| 8 | `ruff check` and `mypy` clean | **PASS** | `All checks passed!` / `Success: no issues found in 5 source files` |
+
+### Criterion 8, the one wrinkle
+
+`$PY -m mypy benchmarks/real_data/eval_t13_complexity/` fails with
+`Source file found twice under different module names`. **This is not my defect** — the identical
+failure occurs on the already-landed `eval_t06_figures`, because an `__init__.py` inside a
+namespace-package tree makes mypy root the package at that directory. The working invocation is:
+
+```
+$PY -m mypy --explicit-package-bases benchmarks/real_data/eval_t13_complexity/
+Success: no issues found in 5 source files
+```
+
+### Full-suite floor
+
+Not re-measured, and it cannot have moved: `pyproject.toml:122` sets `testpaths = ["tests"]`, and
+my whole diff is under `benchmarks/`. The 2,618 / 321 figure stands untouched.
+
+---
+
+## Parity evidence
+
+Generator: `counters.random_connected_graphs`, a single `random.Random` stream. `G(n, p)` with
+`p ~ U[p_min, p_max]`, rejected unless connected, identity node labels — so the pool exercises the
+`set`-slot-order dependence of `_find_new_neighbor` rather than hiding it behind sorted labels.
+
+### Greedy arm — seed 13, sizes 2…12, 660 graphs per size, all densities `p ~ U[0.15, 0.95]`
+
+| quantity | value |
+|---|---|
+| graphs | 7,260 |
+| **(graph, start) parity pairs** | **50,820** |
+| **mismatches vs `GraphToString(g).run(v)[0]`** | **0** |
+| frames | 1,109,460 |
+| `frames == m` | 50,820 / 50,820 |
+| wall clock | 119.5 s |
+
+### Canonical and pruned arms — same generator
+
+A `canonical_counts` call loops over every reachable start internally, so one call covers `n`
+`(graph, start)` pairs. Density is capped above `n = 7` (`m ≤ n + 3`) because the exhaustive search
+is super-exponential in the branching factor — a `K₁₂` canonicalisation does not terminate in any
+useful time. **The cap is on the cohort, never on the encoder**, and the greedy arm above covers
+`2 ≤ n ≤ 12` at every density.
+
+Run in five bounded chunks (the harness reaps long background tasks), aggregated:
+
+| quantity | value |
+|---|---|
+| graphs | 14,077 |
+| **(graph, start) parity pairs, canonical** | **64,033** |
+| **(graph, start) parity pairs, pruned** | **64,033** |
+| **mismatches vs `canonical_string`** | **0** |
+| **mismatches vs `pruned_canonical_string`** | **0** |
+| CONTRACTS §4 invariants satisfied | 14,077 / 14,077 |
+| payload characters in the returned string `== m` | 14,077 / 14,077 |
+| `search_leaves ≤ n · Δ^{n−1}` | 14,077 / 14,077 |
+| frames examined in detail | 10,273,672 |
+| wall clock | 1,398 s |
+
+Graphs per order: `n = 2…6` 2,500 each (all densities, `p ~ U[0.15, 0.85]`); `n = 7` 220 (all
+densities); `n = 8/9/10/11/12` 517 / 371 / 229 / 152 / 88 (sparse, `m ≤ n + 3`).
+
+### Grand total
+
+| arm | pairs | mismatches |
+|---|---|---|
+| greedy | 50,820 | 0 |
+| canonical | 64,033 | 0 |
+| pruned | 64,033 | 0 |
+| **total** | **178,886** | **0** |
+
+Both greedy sweeps — the original and the re-run after the memory refactor — produced
+**byte-identical aggregates** on every field, and `counts_path_agrees` = 50,820 / 50,820: the
+memory-safe scalar path returns exactly the `OperationCounts` the collecting path does.
+
+---
+
+## Derivation checks
+
+### (a) Pair generation is `Θ(M² log M)` per frame — **HOLDS**
+
+Two components, both measured rather than assumed.
+
+**Pairs built.** Over the 1,109,460 greedy frames of the sweep, `Σ_f pairs_generated` =
+**397,705,148**, and `Σ_f (2M_f + 1)²` = **397,705,148**. Exact agreement, constant factor
+**1.000**. The test additionally asserts `len(generate_pairs_sorted_by_sum(M)) == (2M+1)²` and
+`M ≤ n` on every frame.
+
+**Sort cost.** `pair_generation_work(M)` re-sorts the identical key sequence through a
+`__lt__`-counting wrapper, so this is the frozen sort's own comparison count, not a model of it:
+
+| `M` | `P = (2M+1)²` | comparisons | `P·log₂P` | ratio |
+|---|---|---|---|---|
+| 1 | 9 | 18 | 28.5 | 0.631 |
+| 2 | 25 | 87 | 116.1 | 0.749 |
+| 4 | 81 | 408 | 513.5 | 0.795 |
+| 6 | 169 | 974 | 1,250.7 | 0.779 |
+| 8 | 289 | 1,844 | 2,362.6 | 0.781 |
+| 10 | 441 | 3,018 | 3,874.0 | 0.779 |
+| 12 | 625 | 4,510 | 5,804.8 | 0.777 |
+
+The ratio sits in **0.777–0.810 for every `M ≥ 2`** — a constant, so the cost is `Θ(P log P)` with
+`P = (2M+1)² = Θ(M²)`, i.e. `Θ(M² log M)`. Weighted over the sweep: measured
+**2,725,161,533** comparisons against an analytic `Σ_f P_f·log₂P_f` of **3,496,415,624**, ratio
+**0.779**.
+
+**And the memoisation claim.** `generate_pairs_sorted_by_sum` is a pure function of `M`, so the
+sorted order depends on `M` alone and never on the graph. Over the sweep, 1,109,460 frames took only
+**12 distinct values of `M`** (1…12, bounded by `n`). Memoising therefore collapses 1,109,460
+pair-generation calls to at most `n` per encode — `Σ_f Θ(M² log M) = O(m n² log n)` down to
+`Θ(n³ log n)` total, which is the mechanism behind the C++ engine's measured 25.5×–108.6× memo
+speedup. R3.4b asks whether these lists are recomputed or precomputed: **in the frozen Python
+reference they are recomputed at every frame**, and that is the honest answer to give.
+
+### (b) Realised scan depth is far below the `(2M+1)²` worst case — **HOLDS, by ~47×**
+
+Distribution of `D_f / (2M_f + 1)²` over all 1,109,460 greedy frames:
+
+| statistic | value |
+|---|---|
+| mean | **0.0214** |
+| median | 0.0091 |
+| p95 | 0.111 |
+| max | **0.325** |
+
+So the first-fit early return costs on average **2.1 %** of the worst-case scan, and never exceeded
+**32.5 %** on any single frame in the sweep. The **first pair is accepted in 293,499 of 1,109,460
+frames = 26.45 %**.
+
+Per-`n` worst realised depth against the worst case:
+
+| `n` | 4 | 6 | 8 | 10 | 12 |
+|---|---|---|---|---|---|
+| max `D_f` | 18 | 35 | 75 | 131 | 203 |
+| `(2n+1)²` | 81 | 169 | 289 | 441 | 625 |
+| ratio | 0.22 | 0.21 | 0.26 | 0.30 | 0.32 |
+
+The ratio drifts slowly upward with `n` but stays well under a third. **The `O(M²)` worst case is
+real but is not what the implementation pays**, which is precisely why §2.1 says `D_f` is a quantity
+to measure rather than to assume.
+
+### (c) `search_leaves` and the effect of the triplet key
+
+**The bound holds: `search_leaves ≤ n · Δ^{n−1}` on 14,077 / 14,077 graphs, 0 violations.**
+
+**The pruning result is a clean two-way separation**, which is stronger than the criterion asked
+for. Partitioning the 14,077 graphs by whether the triplet key removed at least one candidate
+(`SearchProfile.prunes`):
+
+| | graphs | pruned leaves **<** exhaustive | pruned leaves **==** exhaustive |
+|---|---|---|---|
+| triplet key prunes something | 8,264 | **8,264 (100 %)** | 0 |
+| triplet key prunes nothing | 5,813 | 0 | **5,813 (100 %)** |
+
+So the key strictly reduces the search tree on **every** graph where it removes a candidate and
+leaves it **exactly** unchanged on every graph where it does not. There is no third case in 14,077
+graphs. `search_leaves` for `canonical_counts` is never below `pruned_counts`, as required.
+
+Leaf reduction `pruned / exhaustive`, which sharpens with `n`:
+
+| cohort | mean | median |
+|---|---|---|
+| `n = 2…6` | 0.378 | 0.400 |
+| `n = 7` | 0.118 | 0.073 |
+| `n = 8…10` | 0.129 | 0.096 |
+| `n = 11…12` | **0.051** | 0.036 |
+
+Smallest observed ratio **0.0015625**, a **640×** reduction on one graph. That the reduction grows
+with `n` is the empirical face of Corollary 2: the triplet key removes candidates that differ by a
+node invariant, and the number of such candidates grows with the graph, while what it cannot remove
+— candidates in one orbit of the stabiliser — is what remains.
+
+**Scan behaviour in the canonical arms**, over 10,273,672 frames: mean `D_f / (2M+1)²` = **0.0301**,
+max **0.3248**, first pair accepted in **23.34 %** of frames. Comparable to greedy's 0.0214 / 0.3248
+/ 26.45 %, so the first-fit early return behaves the same way inside the search as outside it.
+
+### (d) `string_length == frames + Σ displacement` — **HOLDS on 50,820 / 50,820**
+
+Both readings of the sum hold identically: `Σ_f disp_emitted` (what the encoder appends) and
+`Σ_f (|a_f| + |b_f|)` (the design note's form) agree on every encode, for the reason proved in the
+lemma below. `frames == m` on all 50,820 encodes, with zero exceptions, and
+`Σ_{V,v frames} 1 == n − 1` on every one.
+
+---
+
+## Decisions and assumptions
+
+1. **Base commit.** My brief pins `1ace4f9`; `CONTRACTS.md` names `10eae30`. I worked from
+   `1ace4f9`, which is what my worktree had at `git rev-parse --short HEAD`. Recorded, not
+   escalated — the frozen encoder is identical either way.
+2. **`search_leaves = 0` for greedy**, matching CONTRACTS §4's "canonical arms only" and its
+   explicit "`0` for greedy" on `backtrack_nodes`. Greedy produces one string without a search;
+   calling that "one leaf" would make the greedy and canonical columns mean different things.
+   Criterion 4's `backtrack_nodes >= search_leaves >= 1` is asserted for the canonical arms only,
+   as the brief specifies.
+3. **Two greedy encoder values, `greedy_single` and `greedy_min`.** I first shipped one `greedy`
+   value plus a `--greedy-mode` flag, flagged the hazard to the orchestrator, and was told to fix
+   it in the data instead. Done: the schema now carries the mode, `frames == m` is assertable
+   exactly on `greedy_single` and `frames == n · m` exactly on `greedy_min`, and no consumer has to
+   remember an invocation. The default remains `greedy_min` because that is the object the
+   registered `isalgraph_greedy` arm times.
+4. **Triplet work is not counted.** `compute_structural_triplets` is a fixed `O(n(n+m))`
+   preprocessing step and the `max`/filter at each branch is `O(|cands|)`; there is no
+   `OperationCounts` field for either, and folding them into `neighbour_checks` would make the
+   pruned and unpruned neighbour columns incomparable. Noted in the module docstring.
+5. **Private imports from the frozen modules** (`_undo_edge`, `_undo_node`, `_is_reachable`,
+   `_primary_moves`, `_secondary_moves`). Read-only use, and it maximises parity fidelity: a
+   transcribed copy would be a second place for the mirror to drift.
+6. **`_step_counted` serves both canonical arms.** Justified above.
+7. **Spec-file format.** See `counters.py` above — the one unilateral interface decision.
+8. **`pair_generation_work` measures sort comparisons for real**, by re-sorting the identical key
+   sequence through a `__lt__`-counting wrapper. Timsort's comparison count is deterministic given
+   the input sequence, so this is a measurement of the frozen sort, not a model of it. It is
+   `lru_cache`d and is never called on the hot path.
+9. **Density cap on the canonical cohort above `n = 7`** (`m ≤ n + 3`), and 220 rather than 2,500
+   replicates at `n = 7`. The exhaustive search is super-exponential in the branching factor: a
+   dense `n = 12` canonicalisation does not terminate in any useful time, and 700 dense `n = 7`
+   graphs exceeded a 580 s chunk. **The cap is on the cohort, never on the encoder**, it is stated
+   with the results rather than buried, and the greedy arm covers `2 ≤ n ≤ 12` at every density.
+10. **Sweeps run in bounded foreground chunks.** Background tasks on this host were reaped
+   mid-run more than once, so every reported number comes from a chunk that ran to completion under
+   an explicit `timeout` and printed its own JSON.
+
+---
+
+## Lemma (one-sided displacement at insertion frames) — for the article notes
+
+*This heading is written to be lifted verbatim. It is a small original result and it belongs to
+T-13.*
+
+**Lemma.** In a G2S encode under the frozen scan order, every frame whose accepted instruction is
+`V` has `b = 0`, and every frame whose accepted instruction is `v` has `a = 0`.
+
+*Proof.* Displacement pairs are scanned in the order `(|a| + |b|, |a|, (a, b))`, and the `V` guard —
+"the primary tentative node has an uninserted neighbour" — depends on `a` alone. Suppose `V` is
+accepted at `(a, b)` with `|b| > 0`. The pair `(a, 0)` has cost `|a| < |a| + |b|` and is therefore
+examined strictly earlier, with the same `a` and hence the same `V` guard, so `V` would have fired
+there: contradiction. The `v` case is symmetric. `v` is reached only after the `V` guard has failed
+at the current pair; the pair `(0, b)` has cost `|b| < |a| + |b|` and is examined strictly earlier,
+its `V` guard also fails (otherwise the frame would be a `V` frame), and its `v` guard is the same,
+so `v` would have fired there. ∎
+
+**What the lemma does and does not say.** It constrains only frames whose accepted instruction is
+`V` or `v`. `C` and `c` frames may still carry two-sided displacement, so the general form
+
+    |w| = m + Σ_f (|a_f| + |b_f|)
+
+**stands unchanged** — the lemma does not correct it. What the lemma buys is a sharper split of that
+sum along the frame decomposition of §2.1: the `n − 1` insertion frames cost **one-sided**
+displacement, the `m − n + 1` chord frames **two-sided**.
+
+**Measured.** Zero exceptions in 215,270 frames across four arms:
+
+| arm | pool | `V` frames | with `b ≠ 0` | `v` frames | with `a ≠ 0` |
+|---|---|---|---|---|---|
+| greedy | seed 99, sizes 2…12, 120 graphs/size, 9,240 encodes | 43,942 | **0** | 24,698 | **0** |
+| canonical | seed 98, sizes 4…7, 60 graphs/size | 119,666 | **0** | 26,964 | **0** |
+
+And the split is not merely formal — the two frame classes differ by 6.1× in realised cost on the
+greedy pool:
+
+| frame class | frames | movement characters emitted | mean per frame |
+|---|---|---|---|
+| insertion (`V`/`v`), one-sided | 377,520 | 89,673 | **0.238** |
+| chord (`C`/`c`), two-sided | 731,940 | 1,083,344 | **1.480** |
+
+(the full 50,820-encode greedy sweep; a 6.2× gap)
+
+So `|w| = m + Σ_f (|a_f| + |b_f|)` is dominated by the chord frames, and a graph's string length is
+driven by its cyclomatic number `m − n + 1` far more than by its node count. That is worth a
+sentence next to the `O(mn)` bound.
+
+---
+
+## Defects found in the brief
+
+**One suspected, investigated, and refuted.** Criterion 5(d) of my brief and §2.1 of the design note
+state `|w| = m + Σ_f (|a_f| + |b_f|)`. The frozen `V` branch emits only `_emit_primary_moves(a)` and
+the `v` branch only `_emit_secondary_moves(b)`, so I expected the formula to over-count on every
+`V`/`v` frame, and instrumented both readings (`FrameRecord.disp_emitted` versus `|a| + |b|`) to
+prove it. **They agree on all 50,820 greedy encodes**, for the reason proved in the lemma above.
+The derivation is right and I was wrong. The lemma is still worth stating in the manuscript,
+because without it the formula reads as an error to a careful reviewer — which is exactly what
+happened here.
+
+**A defect in my own first implementation, worth recording because it bites track C.** The recorder
+originally appended one `FrameRecord` per frame unconditionally. A greedy encode has `m` frames, so
+that is harmless; the canonical search tree is super-exponential in the branching factor, so it is
+not. Measured on a single `n = 8`, `m = 25` graph with 362,694 frames:
+
+| path | peak RSS added | per frame |
+|---|---|---|
+| `canonical_counts` | **0.5 MB** | — |
+| `canonical_detail` | **63.3 MB** | 174 B (136 B object + list slot + allocator) |
+
+A 127× difference on one small graph, growing linearly in the frame count. The fix splits the two
+paths: `*_counts` and `canonical_profile` keep running scalars (`frame_count`, `scan_depth_max`,
+`candidates_seen`, `candidates_expanded`) and retain nothing; `*_detail` collects, and its docstring
+says small graphs only. `test_counting_and_collecting_paths_agree` keeps them in step, asserting
+equal strings, equal `OperationCounts`, `frames == len(frame_list)` and
+`scan_depth_max == max(f.pair_trials)`.
+
+**Honest note on how this was found.** My first parity sweep vanished part-way through the canonical
+arm with no traceback and no exit code, and I read that as an OOM. I cannot confirm that: the
+harness reaped two later background tasks of mine that were plainly not memory-bound, and the
+machine had 19 GB free when I checked. The unbounded retention is a real scalability defect and the
+table above measures it, but **the sweep's death is not evidence for it** and I am not claiming it
+as such. The sweep was subsequently re-run in bounded foreground chunks and completed.
+
+**Track C: `measure.py` must call `canonical_counts` / `canonical_profile`, never `canonical_detail`,
+on the constructed families.** CONTRACTS §5.3 censors on a 300 s budget in a killed subprocess,
+which contains an OOM, but a shard that dies on memory rather than on the budget records nothing and
+looks like a hang.
+
+**A third item, a correction to my own test rather than to the brief.** I first asserted that
+the canonical arms perform *more* neighbour checks per pair trial than greedy, on the strength of
+§2.1's "`_find_new_neighbor` (first match, `O(deg)`); canonical materialises all candidates". They
+do not, in aggregate: on the same graph, exhaustive canonical ran 2.56 checks per trial against
+greedy's 3.12. The design note's claim is about the **per-call** cost and is correct; the aggregate
+ratio is confounded, because most canonical frames sit deep in the search tree where `nleft == 0`
+and the `V`/`v` scan is skipped entirely. The test now isolates the claim to a single frame
+(`test_neighbour_checks_show_the_short_circuit_gap`): on a star encoded from its hub, the opening
+`V` frame charges greedy **1** check and canonical **Δ = 6**. Anyone quoting an aggregate
+neighbour-check ratio in the manuscript should be aware of the confound.
+
+---
+
+## What I did not do
+
+- No timings of any kind. No `ssh`, `sbatch`, `rsync` or network.
+- Nothing written to the repository's `scratchpad/`; the offline sweep script and its JSON report
+  live in the session scratchpad only.
+- No new third-party dependency (`networkx` is not imported — `random_connected_graphs` builds
+  edge lists with the stdlib, which also removes a nondeterminism source).
+- No plan file, ticket board or `CONTRACTS.md` edited.
+- Did not import `families.py`, `symmetry.py`, `schema.py` or `measure.py`.
+- Did not create the `benchmarks/eval_t13_complexity` symlink (track C's). I verified the contract
+  CLI path through a transient symlink and removed it; `git status --porcelain` is clean.
+- Did not run the full 2,618-test suite — `testpaths = ["tests"]` and my diff is entirely under
+  `benchmarks/`, so it cannot have moved.
