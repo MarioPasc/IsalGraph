@@ -301,6 +301,34 @@ def test_cli_self_test_emits_the_frozen_schema(tmp_path: Path) -> None:
     assert seen == set(cli.ENCODERS)
 
 
+def test_cli_greedy_mode_single_gives_frames_equal_m(tmp_path: Path) -> None:
+    """``--greedy-mode single`` prices one encode, so ``frames == m``."""
+    spec = tmp_path / "spec.jsonl"
+    spec.write_text(
+        json.dumps({"n": 5, "edges": [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]]}) + "\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "counts.jsonl"
+    assert (
+        cli.main(
+            [
+                "--spec-file",
+                str(spec),
+                "--out",
+                str(out),
+                "--encoders",
+                "greedy",
+                "--greedy-mode",
+                "single",
+            ]
+        )
+        == 0
+    )
+    row = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
+    assert row["parity_ok"] is True
+    assert row["frames"] == row["m"] == 5
+
+
 def test_cli_spec_file_round_trip(tmp_path: Path) -> None:
     """A hand-written spec file is honoured, provenance fields included."""
     spec = tmp_path / "spec.jsonl"

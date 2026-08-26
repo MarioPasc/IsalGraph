@@ -27,6 +27,12 @@ Usage
 
 ``--self-test K`` replaces the spec file with a deterministic pool of ``K``
 connected graphs per order, so the CLI is runnable without a spec file.
+
+The ``greedy`` rows price the whole ``GreedyMinG2S`` unit of work by default --
+one greedy encode per start node, lexmin shortest kept -- because that is what
+the registered ``isalgraph_greedy`` arm times. Their ``frames`` is therefore
+``n * m``, not ``m``. ``--greedy-mode single`` prices one encode from node ``0``
+instead, for which ``frames == m``.
 """
 
 from __future__ import annotations
@@ -44,6 +50,7 @@ from typing import Any
 from benchmarks.real_data.eval_t13_complexity.instrumented import (
     OperationCounts,
     canonical_counts,
+    greedy_counts,
     greedy_min_counts,
     pruned_counts,
 )
@@ -161,7 +168,7 @@ def _is_connected(n: int, edges: Sequence[tuple[int, int]]) -> bool:
 # ----------------------------------------------------------------------
 
 
-def reference_string(graph: SparseGraph, encoder: str) -> str:
+def reference_string(graph: SparseGraph, encoder: str, *, greedy_mode: str = "min") -> str:
     """Return the frozen **pure-Python** reference string for *encoder*.
 
     The imports are taken from ``isalgraph.core.*`` rather than from the
@@ -171,6 +178,10 @@ def reference_string(graph: SparseGraph, encoder: str) -> str:
     Args:
         graph: The graph to encode.
         encoder: One of ``"greedy"``, ``"canonical"``, ``"pruned"``.
+        greedy_mode: ``"min"`` prices the whole ``GreedyMinG2S`` unit of work
+            (one encode per start node, lexmin shortest kept), matching the
+            registered ``isalgraph_greedy`` arm; ``"single"`` prices a single
+            encode from node ``0``, for which ``frames == m`` holds.
 
     Returns:
         The reference string.
@@ -179,6 +190,8 @@ def reference_string(graph: SparseGraph, encoder: str) -> str:
         ValueError: If *encoder* is not recognised.
     """
     if encoder == "greedy":
+        if greedy_mode == "single":
+            return GraphToString(graph).run(0)[0]
         return _greedy_min_reference(graph)
     if encoder == "canonical":
         return canonical_string(graph)
@@ -205,12 +218,15 @@ def _greedy_min_reference(graph: SparseGraph) -> str:
     return results[0][1]
 
 
-def count_row(graph: SparseGraph, encoder: str) -> tuple[str, OperationCounts]:
+def count_row(
+    graph: SparseGraph, encoder: str, *, greedy_mode: str = "min"
+) -> tuple[str, OperationCounts]:
     """Run the instrumented mirror for *encoder*.
 
     Args:
         graph: The graph to encode.
         encoder: One of ``"greedy"``, ``"canonical"``, ``"pruned"``.
+        greedy_mode: See :func:`reference_string`.
 
     Returns:
         Tuple ``(string, counts)``.
@@ -219,6 +235,8 @@ def count_row(graph: SparseGraph, encoder: str) -> tuple[str, OperationCounts]:
         ValueError: If *encoder* is not recognised.
     """
     if encoder == "greedy":
+        if greedy_mode == "single":
+            return greedy_counts(graph, 0)
         return greedy_min_counts(graph)
     if encoder == "canonical":
         return canonical_counts(graph)
@@ -232,15 +250,15 @@ def count_row(graph: SparseGraph, encoder: str) -> tuple[str, OperationCounts]:
 # ----------------------------------------------------------------------
 
 
-def _row(spec: dict[str, Any], encoder: str) -> dict[str, Any]:
+def _row(spec: dict[str, Any], encoder: str, *, greedy_mode: str = "min") -> dict[str, Any]:
     """Build one output row for ``(spec, encoder)``."""
     n = int(spec["n"])
     edges = [(int(u), int(v)) for u, v in spec["edges"]]
     directed = bool(spec.get("directed", False))
     graph = to_sparse(n, edges, directed=directed)
 
-    string, counts = count_row(graph, encoder)
-    reference = reference_string(graph, encoder)
+    string, counts = count_row(graph, encoder, greedy_mode=greedy_mode)
+    reference = reference_string(graph, encoder, greedy_mode=greedy_mode)
 
     row: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -315,6 +333,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore --spec-file and use K deterministic connected graphs per order",
     )
     parser.add_argument("--seed", type=int, default=13, help="seed for --self-test")
+    parser.add_argument(
+        "--greedy-mode",
+        choices=("min", "single"),
+        default="min",
+        help=(
+            "'min' prices the whole GreedyMinG2S unit (one encode per start node, "
+            "so frames == n * m); 'single' prices one encode from node 0 (frames == m)"
+        ),
+    )
     return parser
 
 
@@ -350,7 +377,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with args.out.open("w", encoding="utf-8") as fh:
         for spec in specs:
             for encoder in encoders:
-                row = _row(spec, encoder)
+                row = _row(spec, encoder, greedy_mode=args.greedy_mode)
                 if not row["parity_ok"]:
                     failures += 1
                     LOGGER.error("parity failure: %s", {k: row[k] for k in ("n", "m", "encoder")})
