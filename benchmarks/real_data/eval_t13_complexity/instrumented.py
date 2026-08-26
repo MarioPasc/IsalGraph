@@ -89,8 +89,10 @@ __all__ = [
     "FrameRecord",
     "InstrumentationError",
     "OperationCounts",
+    "SearchProfile",
     "canonical_counts",
     "canonical_detail",
+    "canonical_profile",
     "greedy_counts",
     "greedy_detail",
     "greedy_min_counts",
@@ -178,29 +180,66 @@ class FrameRecord:
 
 @dataclass(slots=True)
 class _Recorder:
-    """Mutable accumulator threaded through the mirrored encoders."""
+    """Mutable accumulator threaded through the mirrored encoders.
 
+    Everything :class:`OperationCounts` needs is a running scalar. The
+    per-frame :class:`FrameRecord` list is materialised **only** when *collect*
+    is true, because the canonical search tree is super-exponential in the
+    branching factor and one record per frame is unbounded memory: an early
+    version of this class always collected and was OOM-killed part-way through
+    the parity sweep. ``*_counts`` never collect; ``*_detail`` do, and are for
+    small graphs.
+
+    Attributes:
+        collect: Whether to retain per-frame records.
+    """
+
+    collect: bool = False
     pair_trials: int = 0
     pointer_steps: int = 0
     neighbour_checks: int = 0
     backtrack_nodes: int = 0
     search_leaves: int = 0
+    frame_count: int = 0
+    scan_depth_max: int = 0
+    candidates_seen: int = 0
+    candidates_expanded: int = 0
     frames: list[FrameRecord] = field(default_factory=list)
 
     def finish(self, string_length: int) -> OperationCounts:
         """Freeze the accumulator into an :class:`OperationCounts`."""
-        depths = [f.pair_trials for f in self.frames]
         return OperationCounts(
-            frames=len(self.frames),
+            frames=self.frame_count,
             pair_trials=self.pair_trials,
             scan_depth_total=self.pair_trials,
-            scan_depth_max=max(depths) if depths else 0,
+            scan_depth_max=self.scan_depth_max,
             pointer_steps=self.pointer_steps,
             neighbour_checks=self.neighbour_checks,
             backtrack_nodes=self.backtrack_nodes,
             search_leaves=self.search_leaves,
             string_length=string_length,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SearchProfile:
+    """Scalars that do not fit :class:`OperationCounts` but scale to any graph.
+
+    Attributes:
+        candidates_seen: Uninserted neighbours found at ``V``/``v`` frames,
+            before the triplet filter, summed over frames.
+        candidates_expanded: Candidates actually expanded, i.e. ``sum(b_f)``.
+            Equal to *candidates_seen* on the unpruned arm; strictly smaller on
+            the pruned arm exactly when the triplet key removes something.
+    """
+
+    candidates_seen: int
+    candidates_expanded: int
+
+    @property
+    def prunes(self) -> bool:
+        """Whether the pruning key removed at least one candidate."""
+        return self.candidates_expanded < self.candidates_seen
 
 
 # ----------------------------------------------------------------------
@@ -304,17 +343,18 @@ def _reachable_or_raise(graph: SparseGraph, initial_node: int) -> None:
 # ----------------------------------------------------------------------
 
 
-def greedy_detail(graph: SparseGraph, start: int) -> tuple[str, OperationCounts, list[FrameRecord]]:
-    """Greedy encode from *start*, with counts and per-frame detail.
+def _greedy_encode(graph: SparseGraph, start: int, rec: _Recorder) -> str:
+    """Greedy encode from *start*, accumulating into *rec*.
 
     Mirrors ``GraphToString(graph).run(start)[0]`` byte for byte.
 
     Args:
         graph: The graph to encode.
         start: Index of the starting node in *graph*.
+        rec: Accumulator; may already hold counts from earlier start nodes.
 
     Returns:
-        Tuple ``(string, counts, frames)``.
+        The instruction string.
 
     Raises:
         ValueError: If *start* is out of range or cannot reach every node.
@@ -325,7 +365,6 @@ def greedy_detail(graph: SparseGraph, start: int) -> tuple[str, OperationCounts,
         raise ValueError("Initial node out of range")
     _reachable_or_raise(graph, start)
 
-    rec = _Recorder()
     out = ""
 
     cdll = CircularDoublyLinkedList(graph.max_nodes())
@@ -426,7 +465,7 @@ def greedy_detail(graph: SparseGraph, start: int) -> tuple[str, OperationCounts,
                 f"greedy mirror: no valid operation found. Remaining: {nleft} nodes, {eleft} edges."
             )
 
-    return out, rec.finish(len(out)), rec.frames
+    return out
 
 
 def greedy_counts(graph: SparseGraph, start: int) -> tuple[str, OperationCounts]:
@@ -440,8 +479,27 @@ def greedy_counts(graph: SparseGraph, start: int) -> tuple[str, OperationCounts]
         Tuple ``(string, counts)``. The string is byte-identical to
         ``isalgraph.core.graph_to_string.GraphToString(graph).run(start)[0]``.
     """
-    string, counts, _ = greedy_detail(graph, start)
-    return string, counts
+    rec = _Recorder()
+    string = _greedy_encode(graph, start, rec)
+    return string, rec.finish(len(string))
+
+
+def greedy_detail(graph: SparseGraph, start: int) -> tuple[str, OperationCounts, list[FrameRecord]]:
+    """As :func:`greedy_counts`, plus one :class:`FrameRecord` per frame.
+
+    A greedy encode has exactly ``m`` frames, so the record list is small and
+    this is safe on any graph.
+
+    Args:
+        graph: The graph to encode.
+        start: Index of the starting node in *graph*.
+
+    Returns:
+        Tuple ``(string, counts, frames)``.
+    """
+    rec = _Recorder(collect=True)
+    string = _greedy_encode(graph, start, rec)
+    return string, rec.finish(len(string)), rec.frames
 
 
 def greedy_min_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
@@ -471,23 +529,13 @@ def greedy_min_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
     for v in range(n):
         if not _is_reachable(graph, v):
             continue
-        string, _, frames = greedy_detail(graph, v)
-        _absorb(rec, string, frames)
+        string = _greedy_encode(graph, v, rec)
         if best is None or (len(string), string) < (len(best), best):
             best = string
 
     if best is None:
         raise ValueError("No starting node can reach all other nodes.")
     return best, rec.finish(len(best))
-
-
-def _absorb(rec: _Recorder, _string: str, frames: list[FrameRecord]) -> None:
-    """Fold a per-start greedy frame list into an aggregate recorder."""
-    for f in frames:
-        rec.pair_trials += f.pair_trials
-        rec.pointer_steps += f.pointer_steps
-        rec.neighbour_checks += f.neighbour_checks
-        rec.frames.append(f)
 
 
 def _first_new_neighbour(
@@ -523,12 +571,20 @@ def _push_frame(  # noqa: PLR0913
     depth: int,
     start_node: int,
 ) -> None:
-    """Append a :class:`FrameRecord` built from the recorder deltas."""
+    """Close a frame: update the running scalars, and record it if collecting."""
+    depth_f = rec.pair_trials - t0
+    rec.frame_count += 1
+    if depth_f > rec.scan_depth_max:
+        rec.scan_depth_max = depth_f
+    rec.candidates_seen += n_cands
+    rec.candidates_expanded += branch_factor if n_cands else 0
+    if not rec.collect:
+        return
     rec.frames.append(
         FrameRecord(
             pair_scope=scope,
             pairs_generated=(2 * scope + 1) ** 2,
-            pair_trials=rec.pair_trials - t0,
+            pair_trials=depth_f,
             pointer_steps=rec.pointer_steps - p0,
             neighbour_checks=rec.neighbour_checks - n0c,
             opcode=opcode,
@@ -562,12 +618,13 @@ def _canonical_search(
     graph: SparseGraph,
     *,
     pruned: bool,
-) -> tuple[str, OperationCounts, list[FrameRecord]]:
+    collect: bool,
+) -> tuple[str, _Recorder]:
     """Shared driver for the exhaustive and triplet-pruned canonical mirrors."""
     n = graph.node_count()
-    rec = _Recorder()
+    rec = _Recorder(collect=collect)
     if n == 0 or (n == 1 and graph.logical_edge_count() == 0):
-        return "", rec.finish(0), rec.frames
+        return "", rec
 
     triplets = compute_structural_triplets(graph) if pruned else None
     ctx = _SearchContext(ig=graph, rec=rec, triplets=triplets)
@@ -604,7 +661,7 @@ def _canonical_search(
 
     if best is None:
         raise ValueError("No starting node can reach all other nodes.")
-    return best, rec.finish(len(best)), rec.frames
+    return best, rec
 
 
 def _step_counted(  # noqa: PLR0912, PLR0913, PLR0915
@@ -869,15 +926,11 @@ def _prune(
     return [c for c in cands if triplets[c] == max_trip]
 
 
-def canonical_detail(
-    graph: SparseGraph,
-) -> tuple[str, OperationCounts, list[FrameRecord]]:
-    """Exhaustive canonical encode with counts and per-frame detail."""
-    return _canonical_search(graph, pruned=False)
-
-
 def canonical_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
     """Exhaustive canonical encode with realised operation counts.
+
+    Safe on any graph the reference itself can finish: nothing per-frame is
+    retained.
 
     Args:
         graph: The graph to encode.
@@ -886,15 +939,8 @@ def canonical_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
         Tuple ``(string, counts)``. The string is byte-identical to
         ``isalgraph.core.canonical.canonical_string(graph)``.
     """
-    string, counts, _ = _canonical_search(graph, pruned=False)
-    return string, counts
-
-
-def pruned_detail(
-    graph: SparseGraph,
-) -> tuple[str, OperationCounts, list[FrameRecord]]:
-    """Triplet-pruned canonical encode with counts and per-frame detail."""
-    return _canonical_search(graph, pruned=True)
+    string, rec = _canonical_search(graph, pruned=False, collect=False)
+    return string, rec.finish(len(string))
 
 
 def pruned_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
@@ -907,5 +953,53 @@ def pruned_counts(graph: SparseGraph) -> tuple[str, OperationCounts]:
         Tuple ``(string, counts)``. The string is byte-identical to
         ``isalgraph.core.canonical_pruned.pruned_canonical_string(graph)``.
     """
-    string, counts, _ = _canonical_search(graph, pruned=True)
-    return string, counts
+    string, rec = _canonical_search(graph, pruned=True, collect=False)
+    return string, rec.finish(len(string))
+
+
+def canonical_profile(
+    graph: SparseGraph, *, pruned: bool = False
+) -> tuple[str, OperationCounts, SearchProfile]:
+    """Canonical encode with counts plus the scalar search profile.
+
+    Unlike :func:`canonical_detail`, this retains nothing per frame, so it is
+    safe on graphs with a large search tree. Use it to ask whether the triplet
+    key pruned anything (:attr:`SearchProfile.prunes`).
+
+    Args:
+        graph: The graph to encode.
+        pruned: Whether to apply the structural-triplet filter.
+
+    Returns:
+        Tuple ``(string, counts, profile)``.
+    """
+    string, rec = _canonical_search(graph, pruned=pruned, collect=False)
+    return (
+        string,
+        rec.finish(len(string)),
+        SearchProfile(
+            candidates_seen=rec.candidates_seen,
+            candidates_expanded=rec.candidates_expanded,
+        ),
+    )
+
+
+def canonical_detail(
+    graph: SparseGraph,
+) -> tuple[str, OperationCounts, list[FrameRecord]]:
+    """Exhaustive canonical encode with one :class:`FrameRecord` per frame.
+
+    **Small graphs only.** The canonical search tree is super-exponential in the
+    branching factor, so the record list is unbounded; call
+    :func:`canonical_counts` or :func:`canonical_profile` at scale.
+    """
+    string, rec = _canonical_search(graph, pruned=False, collect=True)
+    return string, rec.finish(len(string)), rec.frames
+
+
+def pruned_detail(
+    graph: SparseGraph,
+) -> tuple[str, OperationCounts, list[FrameRecord]]:
+    """Triplet-pruned canonical encode with per-frame detail. Small graphs only."""
+    string, rec = _canonical_search(graph, pruned=True, collect=True)
+    return string, rec.finish(len(string)), rec.frames

@@ -17,11 +17,14 @@ import pytest
 
 from benchmarks.real_data.eval_t13_complexity import counters as cli
 from benchmarks.real_data.eval_t13_complexity.instrumented import (
+    canonical_counts,
     canonical_detail,
+    canonical_profile,
     greedy_counts,
     greedy_detail,
     greedy_min_counts,
     pair_generation_work,
+    pruned_counts,
     pruned_detail,
 )
 from isalgraph.core.canonical import canonical_string
@@ -213,6 +216,46 @@ def test_pruning_never_increases_the_search_tree() -> None:
             assert pruned.search_leaves < exhaustive.search_leaves
             strictly_smaller += 1
     assert strictly_smaller > 0
+
+
+def test_counting_and_collecting_paths_agree() -> None:
+    """The memory-safe ``*_counts`` path produces the same counts as ``*_detail``.
+
+    ``*_counts`` keeps running scalars and retains nothing per frame; ``*_detail``
+    materialises a :class:`FrameRecord` per frame. An earlier version always
+    collected and was OOM-killed part-way through the parity sweep, so the two
+    paths must be kept in step by a test rather than by inspection.
+    """
+    for entry in CANON_POOL[:40]:
+        graph = _sg(entry)
+        for detail, counts_fn in (
+            (canonical_detail(graph), canonical_counts),
+            (pruned_detail(graph), pruned_counts),
+        ):
+            string_d, counts_d, frames = detail
+            string_c, counts_c = counts_fn(graph)
+            assert string_c == string_d
+            assert counts_c == counts_d
+            assert counts_c.frames == len(frames)
+            assert counts_c.scan_depth_max == max(f.pair_trials for f in frames)
+
+
+def test_search_profile_detects_pruning_without_retaining_frames() -> None:
+    """``SearchProfile.prunes`` agrees with the frame-level predicate."""
+    unpruned_ever_prunes = False
+    agreements = 0
+    for entry in CANON_POOL:
+        graph = _sg(entry)
+        _, _, exhaustive_profile = canonical_profile(graph, pruned=False)
+        _, _, pruned_profile = canonical_profile(graph, pruned=True)
+        _, _, pruned_frames = pruned_detail(graph)
+
+        unpruned_ever_prunes |= exhaustive_profile.prunes
+        assert pruned_profile.prunes == any(f.branch_factor < f.n_cands for f in pruned_frames)
+        agreements += 1
+    # The unpruned arm expands every candidate it sees, by definition.
+    assert not unpruned_ever_prunes
+    assert agreements == len(CANON_POOL)
 
 
 def test_search_leaves_respect_the_delta_bound() -> None:

@@ -170,7 +170,78 @@ CANONICAL_TABLE_PLACEHOLDER
 
 ## Derivation checks
 
-DERIVATION_PLACEHOLDER
+### (a) Pair generation is `Θ(M² log M)` per frame — **HOLDS**
+
+Two components, both measured rather than assumed.
+
+**Pairs built.** Over the 1,109,460 greedy frames of the sweep, `Σ_f pairs_generated` =
+**397,705,148**, and `Σ_f (2M_f + 1)²` = **397,705,148**. Exact agreement, constant factor
+**1.000**. The test additionally asserts `len(generate_pairs_sorted_by_sum(M)) == (2M+1)²` and
+`M ≤ n` on every frame.
+
+**Sort cost.** `pair_generation_work(M)` re-sorts the identical key sequence through a
+`__lt__`-counting wrapper, so this is the frozen sort's own comparison count, not a model of it:
+
+| `M` | `P = (2M+1)²` | comparisons | `P·log₂P` | ratio |
+|---|---|---|---|---|
+| 1 | 9 | 18 | 28.5 | 0.631 |
+| 2 | 25 | 87 | 116.1 | 0.749 |
+| 4 | 81 | 408 | 513.5 | 0.795 |
+| 6 | 169 | 974 | 1,250.7 | 0.779 |
+| 8 | 289 | 1,844 | 2,362.6 | 0.781 |
+| 10 | 441 | 3,018 | 3,874.0 | 0.779 |
+| 12 | 625 | 4,510 | 5,804.8 | 0.777 |
+
+The ratio sits in **0.777–0.810 for every `M ≥ 2`** — a constant, so the cost is `Θ(P log P)` with
+`P = (2M+1)² = Θ(M²)`, i.e. `Θ(M² log M)`. Weighted over the sweep: measured
+**2,725,161,533** comparisons against an analytic `Σ_f P_f·log₂P_f` of **3,496,415,624**, ratio
+**0.779**.
+
+**And the memoisation claim.** `generate_pairs_sorted_by_sum` is a pure function of `M`, so the
+sorted order depends on `M` alone and never on the graph. Over the sweep, 1,109,460 frames took only
+**12 distinct values of `M`** (1…12, bounded by `n`). Memoising therefore collapses 1,109,460
+pair-generation calls to at most `n` per encode — `Σ_f Θ(M² log M) = O(m n² log n)` down to
+`Θ(n³ log n)` total, which is the mechanism behind the C++ engine's measured 25.5×–108.6× memo
+speedup. R3.4b asks whether these lists are recomputed or precomputed: **in the frozen Python
+reference they are recomputed at every frame**, and that is the honest answer to give.
+
+### (b) Realised scan depth is far below the `(2M+1)²` worst case — **HOLDS, by ~47×**
+
+Distribution of `D_f / (2M_f + 1)²` over all 1,109,460 greedy frames:
+
+| statistic | value |
+|---|---|
+| mean | **0.0214** |
+| median | 0.0091 |
+| p95 | 0.111 |
+| max | **0.325** |
+
+So the first-fit early return costs on average **2.1 %** of the worst-case scan, and never exceeded
+**32.5 %** on any single frame in the sweep. The **first pair is accepted in 293,499 of 1,109,460
+frames = 26.45 %**.
+
+Per-`n` worst realised depth against the worst case:
+
+| `n` | 4 | 6 | 8 | 10 | 12 |
+|---|---|---|---|---|---|
+| max `D_f` | 18 | 35 | 75 | 131 | 203 |
+| `(2n+1)²` | 81 | 169 | 289 | 441 | 625 |
+| ratio | 0.22 | 0.21 | 0.26 | 0.30 | 0.32 |
+
+The ratio drifts slowly upward with `n` but stays well under a third. **The `O(M²)` worst case is
+real but is not what the implementation pays**, which is precisely why §2.1 says `D_f` is a quantity
+to measure rather than to assume.
+
+### (c) `search_leaves` and the effect of the triplet key
+
+CANONICAL_DERIVATION_PLACEHOLDER
+
+### (d) `string_length == frames + Σ displacement` — **HOLDS on 50,820 / 50,820**
+
+Both readings of the sum hold identically: `Σ_f disp_emitted` (what the encoder appends) and
+`Σ_f (|a_f| + |b_f|)` (the design note's form) agree on every encode, for the reason proved in the
+lemma below. `frames == m` on all 50,820 encodes, with zero exceptions, and
+`Σ_{V,v frames} 1 == n − 1` on every one.
 
 ---
 
