@@ -15,7 +15,8 @@
 #
 # Reads from the environment: ISALGRAPH_REPO_DIR, ISALGRAPH_CONDA_ENV,
 # ISALGRAPH_COHORT_ROOT, T13_RESULTS_DIR, T13_RUN_ID, T13_SOURCE, T13_N_SHARDS,
-# T13_SHARDS_PER_TASK, T13_ARMS_COLON, T13_BUDGET_S, T13_SEED.
+# T13_SHARDS_PER_TASK, T13_ARMS_COLON, T13_BUDGET_S, T13_SEED,
+# T13_FAMILIES_COLON, T13_REPLICATES.
 #
 set -euo pipefail
 
@@ -34,6 +35,13 @@ RUN_ID="${T13_RUN_ID:-t13_unknown}"
 # The launcher ships the arm list colon-separated because --export splits on
 # every comma and would truncate "default,no_bnb" to "default" in silence.
 ARMS="${T13_ARMS_COLON//:/,}"
+
+# Same reason, same encoding: the campaign runs the three ladder families and
+# "spider_ladder,symmetry_ladder" inside --export would arrive as
+# "spider_ladder" with "symmetry_ladder" parsed as a junk variable name, in
+# silence. Empty means "every family", which is the full 664-spec grid.
+FAMILIES="${T13_FAMILIES_COLON//:/,}"
+REPLICATES="${T13_REPLICATES:-}"
 
 TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
 SHARD_LO=$(( TASK_ID * SHARDS_PER_TASK ))
@@ -175,10 +183,14 @@ for offset in $(seq 0 $(( SHARDS_PER_TASK - 1 ))); do
     shard=$(( SHARD_LO + offset ))
     (( shard >= N_SHARDS )) && break
     log="${MYLOCALSCRATCH}/shard_${shard}.log"
+    declare -a SUBSET_ARGS=()
+    [[ -n "${FAMILIES}" ]]   && SUBSET_ARGS+=(--families "${FAMILIES}")
+    [[ -n "${REPLICATES}" ]] && SUBSET_ARGS+=(--replicates "${REPLICATES}")
     taskset -c "${offset}" "${PY}" -m benchmarks.eval_t13_complexity.measure \
         --source "${SOURCE}" \
         --shard "${shard}" \
         --n-shards "${N_SHARDS}" \
+        "${SUBSET_ARGS[@]}" \
         --arms "${ARMS}" \
         --budget-s "${BUDGET_S}" \
         --seed "${SEED}" \

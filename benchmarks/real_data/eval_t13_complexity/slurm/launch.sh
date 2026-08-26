@@ -77,6 +77,11 @@ N_SHARDS="${T13_N_SHARDS:-128}"
 BUDGET_S="${T13_BUDGET_S:-300}"
 SEED="${T13_SEED:-13}"
 ARMS="${T13_ARMS:-default}"
+# The campaign runs the ladders alone at one replicate: design rule 7 makes the
+# within-(n, m) ladder contrast the primary evidence, and the other nine
+# families are supporting. Empty FAMILIES means the full 664-spec grid.
+FAMILIES="${T13_FAMILIES:-}"
+REPLICATES="${T13_REPLICATES:-}"
 SOURCE=""
 DRY_RUN=false
 TEST_ONLY=false
@@ -88,6 +93,8 @@ while [[ $# -gt 0 ]]; do
         --n-shards)        N_SHARDS="$2"; shift 2 ;;
         --shards-per-task) SHARDS_PER_TASK="$2"; shift 2 ;;
         --arms)            ARMS="$2"; shift 2 ;;
+        --families)        FAMILIES="$2"; shift 2 ;;
+        --replicates)      REPLICATES="$2"; shift 2 ;;
         --budget-s)        BUDGET_S="$2"; shift 2 ;;
         --seed)            SEED="$2"; shift 2 ;;
         --node-family)     NODE_FAMILY="$2"; shift 2 ;;
@@ -169,7 +176,7 @@ SBATCH_ARGS=(
     --chdir="${REPO_DIR}"
     --output="${LOGS_DIR}/t13_${SOURCE}_%A_%a.out"
     --error="${LOGS_DIR}/t13_${SOURCE}_%A_%a.err"
-    --export="ALL,ISALGRAPH_REPO_DIR=${REPO_DIR},ISALGRAPH_CONDA_ENV=${CONDA_ENV_PATH},ISALGRAPH_COHORT_ROOT=${COHORT_ROOT},T13_RESULTS_DIR=${RESULTS_DIR},T13_RUN_ID=${RUN_ID},T13_SOURCE=${SOURCE},T13_N_SHARDS=${N_SHARDS},T13_SHARDS_PER_TASK=${SHARDS_PER_TASK},T13_ARMS_COLON=${ARMS_COLON},T13_BUDGET_S=${BUDGET_S},T13_SEED=${SEED}"
+    --export="ALL,ISALGRAPH_REPO_DIR=${REPO_DIR},ISALGRAPH_CONDA_ENV=${CONDA_ENV_PATH},ISALGRAPH_COHORT_ROOT=${COHORT_ROOT},T13_RESULTS_DIR=${RESULTS_DIR},T13_RUN_ID=${RUN_ID},T13_SOURCE=${SOURCE},T13_N_SHARDS=${N_SHARDS},T13_SHARDS_PER_TASK=${SHARDS_PER_TASK},T13_ARMS_COLON=${ARMS_COLON},T13_FAMILIES_COLON=${FAMILIES//,/:},T13_REPLICATES=${REPLICATES},T13_BUDGET_S=${BUDGET_S},T13_SEED=${SEED}"
     "${SCRIPT_DIR}/worker.sh"
 )
 
