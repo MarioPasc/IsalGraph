@@ -298,35 +298,31 @@ def test_cli_self_test_emits_the_frozen_schema(tmp_path: Path) -> None:
         assert row["parity_ok"] is True
         assert row["encoder"] in cli.ENCODERS
         seen.add(row["encoder"])
-    assert seen == set(cli.ENCODERS)
+    assert seen == set(cli.DEFAULT_ENCODERS)
 
 
-def test_cli_greedy_mode_single_gives_frames_equal_m(tmp_path: Path) -> None:
-    """``--greedy-mode single`` prices one encode, so ``frames == m``."""
+def test_encoder_semantics_travel_in_the_data(tmp_path: Path) -> None:
+    """``greedy_single`` and ``greedy_min`` are distinct schema values.
+
+    The frame accounting differs between them, so the distinction must be
+    readable from the row rather than from how the CLI happened to be invoked.
+    """
     spec = tmp_path / "spec.jsonl"
     spec.write_text(
         json.dumps({"n": 5, "edges": [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]]}) + "\n",
         encoding="utf-8",
     )
     out = tmp_path / "counts.jsonl"
-    assert (
-        cli.main(
-            [
-                "--spec-file",
-                str(spec),
-                "--out",
-                str(out),
-                "--encoders",
-                "greedy",
-                "--greedy-mode",
-                "single",
-            ]
-        )
-        == 0
-    )
-    row = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
-    assert row["parity_ok"] is True
-    assert row["frames"] == row["m"] == 5
+    assert cli.main(["--spec-file", str(spec), "--out", str(out), "--greedy-mode", "both"]) == 0
+
+    rows = {
+        row["encoder"]: row
+        for row in (json.loads(line) for line in out.read_text(encoding="utf-8").splitlines())
+    }
+    assert set(rows) == {"greedy_single", "greedy_min", "canonical", "pruned"}
+    assert all(row["parity_ok"] for row in rows.values())
+    assert rows["greedy_single"]["frames"] == rows["greedy_single"]["m"] == 5
+    assert rows["greedy_min"]["frames"] == rows["greedy_min"]["n"] * rows["greedy_min"]["m"] == 25
 
 
 def test_cli_spec_file_round_trip(tmp_path: Path) -> None:

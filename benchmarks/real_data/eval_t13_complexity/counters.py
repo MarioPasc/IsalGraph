@@ -28,11 +28,21 @@ Usage
 ``--self-test K`` replaces the spec file with a deterministic pool of ``K``
 connected graphs per order, so the CLI is runnable without a spec file.
 
-The ``greedy`` rows price the whole ``GreedyMinG2S`` unit of work by default --
-one greedy encode per start node, lexmin shortest kept -- because that is what
-the registered ``isalgraph_greedy`` arm times. Their ``frames`` is therefore
-``n * m``, not ``m``. ``--greedy-mode single`` prices one encode from node ``0``
-instead, for which ``frames == m``.
+Encoder values, and why there are two greedy ones
+-------------------------------------------------
+``encoder`` takes one of ``"greedy_single"``, ``"greedy_min"``, ``"canonical"``,
+``"pruned"``. The two greedy values price different objects and the distinction
+travels in the data rather than in the invocation, because a consumer asserting
+``frames == m`` on the wrong one gets a wrong answer with no error:
+
+``greedy_single``
+    One greedy encode from node ``0``. ``frames == m``.
+``greedy_min``
+    The whole ``GreedyMinG2S`` unit -- one encode per start node, lexmin
+    shortest kept. ``frames == n * m``. This is what the registered
+    ``isalgraph_greedy`` arm times, so counts and timings price the same object.
+
+``--greedy-mode {min,single,both}`` selects which greedy rows are emitted.
 """
 
 from __future__ import annotations
@@ -60,12 +70,20 @@ from isalgraph.core.graph_to_string import GraphToString
 from isalgraph.core.sparse_graph import SparseGraph
 
 SCHEMA_VERSION = "t13c.1"
-ENCODERS: tuple[str, ...] = ("greedy", "canonical", "pruned")
+ENCODERS: tuple[str, ...] = ("greedy_single", "greedy_min", "canonical", "pruned")
+DEFAULT_ENCODERS: tuple[str, ...] = ("greedy_min", "canonical", "pruned")
+GREEDY_BY_MODE: dict[str, tuple[str, ...]] = {
+    "min": ("greedy_min",),
+    "single": ("greedy_single",),
+    "both": ("greedy_single", "greedy_min"),
+}
 
 LOGGER = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFAULT_ENCODERS",
     "ENCODERS",
+    "GREEDY_BY_MODE",
     "SCHEMA_VERSION",
     "count_row",
     "random_connected_graphs",
@@ -168,7 +186,7 @@ def _is_connected(n: int, edges: Sequence[tuple[int, int]]) -> bool:
 # ----------------------------------------------------------------------
 
 
-def reference_string(graph: SparseGraph, encoder: str, *, greedy_mode: str = "min") -> str:
+def reference_string(graph: SparseGraph, encoder: str) -> str:
     """Return the frozen **pure-Python** reference string for *encoder*.
 
     The imports are taken from ``isalgraph.core.*`` rather than from the
@@ -177,11 +195,7 @@ def reference_string(graph: SparseGraph, encoder: str, *, greedy_mode: str = "mi
 
     Args:
         graph: The graph to encode.
-        encoder: One of ``"greedy"``, ``"canonical"``, ``"pruned"``.
-        greedy_mode: ``"min"`` prices the whole ``GreedyMinG2S`` unit of work
-            (one encode per start node, lexmin shortest kept), matching the
-            registered ``isalgraph_greedy`` arm; ``"single"`` prices a single
-            encode from node ``0``, for which ``frames == m`` holds.
+        encoder: One of the values in :data:`ENCODERS`.
 
     Returns:
         The reference string.
@@ -189,9 +203,9 @@ def reference_string(graph: SparseGraph, encoder: str, *, greedy_mode: str = "mi
     Raises:
         ValueError: If *encoder* is not recognised.
     """
-    if encoder == "greedy":
-        if greedy_mode == "single":
-            return GraphToString(graph).run(0)[0]
+    if encoder == "greedy_single":
+        return GraphToString(graph).run(0)[0]
+    if encoder == "greedy_min":
         return _greedy_min_reference(graph)
     if encoder == "canonical":
         return canonical_string(graph)
@@ -218,15 +232,12 @@ def _greedy_min_reference(graph: SparseGraph) -> str:
     return results[0][1]
 
 
-def count_row(
-    graph: SparseGraph, encoder: str, *, greedy_mode: str = "min"
-) -> tuple[str, OperationCounts]:
+def count_row(graph: SparseGraph, encoder: str) -> tuple[str, OperationCounts]:
     """Run the instrumented mirror for *encoder*.
 
     Args:
         graph: The graph to encode.
-        encoder: One of ``"greedy"``, ``"canonical"``, ``"pruned"``.
-        greedy_mode: See :func:`reference_string`.
+        encoder: One of the values in :data:`ENCODERS`.
 
     Returns:
         Tuple ``(string, counts)``.
@@ -234,9 +245,9 @@ def count_row(
     Raises:
         ValueError: If *encoder* is not recognised.
     """
-    if encoder == "greedy":
-        if greedy_mode == "single":
-            return greedy_counts(graph, 0)
+    if encoder == "greedy_single":
+        return greedy_counts(graph, 0)
+    if encoder == "greedy_min":
         return greedy_min_counts(graph)
     if encoder == "canonical":
         return canonical_counts(graph)
@@ -250,15 +261,15 @@ def count_row(
 # ----------------------------------------------------------------------
 
 
-def _row(spec: dict[str, Any], encoder: str, *, greedy_mode: str = "min") -> dict[str, Any]:
+def _row(spec: dict[str, Any], encoder: str) -> dict[str, Any]:
     """Build one output row for ``(spec, encoder)``."""
     n = int(spec["n"])
     edges = [(int(u), int(v)) for u, v in spec["edges"]]
     directed = bool(spec.get("directed", False))
     graph = to_sparse(n, edges, directed=directed)
 
-    string, counts = count_row(graph, encoder, greedy_mode=greedy_mode)
-    reference = reference_string(graph, encoder, greedy_mode=greedy_mode)
+    string, counts = count_row(graph, encoder)
+    reference = reference_string(graph, encoder)
 
     row: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -323,7 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, required=True, help="JSON Lines output path")
     parser.add_argument(
         "--encoders",
-        default=",".join(ENCODERS),
+        default=",".join(DEFAULT_ENCODERS),
         help=f"comma-separated subset of {','.join(ENCODERS)}",
     )
     parser.add_argument(
@@ -335,14 +346,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=13, help="seed for --self-test")
     parser.add_argument(
         "--greedy-mode",
-        choices=("min", "single"),
-        default="min",
+        choices=tuple(GREEDY_BY_MODE),
+        default=None,
         help=(
-            "'min' prices the whole GreedyMinG2S unit (one encode per start node, "
-            "so frames == n * m); 'single' prices one encode from node 0 (frames == m)"
+            "which greedy rows to emit, overriding the greedy entries of --encoders: "
+            "'min' -> greedy_min (the whole GreedyMinG2S unit, frames == n * m), "
+            "'single' -> greedy_single (one encode from node 0, frames == m), "
+            "'both' -> both rows"
         ),
     )
     return parser
+
+
+def _resolve_encoders(spec: str, greedy_mode: str | None) -> list[str]:
+    """Resolve the encoder list, applying ``--greedy-mode`` if it was given."""
+    encoders = [e.strip() for e in spec.split(",") if e.strip()]
+    if greedy_mode is None:
+        return encoders
+    others = [e for e in encoders if not e.startswith("greedy")]
+    return [*GREEDY_BY_MODE[greedy_mode], *others]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -357,7 +379,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = build_parser().parse_args(argv)
 
-    encoders = [e.strip() for e in args.encoders.split(",") if e.strip()]
+    encoders = _resolve_encoders(args.encoders, args.greedy_mode)
     unknown = sorted(set(encoders) - set(ENCODERS))
     if unknown:
         LOGGER.error("unknown encoders: %s", unknown)
@@ -377,7 +399,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with args.out.open("w", encoding="utf-8") as fh:
         for spec in specs:
             for encoder in encoders:
-                row = _row(spec, encoder, greedy_mode=args.greedy_mode)
+                row = _row(spec, encoder)
                 if not row["parity_ok"]:
                     failures += 1
                     LOGGER.error("parity failure: %s", {k: row[k] for k in ("n", "m", "encoder")})
