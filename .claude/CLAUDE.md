@@ -99,6 +99,19 @@ figure was T-09's 2,583. `testpaths = ["tests"]`, so unrelated work under
 > to what the grid covers — **the frozen grid was not regenerated**, because it
 > is a pre-registered artifact. Run the full suite after adding any backend.
 
+> **Registering a backend does NOT put it in a figure, and the omission is
+> silent.** `benchmarks/real_data/eval_t06_figures/design.py` holds
+> `REPRESENTATIONS`, a **hand-written literal**, and `design.present()` drops
+> unregistered keys on purpose — *"a figure must never invent a style for a
+> backend the registry does not know."* Every consumer filters through it:
+> `fig_ic` via `present()`, `eval_size_profile.figures` via `design.ORDER` /
+> `design.BY_KEY`, `tables.py` by iterating `REPRESENTATIONS`. An arm missing
+> from that literal produces figures and tables that regenerate **successfully,
+> with the arm absent and no error raised**. `tables.py` then needs its four
+> `.get()`-guarded per-key constants too (`PSI_MEASURED`, `COMPLETION_FLOOR`,
+> `EXECUTABLE`, `PAYLOAD_PER_BYTE`) or the cells render blank or `?`.
+> `available_backends()` going 12 → 13 is *not* the check. Look at the legend.
+
 > ⚠ **This figure was stale by ~3.5× until 2026-08-24.** It read *"726 passed /
 > 271 skipped (integration of wave 2026-08-10)"* while the suite had grown across
 > T-04, T-04a, T-05, T-27 and T-06 to 2,544. **A stale floor here is worse than

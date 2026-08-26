@@ -209,6 +209,9 @@ raw inputs by an independent path, **max discrepancy 1.1 × 10⁻¹⁶**.
 | The LB→UB weight transfer with a p-value | **7 of 8, p = 0.070 — not significant.** Descriptive only. **Only R² falling 8/8 (p = 0.0078) is supported** |
 | `43 s/graph`, `≈ 520×`, `≥ 6.8 core-hours` | **Retracted as unprovenanced** — the run that produced them left no artifact |
 | Any F0/F1/F2 result restated more favourably than it came out | The confirmatory layer is pre-registered; its value is that it is reported unchanged |
+| *"the exhaustive canonical arm closes the gap to nauty-sparse6"* | **Measured 2026-08-26: it does not.** 348.7 → **342.4** bits at `n = 40` against nauty-sparse6's **336.0**. It closes 6.3 of 12.7 bits. `T-06-POSITIONING.md` §5's projection to *"≈ 310 — below nauty-sparse6's 336"* extrapolated an `n ≤ 26` measurement; at `n = 40` the 30 s budget expires on **96.8 %** of the stratum, so only 3 of 93 graphs carry a true `w*_G`. Claimable at `n = 20`, where it is **114.1 against 144.0** |
+| *"greedy-min is never shorter than the canonical string"* unqualified | Exact when scoped to **completed searches** — 0 violations over 18,461 graphs — and **false over the delivered column**, where greedy beats `isalgraph_exhaustive` on 1,999 of 21,720 graphs. Every one is a fallback row. The scope is load-bearing |
+| A ψ for `isalgraph_greedy` | **Never measured.** The ablation's Part A did not run. What exists is the non-invariance *rate* (50.7–91.0 % at `n = 5–9` against 0 % for both canonical arms), which is a different statistic on a different scale — ψ is a separation ratio and `sparse6`'s reaches 1.15 |
 
 ### Measured a mechanism for, never an incidence of
 
