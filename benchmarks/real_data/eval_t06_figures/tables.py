@@ -57,6 +57,16 @@ SIGN_TEST_ALPHA: Final[float] = 0.05
 PSI_MEASURED: Final[dict[str, str]] = {
     "isalgraph_pruned": "0",
     "isalgraph_canonical": "0",
+    "isalgraph_exhaustive": "0",
+    # The ablation has no psi under this protocol: T-04a E1 measures relabelling
+    # sensitivity of a *distance*, and Part A was never run for the greedy arm.
+    # What the campaign did measure is a different statistic -- the fraction of
+    # relabelling draws that change the string at all, 50.7--91.0 % over n = 5-9
+    # against 0 % for both canonical arms
+    # (``.claude/notes/2026-08-25-t06-exhaustive/log.md``, "The canonicalisation
+    # ablation, measured"). A rate is not a magnitude -- sparse6's psi is 1.15 --
+    # so it must not be printed in this column.
+    "isalgraph_greedy": "--",
     "min_dfs": "0",
     "agm_cam": "0",
     "nauty_graph6": "0",
@@ -91,6 +101,14 @@ COMPLETION_FLOOR: Final[dict[str, float]] = {
     "graph6": 1.0,
     "isalgraph_canonical": 1.0,
     "isalgraph_pruned": 1.0,
+    # Both new arms are complete under D14 by construction, not by luck. The
+    # exhaustive arm cascades canonical -> pruned -> greedy-min inside the
+    # driver, so a graph that exhausts the 30 s budget is substituted rather
+    # than dropped; greedy-min always terminates and is the terminal tier.
+    # The exhaustive arm's *censoring* rate is a separate quantity and is not
+    # this column -- it reaches 63.6 % on suite2/protein.
+    "isalgraph_exhaustive": 1.0,
+    "isalgraph_greedy": 1.0,
     "nauty_graph6": 1.0,
     "size_null": 1.0,
     "sparse6": 1.0,
@@ -103,7 +121,17 @@ COMPLETION_FLOOR: Final[dict[str, float]] = {
 #: The categorical property no serialisation has: the encoding is a program
 #: that constructs the graph, executable prefix by prefix. It is where the
 #: contribution actually lives and it is not adjudicated by rho or by bits.
-EXECUTABLE: Final[frozenset[str]] = frozenset({"isalgraph_pruned", "isalgraph_canonical"})
+EXECUTABLE: Final[frozenset[str]] = frozenset(
+    {
+        "isalgraph_pruned",
+        "isalgraph_canonical",
+        "isalgraph_exhaustive",
+        # The ablation is executable too: it emits the same instruction set and
+        # every prefix still constructs a subgraph. What it loses is canonicity,
+        # which is a different axis and is reported in its own column.
+        "isalgraph_greedy",
+    }
+)
 
 _YES: Final[str] = r"\checkmark"
 _NO: Final[str] = r"--"
@@ -455,6 +483,11 @@ def head_to_head_table(
 PAYLOAD_PER_BYTE: Final[dict[str, float]] = {
     "isalgraph_pruned": 3.17,
     "isalgraph_canonical": 3.17,
+    # Same alphabet, so the same payload density: all four IsalGraph arms emit
+    # one character per symbol from a fixed |Sigma| = 9, giving log2(9) = 3.17
+    # payload bits per stored byte independently of n.
+    "isalgraph_exhaustive": 3.17,
+    "isalgraph_greedy": 3.17,
     "min_dfs": 1.83,
     "agm_cam": 6.00,
     "nauty_graph6": 6.00,
@@ -729,7 +762,11 @@ def summary_table(
     for rep in design.REPRESENTATIONS:
         name = rf"\textbf{{{rep.tex}}}" if rep.is_ours else rep.tex
         psi = PSI_MEASURED.get(rep.key, "?")
-        psi_cell = _BEST.format(psi) if psi == "0" else _WORST.format(psi)
+        # The caption's own rule: an axis a representation cannot be measured on
+        # reads ``--`` and leaves that column's ranking rather than counting as
+        # its worst. Underlining the dash would assert a measurement we do not
+        # have.
+        psi_cell = _NO if psi == _NO else (_BEST if psi == "0" else _WORST).format(psi)
         collisions = COLLISIONS_MEASURED.get(rep.key)
         if collisions is not None:
             collision_cell = _WORST.format(collisions)

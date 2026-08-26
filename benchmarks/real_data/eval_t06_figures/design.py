@@ -231,6 +231,42 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
         max_n=12,
     ),
     Representation(
+        key="isalgraph_exhaustive",
+        short="IsalGraph (hyb.)",
+        long="IsalGraph (exhaustive canonical, pruned fallback)",
+        tex=r"\textsc{IsalGraph}$^{\dagger}$",
+        # Deliberately far from the pruned arm's #AA3377. The two curves
+        # coincide above n ~ 28 -- 96.8 % of the n = 40 stratum falls back to
+        # the pruned string -- so a near-neighbour magenta made the pair
+        # unreadable exactly where the reader needs to see them separate.
+        colour="#EE3377",
+        marker="d",
+        family=Family.CANONICAL_CODE,
+        is_ours=True,
+        canonical=True,
+        complete=True,
+        reversible=True,
+        handles_disconnected=False,
+        metric_admissible=True,
+        max_n=98,
+    ),
+    Representation(
+        key="isalgraph_greedy",
+        short="IsalGraph greedy",
+        long="IsalGraph (greedy-min, canonical search ablated)",
+        tex=r"\textsc{IsalGraph}$_{\mathrm{greedy}}$",
+        colour="#CC6677",
+        marker="h",
+        family=Family.RAW_SERIALISATION,
+        is_ours=True,
+        canonical=False,
+        complete=False,
+        reversible=True,
+        handles_disconnected=False,
+        metric_admissible=False,
+        max_n=98,
+    ),
+    Representation(
         key="min_dfs",
         short="gSpan min-DFS",
         long="gSpan minimum DFS code",
