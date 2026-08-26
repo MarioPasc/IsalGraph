@@ -69,15 +69,30 @@ CONTRACTS §4 names, `parity_ok` computed per row against the pure-Python refere
 exit status if any row fails.
 
 `--spec-file` rows carry the graph **explicitly** (`n`, `edges`) plus optional provenance
-(`source`, `family`, `n_target`, `replicate`, `dataset`, `graph_index`, `directed`, `encoders`),
-copied verbatim into the output. That is a deliberate choice: it keeps this module independent of
-track A's `families.py`, which the brief forbids me to import. Track A or C generate the spec file
-including the edge list; I consume it. **Orchestrator: this is the one interface decision I had to
-make unilaterally.**
+(`source`, `family`, `n_target`, `replicate`, `dataset`, `graph_index`, `directed`), copied verbatim
+into the output. That keeps this module independent of track A's `families.py`, which the brief
+forbids me to import. **Approved by the orchestrator**, who generates the spec file at campaign time
+from `families.enumerate_grid` / `families.build` and passes provenance through the optional fields.
 
 `--self-test K` replaces the spec file with a deterministic pool, so the CLI is runnable standalone.
 `random_connected_graphs(...)` and `to_sparse(...)` are exported for the tests and the offline
 sweep.
+
+**`encoder` takes four values, not three** — a CONTRACTS §4 amendment made by the orchestrator on my
+report of the hazard:
+
+| value | object priced | frame accounting |
+|---|---|---|
+| `greedy_single` | one greedy encode from node `0` | `frames == m` |
+| `greedy_min` | the whole `GreedyMinG2S` unit — one encode per start node, lexmin shortest kept; what the registered `isalgraph_greedy` arm times | `frames == n · m` |
+| `canonical` | `canonical_string` | summed over the search tree |
+| `pruned` | `pruned_canonical_string` | summed over the search tree |
+
+The two greedy rows price different objects, so the distinction travels **in the data**. A single
+`greedy` value plus an invocation-time flag was the earlier design and was a trap: a consumer
+asserting `frames == m` on the wrong row would have got a wrong answer with no error.
+`--greedy-mode {min,single,both}` selects which greedy rows are emitted; default `greedy_min`,
+because counts and timings must price the same object.
 
 ### `benchmarks/real_data/eval_t13_complexity/tests/test_instrumented.py`
 
@@ -101,8 +116,8 @@ brief instructs. Take track A's version on merge.
 | 3 | ≥ 50,000 (graph, start) parity pairs, 0 mismatches, connected, 2 ≤ n ≤ 12, fixed seed | **PASS** | see *Parity evidence* |
 | 4 | structural invariants on every graph in the sweep | **PASS** | see *Parity evidence* |
 | 5 | derivation checks (a)–(d) | **PASS with one correction to my own prior** | see *Derivation checks* |
-| 6 | CLI emits the `t13c.1` schema with `parity_ok` true in every row | **PASS** | `$PY -m benchmarks.eval_t13_complexity.counters --help` renders (verified through a transient symlink; the symlink itself is track C's file and is **not** in my diff). `--self-test 3` wrote 36 rows, 0 parity failures |
-| 7 | `pytest .../tests/test_instrumented.py -q` | **PASS** | `21 passed in 7.31s` |
+| 6 | CLI emits the `t13c.1` schema with `parity_ok` true in every row | **PASS** | `$PY -m benchmarks.eval_t13_complexity.counters --help` renders (verified through a transient symlink; the symlink itself is track C's file and is **not** in my diff). `--self-test 3 --greedy-mode both` wrote 48 rows across all four encoder values, `0 parity failures`; `greedy_single` satisfies `frames == m` and `greedy_min` satisfies `frames == n·m` on every row |
+| 7 | `pytest .../tests/test_instrumented.py -q` | **PASS** | `21 passed in 7.32s` |
 | 8 | `ruff check` and `mypy` clean | **PASS** | `All checks passed!` / `Success: no issues found in 5 source files` |
 
 ### Criterion 8, the one wrinkle
@@ -169,13 +184,12 @@ DERIVATION_PLACEHOLDER
    calling that "one leaf" would make the greedy and canonical columns mean different things.
    Criterion 4's `backtrack_nodes >= search_leaves >= 1` is asserted for the canonical arms only,
    as the brief specifies.
-3. **The CLI's `greedy` row prices the whole `GreedyMinG2S` unit** — one greedy encode per start
-   node, lexmin shortest kept — because that is what the registered `isalgraph_greedy` arm times,
-   and counts and timings must price the same object. Its `frames` is therefore `n · m`, **not**
-   `m`. `greedy_counts(g, start)`, the contract function, is per-start and does satisfy
-   `frames == m`. `--greedy-mode single` switches the CLI to the per-start reading.
-   **A downstream consumer asserting `frames == m` on a CLI `greedy` row will be wrong under the
-   default mode.** Flagging deliberately.
+3. **Two greedy encoder values, `greedy_single` and `greedy_min`.** I first shipped one `greedy`
+   value plus a `--greedy-mode` flag, flagged the hazard to the orchestrator, and was told to fix
+   it in the data instead. Done: the schema now carries the mode, `frames == m` is assertable
+   exactly on `greedy_single` and `frames == n · m` exactly on `greedy_min`, and no consumer has to
+   remember an invocation. The default remains `greedy_min` because that is the object the
+   registered `isalgraph_greedy` arm times.
 4. **Triplet work is not counted.** `compute_structural_triplets` is a fixed `O(n(n+m))`
    preprocessing step and the `max`/filter at each branch is `O(|cands|)`; there is no
    `OperationCounts` field for either, and folding them into `neighbour_checks` would make the
@@ -192,36 +206,63 @@ DERIVATION_PLACEHOLDER
 
 ---
 
+## Lemma (one-sided displacement at insertion frames) — for the article notes
+
+*This heading is written to be lifted verbatim. It is a small original result and it belongs to
+T-13.*
+
+**Lemma.** In a G2S encode under the frozen scan order, every frame whose accepted instruction is
+`V` has `b = 0`, and every frame whose accepted instruction is `v` has `a = 0`.
+
+*Proof.* Displacement pairs are scanned in the order `(|a| + |b|, |a|, (a, b))`, and the `V` guard —
+"the primary tentative node has an uninserted neighbour" — depends on `a` alone. Suppose `V` is
+accepted at `(a, b)` with `|b| > 0`. The pair `(a, 0)` has cost `|a| < |a| + |b|` and is therefore
+examined strictly earlier, with the same `a` and hence the same `V` guard, so `V` would have fired
+there: contradiction. The `v` case is symmetric. `v` is reached only after the `V` guard has failed
+at the current pair; the pair `(0, b)` has cost `|b| < |a| + |b|` and is examined strictly earlier,
+its `V` guard also fails (otherwise the frame would be a `V` frame), and its `v` guard is the same,
+so `v` would have fired there. ∎
+
+**What the lemma does and does not say.** It constrains only frames whose accepted instruction is
+`V` or `v`. `C` and `c` frames may still carry two-sided displacement, so the general form
+
+    |w| = m + Σ_f (|a_f| + |b_f|)
+
+**stands unchanged** — the lemma does not correct it. What the lemma buys is a sharper split of that
+sum along the frame decomposition of §2.1: the `n − 1` insertion frames cost **one-sided**
+displacement, the `m − n + 1` chord frames **two-sided**.
+
+**Measured.** Zero exceptions in 215,270 frames across four arms:
+
+| arm | pool | `V` frames | with `b ≠ 0` | `v` frames | with `a ≠ 0` |
+|---|---|---|---|---|---|
+| greedy | seed 99, sizes 2…12, 120 graphs/size, 9,240 encodes | 43,942 | **0** | 24,698 | **0** |
+| canonical | seed 98, sizes 4…7, 60 graphs/size | 119,666 | **0** | 26,964 | **0** |
+
+And the split is not merely formal — the two frame classes differ by 6.1× in realised cost on the
+greedy pool:
+
+| frame class | frames | movement characters emitted | mean per frame |
+|---|---|---|---|
+| insertion (`V`/`v`), one-sided | 68,640 | 16,761 | **0.244** |
+| chord (`C`/`c`), two-sided | 128,879 | 193,272 | **1.500** |
+
+So `|w| = m + Σ_f (|a_f| + |b_f|)` is dominated by the chord frames, and a graph's string length is
+driven by its cyclomatic number `m − n + 1` far more than by its node count. That is worth a
+sentence next to the `O(mn)` bound.
+
+---
+
 ## Defects found in the brief
 
-**One suspected, investigated, and refuted — the derivation is right and I was wrong.**
-
-My brief's criterion 5(d) and the design note's §2.1 both state
-`|w| = m + Σ_f (|a_f| + |b_f|)`. Reading the frozen encoder, the `V` branch emits only
-`_emit_primary_moves(a)` and the `v` branch only `_emit_secondary_moves(b)` — neither emits the
-other half of the pair. I expected the formula to over-count on every `V`/`v` frame and instrumented
-both readings (`FrameRecord.disp_emitted` versus `|a| + |b|`) to prove it.
-
-They agree on all 50,820 greedy encodes. The reason is a short lemma the design note leaves
-implicit:
-
-> **At every accepted `V` frame, `b = 0`; at every accepted `v` frame, `a = 0`.**
->
-> *Proof.* Pairs are scanned in the frozen order `(|a| + |b|, |a|, (a, b))`, and the `V` guard
-> depends on `a` alone. Suppose `V` is accepted at `(a, b)` with `|b| > 0`. The pair `(a, 0)` has
-> cost `|a| < |a| + |b|` and is therefore examined strictly earlier, with the same `a` and hence
-> the same `V` guard — so `V` would have fired there. Contradiction. The `v` case is symmetric:
-> `v` is only reached once the `V` guard has failed at the current pair, and `(0, b)` has cost
-> `|b| < |a| + |b|`; at `(0, b)` the `V` guard failed too (else the frame would be a `V` frame),
-> so `v` fires there. ∎
-
-Measured on an independent pool (seed 99, sizes 2…12, 120 graphs per size): **43,942 greedy `V`
-frames, 0 with `b ≠ 0`; 24,698 greedy `v` frames, 0 with `a ≠ 0`**. And on the canonical arm
-(seed 98, sizes 4…7): **119,666 `V` frames, 0 with `b ≠ 0`; 26,964 `v` frames, 0 with `a ≠ 0`**.
-
-So the formula in the design note is correct as written, and the lemma above is worth one sentence
-in the manuscript, because without it the formula looks like an error to a careful reviewer — which
-is exactly what happened to me.
+**One suspected, investigated, and refuted.** Criterion 5(d) of my brief and §2.1 of the design note
+state `|w| = m + Σ_f (|a_f| + |b_f|)`. The frozen `V` branch emits only `_emit_primary_moves(a)` and
+the `v` branch only `_emit_secondary_moves(b)`, so I expected the formula to over-count on every
+`V`/`v` frame, and instrumented both readings (`FrameRecord.disp_emitted` versus `|a| + |b|`) to
+prove it. **They agree on all 50,820 greedy encodes**, for the reason proved in the lemma above.
+The derivation is right and I was wrong. The lemma is still worth stating in the manuscript,
+because without it the formula reads as an error to a careful reviewer — which is exactly what
+happened here.
 
 **A second, smaller correction, to my own test rather than to the brief.** I first asserted that
 the canonical arms perform *more* neighbour checks per pair trial than greedy, on the strength of
