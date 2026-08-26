@@ -57,9 +57,74 @@ And the finding that replaces them:
 > 0.979, max 1.000; **zero** graphs where either partition is finer than the orbits — as
 > Proposition 1 below requires).
 
-This is the *characterised* worst case R3.7d asks for, and it is far stronger than the WL claim it
-replaces: there is **no headroom for a finer invariant at all**. Decision 17's conclusion (do not
-build `wl_pruned_canonical`) survives and is strengthened; only its stated rationale changes.
+This is the *characterised* worst case R3.7d asks for. ~~There is **no headroom for a finer
+invariant at all**.~~ **See §1.3a — that sentence was drawn from a 250-graph probe and does not
+survive the full cohort.** Decision 17's conclusion (do not build `wl_pruned_canonical`) survives;
+its stated rationale changes, and the honest version is narrower than the probe suggested.
+
+### 1.3a Corrected at cohort scale, 2026-08-26 — the "no headroom" claim was overstated
+
+The 250-graph probe measured `WL/orbits = 1.000` on every graph and `triplet/orbits` at a median
+0.979, which reads as "both partitions are already at the invariance ceiling". Re-run over the
+**whole locked cohort, 16,370 graphs**, that splits in two and only one half holds:
+
+| | 250-graph probe | **16,370-graph cohort** |
+|---|---:|---:|
+| 1-WL **==** orbit partition | 250/250 (100 %) | **16,360/16,370 (99.939 %)** |
+| triplet key **==** orbit partition | ~ all | **6,854/16,370 (41.869 %)** |
+| triplet resolution / ceiling | median 0.979 | **median 0.9130, mean 0.8571** |
+| WL/triplet class ratio | median 1.021 | **median 1.0952, mean 1.2379, max 7.333** |
+| Proposition 1 violations | 0 | **0** |
+| incomparable | 0 | **0** |
+
+**What survives, and it is the load-bearing half:** 1-WL attains the invariance ceiling on
+**99.94 %** of the cohort, so *no invariant finer than 1-WL can help anywhere that matters*. Cor. 3
+stands.
+
+**What does not survive:** the incumbent **triplet key is not at the ceiling** — it agrees with the
+orbit partition on only 41.9 % of graphs, and the shortfall is concentrated exactly where
+canonicalisation is expensive:
+
+| dataset | triplet == orbits | |
+|---|---:|---|
+| `iam_letter_low` | 100.00 % | small, sparse, cheap |
+| `iam_letter_high` | 83.97 % | |
+| `aids_iam` | 50.58 % | |
+| `mutagenicity` | **14.50 %** | **the dataset T-06 measured 2.50 % censoring on** |
+| `coil_del` | **10.33 %** | |
+| `protein` | **10.54 %** | |
+
+So there **is** headroom between the incumbent key and the ceiling, it is large on the hard
+datasets, and 1-WL would capture essentially all of it. That partially rehabilitates the intuition
+behind the plan's item 4 while leaving both of its stated claims refuted: the relation is
+**incomparable in general** (§1.3's connected 3-regular witness), and the magnitude is a median
+**1.0952×**, not 2.4–2.6×.
+
+**Consequence for the ticket.** Whether that class-count headroom converts into *time* is not a
+partition question — it is the cost law, and it is what the campaign measures. Decision 17 is not
+reopened: T-16 was rejected on scope grounds (a new canonicalisation algorithm shipped during a
+revision round whose opening comment questions the contribution's substance), and that argument is
+untouched by this measurement. **Do not restate decision 17's rationale as "WL would buy nothing".**
+
+### 1.3b 🔴 The cohort loader and the locked cohort are not the same ten datasets
+
+`competitors.datasets.ALL_DATASETS` enumerates ten names summing to **16,320** graphs.
+T-01's locked cohort is **16,370**. The difference is exact and identified:
+
+- the loader's ten include Suite-1 **`aids` (769)** and **exclude `aids_graphedx`**;
+- `aids_graphedx.npz` ships in `exported_suite2/` with **819** graphs and is **not reachable through
+  the loader at all** — `datasets.load("aids_graphedx")` raises `DatasetNotFoundError`, because the
+  name is absent from `SUITE2`;
+- `16,320 − 769 + 819 = 16,370`, and swapping them reproduces the locked count **to the graph**.
+
+Both figures above were therefore computed twice, and the table in §1.3a is the **locked ten**
+(`aids_graphedx` in, Suite-1 `aids` out). The loader's ten give 16,310/16,320 and 6,848/16,320 —
+the same conclusion.
+
+**This is not T-13's to fix, and T-13 does not fix it**, but anything that iterates
+`ALL_DATASETS` and calls the result "the cohort" is covering 16,320 graphs across a *different*
+ten than the plan's. Owner: whoever next touches `competitors/datasets.py`. Carried to
+`review-close`.
 
 ### 1.4 The cost law, and why an observational study is not enough
 
