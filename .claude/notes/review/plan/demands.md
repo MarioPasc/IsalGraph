@@ -48,7 +48,7 @@ Detail in [compliance](compliance.md).
 | AE.4a | **Choice of benchmark models** (`:66`) | six competitor representations enter three experiments; **each distance selected by measurement** (T-04a). **Requirement-modal via `:67` — this, not R1.1, is what the competitors answer to** | T-04, **T-04a**, T-06 | Tabs. 2–3, Figs. 1–2 | ✓ |
 | AE.4b | **Fully labeled vs partially labeled** (`:66`) | a **label-content column** in the dataset table (Tier 0). **T-01 measured it** — per-dataset node and edge attribute names, and **LINUX carries none**, which settles E6 by measurement rather than by reading prose ([data](data.md) §1.5) | **T-18** (data supplied by T-01) | §3.1 table | ✓ |
 | AE.4c | Associated analysis of results (`:66`) | the whole [statistics](statistics.md) protocol, D1–D15, **plus the frozen confirmatory family** ([preregistration](preregistration.md), `N_max = 197`). **T-02 closed 2026-08-13** | ~~T-02~~, T-06 | §3.2, §4 | ✓ |
-| AE.5 | "**Additional comments … should also be addressed**" (`:69`) | Catch-all, requirement modal. Largely subsumed; the one unowned clause is **"rationale"** from R3's preamble (`:83`), which lands in R3.1a(ii)'s paragraph at **no marginal cost**. Plus one verification pass over `:73–116` inside T-14 | **T-14** + T-07 | response letter, §2.x | **NEW** |
+| AE.5 | "**Additional comments … should also be addressed**" (`:69`) | Catch-all, requirement modal. Largely subsumed; the one unowned clause is **"rationale"** from R3's preamble (`:83`), which lands in R3.1a(ii)'s paragraph at **no marginal cost**. **T-07, 2026-08-26: the rationale half is DELIVERED** — the sufficiency paragraph explains *why* the redesign was necessary (hydrogen-only container, H₂ seed, per-element degree constants), not merely that it happened. The `:73–116` verification pass remains T-14's. Plus one verification pass over `:73–116` inside T-14 | **T-14** + T-07 | response letter, §2.x | **NEW** |
 
 ## Reviewer 1
 
@@ -66,8 +66,8 @@ Detail in [compliance](compliance.md).
 
 | ID | Demand | Decision / experiment | Ticket | Artifact | |
 |---|---|---|---|---|---|
-| R3.1a**(i)** | Inherited / modified / new vs [28], [29] (`:86`) | read both **papers** ([29] is published); delta table | T-07 | §2.x table (new) | ✓ |
-| **R3.1a(ii)** | "**…and explain why the combined extension constitutes a sufficiently substantive contribution**" (`:86`) | **one paragraph closing §2.x**, ~120–150 words. Re-orders facts T-07 already gathers — **no new investigation**. Without it, the delta table becomes evidence *against* us | **T-07** | §2.x closing paragraph | **NEW** |
+| ~~R3.1a**(i)**~~ | Inherited / modified / new vs [28], [29] (`:86`) | **DELIVERED 2026-08-26** — both papers read in full; **Tab. 3**, 9 rows × 4 columns, grouped inherited/modified/new, **0.67 p measured**. 3 inherited, 5 modified, 1 new | T-07 | **§2.3, Tab. 3** | **done** |
+| ~~**R3.1a(ii)**~~ | "**…and explain why the combined extension constitutes a sufficiently substantive contribution**" (`:86`) | **DELIVERED 2026-08-26** — **145 words**, closing §2.3. Stands on Theorem 2.12, which T-07 evidenced as genuinely new (`theorem`/`proof`/`lemma`/`proposition` = **0 occurrences in both** predecessors). No R3.2 defence, per prose.md's red line | **T-07** | **§2.3 closing ¶** | **done** |
 | R3.1b | "No existing method satisfies all four" too absolute (`:86`) | B6 — softened **and unified**; the claim appears twice with *different* property sets | T-12, T-17 | §1, §5 | ✓ |
 | R3.2 | **Sequential-model evaluation** (`:89`) | **DECLINED** (decision 5) + all five LM claim sites come down + a contingency **conditional on the S-f extension** | *(decision, not a ticket)* | abstract, §5 | ✓ |
 | R3.3a | Narrow "any finite simple graph" / "arbitrary graphs" (`:92`) | B1: undirected **connected**; directed **root reaching all nodes**; S2G total, G2S partial | T-12 | abstract, §1, §5 | ✓ |

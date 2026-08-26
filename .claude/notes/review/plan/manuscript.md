@@ -21,7 +21,7 @@ Related: [compliance](compliance.md) (the EiC checklist) · [corrections](correc
 | **2.2.x Complexity (NEW)** | `methodology.tex` §2.2 | `P(M)` recomputed per frame; four costed operations; three-way separation | R3.4b, R3.4c, R3.7d | T-13 |
 | 2.3 Canonicalization | `methodology.tex:421–470` | add the search-space schematic (renderer exists: `viz/search_tree.py::canonical_search_tree_figure`) | R3.7c | T-09 |
 | 2.3.3 Proof | `methodology.tex:623–726` | restate Thm 2.12 within a fixed directedness class; move the flag hypothesis into the statement; **re-verify all three steps; propagate to Cor. 2.13** | R3.3b/c | **T-22** |
-| **2.x Prior-work delta (NEW)** | §1.x or `methodology.tex` | inherited / modified / new vs [28] and [29], **plus the sufficiency paragraph** | R3.1a(i)+(ii), R3.7b, AE.3, AE.5 | T-07 |
+| ~~**2.x Prior-work delta (NEW)**~~ → **§2.3, BUILT 2026-08-26 (T-07)** | ~~§1.x or `methodology.tex`~~ → **new §2.3 "Relation to the authors' prior work"** ([prose](prose.md) §2) | **Tab. 3**, 9 rows × 4 columns, grouped inherited / modified / new, **plus the sufficiency paragraph** (145 words). **Measured 0.67 p + 0.1 p**, against the 0.75 p predicted here | R3.1a(i)+(ii), R3.7b, AE.3, AE.5 | T-07 |
 | 3.1 Datasets | `computational_experiments.tex:14–58` | **5 → 10 datasets**; table gains `n̄`, density, connectivity retention, **the discarded subset's `n̄`/`n_max`**, and a **label column**; Suite 1 / Suite 2 split | AE.1, AE.4b, E1, F1 | **T-20**, T-18 |
 | 3.2 Protocol | `computational_experiments.tex:90–233` | the whole statistical protocol replaced; pair-accounting ladder; exclusion justifications with counts | R3.5a/b/c | **T-20** |
 | 3.2.3 Message length | `computational_experiments.tex:141–189` | "standard construction" → "explicit-construction reference model"; real serializations beside it; shared edit-operation alphabet | R3.6a | **T-20**, T-17 |
@@ -45,7 +45,7 @@ Related: [compliance](compliance.md) (the EiC checklist) · [corrections](correc
 | Tab. 2 | Dataset properties + information content | **replace** — 10 datasets, new columns | 1.25 |
 | Tab. 3 | Spearman ρ summary | **replace** — competitors, brackets, CIs | 1.25 |
 | NEW | AE.3 representation comparison | T-17 | 0.75 |
-| NEW | [28]/[29] inherited-modified-new | T-07 | 0.75 |
+| NEW | [28]/[29] inherited-modified-new | T-07 | ~~0.75~~ **0.67 measured** |
 | NEW | Pair-accounting ladder, per dataset | T-02 | 0.5 |
 | NEW | Calibration: bracket width, certification rate, ρ-gap vs `n` | T-05 | 0.75 |
 | NEW | Canonical search-space schematic | ~~T-09~~ **done** | 0.5 |

@@ -516,8 +516,14 @@ Full details: `src/isalgraph/core/README.md`.
 
 ## Key References
 
-- Lopez-Rubio (2025). arXiv:2512.10429v2. `docs/references/2512_10429v2.pdf`
-- Design notes: `docs/references/Idea.pdf`
+- Lopez-Rubio (2025). arXiv:2512.10429v2. ⚠ **`docs/references/` NO LONGER EXISTS** — deleted in
+  `7d18f52`. Recover with `git show a23acbf:docs/references/2512_10429v2.pdf > <dest>`, or read the
+  archived copy at `/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/results/reports/T-07-prior-work-delta/sources/`.
+  Found by T-07, which the dead path would otherwise have blocked.
+- Design notes: `Idea.pdf` — same deletion; recover with `git show a23acbf:docs/references/Idea.pdf`.
+- Thurnhofer-Hemsi et al. (2025), *IsalChem*, JCIM 65(15):7936–7955. **CC BY, PMC12344769**,
+  DOI `10.1021/acs.jcim.5c00354`. Full text + the `icai-uma/IsalChem` clone are archived beside the
+  T-07 report above.
 - You et al. (2018). GraphRNN. ICML.
 - Fey & Lenssen (2019). PyTorch Geometric. ICLR Workshop.
 
