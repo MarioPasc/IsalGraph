@@ -199,6 +199,18 @@ IEEE_COLUMN_GAP_INCHES: float = 0.24
 IEEE_TEXT_WIDTH_INCHES: float = 7.0
 IEEE_TEXT_HEIGHT_INCHES: float = 9.0
 
+#: Text width of the *Pattern Recognition* manuscript, in inches:
+#: ``letterpaper`` (8.5 in) less the 4.8 cm side margins declared at
+#: ``main.tex:11``, so 8.5 - 2 * 1.89 = 4.72.
+#:
+#: **A paper figure must be drawn at this width, not at**
+#: :data:`IEEE_TEXT_WIDTH_INCHES`. Drawing at 7.0 and placing at
+#: ``width=\textwidth`` scales the file by 0.674, and point sizes scale with
+#: it: the search-space schematic's 5.5 pt labels reached the page at 3.7 pt.
+#: Font sizes inside a figure are absolute, so the only way they mean what
+#: they say is for the render width to equal the placement width.
+PATREC_TEXT_WIDTH_INCHES: float = 4.72
+
 
 #: rcParams applied by :func:`apply_ieee_style`. ``pdf.fonttype`` and
 #: ``ps.fonttype`` are pinned to 42 so glyphs embed as TrueType rather
@@ -472,6 +484,7 @@ __all__ = [
     "INSTRUCTION_PALETTE",
     "INSTRUCTION_POINTER",
     "NEW_ELEMENT_COLOR",
+    "PATREC_TEXT_WIDTH_INCHES",
     "PAUL_TOL_BRIGHT",
     "PAUL_TOL_HIGH_CONTRAST",
     "PAUL_TOL_MUTED",

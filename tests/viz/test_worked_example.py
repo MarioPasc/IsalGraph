@@ -235,10 +235,19 @@ def test_search_tree_draws_every_start_node() -> None:
 
     The width of that forest is half of what R3.7c asked to see; capping
     it would make the figure's width an artefact of the drawing.
+
+    The width assertion is not incidental. Point sizes inside a figure are
+    absolute, so a figure rendered wider than the text block it is placed
+    in has every label scaled down by the ratio: at the previous 7.0 in
+    this schematic's 5.5 pt labels reached a 4.72 in text block at 3.7 pt.
+    Rendering at the placement width is what makes the declared sizes the
+    printed ones.
     """
+    from isalgraph.viz.style import PATREC_TEXT_WIDTH_INCHES
+
     fig = build_search_tree_figure()
     try:
-        assert fig.get_figwidth() == pytest.approx(7.0)
+        assert fig.get_figwidth() == pytest.approx(PATREC_TEXT_WIDTH_INCHES)
     finally:
         plt.close(fig)
 

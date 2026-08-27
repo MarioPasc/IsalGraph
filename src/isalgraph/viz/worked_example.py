@@ -78,6 +78,7 @@ from isalgraph.viz.style import (
     GHOST_EDGE_COLOR,
     GHOST_FACE,
     GHOST_TEXT_COLOR,
+    POINTER_OVERLAP_COLOR,
     POINTER_PALETTE,
 )
 
@@ -235,6 +236,8 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
     secondary_node: NodeId | None = None,
     node_radius: float = 0.17,
     label_fontsize: float = 6.0,
+    pointer_ring_scale: float | None = None,
+    accent_solid: bool = False,
 ) -> None:
     """Draw one graph state with ghost, present and accent elements.
 
@@ -258,6 +261,20 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
         secondary_node: Node under the secondary pointer.
         node_radius: Node radius in axis units.
         label_fontsize: Node-label point size.
+        pointer_ring_scale: Radius of the two pointer rings, as a
+            multiple of *node_radius*. The default of ``None`` keeps the
+            historical 1.26 and 1.40, which draw the pointers as haloes
+            *around* the node. Pass ``1.0`` to draw them as the node's own
+            outline instead; a node carrying both pointers then gets one
+            ring in :data:`~isalgraph.viz.style.POINTER_OVERLAP_COLOR`,
+            matching how :func:`~isalgraph.viz.cdll_view.draw_cdll_ring`
+            colours the same situation.
+        accent_solid: Draw an accented edge solid even when it is ghosted.
+            Off by default, which is what the committed worked-example
+            panels were rendered with. A G2S panel ghosts the edge its
+            step just captured, so every accented edge there is dashed;
+            on a short edge the dash gap can fall across the whole span
+            between the two node discs and the pair reads as unjoined.
     """
     from matplotlib.lines import Line2D
     from matplotlib.patches import Circle
@@ -269,13 +286,20 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
         solid = edge in present_edges
         accent = edge in accent_edges
         color = ACCENT_COLOR if accent else ("#4A4A4A" if solid else GHOST_EDGE_COLOR)
+        # A G2S panel's graph drains, so the edge a step just captured is
+        # ghosted the moment it is accented -- and a ghost dash on a short
+        # edge can put its gap across the whole span left visible between
+        # the two node discs, which reads as "these nodes are not joined".
+        # The amber already says the step touched this edge; solid says it
+        # exists. See *accent_solid*.
+        dashed = not solid and not (accent and accent_solid)
         ax.add_line(
             Line2D(
                 [positions[u][0], positions[v][0]],
                 [positions[u][1], positions[v][1]],
                 color=color,
                 lw=1.7 if accent else (1.25 if solid else 0.9),
-                linestyle="-" if solid else GHOST_DASH,
+                linestyle=GHOST_DASH if dashed else "-",
                 alpha=ACTIVE_ALPHA if solid else 1.0,
                 zorder=2 if accent else 1,
                 solid_capstyle="round",
@@ -285,20 +309,43 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
     for node, (x, y) in positions.items():
         solid = node in present_nodes
         if node in accent_nodes:
+            if pointer_ring_scale is None:
+                accent_scale, accent_z = 1.55, 3
+            elif node in (primary_node, secondary_node):
+                # Both marks want the node's own outline. Push the accent
+                # just outside so neither is hidden; on the running
+                # example this never fires, but a created node the
+                # pointers already sit on is not impossible.
+                accent_scale, accent_z = pointer_ring_scale * 1.34, 3
+            else:
+                accent_scale, accent_z = pointer_ring_scale, 6
             ax.add_patch(
                 Circle(
                     (x, y),
-                    node_radius * 1.55,
+                    node_radius * accent_scale,
                     facecolor="none",
                     edgecolor=ACCENT_COLOR,
                     lw=1.6,
-                    zorder=3,
+                    zorder=accent_z,
                 )
             )
-        for pointer, color, scale in (
-            (primary_node, POINTER_PALETTE[0], 1.26),
-            (secondary_node, POINTER_PALETTE[1], 1.40),
-        ):
+        rings: tuple[tuple[NodeId | None, str, float], ...]
+        if pointer_ring_scale is None:
+            rings = (
+                (primary_node, POINTER_PALETTE[0], 1.26),
+                (secondary_node, POINTER_PALETTE[1], 1.40),
+            )
+        elif primary_node == secondary_node == node:
+            # One ring, not two coincident ones. At a scale of 1 the two
+            # rings would land on the same circle and only the second
+            # would be seen, which silently loses a pointer.
+            rings = ((node, POINTER_OVERLAP_COLOR, pointer_ring_scale),)
+        else:
+            rings = (
+                (primary_node, POINTER_PALETTE[0], pointer_ring_scale),
+                (secondary_node, POINTER_PALETTE[1], pointer_ring_scale),
+            )
+        for pointer, color, scale in rings:
             if pointer == node:
                 ax.add_patch(
                     Circle(
@@ -307,7 +354,9 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
                         facecolor="none",
                         edgecolor=color,
                         lw=1.3,
-                        zorder=4,
+                        # Above the node disc when the ring is the node's
+                        # own size, or the disc would paint over it.
+                        zorder=4 if scale > 1.0 else 6,
                     )
                 )
         ax.add_patch(

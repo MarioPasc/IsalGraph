@@ -76,6 +76,13 @@ def draw_cdll_ring(
     radius: float = 1.0,
     node_radius: float = 0.15,
     show_legend: bool = False,
+    label_fontsize: float = 7.0,
+    pointer_fontsize: float = 8.0,
+    pointer_scale: float = 9.0,
+    pointer_lw: float = 1.4,
+    arrow_gap: float = 0.60,
+    label_gap: float = 0.26,
+    margin_pad: float = 0.45,
 ) -> None:
     """Draw the CDLL as a ring with pointer arrows.
 
@@ -96,6 +103,22 @@ def draw_cdll_ring(
         node_radius: Node circle radius.
         show_legend: Draw a per-panel legend instead of relying on a
             shared figure-level one.
+        label_fontsize: Node-label point size.
+        pointer_fontsize: Point size of the π and σ glyphs.
+        pointer_scale: Arrowhead ``mutation_scale``, in points.
+        pointer_lw: Arrow line width, in points.
+        arrow_gap: Distance from the node discs out to the arrow tails,
+            in ring-radius units.
+        label_gap: Distance from the arrow tail out to the π/σ glyph.
+        margin_pad: Blank ring-radius units beyond the arrow tails. Must
+            exceed *label_gap*, or the glyphs fall outside the axes.
+
+    The size and gap parameters exist because the ring's geometry scales
+    with the axes while its annotations do not: point sizes are absolute,
+    so the defaults -- correct on a panel-sized ring -- draw arrowheads
+    wider than the node discs once the ring is dropped into a half-inch
+    row. Their defaults are the sizes every committed figure was rendered
+    at, so passing nothing reproduces those figures exactly.
     """
     from matplotlib.patches import Circle
 
@@ -133,14 +156,21 @@ def draw_cdll_ring(
             Circle((x, y), node_radius, facecolor=color, edgecolor="0.3", linewidth=0.8, zorder=3)
         )
         ax.text(
-            x, y, str(payload), ha="center", va="center", fontsize=7, fontweight="bold", zorder=4
+            x,
+            y,
+            str(payload),
+            ha="center",
+            va="center",
+            fontsize=label_fontsize,
+            fontweight="bold",
+            zorder=4,
         )
 
     # The arrow tail must clear the node disc with room left over, or the
     # head is all that survives: the old offset of 0.35 axis units was
     # shorter than the point-space shrink applied at the head, so the body
     # was drawn with negative length and disappeared.
-    arrow_radius = radius + node_radius + 0.60
+    arrow_radius = radius + node_radius + arrow_gap
     _draw_pointer_arrow(
         ax,
         angles[primary_ptr_idx],
@@ -149,6 +179,10 @@ def draw_cdll_ring(
         node_radius,
         PRIMARY_COLOR,
         "π",
+        fontsize=pointer_fontsize,
+        mutation_scale=pointer_scale,
+        linewidth=pointer_lw,
+        label_gap=label_gap,
     )
     # When both pointers rest on one node, fan the secondary arrow away
     # so the two arrowheads stay distinguishable.
@@ -165,6 +199,10 @@ def draw_cdll_ring(
         node_radius,
         SECONDARY_COLOR,
         "σ",
+        fontsize=pointer_fontsize,
+        mutation_scale=pointer_scale,
+        linewidth=pointer_lw,
+        label_gap=label_gap,
     )
 
     if show_legend:
@@ -176,7 +214,7 @@ def draw_cdll_ring(
             framealpha=0.7,
         )
 
-    margin = arrow_radius + 0.45
+    margin = arrow_radius + margin_pad
     ax.set_xlim(-margin, margin)
     ax.set_ylim(-margin, margin)
     ax.set_aspect("equal")
@@ -191,6 +229,11 @@ def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
     node_radius: float,
     color: str,
     label: str,
+    *,
+    fontsize: float = 8.0,
+    mutation_scale: float = 9.0,
+    linewidth: float = 1.4,
+    label_gap: float = 0.26,
 ) -> None:
     """Draw one labelled pointer arrow from outside the ring toward a node.
 
@@ -208,6 +251,10 @@ def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
         node_radius: Node disc radius; the head stops just outside it.
         color: Arrow and label colour.
         label: Text drawn beyond the tail.
+        fontsize: Label point size.
+        mutation_scale: Arrowhead size, in points.
+        linewidth: Arrow line width, in points.
+        label_gap: Distance from the tail out to the label.
     """
     cos_a, sin_a = math.cos(angle), math.sin(angle)
     tip = ring_radius + node_radius * 1.10
@@ -218,21 +265,21 @@ def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
         arrowprops={
             "arrowstyle": "-|>",
             "color": color,
-            "linewidth": 1.4,
-            "mutation_scale": 9,
+            "linewidth": linewidth,
+            "mutation_scale": mutation_scale,
             "shrinkA": 0,
             "shrinkB": 0,
         },
     )
-    label_x = (arrow_radius + 0.26) * cos_a
-    label_y = (arrow_radius + 0.26) * sin_a
+    label_x = (arrow_radius + label_gap) * cos_a
+    label_y = (arrow_radius + label_gap) * sin_a
     ax.text(
         label_x,
         label_y,
         label,
         ha="center",
         va="center",
-        fontsize=8,
+        fontsize=fontsize,
         fontweight="bold",
         color=color,
     )

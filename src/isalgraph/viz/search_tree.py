@@ -48,6 +48,7 @@ from isalgraph.types import NodeId
 from isalgraph.viz.style import (
     GRAYED_EDGE,
     INSTRUCTION_PALETTE,
+    PATREC_TEXT_WIDTH_INCHES,
     POINTER_PALETTE,
 )
 
@@ -507,8 +508,8 @@ def draw_search_tree(
     ax: Axes,
     tree: SearchTree,
     *,
-    label_fontsize: float = 5.5,
-    node_points: float = 74.0,
+    label_fontsize: float = 6.0,
+    node_points: float = 62.0,
 ) -> None:
     """Draw *tree* on *ax*.
 
@@ -553,9 +554,16 @@ def draw_search_tree(
             zorder=1,
             solid_capstyle="round",
         )
+        # Sibling edges share a parent, so their midpoints are half a child
+        # spacing apart -- close enough that two two-character segments
+        # ("pv" against "pv") printed there overlap illegibly. Siblings
+        # diverge toward their children, so placing the label at 0.70 of the
+        # way down separates them by 40 % more without moving it off its
+        # own edge.
+        label_t = 0.70
         ax.text(
-            (x0 + x1) / 2,
-            (y0 + y1) / 2,
+            x0 + label_t * (x1 - x0),
+            y0 + label_t * (y1 - y0),
             step.segment,
             fontsize=label_fontsize,
             fontfamily="monospace",
@@ -568,15 +576,27 @@ def draw_search_tree(
 
     for node in tree.nodes:
         x, y = pos[node.index]
+        # Every non-root node is labelled with the input-graph node its step
+        # attached, leaf rows included. Leaving the leaf row blank made it
+        # read as a row of empty markers -- the depth budget truncates what
+        # comes *after* a node, which says nothing about how it was reached.
+        chosen = node.step.chosen if node.step is not None else None
+        label = "" if chosen is None else str(chosen)
         if node.parent is None:
-            face, label, text_color = POINTER_PALETTE[0], f"$v_{node.start_node}$", "#FFFFFF"
+            # Plain node ids, not "$v_k$". Every other mark in this figure
+            # set names a node of G by its integer: the interior and leaf
+            # labels here, the inset, and the four worked-example panels
+            # (``draw_state_graph`` writes ``str(node)``). A root drawn as
+            # "$v_3$" beside a graph drawn as "3" makes the reader translate
+            # between two notations for one object. The start-node role is
+            # already carried by the fill colour and the row label.
+            face, label, text_color = POINTER_PALETTE[0], str(node.start_node), "#FFFFFF"
         elif node.terminal:
-            face, label, text_color = "#228833", "", "#FFFFFF"
+            face, text_color = "#228833", "#FFFFFF"
         elif node.truncated:
-            face, label, text_color = "#F2F2F2", "", "#666666"
+            face, text_color = "#F2F2F2", "#666666"
         else:
             face, text_color = "#FFFFFF", "#222222"
-            label = str(node.step.chosen) if node.step and node.step.chosen is not None else ""
         ax.scatter(
             [x],
             [y],
@@ -598,14 +618,14 @@ def draw_search_tree(
                 zorder=4,
             )
 
-    for depth, name in enumerate(("start node", "1st $V$/$v$", "2nd step", "3rd step")):
+    for depth, name in enumerate(("Start Node", "1st $V$/$v$", "2nd Step", "3rd Step")):
         if depth > tree.max_depth:
             break
         ax.text(
             min(p[0] for p in pos.values()) - 0.75,
             -float(depth),
             name,
-            fontsize=6,
+            fontsize=6.5,
             color="0.35",
             ha="right",
             va="center",
@@ -613,7 +633,11 @@ def draw_search_tree(
 
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]
-    ax.set_xlim(min(xs) - 2.6, max(xs) + 0.5)
+    # The row labels are drawn inside the axes at ``min(x) - 0.75`` and
+    # extend leftward, so this left margin is what has to hold them. It is
+    # in data units and the widest label is "Start Node"; 2.6 held it only
+    # while the figure was drawn 7 in wide.
+    ax.set_xlim(min(xs) - 3.8, max(xs) + 0.5)
     ax.set_ylim(min(ys) - 0.45, max(ys) + 0.45)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -627,7 +651,7 @@ def canonical_search_tree_figure(
     max_depth: int = 3,
     max_nodes: int = 400,
     max_roots: int | None = 3,
-    figsize: tuple[float, float] = (7.0, 3.6),
+    figsize: tuple[float, float] = (PATREC_TEXT_WIDTH_INCHES, 2.6),
     title: str | None = None,
     show_graph_inset: bool = True,
     inset_positions: dict[NodeId, tuple[float, float]] | None = None,
@@ -641,7 +665,12 @@ def canonical_search_tree_figure(
         max_nodes: Tree-size cap.
         max_roots: Starting-node subtrees to show; see
             :func:`enumerate_search_tree`.
-        figsize: Figure size in inches; the default is IEEE text width.
+        figsize: Figure size in inches. The default is the *manuscript*
+            text width -- ``letterpaper`` with 4.8 cm side margins leaves
+            4.72 in -- so the figure is placed at ``width=\\textwidth``
+            unscaled and its point sizes are the sizes that print. Rendering
+            wider and letting LaTeX scale is what put 5.5 pt labels on the
+            page at 3.7 pt.
         title: Figure suptitle.
         show_graph_inset: Draw the source graph as an inset panel.
         inset_positions: Pinned coordinates for the inset. When given,
@@ -664,17 +693,38 @@ def canonical_search_tree_figure(
     )
 
     fig = plt.figure(figsize=figsize)
+    # The tree spans the full width; the legend and the source graph share
+    # the band beneath it, legend left and graph right. Putting the graph
+    # beside the tree instead cost the leaf row a fifth of its width, and
+    # the leaf row is what sets how small the labels have to be.
     gs = GridSpec(
         2,
         2,
         figure=fig,
-        width_ratios=[1.0, 3.9],
-        height_ratios=[1.0, 0.13],
-        wspace=0.03,
+        width_ratios=[3.5, 1.0],
+        height_ratios=[1.0, 0.34] if show_graph_inset else [1.0, 0.20],
+        wspace=0.02,
         hspace=0.05,
+        # Matplotlib reserves the top 12 % of the figure for a suptitle. With
+        # no title that is a band of blank page, and page height is the
+        # scarcest resource in this manuscript. Reclaim it unless a suptitle
+        # was actually asked for.
+        top=0.88 if title is not None else 0.985,
+        bottom=0.015,
+        left=0.015,
+        right=0.99,
     )
+    ax_tree = fig.add_subplot(gs[0, :])
+    draw_search_tree(ax_tree, tree)
+    # No axes title. What stood here -- "Branches: the starting node, and the
+    # uninserted-neighbour choice at each V/v. Fixed (never branch):
+    # displacement order |a|+|b|, and priority V > v > C > c." -- is caption
+    # text, and baking it into the image renders it in the figure's font
+    # rather than the document's, at whatever scale the figure is placed.
+    # It belongs in the LaTeX caption; see the plan's prose.md section 10.3.
+
     if show_graph_inset:
-        ax_inset = fig.add_subplot(gs[0, 0])
+        ax_inset = fig.add_subplot(gs[1, 1])
         if inset_positions is None:
             draw_graph(
                 ax_inset,
@@ -698,31 +748,26 @@ def canonical_search_tree_figure(
                 inset_positions,
                 present_nodes=everything,
                 present_edges=frozenset(graph_edges(graph)),
-                node_radius=0.20,
-                label_fontsize=6.5,
+                node_radius=0.24,
+                label_fontsize=6.0,
             )
-        ax_inset.set_title("Input graph $G$", fontsize=7.5)
-    ax_tree = fig.add_subplot(gs[0, 1])
-    draw_search_tree(ax_tree, tree)
-    ax_tree.set_title(
-        "Branches: the starting node, and the uninserted-neighbour choice at each $V$/$v$.\n"
-        "Fixed (never branch): displacement order $|a|+|b|$, and priority "
-        "$V \\succ v \\succ C \\succ c$.",
-        fontsize=7,
-        pad=5,
-    )
+        ax_inset.set_title("Input Graph $G$", fontsize=6.5, pad=2)
 
-    ax_legend = fig.add_subplot(gs[1, :])
+    ax_legend = fig.add_subplot(gs[1, 0])
     ax_legend.axis("off")
     handles = _legend_handles(complete=any(node.terminal for node in tree.nodes))
+    # Four entries in one row overflow a 4.72 in figure and are clipped at
+    # both ends. Two rows of two fit with margin at every width this figure
+    # is drawn at.
     ax_legend.legend(
         handles=handles,
         loc="center",
-        fontsize=6.5,
-        ncol=len(handles),
+        fontsize=6.0,
+        ncol=min(len(handles), 2),
         frameon=False,
-        handlelength=2.2,
-        columnspacing=1.4,
+        handlelength=2.0,
+        columnspacing=1.6,
+        labelspacing=0.5,
     )
     if title is not None:
         fig.suptitle(title, fontsize=9)
@@ -744,17 +789,20 @@ def _legend_handles(*, complete: bool = True) -> list[Any]:
     from matplotlib.lines import Line2D
 
     handles = [
-        Line2D([0], [0], color=POINTER_PALETTE[0], lw=1.5, label="branch at $V$ (π primary)"),
-        Line2D([0], [0], color=POINTER_PALETTE[1], lw=1.5, label="branch at $v$ (σ secondary)"),
+        # Only the leading word is capitalised. ``V`` and ``v`` are distinct
+        # instructions -- primary and secondary pointer -- so title-casing
+        # the whole label would silently rename half the alphabet.
+        Line2D([0], [0], color=POINTER_PALETTE[0], lw=1.5, label="Branch at $V$ (π primary)"),
+        Line2D([0], [0], color=POINTER_PALETTE[1], lw=1.5, label="Branch at $v$ (σ secondary)"),
         Line2D(
             [0],
             [0],
             color=GRAYED_EDGE,
             lw=1.0,
             ls=(0, (2.2, 1.6)),
-            label="forced step (no branching)",
+            label="Forced step (no branching)",
         ),
-        Line2D([0], [0], color=CANONICAL_HALO, lw=4.0, alpha=0.85, label="canonical path $w^*_G$"),
+        Line2D([0], [0], color=CANONICAL_HALO, lw=4.0, alpha=0.85, label="Canonical path $w^*_G$"),
     ]
     if complete:
         handles.append(
@@ -766,7 +814,7 @@ def _legend_handles(*, complete: bool = True) -> list[Any]:
                 markerfacecolor="#228833",
                 markeredgecolor="0.3",
                 markersize=6,
-                label="encoding complete",
+                label="Encoding complete",
             )
         )
     return handles

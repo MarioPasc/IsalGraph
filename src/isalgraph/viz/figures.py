@@ -42,7 +42,11 @@ from isalgraph.viz.base import Position
 from isalgraph.viz.composite import single_card_figure, steps_figure
 from isalgraph.viz.encoder_trace import EncoderTrace, trace_encoder, trace_execution
 from isalgraph.viz.search_tree import canonical_search_tree_figure
-from isalgraph.viz.style import apply_ieee_style, save_figure
+from isalgraph.viz.search_walkthrough import (
+    canonical_search_walkthrough_figure,
+    pruned_search_walkthrough_figure,
+)
+from isalgraph.viz.style import PATREC_TEXT_WIDTH_INCHES, apply_ieee_style, save_figure
 from isalgraph.viz.worked_example import (
     RUNNING_EXAMPLE_POSITIONS,
     decode_trace,
@@ -294,8 +298,38 @@ def build_search_tree_figure() -> Figure:
         build_example_graph(),
         max_depth=3,
         max_roots=None,
-        figsize=(7.0, 3.4),
+        figsize=(PATREC_TEXT_WIDTH_INCHES, 3.0),
+        # The inset sits in the band under the tree, to the right of the
+        # legend, so it gives the reader the graph the six subtrees are
+        # rooted in without taking width from the leaf row.
+        show_graph_inset=True,
         inset_positions=RUNNING_EXAMPLE_POSITIONS,
+    )
+
+
+def build_canonical_search_walkthrough() -> Figure:
+    """Build the merged search-space / worked-example figure, exhaustive form.
+
+    Landscape, for a rotated float: panel (a)'s depth axis is horizontal,
+    which is what gives each of the seven steps enough width to label.
+    """
+    return canonical_search_walkthrough_figure(
+        build_example_graph(),
+        start_node=RUNNING_EXAMPLE_START,
+        positions=RUNNING_EXAMPLE_POSITIONS,
+    )
+
+
+def build_pruned_search_walkthrough() -> Figure:
+    """Build the same figure for the pruned canonicalisation.
+
+    No starting node is passed. The pruned canonical string is generally
+    emitted by no greedy run, so the builder recovers the execution from
+    the string and finds the starting node itself.
+    """
+    return pruned_search_walkthrough_figure(
+        build_example_graph(),
+        positions=RUNNING_EXAMPLE_POSITIONS,
     )
 
 
@@ -309,6 +343,8 @@ FIGURE_BUILDERS: dict[str, Any] = {
     "fig_worked_example_s2g_pruned": build_s2g_worked_example_pruned,
     "fig_worked_example_g2s_pruned": build_g2s_worked_example_pruned,
     "canonical_search_tree": build_search_tree_figure,
+    "fig_canonical_search_walkthrough": build_canonical_search_walkthrough,
+    "fig_pruned_search_walkthrough": build_pruned_search_walkthrough,
 }
 
 #: The subset that goes into the manuscript. ``render_all(..., paper_only=True)``
@@ -319,6 +355,8 @@ PAPER_FIGURES: tuple[str, ...] = (
     "fig_worked_example_s2g_pruned",
     "fig_worked_example_g2s_pruned",
     "canonical_search_tree",
+    "fig_canonical_search_walkthrough",
+    "fig_pruned_search_walkthrough",
 )
 
 
@@ -371,6 +409,8 @@ __all__ = [
     "build_s2g_steps_figure",
     "build_s2g_worked_example",
     "build_s2g_worked_example_pruned",
+    "build_canonical_search_walkthrough",
+    "build_pruned_search_walkthrough",
     "build_search_tree_figure",
     "decoded_positions",
     "g2s_example_encoder_trace",
