@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
 
@@ -717,46 +718,41 @@ def figure_one_combined(
     out: Path,
     *,
     reference: str = "wl",
-    ref_label: str = "WL kernel",
     degenerate: str | None = "wl_subtree",
     width: float | None = None,
 ) -> list[str]:
     """The structural reference beside graph edit distance, in one figure.
 
-    Three panels, left to right:
+    **(a)** the structural reference, exact at every size, so one series per
+    representation over the whole size range. **(b)** :func:`figure_one`
+    unchanged --- exact GED at ``n <= EXACT_CEILING`` on the wide axes, the
+    LB/UB bracket above it as small multiples, one per representation carrying
+    bracket data plus a final panel overlaying every arm. A rule separates the
+    two halves.
 
-    **(a) the structural reference** --- exact at every size, so one series per
-    representation over the whole size range. **(b) exact GED**, which exists
-    only to ``EXACT_CEILING``. **(c) the GED bracket** above the ceiling, LB
-    dashed and UB solid.
-
-    The comparison the figure exists to make is that (b) and (c) hold the
+    The comparison the figure exists to make is that (a) and (b) hold the
     *reference* side of the correlation and nothing else: the representation
-    distances behind all three panels are the same cached T-04a matrices. So a
-    difference between (a) and (b)/(c) is a property of the yardstick.
+    distances behind both are the same cached T-04a matrices. A difference
+    between them is a property of the yardstick.
 
-    **The y axis is genuinely shared** --- one scale, ticks on (a) only --- and
-    so is the legend. **The x scale is NOT shared, and the figure says so.**
-    Exact GED spans ten strata and the other two span sixty-two; putting all
-    three on one scale would render (b) about 0.4 in wide at this figure width,
-    and stretching (b) to match without a note would misrepresent a tenfold
-    difference in span as a like-for-like axis.
-
-    Panels (b) and (c) stay separate for the reason :func:`figure_one` splits
-    them: above the ceiling the reference is a *bracket*, and a bracket sharing
-    an axis with an exact value invites the reader to read one as the other.
+    **The y axis is shared throughout** --- one scale, ticks on the leftmost
+    axes of each half. The x axis is graph size ``n`` everywhere, but exact GED
+    spans ten strata where the other references span sixty-two, so the panels
+    are not on a common x scale. **That belongs in the caption**, and so does
+    every other qualification: this function draws no titles, no in-axes notes
+    and no significance textbox. Only the two panel letters.
 
     Args:
         points: Aggregated points, carrying *reference* and the GED references.
         out: Output path without an extension.
-        reference: The structural reference drawn in panel (a).
-        ref_label: Human-readable name for *reference*.
+        reference: The structural reference drawn in (a).
         degenerate: A representation whose own distance **is** *reference*, so
-            its rho is 1.0 by construction. Drawn --- hiding it would be a
-            silent exclusion --- but annotated in panel (a).
+            its rho is 1.0 by construction. It is still drawn --- hiding it
+            would be a silent exclusion --- and named in the caption instead of
+            on the figure.
         width: Render width in inches; defaults to the frozen 7.0 in constant.
-            See :func:`figure_one_single_reference` for why passing a narrower
-            value is not sufficient on its own.
+            See :func:`figure_one_single_reference` for why a narrower value is
+            not sufficient on its own.
 
     Returns:
         Paths written.
@@ -785,9 +781,7 @@ def figure_one_combined(
     bracket_reps = _bracket_representations(points)
 
     # One correction over every point the figure draws, matching this module's
-    # rule that the BH level is local to a figure and stated on it. A combined
-    # figure therefore corrects over more points than either panel alone would,
-    # and the note reports the count.
+    # rule that the BH level is local to a figure. The count goes in the caption.
     drawn = [
         p
         for p in points
@@ -798,96 +792,109 @@ def figure_one_combined(
     flags = benjamini_hochberg([p.p_value for p in drawn])
     significant = {(p.representation, p.reference, p.n) for p, f in zip(drawn, flags) if f}
 
+    ncols = 2
+    nrows = max(1, -(-(len(bracket_reps) + 1) // ncols))
     figure_width = design.text_width() if width is None else width
-    fig = plt.figure(figsize=(figure_width, 3.35 * figure_width / design.text_width()))
-    # (b) gets more width than its ten strata warrant so its error bars stay
-    # legible; the caption states the scale is per panel.
-    grid = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.62, 1.0], wspace=0.075)
-    ax_struct = fig.add_subplot(grid[0, 0])
-    ax_exact = fig.add_subplot(grid[0, 1], sharey=ax_struct)
-    ax_bracket = fig.add_subplot(grid[0, 2], sharey=ax_struct)
+    fig = plt.figure(figsize=(figure_width, 1.15 * nrows + 1.05))
 
-    # Labels come from panel (a) alone. It carries every representation the
-    # figure draws, so labelling the other two as well would repeat entries in
-    # the shared legend.
+    # Outer split: (a) | rule | (b). The middle column is empty and exists only
+    # to hold the gap the rule is drawn down.
+    outer = fig.add_gridspec(1, 3, width_ratios=[1.62, 0.26, 3.00], wspace=0.0)
+    ax_struct = fig.add_subplot(outer[0, 0])
+    inner = outer[0, 2].subgridspec(
+        nrows, 1 + ncols, width_ratios=[1.55, *([1.0] * ncols)], wspace=0.13, hspace=0.30
+    )
+    ax_exact = fig.add_subplot(inner[:, 0], sharey=ax_struct)
+
     for key in struct_reps:
         _draw_series(ax_struct, points, key, reference, significant, label=design.BY_KEY[key].short)
     for key in exact_reps:
         _draw_series(ax_exact, points, key, "exact", significant, label=None)
-    for key in bracket_reps:
-        for bound in ("lb", "ub"):
-            _draw_series(ax_bracket, points, key, bound, significant, label=None)
 
-    if degenerate is not None and any(
-        p.representation == degenerate and p.reference == reference for p in points
-    ):
-        rep = design.BY_KEY.get(degenerate)
-        ax_struct.annotate(
-            f"{rep.short if rep else degenerate} $\\equiv$ reference ($\\rho \\equiv 1$)",
-            xy=(0.97, 0.905),
-            xycoords="axes fraction",
-            ha="right",
-            va="top",
-            fontsize=design.FS_ANNOT,
-            color="0.30",
-        )
+    # The bracket small multiples, reproducing figure_one's treatment: a grey
+    # envelope of the whole field behind each panel, LB thinner than UB, and a
+    # final panel overlaying every arm.
+    envelope: dict[int, list[float]] = {}
+    for p in points:
+        if p.reference in ("lb", "ub"):
+            envelope.setdefault(p.n, []).append(p.rho)
+    span = sorted(envelope)
 
-    # The letter goes INSIDE the title, not through design.panel_letter. That
-    # helper stamps at 1.045 in axes fraction, which is where a title with this
-    # module's pad already sits, and the two overlap.
-    titles = (
-        (ax_struct, f"(a) {ref_label}  (exact, every $n$)"),
-        (ax_exact, f"(b) exact GED  ($n \\leq {EXACT_CEILING}$)"),
-        (ax_bracket, f"(c) GED bracket  ($n > {EXACT_CEILING}$)"),
-    )
-    for ax, title in titles:
+    panels: list[str | None] = [*bracket_reps, None]
+    for index, key in enumerate(panels):
+        ax = fig.add_subplot(inner[index // ncols, 1 + index % ncols], sharey=ax_struct)
+        if span:
+            ax.fill_between(
+                span,
+                [min(envelope[n]) for n in span],
+                [max(envelope[n]) for n in span],
+                color="0.55",
+                alpha=0.20,
+                linewidth=0,
+                zorder=1,
+            )
+        for one in bracket_reps if key is None else (key,):
+            rep = design.BY_KEY[one]
+            for ref, scale in (("lb", 0.75), ("ub", 1.0)):
+                sel = sorted(
+                    (p for p in points if p.representation == one and p.reference == ref),
+                    key=lambda p: p.n,
+                )
+                if not sel:
+                    continue
+                style = design.line_kwargs(rep, ref, primary=frozenset(design.Family))
+                style["marker"] = "None"
+                style["linewidth"] = (design.LW_REFERENCE if rep.is_ours else 0.95) * scale
+                if key is None and not rep.is_ours:
+                    style["alpha"] = 0.55
+                ax.plot([p.n for p in sel], [p.rho for p in sel], **style)
         ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
         ax.set_ylim(-0.75, 1.05)
-        ax.set_title(title, fontsize=design.FS_TITLE - 0.6, pad=4.0)
+        ax.grid(True, alpha=design.GRID_ALPHA, linewidth=design.GRID_LW)
+        ax.tick_params(labelsize=design.FS_TICK - 1.4, labelleft=False)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=4))
+        if index // ncols != nrows - 1:
+            ax.set_xticklabels([])
+
+    for ax in (ax_struct, ax_exact):
+        ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+        ax.set_ylim(-0.75, 1.05)
         design.finish_axes(ax)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=7))
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=8))
+    # One y scale, one set of tick labels. Without this (b) reprints the same
+    # ticks a centimetre from (a)'s and the axis reads as two axes.
+    ax_exact.tick_params(labelleft=False)
+    ax_struct.set_ylabel(r"Spearman $\rho$, within equal $n$", fontsize=design.FS_LABEL)
 
-    ax_struct.set_ylabel(
-        r"Spearman $\rho$ (distance vs reference), within equal $n$",
-        fontsize=design.FS_LABEL,
-    )
-    for ax in (ax_exact, ax_bracket):
-        ax.tick_params(labelleft=False)
-
-    ax_bracket.annotate(
-        "dashed: lower bound\nsolid: upper bound",
-        xy=(0.975, 0.03),
-        xycoords="axes fraction",
-        ha="right",
-        va="bottom",
-        fontsize=design.FS_ANNOT,
-        color="0.30",
-    )
-    # Between the axes floor and the legend, not on top of either. The axes stop
-    # at AXES_BOTTOM + 0.07 and the legend hangs from LEGEND_Y, so the label sits
-    # in the gap; placing it at AXES_BOTTOM - 0.085 puts it through the legend.
-    fig.text(
-        0.5,
-        AXES_BOTTOM - 0.012,
-        "graph size $n$   (the panels do not share an x scale)",
-        ha="center",
-        va="top",
-        fontsize=design.FS_LABEL,
-    )
-    fig.text(
-        0.5,
-        0.988,
-        "Same representation distances throughout --- only the reference changes.   "
-        f"○ significant, Benjamini--Hochberg at q = {FDR_Q:g} over all {len(drawn)} points here.",
-        ha="center",
-        va="top",
-        fontsize=design.FS_ANNOT,
-        color="0.30",
-    )
+    design.panel_letter(ax_struct, "a")
+    design.panel_letter(ax_exact, "b")
 
     handles, labels = ax_struct.get_legend_handles_labels()
     design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
-    fig.subplots_adjust(left=0.088, right=0.992, top=0.868, bottom=AXES_BOTTOM + 0.07)
+    fig.subplots_adjust(left=0.078, right=0.992, top=0.935, bottom=AXES_BOTTOM + 0.045)
+    fig.text(
+        0.5,
+        AXES_BOTTOM - 0.005,
+        "graph size $n$",
+        ha="center",
+        va="top",
+        fontsize=design.FS_LABEL,
+    )
+
+    # The rule, drawn after subplots_adjust so it spans the settled axes box.
+    x_rule = 0.5 * (ax_struct.get_position().x1 + fig.axes[1].get_position().x0)
+    top = ax_struct.get_position().y1
+    bottom = ax_struct.get_position().y0
+    fig.add_artist(
+        Line2D(
+            [x_rule, x_rule],
+            [bottom, top + 0.045],
+            transform=fig.transFigure,
+            color=design.INK_SEPARATOR,
+            linewidth=0.8,
+        )
+    )
+
     saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
     return saved
@@ -1216,7 +1223,6 @@ def main(argv: list[str] | None = None) -> int:
             points,
             args.out_dir / stem,
             reference=args.reference,
-            ref_label=args.reference_label or args.reference,
             degenerate=args.degenerate,
             width=args.width,
         )
