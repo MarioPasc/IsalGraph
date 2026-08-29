@@ -103,15 +103,22 @@ def _regime(n: int) -> tuple[str, ...]:
     return ("exact",) if n <= EXACT_CEILING else ("lb", "ub")
 
 
-def load_rows(path: Path) -> list[dict[str, Any]]:
+def load_rows(path: Path, *, keep_reference: str | None = None) -> list[dict[str, Any]]:
     """Load usable stratum rows, dropping degenerate ones.
 
     Args:
         path: ``size_profile.json``.
+        keep_reference: When ``None`` (the default, and what every published
+            figure uses) each row is kept only under the GED regime that applies
+            at its node count --- ``exact`` at or below the ceiling, the
+            ``lb``/``ub`` bracket above it. When a name is given, that reference
+            alone is kept, at **every** node count. T-28's references carry no
+            bracket and no exact ceiling, so the regime filter would otherwise
+            drop every one of their rows silently.
 
     Returns:
-        Rows with a defined rho, restricted to the regime that applies at their
-        node count and to the **primary** D14 arm.
+        Rows with a defined rho, restricted as above and to the **primary** D14
+        arm.
 
     Raises:
         ValueError: If the profile carries an arm this function does not know
@@ -123,7 +130,10 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
     for row in payload["rows"]:
         if row["rho"] is None:
             continue
-        if row["reference"] not in _regime(int(row["n"])):
+        if keep_reference is None:
+            if row["reference"] not in _regime(int(row["n"])):
+                continue
+        elif row["reference"] != keep_reference:
             continue
         # size_profile.json can carry two arms since schema t06.size_profile.2.
         # A profile written with --arm both holds each stratum twice, and without
@@ -451,6 +461,180 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
     return saved
 
 
+def _single_reference_onset(points: list[AggregatePoint], reference: str) -> int | None:
+    """Return the node count beyond which no interval of *reference* excludes zero.
+
+    The bracket version of this test reads ``p.reference != "exact"``, which is
+    meaningless for a reference that has no bracket. Here the whole series is one
+    reference and the question is asked of it directly.
+
+    Args:
+        points: Aggregated points.
+        reference: The single reference name.
+
+    Returns:
+        The onset node count, or ``None`` when every size still resolves.
+    """
+    sel = [p for p in points if p.reference == reference]
+    resolved = {p.n for p in sel if not p.ci_lo <= 0.0 <= p.ci_hi}
+    covered = sorted({p.n for p in sel if p.ci_lo <= 0.0 <= p.ci_hi})
+    return next((n for n in covered if not any(m >= n for m in resolved)), None)
+
+
+def figure_one_single_reference(
+    points: list[AggregatePoint],
+    out: Path,
+    *,
+    reference: str,
+    ref_label: str,
+    degenerate: str | None = None,
+    width: float | None = None,
+) -> list[str]:
+    """Figure 1 for a reference that needs no approximation: one panel, one axis.
+
+    :func:`figure_one` is split in two because graph edit distance is only exact
+    to ``n = EXACT_CEILING``; above it the reference is a *bracket*, and a bracket
+    cannot share an axis with an exact value without inviting the reader to read
+    one as the other. That constraint is a property of GED, not of the question.
+
+    The Weisfeiler-Lehman kernel distance is computed exactly at every size, so
+    there is no bracket, no regime split and no ceiling: every representation is
+    one series over the whole size range, on one axis, directly comparable.
+
+    Intervals are drawn as error bars for short series and as a band once a
+    series passes ``DENSE_SERIES`` points, following this module's convention ---
+    a picket fence of caps hides the trend it qualifies.
+
+    Args:
+        points: Aggregated points; only those carrying *reference* are drawn.
+        out: Output path without an extension.
+        reference: The reference key, e.g. ``wl``.
+        ref_label: Human-readable name for the axis and title, e.g. ``WL kernel``.
+        degenerate: A representation whose own distance **is** this reference, so
+            its rho is exactly 1.0 by construction. It is drawn --- hiding it
+            would be a silent exclusion --- but annotated, because a flat line at
+            1.0 otherwise reads as a competitor that solved the problem.
+        width: Render width in inches. Defaults to ``design.text_width()``
+            (7.0 in, the frozen IEEE constant). **Point sizes inside a figure
+            are absolute**, so a figure rendered wider than the text block it
+            is placed in has its labels scaled down on the page: the published
+            ``rho_vs_size.pdf`` is 7.03 in inside a 4.72 in Pattern Recognition
+            block, which lands its 5.5-6.5 pt labels at 3.7-4.4 pt. Pass 4.72
+            to render at the placement width instead. The frozen constant is
+            left alone --- a test pins it to the submitted PDF.
+
+            ⚠ Passing a narrower width is NOT sufficient on its own.
+            ``save_figure`` writes with ``bbox_inches='tight'``, so the output
+            box is the CONTENT box: at 4.72 in the seven-column legend and the
+            title overflow and the tight box expands back to about 7 in, with
+            nothing in the output to say so. A genuine narrow render also needs
+            a narrower legend and a shorter title, which is a different figure.
+            Measured, not assumed: both renders came back 7.03 in wide.
+
+    Returns:
+        Paths written.
+    """
+    plt = _style()
+
+    selected = [p for p in points if p.reference == reference]
+    present = tuple(r for r in design.ORDER if any(p.representation == r for p in selected))
+
+    flags = benjamini_hochberg([p.p_value for p in selected])
+    significant = {(p.representation, p.n) for p, f in zip(selected, flags) if f}
+
+    figure_width = design.text_width() if width is None else width
+    fig = plt.figure(figsize=(figure_width, 3.05 * figure_width / design.text_width()))
+    axis = fig.add_subplot(1, 1, 1)
+
+    for key in present:
+        rep = design.BY_KEY.get(key)
+        if rep is None:
+            continue
+        series = sorted((p for p in selected if p.representation == key), key=lambda p: p.n)
+        xs = [p.n for p in series]
+        ys = [p.rho for p in series]
+        style = design.line_kwargs(rep, None)
+        if len(series) > DENSE_SERIES:
+            axis.plot(xs, ys, label=rep.short, **style)
+            axis.fill_between(
+                xs,
+                [p.ci_lo for p in series],
+                [p.ci_hi for p in series],
+                color=rep.colour,
+                alpha=0.13,
+                linewidth=0,
+                zorder=rep.zorder - 1,
+            )
+        else:
+            axis.errorbar(
+                xs,
+                ys,
+                yerr=[
+                    [p.rho - p.ci_lo for p in series],
+                    [p.ci_hi - p.rho for p in series],
+                ],
+                elinewidth=0.55,
+                capsize=1.4,
+                label=rep.short,
+                **style,
+            )
+        marked = [(p.n, p.rho) for p in series if (key, p.n) in significant]
+        if marked and (rep.family in design.PRIMARY_FAMILIES or rep.is_ours):
+            axis.scatter(
+                [m[0] for m in marked],
+                [m[1] for m in marked],
+                s=design.MS_SIGNIFICANT,
+                facecolors="none",
+                edgecolors=rep.colour,
+                linewidths=0.85,
+                zorder=rep.zorder + 1,
+            )
+
+    onset = _single_reference_onset(points, reference)
+    if onset is not None and selected:
+        axis.axvspan(
+            onset - 0.5,
+            max(p.n for p in selected) + 1,
+            color="0.85",
+            alpha=0.6,
+            zorder=0,
+            linewidth=0,
+        )
+    if degenerate is not None and any(p.representation == degenerate for p in selected):
+        rep = design.BY_KEY.get(degenerate)
+        name = rep.short if rep is not None else degenerate
+        axis.annotate(
+            f"{name} $\\equiv$ reference: $\\rho \\equiv 1$ by construction",
+            xy=(0.985, 0.975),
+            xycoords="axes fraction",
+            ha="right",
+            va="top",
+            fontsize=design.FS_TICK - 0.5,
+            color="0.30",
+        )
+
+    axis.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+    title = f"{ref_label} --- exact at every size, so no bracket and no regime split"
+    if onset:
+        title += f";  shaded: $\\rho$ not separable from 0 ($n>{onset}$)"
+    axis.set_title(title, fontsize=design.FS_TITLE - 0.6, pad=4, color="0.25")
+    design.finish_axes(
+        axis,
+        xlabel="graph size $n$",
+        ylabel=rf"Spearman $\rho$ (distance vs {ref_label}), within equal $n$",
+    )
+    axis.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=12))
+    axis.set_ylim(-0.75, 1.05)
+
+    handles, labels = axis.get_legend_handles_labels()
+    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    fig.subplots_adjust(left=0.105, right=0.985, top=0.905, bottom=AXES_BOTTOM + 0.045)
+    saved = [str(q) for q in design.save(fig, out)]
+    plt.close(fig)
+    return saved
+
+
+
 def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Path) -> list[str]:
     """Figure 2 --- one panel per representation, datasets broken out.
 
@@ -687,6 +871,43 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--profile", type=Path, required=True, help="size_profile.json")
     ap.add_argument("--out-dir", type=Path, required=True, help="figure output directory")
+    ap.add_argument(
+        "--reference",
+        default=None,
+        help=(
+            "draw the single-reference variant of figure 1 for this reference "
+            "(e.g. 'wl') instead of the three GED figures. The reference carries "
+            "no bracket, so each small multiple shows one exact series"
+        ),
+    )
+    ap.add_argument(
+        "--reference-label",
+        default=None,
+        help="human-readable name for --reference in the titles, e.g. 'WL kernel'",
+    )
+    ap.add_argument(
+        "--stem",
+        default=None,
+        help="output basename; defaults to fig1_rho_vs_size_<reference>",
+    )
+    ap.add_argument(
+        "--width",
+        type=float,
+        default=None,
+        help=(
+            "render width in inches; default is the frozen 7.0 in IEEE width. "
+            "Pass 4.72 for the Pattern Recognition text block, so declared point "
+            "sizes are the printed point sizes"
+        ),
+    )
+    ap.add_argument(
+        "--degenerate",
+        default=None,
+        help=(
+            "a representation whose distance IS --reference, so its rho is 1.0 "
+            "by construction; drawn but annotated (e.g. wl_subtree under wl)"
+        ),
+    )
     return ap
 
 
@@ -702,12 +923,32 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    rows = load_rows(args.profile)
+    rows = load_rows(args.profile, keep_reference=args.reference)
     if not rows:
         LOGGER.error("no usable rows in %s", args.profile)
         return 1
     points = aggregate(rows)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.reference is not None:
+        stem = args.stem or f"fig1_rho_vs_size_{args.reference}"
+        label = args.reference_label or args.reference
+        saved = figure_one_single_reference(
+            points,
+            args.out_dir / stem,
+            reference=args.reference,
+            ref_label=label,
+            degenerate=args.degenerate,
+            width=args.width,
+        )
+        LOGGER.info("%s -> %s", stem, ", ".join(saved))
+        LOGGER.info(
+            "%d stratum rows, %d aggregate points, reference=%s",
+            len(rows),
+            len(points),
+            args.reference,
+        )
+        return 0
 
     for name, saved in (
         ("fig1_rho_vs_size", figure_one(points, args.out_dir / "fig1_rho_vs_size")),

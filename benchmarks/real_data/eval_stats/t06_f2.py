@@ -106,6 +106,17 @@ EXCLUDED_REPRESENTATIONS: Final[frozenset[str]] = frozenset({"adjacency", "graph
 #: The Claim-B comparators surviving ``k``, in the frozen spelling.
 FAMILY_COMPARATORS: Final[tuple[str, ...]] = ("nauty_graph6", "agm_cam", "min_dfs", "wl_subtree")
 
+#: 🔴 The ONLY references that may carry a confirmatory cell.
+#:
+#: ``N_actual = 79`` and the BH correction over it are pre-registered and frozen.
+#: Family membership is decided by ``comparator.representation`` alone, so without
+#: this guard **every reference added later would silently enter the family as a
+#: ``B1a`` row** and inflate ``N_actual`` past 79 --- invalidating the frozen
+#: correction with no error raised. T-28 adds ``wl`` and the spectral family; they
+#: are exploratory by construction and must stay outside. Gate: ``N_actual`` must
+#: still be 79 with the T-28 references enabled.
+CONFIRMATORY_REFERENCES: Final[frozenset[str]] = frozenset({"exact", "lb", "ub"})
+
 #: Computed and reported, but outside the frozen family: ``preregistration``
 #: 4.1 names plain ``sparse6``, and this is the nauty-canonicalised variant that
 #: T-04 added afterwards. Section 15.3 makes it one of the three representations
@@ -349,8 +360,18 @@ def _select(datasets: Sequence[str], only: frozenset[str] | None) -> tuple[str, 
 
 
 def _reference_regime(reference: str) -> str:
-    """Return the regime label a reference matrix belongs to."""
-    return "exact" if reference == "exact" else "approximate"
+    """Return the regime label a reference matrix belongs to.
+
+    T-28's alternative similarity references are neither the exact GED regime nor
+    the bracketed approximate one: they are a different notion of similarity
+    altogether, so they carry their own label and never merge into either
+    regime's omnibus.
+    """
+    if reference == "exact":
+        return "exact"
+    if reference in CONFIRMATORY_REFERENCES:
+        return "approximate"
+    return "structural"
 
 
 def run_correlation_group(
@@ -545,7 +566,13 @@ def _comparator_record(
     excess = diffs.get(f"excess{index}@{reference}")
     difference = diffs[f"diff{index}@{reference}"]
     shared_arm = results[f"arm@{reference}"]
-    in_family = comparator.representation in FAMILY_COMPARATORS
+    # Both conditions are load-bearing: family membership is a property of the
+    # (representation, reference) pair, not of the representation alone. See
+    # CONFIRMATORY_REFERENCES.
+    in_family = (
+        comparator.representation in FAMILY_COMPARATORS
+        and reference in CONFIRMATORY_REFERENCES
+    )
     row = None
     if in_family:
         row = "B1e" if reference == "exact" else "B1a"
