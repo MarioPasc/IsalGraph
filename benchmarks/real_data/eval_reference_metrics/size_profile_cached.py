@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -35,6 +36,27 @@ from benchmarks.real_data.eval_size_profile.size_profile import (
 )
 
 LOGGER: Final = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Roots:
+    """The input trees, named explicitly rather than guessed from one prefix.
+
+    The workstation archive and the Picasso staging tree do not share a layout,
+    so a single ``--archive`` prefix cannot address both. Every root is passed
+    separately, which is also what ``t06_f2`` does.
+
+    Attributes:
+        distances: The T-06 ``distances/`` tree, holding ``{suite}/`` beneath.
+        ged: Suite-1 exact GED matrices, one ``{dataset}.npz`` each.
+        approx: The ``APPROX_GED`` root, holding ``LB/``.
+        t28: The T-28 reference tree, or ``None``.
+    """
+
+    distances: Path
+    ged: Path
+    approx: Path
+    t28: Path | None
 
 SUITES: Final[dict[str, tuple[str, ...]]] = {
     "suite1": ("aids", "iam_letter_low", "iam_letter_med", "iam_letter_high", "linux"),
@@ -78,43 +100,41 @@ def _load_square(path: Path, field: str, target: npt.NDArray[Any] | None) -> Any
 
 
 def _references(
-    archive: Path, suite: str, dataset: str, ids: npt.NDArray[Any], t28_root: Path | None
+    roots: Roots, suite: str, dataset: str, ids: npt.NDArray[Any]
 ) -> dict[str, npt.NDArray[Any]]:
     """Return every reference matrix for one cell, aligned onto *ids*."""
     out: dict[str, npt.NDArray[Any]] = {}
     if suite == "suite1":
-        path = archive / "data/eval/ged_matrices" / f"{dataset}.npz"
+        path = roots.ged / f"{dataset}.npz"
         if path.exists():
             out["exact"] = _load_square(path, "ged_matrix", ids)[0]
     else:
-        path = archive / "data/source/APPROX_GED/LB" / f"{dataset}.npz"
+        path = roots.approx / "LB" / f"{dataset}.npz"
         if path.exists():
             for key, field in (("lb", "lb_matrix"), ("ub", "ub_matrix")):
                 with np.load(path, allow_pickle=True) as z:
                     if field not in z:
                         continue
                 out[key] = _load_square(path, field, ids)[0]
-    if t28_root is not None:
-        for path in sorted((t28_root / suite).glob(f"{dataset}__*.npz")):
+    if roots.t28 is not None:
+        for path in sorted((roots.t28 / suite).glob(f"{dataset}__*.npz")):
             out[path.stem.split("__", 1)[1]] = _load_square(path, "distance_matrix", ids)[0]
     return out
 
 
 def profile_cell(
-    archive: Path,
+    roots: Roots,
     suite: str,
     dataset: str,
-    t28_root: Path | None,
     keep: frozenset[str] | None = None,
     bootstrap: bool = True,
 ) -> list[StratumRow]:
     """Return one row per (representation, reference, n) for one cell.
 
     Args:
-        archive: Artifact archive root.
+        roots: Input trees.
         suite: Suite key.
         dataset: Dataset key.
-        t28_root: T-28 reference tree, or None.
         keep: Restrict to these references. The graph-level bootstrap runs
             ``N_BOOTSTRAP`` replicates per (representation, reference, stratum),
             so every extra reference is a full multiple of the cost; a figure
@@ -126,13 +146,13 @@ def profile_cell(
             and skip what dominates the runtime. Leave it True for any table
             that quotes a per-stratum interval.
     """
-    dist_dir = archive / "data/source/T06/distances" / suite
+    dist_dir = roots.distances / suite
     arm_path = dist_dir / f"{dataset}__isalgraph_pruned__levenshtein.npz"
     if not arm_path.exists():
         LOGGER.warning("%s/%s: no arm matrix, skipping", suite, dataset)
         return []
     _, ids, _, node_counts = _load_square(arm_path, "distance_matrix", None)
-    references = _references(archive, suite, dataset, ids, t28_root)
+    references = _references(roots, suite, dataset, ids)
     if keep is not None:
         references = {k: v for k, v in references.items() if k in keep}
     if not references:
@@ -198,8 +218,14 @@ def profile_cell(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "--archive", type=Path, default=Path("/home/mpascual/research/data/isalgraph_archive")
+        "--archive",
+        type=Path,
+        default=Path("/home/mpascual/research/data/isalgraph_archive"),
+        help="convenience prefix; every root below defaults to a path under it",
     )
+    ap.add_argument("--distances", type=Path, default=None, help="the T-06 distances/ tree")
+    ap.add_argument("--ged-root", type=Path, default=None, help="Suite-1 exact matrices")
+    ap.add_argument("--approx-root", type=Path, default=None, help="APPROX_GED root")
     ap.add_argument("--t28-root", type=Path, default=None, help="T-28 reference tree")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--datasets", default="all")
@@ -219,6 +245,16 @@ def main() -> int:
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
+    roots = Roots(
+        distances=args.distances or args.archive / "data/source/T06/distances",
+        ged=args.ged_root or args.archive / "data/eval/ged_matrices",
+        approx=args.approx_root or args.archive / "data/source/APPROX_GED",
+        t28=args.t28_root,
+    )
+    named = (("distances", roots.distances), ("ged", roots.ged), ("approx", roots.approx))
+    for name, path in named:
+        if not path.exists():
+            LOGGER.warning("%s root does not exist: %s", name, path)
     wanted = None if args.datasets == "all" else set(args.datasets.split(","))
     keep = frozenset(args.references.split(",")) if args.references else None
     rows: list[StratumRow] = []
@@ -226,11 +262,7 @@ def main() -> int:
         for dataset in datasets:
             if wanted is not None and dataset not in wanted:
                 continue
-            rows.extend(
-                profile_cell(
-                    args.archive, suite, dataset, args.t28_root, keep, not args.no_bootstrap
-                )
-            )
+            rows.extend(profile_cell(roots, suite, dataset, keep, not args.no_bootstrap))
 
     payload: dict[str, Any] = {
         "schema_version": "t06.size_profile.2",
