@@ -42,7 +42,16 @@ export CONDA_PREFIX_DIR="${CONDA_PREFIX_DIR:-${FSCRATCH}/conda_envs/isalgraph}"
 export REPO_DIR="${REPO_DIR:-${FSCRATCH}/repos/IsalGraph-t28}"
 
 # Read-only inputs, all reused.
-export OUT_ROOT="${OUT_ROOT:-${DATA}/T06_exhaustive}"
+#
+# 🔴 T-06's OWN tree, NOT T06_exhaustive's. Both hold the arms T-28 needs and the
+# shared matrices are identical, but T06_exhaustive/encodings ALSO holds
+# isalgraph_exhaustive and isalgraph_greedy. With T06_REFERENCE_ARM=isalgraph_pruned
+# those two are undeclared, the completion table names them, and every shard dies
+# in family.validate() with
+#     FamilyError: c names an undeclared representation 'isalgraph_exhaustive'
+# Caught by a login-node smoke run; queued, it would have surfaced after a ~10 h
+# wait. Using T-06's own inputs is also what gate G1 compares against.
+export OUT_ROOT="${OUT_ROOT:-${DATA}/T06}"
 export GED_ROOT="${GED_ROOT:-${DATA}/eval/ged_matrices}"
 export APPROX_ROOT="${APPROX_ROOT:-${DATA}/APPROX_GED}"
 
