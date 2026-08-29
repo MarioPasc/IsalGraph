@@ -82,6 +82,33 @@ N_F2_TASKS="${N_F2_TASKS:-8}"
 F2_CONCURRENT="${F2_CONCURRENT:-8}"
 export START_CUTOFF_S="${START_CUTOFF_S:-54000}"   # 15 h of a 20 h wall
 
+# QOS. Empty means the account default, which is medium_uma. Measured on this
+# cluster 2026-08-29 with `sacctmgr show qos`:
+#
+#   short        priority 10000   MaxWall 02:00:00
+#   medium_uma   priority  1000   MaxWall 3-00:00:00
+#   long_uma     priority   500   MaxWall 7-00:00:00
+#
+# The site weights QOS at 100000, so the factor is qos_priority/10000 and the
+# contribution is 100000 under `short` against 10000 under `medium_uma`. Job
+# 2132238 sat on Priority/ for six hours at a total of 29,485 with 22 pending
+# jobs ahead of it; +90,000 puts it at the top of that queue instead. The whole
+# cost is the two-hour wall, so this is right for the light cells and wrong for
+# mutagenicity and coil_del.
+#
+# The shard loop is idempotent -- it skips any cell whose partial already
+# exists -- so a `short` array and a `medium_uma` array can target the SAME
+# FAM_ROOT, and the second one only picks up what the first did not finish.
+# Do not run them CONCURRENTLY against one FAM_ROOT: the skip test is a
+# check-then-write, so two live arrays can both start the same cell and race on
+# the partial. Hold one while the other runs.
+F2_QOS="${F2_QOS:-}"
+
+# Submit the shard array only. The merge needs all fifteen partials and aborts
+# otherwise, so when the campaign is being completed in more than one pass the
+# merge is submitted by hand once the fifteenth partial lands.
+SKIP_MERGE="${SKIP_MERGE:-false}"
+
 SUITE1=(linux aids iam_letter_low iam_letter_med iam_letter_high)
 SUITE2=(linux grec protein aids_graphedx iam_letter_low iam_letter_med
         aids_iam iam_letter_high coil_del mutagenicity)
@@ -142,10 +169,17 @@ submit() {
 COMMON_EXPORT="CONDA_PREFIX_DIR=${CONDA_PREFIX_DIR},REPO_DIR=${REPO_DIR},OUT_ROOT=${OUT_ROOT},START_CUTOFF_S=${START_CUTOFF_S}"
 F2_EXPORT="${COMMON_EXPORT},GED_ROOT=${GED_ROOT},APPROX_ROOT=${APPROX_ROOT},FAM_ROOT=${FAM_ROOT},T28_REFERENCE_ROOT=${T28_REFERENCE_ROOT},T06_REFERENCE_ARM=${T06_REFERENCE_ARM},COMPARATOR_SET=${COMPARATOR_SET},EXPECTED_SHARDS=${EXPECTED_SHARDS},EXPECTED_N_ACTUAL=${EXPECTED_N_ACTUAL}"
 
+# Built as its own array so an unset F2_QOS contributes no argument at all.
+# `--qos=` with an empty value is not the same as omitting the flag: sbatch
+# takes it as a request for a QOS named "" and rejects the submission.
+QOS_ARGS=()
+[ -n "${F2_QOS}" ] && QOS_ARGS+=( --qos="${F2_QOS}" )
+
 F2_SHARD_ARGS=(
   --job-name=t28f2s
   --array="0-$(( N_F2_TASKS - 1 ))%${F2_CONCURRENT}"
   --time="${F2_WALL}" --ntasks=1 --cpus-per-task="${F2_CPUS}" --mem="${F2_MEM}"
+  ${QOS_ARGS[@]+"${QOS_ARGS[@]}"}
   --constraint=cpu --account="${ACCOUNT}" --chdir="${REPO_DIR}"
   --output="${LOGS_DIR}/t28f2s_%A_%a.out" --error="${LOGS_DIR}/t28f2s_%A_%a.err"
   --export="ALL,${F2_EXPORT},STAGE=shards,N_TASKS=${N_F2_TASKS},UNIT_LIST=${F2_UNIT_LIST}"
@@ -184,6 +218,17 @@ fi
 
 SHARDS=$(submit "${F2_SHARD_ARGS[@]}") || exit 1
 echo "submitted f2-shards: ${SHARDS}"
+
+if ${SKIP_MERGE}; then
+    echo "submitted f2-merge:  SKIPPED (SKIP_MERGE=true)"
+    echo ""
+    echo "Fifteen partials are required before the merge will run. Check with"
+    echo "  ls -1 ${FAM_ROOT}/f2_partials/*.json | wc -l"
+    echo "and submit the merge by hand once it reads 15."
+    echo "Monitor:  squeue --me"
+    echo "Logs:     ${LOGS_DIR}/t28f2s_${SHARDS}_*.out"
+    exit 0
+fi
 
 MERGE=$(submit --dependency="afterok:${SHARDS}" "${F2_MERGE_ARGS[@]}") || {
     echo "FATAL: merge submission failed; cancelling ${SHARDS}" >&2
