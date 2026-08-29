@@ -106,6 +106,7 @@ def profile_cell(
     dataset: str,
     t28_root: Path | None,
     keep: frozenset[str] | None = None,
+    bootstrap: bool = True,
 ) -> list[StratumRow]:
     """Return one row per (representation, reference, n) for one cell.
 
@@ -118,6 +119,12 @@ def profile_cell(
             ``N_BOOTSTRAP`` replicates per (representation, reference, stratum),
             so every extra reference is a full multiple of the cost; a figure
             that needs one reference should ask for one.
+        bootstrap: Compute the per-stratum interval. **The figures do not read
+            it** --- ``figures.aggregate`` derives its own interval from the
+            Fisher-z weighted mean of ``rho`` and ``n_graphs`` and never looks
+            at ``ci_lo``/``ci_hi`` --- so a figure-only run should pass False
+            and skip what dominates the runtime. Leave it True for any table
+            that quotes a per-stratum interval.
     """
     dist_dir = archive / "data/source/T06/distances" / suite
     arm_path = dist_dir / f"{dataset}__isalgraph_pruned__levenshtein.npz"
@@ -160,8 +167,11 @@ def profile_cell(
                 if np.all(x == x[0]) or np.all(y == y[0]):
                     continue
                 result = stats.spearmanr(x, y)
-                rng = np.random.default_rng(SEED + n)
-                ci_lo, ci_hi = _bootstrap_ci(block, ref_block, valid, rng)
+                if bootstrap:
+                    rng = np.random.default_rng(SEED + n)
+                    ci_lo, ci_hi = _bootstrap_ci(block, ref_block, valid, rng)
+                else:
+                    ci_lo, ci_hi = None, None
                 rows.append(
                     StratumRow(
                         suite=suite,
@@ -198,6 +208,14 @@ def main() -> int:
         default="",
         help="comma-separated reference filter; empty means every reference found",
     )
+    ap.add_argument(
+        "--no-bootstrap",
+        action="store_true",
+        help=(
+            "skip the per-stratum interval. The figures never read it -- they "
+            "aggregate their own from rho and n_graphs -- and it dominates runtime"
+        ),
+    )
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -208,7 +226,11 @@ def main() -> int:
         for dataset in datasets:
             if wanted is not None and dataset not in wanted:
                 continue
-            rows.extend(profile_cell(args.archive, suite, dataset, args.t28_root, keep))
+            rows.extend(
+                profile_cell(
+                    args.archive, suite, dataset, args.t28_root, keep, not args.no_bootstrap
+                )
+            )
 
     payload: dict[str, Any] = {
         "schema_version": "t06.size_profile.2",
@@ -220,7 +242,7 @@ def main() -> int:
         ),
         "generated_utc": datetime.now(UTC).isoformat(),
         "min_pairs": MIN_PAIRS,
-        "n_bootstrap": N_BOOTSTRAP,
+        "n_bootstrap": 0 if args.no_bootstrap else N_BOOTSTRAP,
         "seed": SEED,
         "rows": [vars(r) for r in rows],
     }

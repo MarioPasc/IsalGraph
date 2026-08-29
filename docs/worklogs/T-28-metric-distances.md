@@ -251,8 +251,82 @@ This is a useful negative: it means WL is the answer, not a way-station.
 - [x] `spectral_esd` measured — does **not** rescue the spectral family
 - [x] Agent branches verified and merged; suite **2,019 passed / 275 skipped**
 - [x] Campaign submitted on Picasso (`2132238` shards → `2132239` merge)
+- [x] `rho_vs_size` figure for the WL kernel reference
 - [ ] Campaign completes; results copied back
 - [ ] §5.4 rewrite drafted
+
+---
+
+## 2026-08-29 — session 2
+
+### The `min_dfs` gap is a TIE, and that is now measured rather than inferred
+
+The point estimate put the arm 0.024 below `min_dfs` under the WL reference, which is not a
+verdict. The Picasso array was still sitting on `Priority/` with 0 of 15 partials, so the
+shards were run **locally** off the same cached matrices to get the paired graph-level
+bootstrap. On both LINUX cells the difference's 95 % interval covers zero:
+
+| reference | comparator | arm − comparator [95 % CI] | verdict |
+|---|---|---|---|
+| GED exact | `min_dfs` | −0.1691 [−0.2785, −0.0784] | **LOSS** (p = 0.002) |
+| **WL kernel** | `min_dfs` | **−0.0235 [−0.1470, +0.0923]** | **TIE** (p = 0.70) |
+| **WL kernel** | `min_dfs` (suite 2) | **−0.0413 [−0.1326, +0.0508]** | **TIE** (p = 0.37) |
+| WL kernel | `agm_cam` | +0.1831 [+0.0459, +0.3073] | WIN |
+| WL kernel | `nauty_graph6` | +0.2237 [+0.0905, +0.3563] | WIN |
+| WL kernel | `sparse6_nauty` | +0.2466 [+0.1378, +0.3524] | WIN |
+
+**So under the WL kernel reference the arm is beaten by nothing**: three significant wins and
+one tie, against a significant loss to the same comparator under exact GED. `verdicts_t28.py`
+computes this tally from `difference_vs_reference_arm` — the paired difference on identical
+pairs under one graph-level resample — never from two overlapping marginal intervals.
+
+**Scope, stated plainly:** two of fifteen cells. The Picasso campaign is the record and will
+extend it; the tie claim above is asserted only over what has been measured.
+
+### The figure
+
+`docs/worklogs/T-28-artifacts/fig1_rho_vs_size_wl.{pdf,png}`, from
+`size_profile_wl.json` (1,199 stratum rows, 326 aggregate points, all 15 cells).
+
+**One panel, one x axis, every competitor together** — not the two-regime layout of the GED
+figure. That split exists because graph edit distance is exact only to `n = 12` and is a
+*bracket* above it, and a bracket cannot share an axis with an exact value without inviting
+the reader to read one as the other. The WL kernel distance is computed exactly at every
+size, so there is no bracket, no ceiling and no reason to split. Same styling, same
+Fisher-z aggregation, same local BH treatment.
+
+`wl_subtree` draws as a flat line at ρ ≡ 1.0 and is **annotated on the figure**. It is the
+reference, so this is the identity, not a competitor solving the problem. Hiding it would
+have been a silent exclusion; leaving it unlabelled would have been worse.
+
+Two implementation notes worth keeping:
+
+- **The published `size_profile.py` could not produce this in time.** It re-derives every
+  Levenshtein block per stratum from the encodings and managed **2 of ~120 (dataset,
+  representation) units in fifteen minutes**. The matrices it was recomputing were already on
+  disk. `size_profile_cached.py` reads them and imports `MIN_PAIRS`, `N_BOOTSTRAP`, `SEED`
+  and `_bootstrap_ci` from the original module so the statistics cannot drift.
+- **The per-stratum bootstrap is not read by the figure.** `figures.aggregate` derives its
+  own interval from the Fisher-z weighted mean of `rho` and `n_graphs` and never looks at
+  `ci_lo`/`ci_hi`. Skipping it took the full 15-cell profile from *hours* to **21 seconds**.
+  `--no-bootstrap` is therefore correct for a figure run and wrong for any table quoting a
+  per-stratum interval, and the docstring says so.
+
+### ⚠ A width defect the new figure inherits, and did not fix
+
+`05_results.tex` carries an open BUILD RISK: `rho_vs_size.pdf` is rendered **7.03 in** wide
+and placed in Pattern Recognition's **4.72 in** text block, so `width=\textwidth` scales it
+by 0.67 and its declared 5.5–6.5 pt labels reach the page at 3.7–4.4 pt. **The WL figure is
+7.03 in too** — it matches its sibling, which is what was asked, and inherits the same defect.
+
+A `--width` option was added, and **measuring it showed the option is not sufficient on its
+own**: `save_figure` writes with `bbox_inches="tight"`, so the output box is the *content*
+box, and at 4.72 in the seven-column legend and the title overflow and the box expands back
+to 7.03 in — with nothing in the output to say so. Both renders came back 7.03 in. A genuine
+narrow render also needs a narrower legend and a shorter title, which is a different figure,
+so the misleading `_patrec` variant was deleted rather than shipped. The trap is documented
+in the docstring. **`IEEE_TEXT_WIDTH_INCHES = 7.0` was not touched** — a test pins it to the
+submitted PDF.
 
 ### `spectral_esd`, measured
 
