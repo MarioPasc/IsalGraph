@@ -105,8 +105,18 @@ def _load_ged(archive: Path, suite: str, dataset: str, target: npt.NDArray[Any])
     return out
 
 
-def run_dataset(archive: Path, suite: str, dataset: str) -> list[dict[str, Any]]:
-    """Return one record per (representation, reference, view)."""
+def run_dataset(
+    archive: Path, suite: str, dataset: str, reference_root: Path | None = None
+) -> list[dict[str, Any]]:
+    """Return one record per (representation, reference, view).
+
+    Args:
+        archive: Root of the isalgraph artifact archive.
+        suite: Suite key.
+        dataset: Dataset key.
+        reference_root: When given, references are READ from this tree in the
+            dense CONTRACTS section 4 schema instead of being computed here.
+    """
     graphs = _load_graphs(archive, suite, dataset)
     ids = graphs["graph_ids"]
     n_nodes = np.asarray(graphs["n_nodes"], dtype=np.int64)
@@ -133,15 +143,29 @@ def run_dataset(archive: Path, suite: str, dataset: str) -> list[dict[str, Any]]
     if "_exact_mask" in ged:
         ref_masks["exact"] = ged["_exact_mask"]
 
-    # WL reference: byte-identical to the wl_subtree arm's cached kernel matrix.
-    wl = _load_distance(archive, suite, dataset, "wl_subtree", "kernel", ids)
-    if wl is not None:
-        refs["wl"] = wl[0]
+    if reference_root is not None:
+        # Read the BUILT production matrices, so the probe and the campaign are
+        # measuring the same objects rather than two implementations of the same
+        # description. This is also how spectral_esd reaches the probe.
+        for path in sorted((reference_root / suite).glob(f"{dataset}__*.npz")):
+            key = path.stem.split("__", 1)[1]
+            with np.load(path, allow_pickle=True) as z:
+                src = np.asarray(z["graph_ids"]).astype(str)
+                mat = np.asarray(z["distance_matrix"], dtype=np.float64)
+            refs[key] = mat if list(src) == list(ids) else _align(mat, src, ids)
+    else:
+        # WL reference: byte-identical to the wl_subtree arm's cached kernel matrix.
+        wl = _load_distance(archive, suite, dataset, "wl_subtree", "kernel", ids)
+        if wl is not None:
+            refs["wl"] = wl[0]
 
-    # Spectral references, computed here.
-    for variant, key in (("norm", "spectral"), ("comb", "spectral_comb"), ("adj", "spectral_adj")):
-        spectra = cohort_spectra(n_nodes, graphs["edge_offsets"], graphs["edges"], variant=variant)
-        refs[key] = spectral_distance_matrix(spectra)
+        # Spectral references, computed here.
+        variants = (("norm", "spectral"), ("comb", "spectral_comb"), ("adj", "spectral_adj"))
+        for variant, key in variants:
+            spectra = cohort_spectra(
+                n_nodes, graphs["edge_offsets"], graphs["edges"], variant=variant
+            )
+            refs[key] = spectral_distance_matrix(spectra)
 
     # --- pair views ---------------------------------------------------------
     iu = np.triu_indices(g, k=1)
@@ -192,6 +216,12 @@ def main() -> int:
     ap.add_argument("--archive", type=Path, default=default_archive)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--datasets", default="all")
+    ap.add_argument(
+        "--reference-root",
+        type=Path,
+        default=None,
+        help="read built reference matrices from here instead of computing them",
+    )
     args = ap.parse_args()
 
     cells = [("suite1", d) for d in SUITE1] + [("suite2", d) for d in SUITE2]
@@ -202,7 +232,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     for suite, dataset in cells:
         try:
-            got = run_dataset(args.archive, suite, dataset)
+            got = run_dataset(args.archive, suite, dataset, args.reference_root)
         except Exception as exc:  # noqa: BLE001 - probe: report and continue
             print(f"[skip] {suite}/{dataset}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue

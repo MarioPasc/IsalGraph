@@ -153,12 +153,102 @@ use the group intersection, reproduce T-06's `exact` column to 4 decimals (gate 
 supply paired graph-level bootstrap intervals. A mean Δρ of −0.024 against `min_dfs` may well
 be a tie; that is for the bootstrap to say, not the point estimate.
 
+### 🔴 A guard the reference swap needed, and would not have got
+
+`t06_f2._comparator_record` decided confirmatory-family membership from the
+**representation alone**:
+
+```python
+in_family = comparator.representation in FAMILY_COMPARATORS
+row = "B1e" if reference == "exact" else "B1a"
+```
+
+`N_actual = 79` and the Benjamini–Hochberg correction over it are pre-registered and
+frozen. With that code, **every reference added by T-28 would have entered the family as a
+`B1a` row and inflated `N_actual` past 79, with no error raised** — the pre-registered
+correction silently invalidated, exactly the failure class this project has hit before
+(the stale 726-test floor; the `padded_hamming` primary column; the `dgx` constraint).
+
+Family membership is now a property of the **(representation, reference) pair**:
+
+```python
+CONFIRMATORY_REFERENCES: Final[frozenset[str]] = frozenset({"exact", "lb", "ub"})
+in_family = (comparator.representation in FAMILY_COMPARATORS
+             and reference in CONFIRMATORY_REFERENCES)
+```
+
+and `_reference_regime` returns a third label, `structural`, so a T-28 reference can never
+merge into either GED regime's omnibus. `tests/unit/test_t28_plumbing.py` pins it with 15
+tests, including an end-to-end check that the *same* comparator yields row `B1e` under
+`exact` and no row at all under `wl`. The SLURM merge stage **asserts** `N_actual == 79`
+rather than reporting it: T-28 adds only references, so a moved value is the guard failing,
+not a finding.
+
+Full unit suite after the change: **1,984 passed / 275 skipped**, no regressions.
+
+### Reference matrices — built and independently verified
+
+75 matrices (15 cells × 5 keys) in the dense CONTRACTS §4 schema, verified by the
+orchestrator rather than taken from the building agent's log:
+
+| gate | result |
+|---|---|
+| **G3** symmetric, zero-diagonal, finite, non-negative, joins on `graph_ids` | **75/75 clean** |
+| **G4** `wl` matrix is the cached `wl_subtree__kernel` matrix | **15/15 byte-identical** |
+| **G5** off-diagonal exact-zero fraction < 0.99 | max **0.155**, mean 0.042 |
+
+G4 matters: the WL degeneracy is exact by construction, not approximate, so `ρ = 1.0` for
+that arm is provably the identity rather than a bug hiding behind a near-miss.
+
+### Picasso
+
+The campaign reuses everything and recomputes nothing on the representation side, so
+**there is no distance stage** — the 12 h that cost T-06 is skipped outright. Picasso
+already held a complete `distances` tree (`T06_exhaustive/distances`, a superset of T-06's
+arms) and `APPROX_GED`; only the exact GED and the new reference matrices had to be staged.
+
+- `slurm/t28_metrics/{launcher.sh,f2_worker.sh}` — the worker is a **copy** of T-06's, so
+  that campaign's frozen script stays byte-identical, plus `FAM_ROOT` (T-28 must not
+  overwrite the families it reads distances beside), a validated `T28_REFERENCE_ROOT` (unset,
+  every shard would run a successful GED-only recompute and emit no structural row at all),
+  and the `N_actual` assertion above.
+- Staged to a **separate checkout** `repos/IsalGraph-t28`: the shared `repos/IsalGraph`
+  carries uncommitted local edits and is the target of the env's editable install, and
+  clobbering someone's uncommitted work on a shared cluster is not a thing to do
+  unprompted. The only `import isalgraph` in the F2 chain is inside `_metadata()` for
+  provenance, so the package resolving from the older tree changes no computed number — but
+  the manifest's `src_commit` will describe that tree, which is recorded here rather than
+  discovered later.
+- Environment verified live: numpy 2.4.6, scipy 1.17.1, the guard importable, and
+  `T28_REFERENCE_ROOT` picked up at module import.
+
+### Track B (IsalChem p.7949 fallback) — reasoned negative, no code
+
+Page 7949 is the *Molecular Similarity* subsection and defines **seven binary-fingerprint
+metrics** (Tanimoto, Dice, Cosine, Kulczynski, McConnaughey, Russel, Sokal) over RDKit
+Morgan fingerprints — there is no explicit subgraph repertoire; the "repertoire" is the
+fingerprint's hash-implicit circular-subgraph vocabulary.
+
+All seven transfer at the formula level (they are pure bit-vector operations, no chemistry),
+and the label-stripping is *not* the barrier. **Size domination is.** Graphlet counts scale
+linearly with `n` for sparse graphs, so a graphlet-fingerprint Tanimoto obeys
+`Tani(G,H) ≤ n_min/n_max` — a pure size ratio, which on COIL-DEL (size null 0.9971) buys
+nothing; frequency normalisation collapses to near-1 uniformly instead. Recommendation:
+**do not implement**. The repertoire specification is recorded for a future revision.
+
+This is a useful negative: it means WL is the answer, not a way-station.
+
 ### Status
 
-- [x] Archive secured off the Sandisk
+- [x] Archive secured off the Sandisk (2.8 GB, verified by file count and bytes)
 - [x] Design note frozen and committed before results
 - [x] Fast probe written; smoke pass done; full 15-cell run done
 - [x] Full probe results reviewed — **WL kernel is the load-bearing reference**
-- [ ] Production reference matrices in CONTRACTS §4 schema (track C)
-- [ ] `t06_f2` reference plumbing + SLURM + Picasso submission (track A, mine)
-- [ ] IsalChem p.7949 fallback prepared (track B)
+- [x] Production reference matrices built and gate-verified (track C)
+- [x] `t06_f2` reference plumbing + the family guard + 15 tests
+- [x] SLURM launcher/worker; repo and exact GED staged on Picasso
+- [x] IsalChem p.7949 fallback: reasoned **do not implement** (track B)
+- [ ] `spectral_esd` measured (probe running against the built matrices)
+- [ ] Campaign submitted on Picasso
+- [ ] Agent branches merged
+- [ ] Results copied back and §5.4 rewrite drafted
