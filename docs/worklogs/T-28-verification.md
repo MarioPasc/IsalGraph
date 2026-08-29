@@ -37,6 +37,27 @@ Two facts the worklog did not report, both favourable:
 
 ---
 
+### 1.1 The reference matrices verified here, not taken from the log
+
+Re-run against the Sandisk copy of all 75 matrices:
+
+| gate | claim | re-verified |
+|---|---|---|
+| **G4** | the `wl` reference **is** the cached `wl_subtree__kernel` matrix | **15/15 byte-identical**, `graph_ids` included |
+| **G3** | symmetric, zero diagonal, finite, non-negative | **75/75 clean** |
+| **G5** | off-diagonal exact-zero fraction below the 0.99 silent-zero threshold | max **0.155** (`wl`), min 0.099 (`spectral_esd`) |
+
+G4 has a consequence worth stating in the paper rather than leaving for a reviewer to find:
+**the WL reference is literally one competitor's own representation distance.** That is what
+makes `ρ ≡ 1.0` for the `wl_subtree` arm the identity rather than a near-miss, and it is why
+excluding that arm from the win counts is exact and not a judgement call. It also means the
+reference must be described as *an alternative structural similarity measure*, never as
+"ground truth". The remaining four competitors — `agm_cam`, `min_dfs`, `nauty_graph6`,
+`sparse6_nauty` — are canonical forms and serialisations with no WL-like construction, so
+none of them gains from the swap, and neither does IsalGraph.
+
+---
+
 ## 2. Three integrity findings
 
 ### 2.1 🔴 Four of the fifteen cells are byte-identical duplicates
