@@ -251,7 +251,7 @@ This is a useful negative: it means WL is the answer, not a way-station.
 - [x] `spectral_esd` measured — does **not** rescue the spectral family
 - [x] Agent branches verified and merged; suite **2,019 passed / 275 skipped**
 - [x] Campaign submitted on Picasso (`2132238` shards → `2132239` merge)
-- [x] `rho_vs_size` figure for the WL kernel reference
+- [x] `rho_vs_size` figure for **every** alternative reference (5), built on Picasso
 - [ ] Campaign completes; results copied back
 - [ ] §5.4 rewrite drafted
 
@@ -311,6 +311,46 @@ Two implementation notes worth keeping:
   `ci_lo`/`ci_hi`. Skipping it took the full 15-cell profile from *hours* to **21 seconds**.
   `--no-bootstrap` is therefore correct for a figure run and wrong for any table quoting a
   per-stratum interval, and the docstring says so.
+
+### What was complete and what was not — the question is fair
+
+Asked directly whether the earlier data was incomplete. Precisely:
+
+| artifact | scope | complete? |
+|---|---|---|
+| Probe (point estimates) | 15 cells × every representation × **all 8 references** | **yes** — 1,260 records; this is the head-to-head table |
+| Size profile behind the figure | 15 cells × every representation × **`wl` only** | **no** — a spectral figure needed a second pass |
+| Paired bootstrap verdicts (CIs) | **2 of 15 cells** | **no** — stated as such throughout; the Picasso campaign is the record |
+
+So the head-to-head numbers were complete as point estimates, and the intervals were not; both
+were labelled. But the profile *was* run for one reference when running all eight costs the
+same pass, and that was a genuine inefficiency rather than a scoping decision. Corrected: the
+Picasso worker now makes **one** profile over every reference and emits **one figure per
+alternative distance** — same cohorts, same representations, same T-04a distances as the GED
+figure, with only the reference changed.
+
+### Everything compute-heavy now runs on Picasso
+
+All local runs were stopped on request. Two consequences worth recording:
+
+- `size_profile_cached` now takes explicit `--distances` / `--ged-root` / `--approx-root`
+  rather than deriving them from one `--archive` prefix. The workstation archive and the
+  Picasso staging tree do not share a layout, so one prefix cannot address both; this is what
+  `t06_f2` already does.
+- Two defects were caught by **reading the `--dry-run` argv** rather than by running it.
+  `sbatch --export` is comma-separated, so a space-separated reference list did not survive it
+  — everything after the first space fell outside the option. The list now travels
+  colon-separated and is split in the worker. The worker also verifies each reference has rows
+  in the profile before drawing, because a reference with no rows yields an empty axes and
+  exit 0.
+
+Jobs: `2132238` → `2132239` (the F2 campaign, queued) and `2133213` (profile + all figures,
+**done in 1 m 16 s**: 8,232 stratum rows over all 8 references, 5 figures, 0 failures).
+
+Figures, all on Picasso under `T28_metrics/figures/` and copied to
+`docs/worklogs/T-28-artifacts/`:
+`fig1_rho_vs_size_{wl,spectral,spectral_comb,spectral_adj,spectral_esd}.pdf`, plus
+`size_profile_all_references.json` (8,232 rows) behind them.
 
 ### ⚠ A width defect the new figure inherits, and did not fix
 
