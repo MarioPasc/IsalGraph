@@ -15,7 +15,6 @@ import argparse
 import json
 import logging
 import os
-from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -144,24 +143,52 @@ def _levenshtein_block(seqs: list[tuple[str, ...]]) -> FloatArray:
 def _wl_counts(seqs: list[tuple[str, ...]]) -> FloatArray:
     """Rebuild the WL count matrix from stored encodings.
 
-    The stored encoding is the ``symbol_sep``-joined multiset of WL colours, so
-    counting occurrences over the dataset-wide colour set reproduces the count
-    vectors ``wl_driver.feature_table`` fits, provided the vocabulary is taken
-    over the whole dataset --- which it is, because the encoding campaign fitted
-    per dataset.
+    Each stored symbol is ``h<level>:<colour>:<count>`` --- the multiplicity is
+    **written into the symbol**, not carried by repeating it. So the colour is
+    everything up to the last colon and the count is the field after it.
+
+    🔴 This function used to read ``Counter(seq)`` over whole symbols, on the
+    stated premise that the encoding was "the ``symbol_sep``-joined multiset of
+    WL colours". That premise is false and the consequence was silent: a symbol
+    occurs exactly once in a sequence, so ``Counter`` returned 1 for every one
+    of them and the result was a **presence indicator, not a count vector**. On
+    ``suite1/aids`` it built a 208-entry vocabulary of ``colour:count`` tokens
+    whose largest cell was 1.0, where the frozen encoding campaign fitted 69
+    colours with counts to 12 --- so the "kernel distance" it induced was a
+    Euclidean distance on set membership. Parsing the count out reproduces the
+    cached ``__wl_subtree__kernel.npz`` matrices exactly (max abs difference
+    0.0 over ``suite1/aids``, vocabulary 69 against the metadata's declared 69).
+
+    **Artifacts generated before this fix carry the defect for the
+    ``wl_subtree`` arm and for no other**, because it is the only arm whose
+    primary distance is ``kernel``; every ``levenshtein`` arm is unaffected and
+    was verified byte-identical across the two profiles.
 
     Args:
         seqs: Symbol sequences for every graph in the dataset.
 
     Returns:
-        ``(G, V)`` count matrix over the dataset vocabulary.
+        ``(G, V)`` count matrix over the dataset colour vocabulary.
     """
-    vocabulary = sorted({symbol for seq in seqs for symbol in seq})
+    parsed: list[list[tuple[str, float]]] = []
+    for seq in seqs:
+        entries: list[tuple[str, float]] = []
+        for symbol in seq:
+            colour, _, tail = symbol.rpartition(":")
+            try:
+                multiplicity = float(tail)
+            except ValueError:
+                # A symbol with no trailing count is one occurrence of itself.
+                colour, multiplicity = symbol, 1.0
+            entries.append((colour, multiplicity))
+        parsed.append(entries)
+
+    vocabulary = sorted({colour for entries in parsed for colour, _ in entries})
     index = {colour: j for j, colour in enumerate(vocabulary)}
     counts = np.zeros((len(seqs), len(vocabulary)), dtype=np.float64)
-    for i, seq in enumerate(seqs):
-        for colour, count in Counter(seq).items():
-            counts[i, index[colour]] = float(count)
+    for i, entries in enumerate(parsed):
+        for colour, multiplicity in entries:
+            counts[i, index[colour]] += multiplicity
     return counts
 
 

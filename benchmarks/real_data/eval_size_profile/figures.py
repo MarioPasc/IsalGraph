@@ -638,6 +638,261 @@ def figure_one_single_reference(
     return saved
 
 
+def _draw_series(
+    ax: Any,
+    points: list[AggregatePoint],
+    key: str,
+    reference: str,
+    significant: set[tuple[str, str, int]],
+    *,
+    label: str | None,
+) -> None:
+    """Draw one representation's series for one reference onto *ax*.
+
+    Factored out of the panel builders so the combined figure cannot drift from
+    the single-reference one in interval treatment, marker rule or draw order.
+
+    Args:
+        ax: Target axes.
+        points: Aggregated points; filtered to *key* and *reference* here.
+        key: Representation key.
+        reference: Reference key.
+        significant: ``(representation, reference, n)`` triples that passed the
+            figure's Benjamini-Hochberg correction.
+        label: Legend label, or ``None`` to draw the series without one. Only
+            one panel of a combined figure may label a representation, or the
+            shared legend carries it several times.
+    """
+    rep = design.BY_KEY.get(key)
+    if rep is None:
+        return
+    series = sorted(
+        (p for p in points if p.representation == key and p.reference == reference),
+        key=lambda p: p.n,
+    )
+    if not series:
+        return
+    xs = [p.n for p in series]
+    ys = [p.rho for p in series]
+    style = design.line_kwargs(rep, reference if reference in design.REFERENCE_LINESTYLE else None)
+    if label is not None:
+        style["label"] = label
+
+    if len(series) > DENSE_SERIES:
+        ax.plot(xs, ys, **style)
+        ax.fill_between(
+            xs,
+            [p.ci_lo for p in series],
+            [p.ci_hi for p in series],
+            color=rep.colour,
+            alpha=design.ALPHA_BAND,
+            linewidth=0,
+            zorder=rep.zorder - 1,
+        )
+    else:
+        ax.errorbar(
+            xs,
+            ys,
+            yerr=[[p.rho - p.ci_lo for p in series], [p.ci_hi - p.rho for p in series]],
+            elinewidth=0.55,
+            capsize=1.4,
+            **style,
+        )
+
+    marked = [(p.n, p.rho) for p in series if (key, reference, p.n) in significant]
+    if marked and (rep.family in design.PRIMARY_FAMILIES or rep.is_ours):
+        ax.scatter(
+            [m[0] for m in marked],
+            [m[1] for m in marked],
+            s=design.MS_SIGNIFICANT,
+            facecolors="none",
+            edgecolors=rep.colour,
+            linewidths=0.85,
+            zorder=rep.zorder + 1,
+        )
+
+
+def figure_one_combined(
+    points: list[AggregatePoint],
+    out: Path,
+    *,
+    reference: str = "wl",
+    ref_label: str = "WL kernel",
+    degenerate: str | None = "wl_subtree",
+    width: float | None = None,
+) -> list[str]:
+    """The structural reference beside graph edit distance, in one figure.
+
+    Three panels, left to right:
+
+    **(a) the structural reference** --- exact at every size, so one series per
+    representation over the whole size range. **(b) exact GED**, which exists
+    only to ``EXACT_CEILING``. **(c) the GED bracket** above the ceiling, LB
+    dashed and UB solid.
+
+    The comparison the figure exists to make is that (b) and (c) hold the
+    *reference* side of the correlation and nothing else: the representation
+    distances behind all three panels are the same cached T-04a matrices. So a
+    difference between (a) and (b)/(c) is a property of the yardstick.
+
+    **The y axis is genuinely shared** --- one scale, ticks on (a) only --- and
+    so is the legend. **The x scale is NOT shared, and the figure says so.**
+    Exact GED spans ten strata and the other two span sixty-two; putting all
+    three on one scale would render (b) about 0.4 in wide at this figure width,
+    and stretching (b) to match without a note would misrepresent a tenfold
+    difference in span as a like-for-like axis.
+
+    Panels (b) and (c) stay separate for the reason :func:`figure_one` splits
+    them: above the ceiling the reference is a *bracket*, and a bracket sharing
+    an axis with an exact value invites the reader to read one as the other.
+
+    Args:
+        points: Aggregated points, carrying *reference* and the GED references.
+        out: Output path without an extension.
+        reference: The structural reference drawn in panel (a).
+        ref_label: Human-readable name for *reference*.
+        degenerate: A representation whose own distance **is** *reference*, so
+            its rho is 1.0 by construction. Drawn --- hiding it would be a
+            silent exclusion --- but annotated in panel (a).
+        width: Render width in inches; defaults to the frozen 7.0 in constant.
+            See :func:`figure_one_single_reference` for why passing a narrower
+            value is not sufficient on its own.
+
+    Returns:
+        Paths written.
+
+    Raises:
+        ValueError: If *points* carries no row for *reference*.
+    """
+    plt = _style()
+
+    if not any(p.reference == reference for p in points):
+        raise ValueError(
+            f"no aggregated points for reference {reference!r}; "
+            "the profile was probably built without it"
+        )
+
+    struct_reps = tuple(
+        r
+        for r in design.FIGURE_ORDER
+        if any(p.representation == r and p.reference == reference for p in points)
+    )
+    exact_reps = tuple(
+        r
+        for r in design.FIGURE_ORDER
+        if any(p.representation == r and p.reference == "exact" for p in points)
+    )
+    bracket_reps = _bracket_representations(points)
+
+    # One correction over every point the figure draws, matching this module's
+    # rule that the BH level is local to a figure and stated on it. A combined
+    # figure therefore corrects over more points than either panel alone would,
+    # and the note reports the count.
+    drawn = [
+        p
+        for p in points
+        if (p.reference == reference and p.representation in struct_reps)
+        or (p.reference == "exact" and p.representation in exact_reps)
+        or (p.reference in ("lb", "ub") and p.representation in bracket_reps)
+    ]
+    flags = benjamini_hochberg([p.p_value for p in drawn])
+    significant = {(p.representation, p.reference, p.n) for p, f in zip(drawn, flags) if f}
+
+    figure_width = design.text_width() if width is None else width
+    fig = plt.figure(figsize=(figure_width, 3.35 * figure_width / design.text_width()))
+    # (b) gets more width than its ten strata warrant so its error bars stay
+    # legible; the caption states the scale is per panel.
+    grid = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.62, 1.0], wspace=0.075)
+    ax_struct = fig.add_subplot(grid[0, 0])
+    ax_exact = fig.add_subplot(grid[0, 1], sharey=ax_struct)
+    ax_bracket = fig.add_subplot(grid[0, 2], sharey=ax_struct)
+
+    # Labels come from panel (a) alone. It carries every representation the
+    # figure draws, so labelling the other two as well would repeat entries in
+    # the shared legend.
+    for key in struct_reps:
+        _draw_series(ax_struct, points, key, reference, significant, label=design.BY_KEY[key].short)
+    for key in exact_reps:
+        _draw_series(ax_exact, points, key, "exact", significant, label=None)
+    for key in bracket_reps:
+        for bound in ("lb", "ub"):
+            _draw_series(ax_bracket, points, key, bound, significant, label=None)
+
+    if degenerate is not None and any(
+        p.representation == degenerate and p.reference == reference for p in points
+    ):
+        rep = design.BY_KEY.get(degenerate)
+        ax_struct.annotate(
+            f"{rep.short if rep else degenerate} $\\equiv$ reference ($\\rho \\equiv 1$)",
+            xy=(0.97, 0.905),
+            xycoords="axes fraction",
+            ha="right",
+            va="top",
+            fontsize=design.FS_ANNOT,
+            color="0.30",
+        )
+
+    # The letter goes INSIDE the title, not through design.panel_letter. That
+    # helper stamps at 1.045 in axes fraction, which is where a title with this
+    # module's pad already sits, and the two overlap.
+    titles = (
+        (ax_struct, f"(a) {ref_label}  (exact, every $n$)"),
+        (ax_exact, f"(b) exact GED  ($n \\leq {EXACT_CEILING}$)"),
+        (ax_bracket, f"(c) GED bracket  ($n > {EXACT_CEILING}$)"),
+    )
+    for ax, title in titles:
+        ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+        ax.set_ylim(-0.75, 1.05)
+        ax.set_title(title, fontsize=design.FS_TITLE - 0.6, pad=4.0)
+        design.finish_axes(ax)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=7))
+
+    ax_struct.set_ylabel(
+        r"Spearman $\rho$ (distance vs reference), within equal $n$",
+        fontsize=design.FS_LABEL,
+    )
+    for ax in (ax_exact, ax_bracket):
+        ax.tick_params(labelleft=False)
+
+    ax_bracket.annotate(
+        "dashed: lower bound\nsolid: upper bound",
+        xy=(0.975, 0.03),
+        xycoords="axes fraction",
+        ha="right",
+        va="bottom",
+        fontsize=design.FS_ANNOT,
+        color="0.30",
+    )
+    # Between the axes floor and the legend, not on top of either. The axes stop
+    # at AXES_BOTTOM + 0.07 and the legend hangs from LEGEND_Y, so the label sits
+    # in the gap; placing it at AXES_BOTTOM - 0.085 puts it through the legend.
+    fig.text(
+        0.5,
+        AXES_BOTTOM - 0.012,
+        "graph size $n$   (the panels do not share an x scale)",
+        ha="center",
+        va="top",
+        fontsize=design.FS_LABEL,
+    )
+    fig.text(
+        0.5,
+        0.988,
+        "Same representation distances throughout --- only the reference changes.   "
+        f"○ significant, Benjamini--Hochberg at q = {FDR_Q:g} over all {len(drawn)} points here.",
+        ha="center",
+        va="top",
+        fontsize=design.FS_ANNOT,
+        color="0.30",
+    )
+
+    handles, labels = ax_struct.get_legend_handles_labels()
+    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    fig.subplots_adjust(left=0.088, right=0.992, top=0.868, bottom=AXES_BOTTOM + 0.07)
+    saved = [str(q) for q in design.save(fig, out)]
+    plt.close(fig)
+    return saved
+
+
 def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Path) -> list[str]:
     """Figure 2 --- one panel per representation, datasets broken out.
 
@@ -911,6 +1166,15 @@ def build_parser() -> argparse.ArgumentParser:
             "by construction; drawn but annotated (e.g. wl_subtree under wl)"
         ),
     )
+    ap.add_argument(
+        "--combined",
+        action="store_true",
+        help=(
+            "draw --reference beside exact GED and the GED bracket in one "
+            "three-panel figure with a shared y axis and one legend. Requires "
+            "--reference; the profile must carry that reference AND exact/lb/ub"
+        ),
+    )
     return ap
 
 
@@ -926,12 +1190,44 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    rows = load_rows(args.profile, keep_reference=args.reference)
+    if args.combined and args.reference is None:
+        LOGGER.error("--combined needs --reference; there is nothing to place beside GED")
+        return 2
+
+    if args.combined:
+        # Two passes, deliberately. The regime filter is what keeps an `lb` row
+        # from being drawn where `exact` applies, and it drops every structural
+        # row because a structural reference belongs to no GED regime. So the
+        # GED side is loaded under the filter and the structural side without
+        # it, and they are concatenated -- rather than loosening the filter,
+        # which the three published GED figures also read.
+        rows = load_rows(args.profile) + load_rows(args.profile, keep_reference=args.reference)
+    else:
+        rows = load_rows(args.profile, keep_reference=args.reference)
     if not rows:
         LOGGER.error("no usable rows in %s", args.profile)
         return 1
     points = aggregate(rows)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.combined:
+        stem = args.stem or f"fig1_rho_vs_size_{args.reference}_vs_ged"
+        saved = figure_one_combined(
+            points,
+            args.out_dir / stem,
+            reference=args.reference,
+            ref_label=args.reference_label or args.reference,
+            degenerate=args.degenerate,
+            width=args.width,
+        )
+        LOGGER.info("%s -> %s", stem, ", ".join(saved))
+        LOGGER.info(
+            "%d stratum rows, %d aggregate points, %s beside exact/lb/ub",
+            len(rows),
+            len(points),
+            args.reference,
+        )
+        return 0
 
     if args.reference is not None:
         stem = args.stem or f"fig1_rho_vs_size_{args.reference}"
