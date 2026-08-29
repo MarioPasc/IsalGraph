@@ -54,7 +54,9 @@ def _load_graphs(archive: Path, suite: str, dataset: str) -> dict[str, Any]:
         }
 
 
-def _align(matrix: npt.NDArray[Any], src: npt.NDArray[Any], target: npt.NDArray[Any]) -> npt.NDArray[Any]:
+def _align(
+    matrix: npt.NDArray[Any], src: npt.NDArray[Any], target: npt.NDArray[Any]
+) -> npt.NDArray[Any]:
     """Reorder a square matrix from *src* id order onto *target* id order."""
     pos = {gid: i for i, gid in enumerate(src)}
     idx = np.array([pos[g] for g in target], dtype=np.intp)
@@ -79,15 +81,18 @@ def _load_distance(
 def _load_ged(archive: Path, suite: str, dataset: str, target: npt.NDArray[Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if suite == "suite1":
-        p = archive / "data/source/GED_PRECOMPUTED/extended_merged_exact_ged/computed" / f"{dataset}.npz"
+        ged_dir = "data/source/GED_PRECOMPUTED/extended_merged_exact_ged/computed"
+        p = archive / ged_dir / f"{dataset}.npz"
         if p.exists():
             with np.load(p, allow_pickle=True) as z:
                 src = np.asarray(z["graph_ids"]).astype(str)
                 m = np.asarray(z["ged_matrix"], dtype=np.float64)
-                cert = np.asarray(z["certified_mask"], dtype=bool) if "certified_mask" in z else None
-            out["exact"] = _align(m, src, target) if list(src) != list(target) else m
+                has_cert = "certified_mask" in z
+                cert = np.asarray(z["certified_mask"], dtype=bool) if has_cert else None
+            same = list(src) == list(target)
+            out["exact"] = m if same else _align(m, src, target)
             if cert is not None:
-                out["_exact_mask"] = _align(cert, src, target) if list(src) != list(target) else cert
+                out["_exact_mask"] = cert if same else _align(cert, src, target)
     else:
         p = archive / "data/source/APPROX_GED/LB" / f"{dataset}.npz"
         if p.exists():
@@ -183,7 +188,8 @@ def run_dataset(archive: Path, suite: str, dataset: str) -> list[dict[str, Any]]
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--archive", type=Path, default=Path("/home/mpascual/research/data/isalgraph_archive"))
+    default_archive = Path("/home/mpascual/research/data/isalgraph_archive")
+    ap.add_argument("--archive", type=Path, default=default_archive)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--datasets", default="all")
     args = ap.parse_args()

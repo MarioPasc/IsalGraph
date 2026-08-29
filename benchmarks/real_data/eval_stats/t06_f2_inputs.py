@@ -50,6 +50,17 @@ LOGGER: Final = logging.getLogger(__name__)
 #: in the campaign manifest so a number can never be quoted without its arm.
 REFERENCE_ARM: Final[str] = os.environ.get("T06_REFERENCE_ARM", "isalgraph_pruned")
 
+#: T-28's alternative similarity references, loaded only when this points at a
+#: built tree. Unset -- the default -- and :func:`load_references` behaves exactly
+#: as it did for T-06, so every existing artifact reproduces byte-identically.
+#: This is gate G1: the ``exact``/``lb``/``ub`` columns must be unchanged.
+#:
+#: Layout: ``{T28_REFERENCE_ROOT}/{suite}/{dataset}__{key}.npz`` in the CONTRACTS
+#: section 4 dense schema. The keys become reference names alongside the GED ones.
+#: They are EXPLORATORY: ``t06_f2.CONFIRMATORY_REFERENCES`` keeps them out of the
+#: pre-registered family, so ``N_actual`` stays at 79.
+T28_REFERENCE_ROOT: Final[str] = os.environ.get("T28_REFERENCE_ROOT", "")
+
 #: The two bit conventions F-5 requires to be reported together.
 BIT_CONVENTIONS: Final[tuple[str, str]] = ("entropy_bits", "realised_bits")
 
@@ -265,7 +276,56 @@ def load_references(
                 references["exact"] = _subset_on_ids(
                     np.asarray(z["ged_matrix"], dtype=np.float64), src, target_ids
                 )
+    references.update(_load_t28_references(suite, dataset, target_ids))
     return references
+
+
+def _load_t28_references(
+    suite: str, dataset: str, target_ids: npt.NDArray[Any]
+) -> dict[str, npt.NDArray[Any]]:
+    """Load T-28's alternative similarity references, if a tree is configured.
+
+    Returns an empty mapping when :data:`T28_REFERENCE_ROOT` is unset, which is
+    the default and reproduces T-06 exactly.
+
+    Args:
+        suite: Suite key.
+        dataset: Dataset key.
+        target_ids: Ids to align onto.
+
+    Returns:
+        Named reference matrices keyed by the filename's reference token.
+
+    Raises:
+        ValueError: If a matrix on disk fails the structural gate --- the
+            off-diagonal exact-zero fraction reaching 0.99 is the shape of the
+            silent-zero failure and must abort rather than propagate.
+    """
+    if not T28_REFERENCE_ROOT:
+        return {}
+    root = Path(T28_REFERENCE_ROOT) / suite
+    out: dict[str, npt.NDArray[Any]] = {}
+    for path in sorted(root.glob(f"{dataset}__*.npz")):
+        key = path.stem.split("__", 1)[1]
+        with np.load(path, allow_pickle=True) as z:
+            src = np.asarray(z["graph_ids"]).astype(str)
+            matrix = _subset_on_ids(
+                np.asarray(z["distance_matrix"], dtype=np.float64), src, target_ids
+            )
+        if not np.isfinite(matrix).all():
+            raise ValueError(f"{path}: non-finite entries in reference matrix")
+        n = matrix.shape[0]
+        if n > 1:
+            off = ~np.eye(n, dtype=bool)
+            zero_fraction = float((matrix[off] == 0.0).mean())
+            if zero_fraction >= 0.99:
+                raise ValueError(
+                    f"{path}: off-diagonal exact-zero fraction {zero_fraction:.4f} "
+                    ">= 0.99 -- this is the silent-zero failure shape, not a result"
+                )
+        out[key] = matrix
+        LOGGER.info("t28 reference %s/%s <- %s", suite, dataset, path.name)
+    return out
 
 
 def load_encodings(

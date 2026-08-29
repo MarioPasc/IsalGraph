@@ -77,7 +77,8 @@ def laplacian_spectrum(
         degrees = adjacency.sum(axis=1)
         # An isolated vertex contributes a zero row and column rather than a
         # division by zero; the cohorts are connected, so this is a guard.
-        inv_sqrt = np.where(degrees > _DEGREE_EPS, 1.0 / np.sqrt(np.maximum(degrees, _DEGREE_EPS)), 0.0)
+        safe = np.maximum(degrees, _DEGREE_EPS)
+        inv_sqrt = np.where(degrees > _DEGREE_EPS, 1.0 / np.sqrt(safe), 0.0)
         matrix = np.eye(n, dtype=np.float64) - (inv_sqrt[:, None] * adjacency * inv_sqrt[None, :])
     else:  # pragma: no cover - guarded by the Literal
         raise ValueError(f"unknown spectral variant: {variant!r}")
