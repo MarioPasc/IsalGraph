@@ -103,15 +103,22 @@ def _regime(n: int) -> tuple[str, ...]:
     return ("exact",) if n <= EXACT_CEILING else ("lb", "ub")
 
 
-def load_rows(path: Path) -> list[dict[str, Any]]:
+def load_rows(path: Path, *, keep_reference: str | None = None) -> list[dict[str, Any]]:
     """Load usable stratum rows, dropping degenerate ones.
 
     Args:
         path: ``size_profile.json``.
+        keep_reference: When ``None`` (the default, and what every published
+            figure uses) each row is kept only under the GED regime that applies
+            at its node count --- ``exact`` at or below the ceiling, the
+            ``lb``/``ub`` bracket above it. When a name is given, that reference
+            alone is kept, at **every** node count. T-28's references carry no
+            bracket and no exact ceiling, so the regime filter would otherwise
+            drop every one of their rows silently.
 
     Returns:
-        Rows with a defined rho, restricted to the regime that applies at their
-        node count and to the **primary** D14 arm.
+        Rows with a defined rho, restricted as above and to the **primary** D14
+        arm.
 
     Raises:
         ValueError: If the profile carries an arm this function does not know
@@ -123,7 +130,10 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
     for row in payload["rows"]:
         if row["rho"] is None:
             continue
-        if row["reference"] not in _regime(int(row["n"])):
+        if keep_reference is None:
+            if row["reference"] not in _regime(int(row["n"])):
+                continue
+        elif row["reference"] != keep_reference:
             continue
         # size_profile.json can carry two arms since schema t06.size_profile.2.
         # A profile written with --arm both holds each stratum twice, and without
@@ -440,6 +450,190 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
     return saved
 
 
+def _single_reference_onset(points: list[AggregatePoint], reference: str) -> int | None:
+    """Return the node count beyond which no interval of *reference* excludes zero.
+
+    The bracket version of this test reads ``p.reference != "exact"``, which is
+    meaningless for a reference that has no bracket. Here the whole series is one
+    reference and the question is asked of it directly.
+
+    Args:
+        points: Aggregated points.
+        reference: The single reference name.
+
+    Returns:
+        The onset node count, or ``None`` when every size still resolves.
+    """
+    sel = [p for p in points if p.reference == reference]
+    resolved = {p.n for p in sel if not p.ci_lo <= 0.0 <= p.ci_hi}
+    covered = sorted({p.n for p in sel if p.ci_lo <= 0.0 <= p.ci_hi})
+    return next((n for n in covered if not any(m >= n for m in resolved)), None)
+
+
+def figure_one_single_reference(
+    points: list[AggregatePoint],
+    out: Path,
+    *,
+    reference: str,
+    ref_label: str,
+) -> list[str]:
+    """Figure 1 for a reference that carries no bracket.
+
+    The same figure as :func:`figure_one` --- same split at ``n = EXACT_CEILING``,
+    same panel geometry, same styling, same Benjamini-Hochberg treatment --- so
+    the two can be read side by side. One thing differs, and it is a property of
+    the reference rather than a design choice: graph edit distance above the
+    exact ceiling is a *bracket*, drawn as a dashed lower and a solid upper bound
+    per panel, whereas the Weisfeiler-Lehman kernel distance is computed exactly
+    at every size. Each small multiple therefore carries **one** line, not two.
+
+    ``design.line_kwargs`` is called with ``reference=None`` deliberately: its
+    ``REFERENCE_LINESTYLE`` table is keyed by ``exact``/``lb``/``ub`` and would
+    raise on any other name. ``None`` selects the representation's own linestyle,
+    which is the right semantics for a series that carries no bound.
+
+    Args:
+        points: Aggregated points; only those carrying *reference* are drawn.
+        out: Output path without an extension.
+        reference: The reference key, e.g. ``wl``.
+        ref_label: Human-readable name for the titles, e.g. ``WL kernel``.
+
+    Returns:
+        Paths written.
+    """
+    plt = _style()
+
+    sel_all = [p for p in points if p.reference == reference]
+    low = [p for p in sel_all if p.n <= EXACT_CEILING]
+    high = [p for p in sel_all if p.n > EXACT_CEILING]
+
+    left_reps = tuple(r for r in design.ORDER if any(p.representation == r for p in low))
+    panel_reps = tuple(r for r in design.ORDER if any(p.representation == r for p in high))
+
+    flags = benjamini_hochberg([p.p_value for p in sel_all])
+    significant = {(p.representation, p.n) for p, f in zip(sel_all, flags) if f}
+
+    ncols = 2
+    nrows = max(1, -(-(len(panel_reps) + 1) // ncols))
+    fig = plt.figure(figsize=(design.text_width(), 1.15 * nrows + 0.95))
+    grid = fig.add_gridspec(
+        nrows, 1 + ncols, width_ratios=[1.55, *([1.0] * ncols)], wspace=0.13, hspace=0.30
+    )
+    axis = fig.add_subplot(grid[:, 0])
+
+    for key in left_reps:
+        rep = design.BY_KEY.get(key)
+        if rep is None:
+            continue
+        series = sorted((p for p in low if p.representation == key), key=lambda p: p.n)
+        axis.errorbar(
+            [p.n for p in series],
+            [p.rho for p in series],
+            yerr=[
+                [p.rho - p.ci_lo for p in series],
+                [p.ci_hi - p.rho for p in series],
+            ],
+            elinewidth=0.55,
+            capsize=1.4,
+            label=rep.short,
+            **design.line_kwargs(rep, None),
+        )
+        marked = [(p.n, p.rho) for p in series if (key, p.n) in significant]
+        if marked and (rep.family in design.PRIMARY_FAMILIES or rep.is_ours):
+            axis.scatter(
+                [m[0] for m in marked],
+                [m[1] for m in marked],
+                s=design.MS_SIGNIFICANT,
+                facecolors="none",
+                edgecolors=rep.colour,
+                linewidths=0.85,
+                zorder=rep.zorder + 1,
+            )
+    axis.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+    axis.set_title(f"{ref_label}  ($n \\leq {EXACT_CEILING}$)", fontsize=design.FS_TITLE, pad=3)
+    design.finish_axes(
+        axis,
+        xlabel="graph size $n$",
+        ylabel=rf"Spearman $\rho$ (distance vs {ref_label}), within equal $n$",
+    )
+    axis.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=10))
+    axis.set_ylim(-0.75, 1.05)
+
+    envelope: dict[int, list[float]] = {}
+    for p in high:
+        envelope.setdefault(p.n, []).append(p.rho)
+    span = sorted(envelope)
+    onset = _single_reference_onset(points, reference)
+
+    panels: list[str | None] = [*panel_reps, None]
+    for index, key in enumerate(panels):
+        ax = fig.add_subplot(grid[index // ncols, 1 + index % ncols])
+        if span:
+            ax.fill_between(
+                span,
+                [min(envelope[n]) for n in span],
+                [max(envelope[n]) for n in span],
+                color="0.55",
+                alpha=0.20,
+                linewidth=0,
+                zorder=1,
+            )
+        for one in panel_reps if key is None else (key,):
+            rep = design.BY_KEY[one]
+            series = sorted((p for p in high if p.representation == one), key=lambda p: p.n)
+            if not series:
+                continue
+            style = design.line_kwargs(rep, None, primary=frozenset(design.Family))
+            style["marker"] = "None"
+            style["linewidth"] = design.LW_REFERENCE if rep.is_ours else 0.95
+            if key is None and not rep.is_ours:
+                style["alpha"] = 0.55
+            ax.plot([p.n for p in series], [p.rho for p in series], **style)
+        if onset is not None and span:
+            ax.axvspan(onset - 0.5, max(span) + 1, color="0.85", alpha=0.6, zorder=0, linewidth=0)
+        ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
+        ax.set_ylim(-0.75, 1.05)
+        ax.set_title(
+            "every arm" if key is None else design.BY_KEY[key].short,
+            fontsize=design.FS_TITLE - 0.7,
+            pad=2,
+            color="0.15" if key is None else design.BY_KEY[key].colour,
+        )
+        ax.grid(True, alpha=design.GRID_ALPHA, linewidth=design.GRID_LW)
+        ax.tick_params(labelsize=design.FS_TICK - 0.8)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=4))
+        if index // ncols != nrows - 1:
+            ax.set_xticklabels([])
+        if index % ncols != 0:
+            ax.set_yticklabels([])
+        if index == len(panels) - 1:
+            ax.set_xlabel("graph size $n$", fontsize=design.FS_LABEL - 0.5)
+
+    header = (
+        f"{ref_label}  ($n > {EXACT_CEILING}$)\n"
+        "no bracket: one exact series;  grey: the whole field"
+    )
+    if onset:
+        header += f";  shaded: $\\rho$ not separable from 0 ($n>{onset}$)"
+    fig.text(
+        0.695,
+        0.995,
+        header,
+        ha="center",
+        va="top",
+        fontsize=design.FS_TITLE - 0.6,
+        color="0.25",
+        linespacing=1.35,
+    )
+
+    handles, labels = axis.get_legend_handles_labels()
+    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    fig.subplots_adjust(left=0.075, right=0.99, top=0.875, bottom=AXES_BOTTOM)
+    saved = [str(q) for q in design.save(fig, out)]
+    plt.close(fig)
+    return saved
+
+
 def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Path) -> list[str]:
     """Figure 2 --- one panel per representation, datasets broken out.
 
@@ -676,6 +870,25 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--profile", type=Path, required=True, help="size_profile.json")
     ap.add_argument("--out-dir", type=Path, required=True, help="figure output directory")
+    ap.add_argument(
+        "--reference",
+        default=None,
+        help=(
+            "draw the single-reference variant of figure 1 for this reference "
+            "(e.g. 'wl') instead of the three GED figures. The reference carries "
+            "no bracket, so each small multiple shows one exact series"
+        ),
+    )
+    ap.add_argument(
+        "--reference-label",
+        default=None,
+        help="human-readable name for --reference in the titles, e.g. 'WL kernel'",
+    )
+    ap.add_argument(
+        "--stem",
+        default=None,
+        help="output basename; defaults to fig1_rho_vs_size_<reference>",
+    )
     return ap
 
 
@@ -691,12 +904,27 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    rows = load_rows(args.profile)
+    rows = load_rows(args.profile, keep_reference=args.reference)
     if not rows:
         LOGGER.error("no usable rows in %s", args.profile)
         return 1
     points = aggregate(rows)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.reference is not None:
+        stem = args.stem or f"fig1_rho_vs_size_{args.reference}"
+        label = args.reference_label or args.reference
+        saved = figure_one_single_reference(
+            points, args.out_dir / stem, reference=args.reference, ref_label=label
+        )
+        LOGGER.info("%s -> %s", stem, ", ".join(saved))
+        LOGGER.info(
+            "%d stratum rows, %d aggregate points, reference=%s",
+            len(rows),
+            len(points),
+            args.reference,
+        )
+        return 0
 
     for name, saved in (
         ("fig1_rho_vs_size", figure_one(points, args.out_dir / "fig1_rho_vs_size")),

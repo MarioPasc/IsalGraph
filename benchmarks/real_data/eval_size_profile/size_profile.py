@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -24,6 +25,14 @@ import numpy.typing as npt
 from scipy import stats
 
 LOGGER: Final = logging.getLogger(__name__)
+
+#: T-28's alternative similarity references, loaded only when this points at a
+#: built tree. Unset -- the default -- and :func:`_load_reference` returns exactly
+#: what it returned for T-06, so the published size profile reproduces.
+#:
+#: Layout: ``{T28_REFERENCE_ROOT}/{suite}/{dataset}__{key}.npz``, dense CONTRACTS
+#: section 4 schema. Same contract as ``t06_f2_inputs.T28_REFERENCE_ROOT``.
+T28_REFERENCE_ROOT: Final[str] = os.environ.get("T28_REFERENCE_ROOT", "")
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -239,21 +248,48 @@ def _load_reference(
     out: dict[str, tuple[FloatArray, npt.NDArray[Any]]] = {}
     if suite == "suite1":
         path = ged_root / f"{dataset}.npz"
-        if not path.exists():
-            return out
+        if path.exists():
+            with np.load(path, allow_pickle=True) as z:
+                out["exact"] = (
+                    np.asarray(z["ged_matrix"], dtype=np.float64),
+                    np.asarray(z["graph_ids"]).astype(str),
+                )
+    else:
+        path = approx_root / "LB" / f"{dataset}.npz"
+        if path.exists():
+            with np.load(path, allow_pickle=True) as z:
+                ids = np.asarray(z["graph_ids"]).astype(str)
+                out["lb"] = (np.asarray(z["lb_matrix"], dtype=np.float64), ids)
+                out["ub"] = (np.asarray(z["ub_matrix"], dtype=np.float64), ids)
+    out.update(_load_t28_references(suite, dataset))
+    return out
+
+
+def _load_t28_references(
+    suite: str, dataset: str
+) -> dict[str, tuple[FloatArray, npt.NDArray[Any]]]:
+    """Load T-28's alternative similarity references, if a tree is configured.
+
+    Returns an empty mapping when :data:`T28_REFERENCE_ROOT` is unset, which is
+    the default and reproduces the T-06 size profile exactly.
+
+    Args:
+        suite: Suite key.
+        dataset: Dataset key.
+
+    Returns:
+        Mapping from reference name to ``(matrix, graph_ids)``.
+    """
+    if not T28_REFERENCE_ROOT:
+        return {}
+    out: dict[str, tuple[FloatArray, npt.NDArray[Any]]] = {}
+    for path in sorted((Path(T28_REFERENCE_ROOT) / suite).glob(f"{dataset}__*.npz")):
+        key = path.stem.split("__", 1)[1]
         with np.load(path, allow_pickle=True) as z:
-            out["exact"] = (
-                np.asarray(z["ged_matrix"], dtype=np.float64),
+            out[key] = (
+                np.asarray(z["distance_matrix"], dtype=np.float64),
                 np.asarray(z["graph_ids"]).astype(str),
             )
-        return out
-    path = approx_root / "LB" / f"{dataset}.npz"
-    if not path.exists():
-        return out
-    with np.load(path, allow_pickle=True) as z:
-        ids = np.asarray(z["graph_ids"]).astype(str)
-        out["lb"] = (np.asarray(z["lb_matrix"], dtype=np.float64), ids)
-        out["ub"] = (np.asarray(z["ub_matrix"], dtype=np.float64), ids)
     return out
 
 
