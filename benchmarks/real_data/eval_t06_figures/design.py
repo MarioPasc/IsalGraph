@@ -14,7 +14,7 @@ Colour is pinned per representation here and cannot drift.
 
 **The taxonomy is load-bearing, not decoration.** ``T-06-FRAMING.md`` section 2
 freezes the claim as *"the most compact of the canonical-code representations;
-edge-list serialisations beat it at scale"*. That sentence is only checkable if
+edge-list serializations beat it at scale"*. That sentence is only checkable if
 the figure shows which family each row belongs to, so :class:`Family` is drawn
 (marker shape, dash pattern) as well as named.
 
@@ -63,7 +63,7 @@ LW_REFERENCE: Final[float] = 1.9
 MS_POINT: Final[float] = 3.0
 MS_SIGNIFICANT: Final[float] = 46.0
 
-#: Alpha for a confidence band and for a de-emphasised series.
+#: Alpha for a confidence band and for a de-emphasized series.
 ALPHA_BAND: Final[float] = 0.13
 ALPHA_MUTED: Final[float] = 0.65
 
@@ -77,7 +77,7 @@ INK_SEPARATOR: Final[str] = "0.50"
 INK_FLOOR: Final[str] = "0.20"
 
 #: Shading for a region of the x axis where only one dataset contributes, so
-#: the pooled curve is a composition artefact rather than a trend.
+#: the pooled curve is a composition artifact rather than a trend.
 INK_THIN: Final[str] = "0.90"
 
 #: False-discovery rate used by every descriptive figure in this package.
@@ -102,27 +102,27 @@ class Family(enum.Enum):
         CANONICAL_CODE: The code *is* the canonical form -- canonicity is
             intrinsic to how the string is built (IsalGraph, gSpan min-DFS,
             AGM CAM).
-        CANONICALISED_SERIALISATION: A standard serialisation applied after
-            an external canonical labelling, i.e. nauty (nauty-graph6,
+        CANONICALIZED_SERIALIZATION: A standard serialization applied after
+            an external canonical labeling, i.e. nauty (nauty-graph6,
             nauty-sparse6).
-        RAW_SERIALISATION: A serialisation of the incident labelling, with no
-            canonicalisation at all (adjacency, graph6, sparse6).
+        RAW_SERIALIZATION: A serialization of the incident labeling, with no
+            canonicalization at all (adjacency, graph6, sparse6).
         KERNEL: A feature map with no message length (WL subtree).
         BASELINE: The trivial descriptive null.
     """
 
     CANONICAL_CODE = "canonical code"
-    CANONICALISED_SERIALISATION = "canonicalised serialisation"
-    RAW_SERIALISATION = "raw serialisation"
+    CANONICALIZED_SERIALIZATION = "canonicalized serialization"
+    RAW_SERIALIZATION = "raw serialization"
     KERNEL = "kernel"
     BASELINE = "baseline"
 
 
-#: Dash pattern per family, so the taxonomy survives a greyscale print.
+#: Dash pattern per family, so the taxonomy survives a grayscale print.
 FAMILY_LINESTYLE: Final[dict[Family, Any]] = {
     Family.CANONICAL_CODE: "-",
-    Family.CANONICALISED_SERIALISATION: (0, (5, 1.4)),
-    Family.RAW_SERIALISATION: (0, (1.6, 1.4)),
+    Family.CANONICALIZED_SERIALIZATION: (0, (5, 1.4)),
+    Family.RAW_SERIALIZATION: (0, (1.6, 1.4)),
     Family.KERNEL: (0, (5, 1.2, 1, 1.2)),
     Family.BASELINE: (0, (3, 1.2, 1, 1.2)),
 }
@@ -142,7 +142,7 @@ class Representation:
         family: Design point, see :class:`Family`.
         is_ours: The reference arm, drawn heavier and on top.
         canonical: Isomorphic graphs receive identical encodings. Measured,
-            not declared: E1 relabelling sensitivity psi = 0 exactly.
+            not declared: E1 relabeling sensitivity psi = 0 exactly.
         complete: Equal encodings imply isomorphic graphs (E2).
         reversible: ``decode(encode(G))`` recovers the graph.
         handles_disconnected: Encodes disconnected graphs and isolated
@@ -155,6 +155,11 @@ class Representation:
             T-06 cohorts. A competitor that refuses above a size cannot be
             beaten above it, so a pooled win rate against it is a statement
             about small graphs only.
+        in_figures: Whether the arm is drawn. ``False`` keeps a row in every
+            table and out of every figure -- for an arm whose *number* is a
+            result but whose *curve* is not readable. It is never a way to
+            hide a bad result: a comparator that loses stays drawn, and the
+            only arms this is set on are our own.
     """
 
     key: str
@@ -172,6 +177,7 @@ class Representation:
     metric_admissible: bool = False
     bit_countable: bool = True
     max_n: int | None = None
+    in_figures: bool = True
 
     @property
     def linestyle(self) -> Any:
@@ -197,6 +203,34 @@ class Representation:
 #: backend's declared ``Capability`` set), ``metric_admissible`` from
 #: ``competitors.md`` 9.1 -- ``k = 3``, the three excluded fail F3 at 1/50 --
 #: and ``max_n`` from the encoding cells in ``data/source/T06/encodings/``.
+#:
+#: **Two measured representations are deliberately absent: ``graph6`` and
+#: ``sparse6``, the raw incident-labeling serializations.** Their cells still
+#: exist in every archive and nothing was recomputed; they are withdrawn from
+#: the reported comparison in favor of their nauty-canonicalized forms.
+#:
+#: The reason is that one of them carries no information at all. graph6's
+#: length is a function of ``n`` alone, so canonicalizing permutes the bits
+#: without changing how many there are: over the T06_exhaustive cohort the
+#: ``graph6`` and ``nauty_graph6`` medians agree at **every** node count
+#: (36/36 at ``n = 8``, 198/198 at ``n = 20``, 786/786 at ``n = 40``,
+#: 1776/1776 at ``n = 60``). Its curve was drawn exactly underneath nauty's
+#: and its table row duplicated nauty's to the bit. ``sparse6`` does differ
+#: -- 324 against nauty-sparse6's 336 at ``n = 40`` -- but only because the
+#: incident labeling it happens to be handed compresses better than the
+#: canonical one, which is a property of the input order rather than of the
+#: format, and it is not invariant (``psi`` 0.54--1.15, F3 at 1/50), so no
+#: correlation column was ever defined for it.
+#:
+#: **What this costs, stated because it is not free.** ``sparse6`` was the
+#: most compact serialization in the field and it was not metric-admissible,
+#: which is what let the head-to-head caption say that neither axis has a
+#: single leader. With it withdrawn the most compact serialization is
+#: nauty-sparse6, which *is* admissible, so that sentence is no longer true
+#: and has been removed rather than reworded. The dominance nauty-sparse6
+#: holds over the instruction string above ``n = 20`` now stands unmitigated
+#: in both captions. It was already reported; it is simply no longer paired
+#: with a consolation.
 REPRESENTATIONS: Final[tuple[Representation, ...]] = (
     Representation(
         key="isalgraph_pruned",
@@ -237,7 +271,7 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
         tex=r"\textsc{IsalGraph}$^{\dagger}$",
         # Deliberately far from the pruned arm's #AA3377. The two curves
         # coincide above n ~ 28 -- 96.8 % of the n = 40 stratum falls back to
-        # the pruned string -- so a near-neighbour magenta made the pair
+        # the pruned string -- so a near-neighbor magenta made the pair
         # unreadable exactly where the reader needs to see them separate.
         colour="#EE3377",
         marker="d",
@@ -249,6 +283,17 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
         handles_disconnected=False,
         metric_admissible=True,
         max_n=98,
+        # Tabled, not drawn. The arm is the T06_exhaustive campaign's whole
+        # result and its bit counts are the headline -- 114.1 at n = 20
+        # against the pruned arm's 136.3 -- so the row stays. The *curve*
+        # does not survive the same reading: the D14 cascade substitutes the
+        # pruned string when the 30 s budget expires, at 41.2 % of the
+        # n = 21-30 stratum and 96.8 % of n = 40, so above n ~ 28 this line
+        # is the pruned line wearing a second colour. Two near-identical
+        # curves in one figure read as a measured agreement between two
+        # methods; here they are one method drawn twice, which is the more
+        # misleading of the two ways to be wrong.
+        in_figures=False,
     ),
     Representation(
         key="isalgraph_greedy",
@@ -257,7 +302,7 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
         tex=r"\textsc{IsalGraph}$_{\mathrm{greedy}}$",
         colour="#CC6677",
         marker="h",
-        family=Family.RAW_SERIALISATION,
+        family=Family.RAW_SERIALIZATION,
         is_ours=True,
         canonical=False,
         complete=False,
@@ -299,11 +344,11 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
     Representation(
         key="nauty_graph6",
         short="nauty graph6",
-        long="nauty canonical labelling, graph6",
+        long="nauty canonical labeling, graph6",
         tex="nauty-graph6",
         colour="#4477AA",
         marker="^",
-        family=Family.CANONICALISED_SERIALISATION,
+        family=Family.CANONICALIZED_SERIALIZATION,
         canonical=True,
         complete=True,
         reversible=True,
@@ -314,42 +359,16 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
     Representation(
         key="sparse6_nauty",
         short="nauty sparse6",
-        long="nauty canonical labelling, sparse6",
+        long="nauty canonical labeling, sparse6",
         tex="nauty-sparse6",
         colour="#66CCEE",
         marker="v",
-        family=Family.CANONICALISED_SERIALISATION,
+        family=Family.CANONICALIZED_SERIALIZATION,
         canonical=True,
         complete=True,
         reversible=True,
         handles_disconnected=True,
         metric_admissible=True,
-        max_n=98,
-    ),
-    Representation(
-        key="graph6",
-        short="graph6",
-        long="graph6 (incident labelling)",
-        tex="graph6",
-        colour="#999933",
-        marker="^",
-        family=Family.RAW_SERIALISATION,
-        reversible=True,
-        handles_disconnected=True,
-        metric_admissible=False,
-        max_n=98,
-    ),
-    Representation(
-        key="sparse6",
-        short="sparse6",
-        long="sparse6 (incident labelling)",
-        tex="sparse6",
-        colour="#DDCC77",
-        marker="v",
-        family=Family.RAW_SERIALISATION,
-        reversible=True,
-        handles_disconnected=True,
-        metric_admissible=False,
         max_n=98,
     ),
     Representation(
@@ -359,7 +378,7 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
         tex="adjacency",
         colour="#888888",
         marker="P",
-        family=Family.RAW_SERIALISATION,
+        family=Family.RAW_SERIALIZATION,
         reversible=True,
         handles_disconnected=True,
         metric_admissible=False,
@@ -396,8 +415,13 @@ REPRESENTATIONS: Final[tuple[Representation, ...]] = (
 
 BY_KEY: Final[dict[str, Representation]] = {r.key: r for r in REPRESENTATIONS}
 
-#: Draw order. A figure filters this rather than defining its own tuple.
+#: Registry order, every row. **Tables iterate this.**
 ORDER: Final[tuple[str, ...]] = tuple(r.key for r in REPRESENTATIONS)
+
+#: Draw order. **Figures iterate this**, and it is :data:`ORDER` minus the
+#: arms flagged ``in_figures=False``. A figure filters this rather than
+#: defining its own tuple.
+FIGURE_ORDER: Final[tuple[str, ...]] = tuple(r.key for r in REPRESENTATIONS if r.in_figures)
 
 #: The reference arm every paired comparison is taken against.
 REFERENCE_KEY: Final[str] = "isalgraph_pruned"
@@ -426,11 +450,14 @@ REFERENCE_LINESTYLE: Final[dict[str, Any]] = {"exact": "-", "lb": (0, (4, 1.5)),
 # ---------------------------------------------------------------------------
 
 
-def present(keys: object) -> tuple[Representation, ...]:
+def present(keys: object, *, drawable_only: bool = True) -> tuple[Representation, ...]:
     """Return the registered representations among *keys*, in draw order.
 
     Args:
         keys: Any iterable of backend names.
+        drawable_only: Drop arms flagged ``in_figures=False``. This is the
+            default because every caller is a figure; pass ``False`` to get
+            the full registry order restricted to *keys*.
 
     Returns:
         Registered representations, ordered by :data:`ORDER`. Unknown names
@@ -439,7 +466,9 @@ def present(keys: object) -> tuple[Representation, ...]:
         starts drifting between figures.
     """
     have = set(keys)  # type: ignore[call-overload]
-    return tuple(r for r in REPRESENTATIONS if r.key in have)
+    return tuple(
+        r for r in REPRESENTATIONS if r.key in have and (r.in_figures or not drawable_only)
+    )
 
 
 def tex_name(key: str) -> str:
@@ -459,11 +488,11 @@ def tex_name(key: str) -> str:
 #: drawn dashed and half-transparent, so the eye reads the comparison the
 #: sentence is scoped to -- ``T-06-FRAMING.md`` 2 scopes the compactness claim
 #: to the canonical codes -- without any row leaving the figure. Muting is not
-#: hiding: every representation is still drawn, still labelled, and appears at
+#: hiding: every representation is still drawn, still labeled, and appears at
 #: equal weight in the tables.
 PRIMARY_FAMILIES: Final[frozenset[Family]] = frozenset({Family.CANONICAL_CODE})
 
-#: Alpha and dash pattern applied to a de-emphasised series.
+#: Alpha and dash pattern applied to a de-emphasized series.
 SECONDARY_ALPHA: Final[float] = 0.5
 SECONDARY_DASH: Final[Any] = (0, (4, 1.6))
 
@@ -551,10 +580,19 @@ def style() -> Any:
 
 
 def text_width() -> float:
-    """Return the IEEE full-text-width figure width in inches."""
+    """Return the manuscript's text width in inches.
+
+    **Not** :data:`IEEE_TEXT_WIDTH_INCHES`. That constant is the 7.0 in
+    two-column IEEE print area, and this manuscript is single-column
+    letterpaper with 4.8 cm side margins, which leaves 4.7382 in. Point
+    sizes inside a figure are absolute, so a figure rendered at 7.0 and
+    placed at ``\\textwidth`` has every label scaled by 0.674 -- 5.5 pt
+    labels reach the page at 3.7 pt. Rendering at the placement width is
+    the only way a declared size is the printed size.
+    """
     from benchmarks import plotting_styles
 
-    return float(plotting_styles.IEEE_TEXT_WIDTH_INCHES)
+    return float(plotting_styles.PATREC_TEXT_WIDTH_INCHES)
 
 
 def column_width() -> float:

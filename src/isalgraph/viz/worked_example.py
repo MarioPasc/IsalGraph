@@ -236,6 +236,7 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
     secondary_node: NodeId | None = None,
     node_radius: float = 0.17,
     label_fontsize: float = 6.0,
+    label_dy: float = 0.0,
     pointer_ring_scale: float | None = None,
     accent_solid: bool = False,
 ) -> None:
@@ -261,6 +262,12 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
         secondary_node: Node under the secondary pointer.
         node_radius: Node radius in axis units.
         label_fontsize: Node-label point size.
+        label_dy: Downward shift of the node label, in node-radius units.
+            ``va="center"`` centres a digit on its font's full bounding
+            box, descender space included, and a digit has no descender,
+            so it prints visibly high inside its disc. A shift of about
+            ``0.12`` puts it on the disc's optical centre. Zero by
+            default, which is what every committed figure was drawn with.
         pointer_ring_scale: Radius of the two pointer rings, as a
             multiple of *node_radius*. The default of ``None`` keeps the
             historical 1.26 and 1.40, which draw the pointers as haloes
@@ -372,7 +379,7 @@ def draw_state_graph(  # noqa: PLR0913  -- one parameter per element state
         )
         ax.text(
             x,
-            y,
+            y - label_dy * node_radius,
             str(node),
             ha="center",
             va="center",

@@ -50,7 +50,7 @@ LOGGER: Final = logging.getLogger(__name__)
 #: Per-stratum sign-test level for the Claim B head-to-head.
 SIGN_TEST_ALPHA: Final[float] = 0.05
 
-#: Relabelling sensitivity ``psi`` under the primary distance, measured over
+#: Relabeling sensitivity ``psi`` under the primary distance, measured over
 #: eleven draws in the T-04a E1 annex. Exactly zero for every canonical
 #: representation; the three excluded ones are given as their measured range.
 #: Source: ``competitors.md`` 9.4.
@@ -58,14 +58,15 @@ PSI_MEASURED: Final[dict[str, str]] = {
     "isalgraph_pruned": "0",
     "isalgraph_canonical": "0",
     "isalgraph_exhaustive": "0",
-    # The ablation has no psi under this protocol: T-04a E1 measures relabelling
+    # The ablation has no psi under this protocol: T-04a E1 measures relabeling
     # sensitivity of a *distance*, and Part A was never run for the greedy arm.
     # What the campaign did measure is a different statistic -- the fraction of
-    # relabelling draws that change the string at all, 50.7--91.0 % over n = 5-9
+    # relabeling draws that change the string at all, 50.7--91.0 % over n = 5-9
     # against 0 % for both canonical arms
-    # (``.claude/notes/2026-08-25-t06-exhaustive/log.md``, "The canonicalisation
-    # ablation, measured"). A rate is not a magnitude -- sparse6's psi is 1.15 --
-    # so it must not be printed in this column.
+    # (``.claude/notes/2026-08-25-t06-exhaustive/log.md``, "The canonicalization
+    # ablation, measured"). A rate is not a magnitude -- the withdrawn sparse6
+    # row measured psi 1.15 on the same scale -- so it must not be printed in
+    # this column.
     "isalgraph_greedy": "--",
     "min_dfs": "0",
     "agm_cam": "0",
@@ -73,12 +74,10 @@ PSI_MEASURED: Final[dict[str, str]] = {
     "sparse6_nauty": "0",
     "wl_subtree": "0",
     "adjacency": "0.07--0.74",
-    "graph6": "0.32--1.00",
-    "sparse6": "0.54--1.15",
     "size_null": "0",
 }
 
-#: Measured collision behaviour. The six complete invariants returned zero
+#: Measured collision behavior. The six complete invariants returned zero
 #: collisions and their zero set was identical to the VF2-certified isomorphic
 #: set; WL returned 45 false isomorphism certificates in 183,016 comparisons.
 #: Source: ``competitors.md`` 9.4 E2.
@@ -98,7 +97,6 @@ COST_DRIVER: Final[dict[str, str]] = {
 #: a censored graph does carry an encoding. Source: ``REPORT.md``.
 COMPLETION_FLOOR: Final[dict[str, float]] = {
     "adjacency": 1.0,
-    "graph6": 1.0,
     "isalgraph_canonical": 1.0,
     "isalgraph_pruned": 1.0,
     # Both new arms are complete under D14 by construction, not by luck. The
@@ -111,14 +109,13 @@ COMPLETION_FLOOR: Final[dict[str, float]] = {
     "isalgraph_greedy": 1.0,
     "nauty_graph6": 1.0,
     "size_null": 1.0,
-    "sparse6": 1.0,
     "sparse6_nauty": 1.0,
     "wl_subtree": 1.0,
     "min_dfs": 0.9478,
     "agm_cam": 0.0615,
 }
 
-#: The categorical property no serialisation has: the encoding is a program
+#: The categorical property no serialization has: the encoding is a program
 #: that constructs the graph, executable prefix by prefix. It is where the
 #: contribution actually lives and it is not adjudicated by rho or by bits.
 EXECUTABLE: Final[frozenset[str]] = frozenset(
@@ -310,12 +307,12 @@ def properties_table() -> str:
         r"\begin{table*}[t]",
         r"\centering",
         r"\caption{Side-by-side comparison of graph representations on R1.2's five axes. "
-        r"Every cell is measured, not asserted: $\psi$ is relabelling sensitivity under each "
+        r"Every cell is measured, not asserted: $\psi$ is relabeling sensitivity under each "
         r"representation's own primary distance (T-04a~E1, eleven draws); the collision column is "
         r"the false-isomorphism-certificate rate over 183{,}016 comparisons (T-04a~E2); "
         r"\emph{metric} is whether any candidate distance passed the axioms, invariance and "
-        r"non-degeneracy filters F1--F4, and the three representations that fail do so at "
-        r"$1/50$ relabellings; \emph{bits} is whether a message length is defined at all. "
+        r"non-degeneracy filters F1--F4, and every representation that fails does so at "
+        r"$1/50$ relabelings; \emph{bits} is whether a message length is defined at all. "
         r"$n_{\max}$ is the largest graph the backend encoded in our cohorts and "
         r"\emph{compl.} its completion floor over fifteen dataset cells. "
         r"The downstream-learning axis is not evaluated in this work for any representation.}",
@@ -462,10 +459,8 @@ def head_to_head_table(
         r"\textbf{nauty-sparse6 is more compact and better correlated than the instruction string "
         r"above $n=20$, under both ends of the bracket.} It is the only representation that "
         r"dominates ours on both axes, and it is reported here rather than omitted. "
-        r"Neither axis has a single leader across the whole field: the most compact serialisation "
-        r"(sparse6) admits no distance satisfying the metric axioms, and the best-correlating "
-        r"representation (WL subtree) admits no bit count, so each axis leader is undefined on the "
-        r"other axis.} \\",
+        r"The best-correlating representation (WL subtree) admits no bit count at all, so it "
+        r"cannot be ranked on compactness; every other row is measured on both axes.} \\",
         r"\bottomrule",
         r"\end{tabular}",
         r"\end{table*}",
@@ -492,8 +487,6 @@ PAYLOAD_PER_BYTE: Final[dict[str, float]] = {
     "agm_cam": 6.00,
     "nauty_graph6": 6.00,
     "sparse6_nauty": 5.50,
-    "graph6": 6.00,
-    "sparse6": 5.45,
     "adjacency": 7.50,
 }
 
@@ -509,11 +502,12 @@ def bit_overhead_table() -> str:
         r"\centering",
         r"\caption{What the realised-bytes convention charges. Each entry is the median "
         r"$8\,b_{\mathrm{entropy}}/b_{\mathrm{realised}}$ over both cohorts: how many payload bits "
-        r"a stored byte carries under each format's own serialisation. graph6 and sparse6 pay a "
-        r"published ASCII-printability cost; the adjacency triangle is stored packed; the "
+        r"a stored byte carries under each format's own serialization. The graph6 and sparse6 "
+        r"wire formats pay a published ASCII-printability cost; the adjacency triangle is stored "
+        r"packed; the "
         r"instruction string has no standardised wire format and is rendered one character per "
         r"symbol, which charges it eight bits for a symbol drawn from a nine-letter alphabet. "
-        r"gSpan min-DFS suffers the same artefact and is flagged \emph{inflated} in our "
+        r"gSpan min-DFS suffers the same artifact and is flagged \emph{inflated} in our "
         r"implementation. The realised-bytes column is therefore not comparable across formats, "
         r"which is why the entropy bound is reported beside it throughout.}",
         r"\label{tab:bit-overhead}",
@@ -727,15 +721,16 @@ def summary_table(
         r"correlation columns are not rankings: each is the median per-stratum $\Delta\rho$ "
         r"\emph{paired against the instruction string on identical strata}, positive where the "
         r"instruction string correlates better, with \textbf{bold} a significant sign test in its "
-        r"favour and \underline{underline} one against it. "
+        r"favor and \underline{underline} one against it. "
         r"The marginal median $\rho$ is deliberately not printed: it ranks nauty-graph6 above the "
         r"instruction string on the exact band, where the paired test rejects the other way at "
         r"$p=0.041$ with the instruction string higher on 15 strata by a median of $+0.14$ and "
         r"lower on 5 by $-0.05$. "
-        r"$\psi$ is relabelling sensitivity under the representation's own primary distance "
+        r"$\psi$ is relabeling sensitivity under the representation's own primary distance "
         r"(T-04a~E1, eleven draws); \emph{collis.} is the false-isomorphism-certificate rate over "
         r"183{,}016 comparisons (T-04a~E2); \emph{metric} is whether any candidate distance passed "
-        r"the F1--F4 filters, and the three that fail do so at $1/50$ relabellings and therefore "
+        r"the F1--F4 filters, and every representation that fails does so at $1/50$ relabelings "
+        r"and therefore "
         r"carry no correlation column at all; \emph{exec.} is whether every prefix of the encoding "
         r"is itself a valid program constructing a subgraph. "
         r"Bit counts are the pooled median entropy bound $L\log_2|\Sigma|$ at two anchor sizes; "
@@ -743,7 +738,11 @@ def summary_table(
         r"finding. Correlations are measured within equal-$n$ strata, where $|n_i-n_j|$ is "
         r"identically zero and the size channel is removed by construction; both ends of the "
         r"proven GED bracket are printed because they disagree on two of four comparators. "
-        r"graph6 and nauty-graph6 carry identical bit counts by construction. "
+        r"The raw graph6 and sparse6 serializations are withdrawn from this comparison in "
+        r"favor of their nauty-canonicalized forms: graph6's length is a function of $n$ "
+        r"alone, so its bit counts were identical to nauty-graph6's at every node count, and "
+        r"neither raw form is relabeling-invariant, so neither ever carried a correlation "
+        r"column. "
         r"The downstream-learning axis of R1.2 is not evaluated in this work for any row.}",
         r"\label{tab:representation-summary}",
         r"\scriptsize",
@@ -778,7 +777,7 @@ def summary_table(
             " & ".join(
                 [
                     name,
-                    rep.family.value.replace("canonicalised serialisation", "canon.\\ serial."),
+                    rep.family.value.replace("canonicalized serialization", "canon.\\ serial."),
                     psi_cell,
                     _mark_bool(rep.complete),
                     collision_cell,
@@ -816,14 +815,13 @@ def summary_table(
         r"\midrule",
         r"\multicolumn{16}{@{}p{\textheight}@{}}{\footnotesize "
         rf"At $n={BITS_ANCHORS[1]}$ the instruction string is more compact than "
-        rf"{', '.join(beaten_a)} and less compact than the sparse6 family. "
+        rf"{', '.join(beaten_a)} and less compact than nauty-sparse6. "
         r"\textbf{nauty-sparse6 is both more compact and better correlated above $n=20$, under "
         r"both ends of the bracket} --- the only representation that dominates ours on both axes, "
-        r"and reported here rather than omitted. Neither axis has a single leader across the "
-        r"field: the most compact serialisation admits no distance satisfying the metric axioms, "
-        r"and the best-correlating representation admits no bit count, so each axis leader is "
-        r"undefined on the other axis. The instruction string is the only row that is executable, "
-        r"and that property is not adjudicated by either experiment.} \\",
+        r"and reported here rather than omitted. The best-correlating representation, WL subtree, "
+        r"admits no bit count at all and therefore cannot be ranked on compactness. The "
+        r"instruction string is the only row that is executable, and that property is not "
+        r"adjudicated by either experiment.} \\",
         r"\bottomrule",
         r"\end{tabular}",
         r"\end{sidewaystable*}",

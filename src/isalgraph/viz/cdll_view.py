@@ -77,9 +77,11 @@ def draw_cdll_ring(
     node_radius: float = 0.15,
     show_legend: bool = False,
     label_fontsize: float = 7.0,
+    label_dy: float = 0.0,
     pointer_fontsize: float = 8.0,
     pointer_scale: float = 9.0,
     pointer_lw: float = 1.4,
+    show_pointer_arrows: bool = True,
     arrow_gap: float = 0.60,
     label_gap: float = 0.26,
     margin_pad: float = 0.45,
@@ -104,11 +106,26 @@ def draw_cdll_ring(
         show_legend: Draw a per-panel legend instead of relying on a
             shared figure-level one.
         label_fontsize: Node-label point size.
+        label_dy: Downward shift of the node label, in node-radius units.
+            ``va="center"`` centres a digit on its font's full bounding
+            box, descender space included, and a digit has no descender,
+            so it prints visibly high inside its disc. A shift of about
+            ``0.12`` puts it on the disc's optical centre. Zero by
+            default, which is what every committed figure was drawn with.
         pointer_fontsize: Point size of the π and σ glyphs.
         pointer_scale: Arrowhead ``mutation_scale``, in points.
         pointer_lw: Arrow line width, in points.
+        show_pointer_arrows: Draw the two pointer arrows. Turning them
+            off keeps the π and σ glyphs and moves them in to where the
+            arrow tails were. The glyph sits on the same radius as its
+            arrow, so on a small ring the two compete for one band of
+            blank margin and a glyph large enough to read overlaps the
+            shaft it is labelling; dropping the arrow spends that band on
+            the glyph instead. The pointed-at disc is already filled in
+            the pointer's own colour, so nothing is lost but the shaft.
         arrow_gap: Distance from the node discs out to the arrow tails,
-            in ring-radius units.
+            in ring-radius units. Ignored when *show_pointer_arrows* is
+            off, which has no tails.
         label_gap: Distance from the arrow tail out to the π/σ glyph.
         margin_pad: Blank ring-radius units beyond the arrow tails. Must
             exceed *label_gap*, or the glyphs fall outside the axes.
@@ -157,7 +174,7 @@ def draw_cdll_ring(
         )
         ax.text(
             x,
-            y,
+            y - label_dy * node_radius,
             str(payload),
             ha="center",
             va="center",
@@ -170,7 +187,10 @@ def draw_cdll_ring(
     # head is all that survives: the old offset of 0.35 axis units was
     # shorter than the point-space shrink applied at the head, so the body
     # was drawn with negative length and disappeared.
-    arrow_radius = radius + node_radius + arrow_gap
+    # With the arrows off there are no tails, so the glyphs move in to
+    # where the tails would have been and the whole arrow_gap band is
+    # spent on the glyph instead.
+    arrow_radius = radius + node_radius + (arrow_gap if show_pointer_arrows else 0.0)
     _draw_pointer_arrow(
         ax,
         angles[primary_ptr_idx],
@@ -183,6 +203,7 @@ def draw_cdll_ring(
         mutation_scale=pointer_scale,
         linewidth=pointer_lw,
         label_gap=label_gap,
+        draw_arrow=show_pointer_arrows,
     )
     # When both pointers rest on one node, fan the secondary arrow away
     # so the two arrowheads stay distinguishable.
@@ -203,6 +224,7 @@ def draw_cdll_ring(
         mutation_scale=pointer_scale,
         linewidth=pointer_lw,
         label_gap=label_gap,
+        draw_arrow=show_pointer_arrows,
     )
 
     if show_legend:
@@ -234,6 +256,7 @@ def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
     mutation_scale: float = 9.0,
     linewidth: float = 1.4,
     label_gap: float = 0.26,
+    draw_arrow: bool = True,
 ) -> None:
     """Draw one labelled pointer arrow from outside the ring toward a node.
 
@@ -255,22 +278,25 @@ def _draw_pointer_arrow(  # noqa: PLR0913  -- polar geometry needs its terms
         mutation_scale: Arrowhead size, in points.
         linewidth: Arrow line width, in points.
         label_gap: Distance from the tail out to the label.
+        draw_arrow: Draw the shaft and head. When off, only the label is
+            drawn, at the same place it would otherwise have gone.
     """
     cos_a, sin_a = math.cos(angle), math.sin(angle)
-    tip = ring_radius + node_radius * 1.10
-    ax.annotate(
-        "",
-        xy=(tip * cos_a, tip * sin_a),
-        xytext=(arrow_radius * cos_a, arrow_radius * sin_a),
-        arrowprops={
-            "arrowstyle": "-|>",
-            "color": color,
-            "linewidth": linewidth,
-            "mutation_scale": mutation_scale,
-            "shrinkA": 0,
-            "shrinkB": 0,
-        },
-    )
+    if draw_arrow:
+        tip = ring_radius + node_radius * 1.10
+        ax.annotate(
+            "",
+            xy=(tip * cos_a, tip * sin_a),
+            xytext=(arrow_radius * cos_a, arrow_radius * sin_a),
+            arrowprops={
+                "arrowstyle": "-|>",
+                "color": color,
+                "linewidth": linewidth,
+                "mutation_scale": mutation_scale,
+                "shrinkA": 0,
+                "shrinkB": 0,
+            },
+        )
     label_x = (arrow_radius + label_gap) * cos_a
     label_y = (arrow_radius + label_gap) * sin_a
     ax.text(

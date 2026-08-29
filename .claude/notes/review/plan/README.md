@@ -42,6 +42,8 @@ ticket, exactly which of these to read.
 | **[labels](labels.md)** | R1.3 / AE.4b, tiered, with the PI decision that is still open |
 | **[corrections](corrections.md)** | Claim scoping B1–B6, the formal-statement audit, the twelve manuscript defects, and the [28]/[29] delta |
 | **[manuscript](manuscript.md)** | Section rewrite map, artifact inventory, the **page budget**, the response-letter architecture |
+| **[review-procedure](../../../skills/review-procedure/SKILL.md)** *(skill)* | **How the revision gets written** — manuscript first then answers, the `changes`-package contract producing the clean and blue versions from one source, the response format, and the prose style. Invoke with `/review-procedure` |
+| **[prose](prose.md)** | **The narrative architecture** — the thesis, the H1–H4 hypothesis spine, the section-by-section drafting brief, the frozen claim register and its red lines, the supplementary split, and the decision→experiment checklist |
 | **[compliance](compliance.md)** | What the Editor-in-Chief checks **pass/fail**: bibliography count, recency, venue, arXiv, citation groups, 35 pages, submission package |
 
 ---

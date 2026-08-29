@@ -19,7 +19,7 @@ median pooled over one dataset is a statement about that dataset rather than
 about the cohort. :class:`Aggregate` therefore carries ``n_datasets`` and
 ``n_graphs`` on every point, and :func:`dataset_support` reports the same thing
 per node count so a caller can set its own guard. Dropping that column is how a
-composition artefact becomes a trend line.
+composition artifact becomes a trend line.
 
 The composition-free alternative is :func:`paired_relative_gap`, which pairs on
 graph identity inside a dataset: the same graphs sit on both sides of every
@@ -229,10 +229,10 @@ def dataset_support(cells: list[Cell], *, min_graphs: int = MIN_GRAPHS) -> dict[
     return {n: len(v) for n, v in sorted(seen.items())}
 
 
-def unlabelled_floor(cells: list[Cell], *, min_graphs: int = MIN_GRAPHS) -> list[tuple[int, float]]:
+def unlabeled_floor(cells: list[Cell], *, min_graphs: int = MIN_GRAPHS) -> list[tuple[int, float]]:
     """Return the information-theoretic floor per node count.
 
-    An unlabelled simple graph on ``n`` nodes with ``m`` edges cannot be
+    An unlabeled simple graph on ``n`` nodes with ``m`` edges cannot be
     encoded in fewer than ``log2 |U(n, m)|`` bits, and by orbit counting
     ``|U(n, m)| >= C(T, m) / n!`` with ``T = n(n-1)/2``. The bound is a
     genuine lower bound rather than an estimate: the orbit of a symmetric
@@ -380,5 +380,5 @@ __all__ = [
     "load_cells",
     "load_json",
     "paired_relative_gap",
-    "unlabelled_floor",
+    "unlabeled_floor",
 ]

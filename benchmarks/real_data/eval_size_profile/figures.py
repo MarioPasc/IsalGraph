@@ -55,7 +55,7 @@ DENSE_SERIES: Final[int] = 20
 #: representations *present in this call* -- so a representation's colour
 #: depended on which others had landed, and two figures of the same campaign
 #: could give one backend two colours.
-REPRESENTATION_ORDER: Final[tuple[str, ...]] = design.ORDER
+REPRESENTATION_ORDER: Final[tuple[str, ...]] = design.FIGURE_ORDER
 
 DATASET_MARKERS: Final[tuple[str, ...]] = ("o", "s", "^", "v", "D", "P", "X", "*", "<", ">")
 
@@ -258,29 +258,37 @@ def _bracket_representations(points: list[AggregatePoint]) -> tuple[str, ...]:
         Representation keys with at least one ``lb`` or ``ub`` point.
     """
     have = {p.representation for p in points if p.reference in ("lb", "ub")}
-    return tuple(r for r in design.ORDER if r in have)
+    return tuple(r for r in design.FIGURE_ORDER if r in have)
 
 
-def _undetermined_onset(points: list[AggregatePoint]) -> int | None:
-    """Return the node count beyond which no bracket interval excludes zero.
-
-    Args:
-        points: Aggregated points.
-
-    Returns:
-        The onset node count, or ``None`` when every size still resolves.
-    """
-    bracket = [p for p in points if p.reference != "exact"]
-    resolved = {p.n for p in bracket if not p.ci_lo <= 0.0 <= p.ci_hi}
-    covered = sorted({p.n for p in bracket if p.ci_lo <= 0.0 <= p.ci_hi})
-    return next((n for n in covered if not any(m >= n for m in resolved)), None)
+# ---------------------------------------------------------------------------
+# The undetermined-onset rule, removed 2026-08-26. Do not reinstate it.
+#
+# ``figure_one`` shaded its right tail and captioned it "rho not separable
+# from 0 (n > onset)", where ``onset`` came from a helper returning the
+# smallest node count whose interval covers zero and beyond which none
+# resolves. Three reasons it is gone, in order of severity:
+#
+# 1. It is a data-dependent stopping rule with no multiplicity control. The
+#    figure's own BH correction runs over the p-values; the onset ran over
+#    the intervals and was corrected by nothing.
+# 2. It is confounded with support, not with rho. Above n = 56 a stratum
+#    carries 9-17 graphs from 1-2 datasets, and the Fisher-z weight is
+#    ``n_graphs - 3``, so the weights there are 6-14. An interval covering
+#    zero on that support is a statement about power, not about rho. Several
+#    of those strata are single-dataset, so the "weighted mean across
+#    datasets" is one dataset's rho wearing an aggregate's label.
+# 3. It was quoted nowhere -- not in the manuscript, not in a response-letter
+#    fragment, not in a ticket note. Only on the figure, which is the worst
+#    place for a claim nothing else defends.
+# ---------------------------------------------------------------------------
 
 
 def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
     """Figure 1 --- the within-`n` collapse, per regime and per representation.
 
-    **Left, exact GED at ``n <= 12``.** Every representation, family-emphasised:
-    canonical codes solid at full weight, serialisations dashed and
+    **Left, exact GED at ``n <= 12``.** Every representation, family-emphasized:
+    canonical codes solid at full weight, serializations dashed and
     half-transparent. Ground truth exists here and the head-to-head resolves, so
     the per-representation detail is the content.
 
@@ -288,10 +296,15 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
     on one axes was a texture rather than a figure, and collapsing them into a
     single envelope answered that by discarding the per-representation detail.
     The grid keeps both: one small panel per representation carrying bracket
-    data, each showing its own two bounds against the grey envelope of the whole
+    data, each showing its own two bounds against the gray envelope of the whole
     field, plus a final panel overlaying every arm. The grid is sized so its top
     and bottom rows align with the exact-GED panel, so the two regimes read as
-    one figure.
+    one figure. Panel titles are black rather than the representation's colour:
+    the two lines inside each panel already carry it, and colouring the title
+    too made the grid read as six separate figures.
+
+    **No region of the bracket is shaded.** See the note above
+    :func:`figure_one` for why the undetermined-onset rule was removed.
 
     Args:
         points: Aggregated points.
@@ -304,7 +317,7 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
 
     exact_reps = tuple(
         r
-        for r in design.ORDER
+        for r in design.FIGURE_ORDER
         if any(p.representation == r and p.reference == "exact" for p in points)
     )
     bracket_reps = _bracket_representations(points)
@@ -353,11 +366,11 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
                 zorder=rep.zorder + 1,
             )
     left.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
-    left.set_title(f"exact GED  ($n \\leq {EXACT_CEILING}$)", fontsize=design.FS_TITLE, pad=3)
+    left.set_title(f"Exact GED  ($n \\leq {EXACT_CEILING}$)", fontsize=design.FS_TITLE, pad=3)
     design.finish_axes(
         left,
-        xlabel="graph size $n$",
-        ylabel=r"Spearman $\rho$ (distance vs GED), within equal $n$",
+        xlabel="Graph Size ($n$)",
+        ylabel=r"Spearman $\rho$ (Distance vs GED), Within Equal $n$",
     )
     left.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=10))
     left.set_ylim(-0.75, 1.05)
@@ -367,7 +380,6 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
         if p.reference != "exact":
             envelope.setdefault(p.n, []).append(p.rho)
     span = sorted(envelope)
-    onset = _undetermined_onset(points)
 
     panels = [*bracket_reps, None]
     for index, key in enumerate(panels):
@@ -398,15 +410,16 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
                 if key is None and not rep.is_ours:
                     style["alpha"] = 0.55
                 ax.plot([p.n for p in sel], [p.rho for p in sel], **style)
-        if onset is not None and span:
-            ax.axvspan(onset - 0.5, max(span) + 1, color="0.85", alpha=0.6, zorder=0, linewidth=0)
         ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
         ax.set_ylim(-0.75, 1.05)
+        # Black, not the representation's colour. The panel's two lines already
+        # carry that colour, and a coloured title made the grid read as six
+        # separate figures rather than one small-multiples panel.
         ax.set_title(
-            "every arm" if key is None else design.BY_KEY[key].short,
+            "Every Arm" if key is None else design.BY_KEY[key].short,
             fontsize=design.FS_TITLE - 0.7,
             pad=2,
-            color="0.15" if key is None else design.BY_KEY[key].colour,
+            color="black",
         )
         ax.grid(True, alpha=design.GRID_ALPHA, linewidth=design.GRID_LW)
         ax.tick_params(labelsize=design.FS_TICK - 0.8)
@@ -416,11 +429,9 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
         if index % ncols != 0:
             ax.set_yticklabels([])
         if index == len(panels) - 1:
-            ax.set_xlabel("graph size $n$", fontsize=design.FS_LABEL - 0.5)
+            ax.set_xlabel("Graph Size ($n$)", fontsize=design.FS_LABEL - 0.5)
 
-    header = f"GED bracket  ($n > {EXACT_CEILING}$)\ndashed LB, solid UB;  grey: the whole field"
-    if onset:
-        header += f";  shaded: $\\rho$ not separable from 0 ($n>{onset}$)"
+    header = f"GED Bracket  ($n > {EXACT_CEILING}$)\nDashed LB, solid UB;  gray: the whole field"
     fig.text(
         0.695,
         0.995,
@@ -525,7 +536,7 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
     for ax in flat[len(reps) :]:
         ax.axis("off")
     for ax in flat[max(0, len(reps) - ncols) : len(reps)]:
-        ax.set_xlabel("graph size $n$", fontsize=design.FS_LABEL)
+        ax.set_xlabel("Graph Size ($n$)", fontsize=design.FS_LABEL)
     for i in range(0, len(reps), ncols):
         flat[i].set_ylabel(r"Spearman $\rho$", fontsize=design.FS_LABEL)
 
@@ -539,12 +550,12 @@ def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Pa
         ncol=min(len(datasets), 5),
         fontsize=design.FS_LEGEND,
         frameon=False,
-        title="dataset (faint markers); heavy line = aggregate",
+        title="Dataset (faint markers); heavy line = aggregate",
         title_fontsize=design.FS_LEGEND,
         bbox_to_anchor=(0.5, -0.02),
     )
     fig.suptitle(
-        "Per-dataset spread behind each aggregate point"
+        "Per-Dataset Spread Behind Each Aggregate Point"
         f"  (dash-dot: exact-GED ceiling at n = {EXACT_CEILING};"
         "  solid line = aggregate / UB, dashed = LB;  ○ = BH-significant)",
         fontsize=design.FS_TITLE,
@@ -633,17 +644,17 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
             alpha=0.16,
             linewidth=0,
             zorder=1,
-            label="true GED lies in here",
+            label="True GED lies in here",
         )
         twin.plot(band_x, lo, color="0.15", linewidth=0.9, linestyle="--", zorder=4)
         twin.plot(band_x, hi, color="0.15", linewidth=0.9, linestyle="-", zorder=4)
 
     ax.axvline(EXACT_CEILING + 0.5, color="0.5", linewidth=0.7, linestyle="-.")
-    ax.set_xlabel("graph size $n$  (both graphs in the pair)", fontsize=design.FS_LABEL)
+    ax.set_xlabel("Graph Size ($n$)  (both graphs in the pair)", fontsize=design.FS_LABEL)
     ax.set_ylabel(
-        "mean representation distance  (symbols / kernel units)", fontsize=design.FS_LABEL
+        "Mean Representation Distance  (symbols / kernel units)", fontsize=design.FS_LABEL
     )
-    twin.set_ylabel("mean GED  (unit cost model)", fontsize=design.FS_LABEL)
+    twin.set_ylabel("Mean GED  (unit cost model)", fontsize=design.FS_LABEL)
     ax.grid(True, alpha=0.25, linewidth=0.4)
     ax.tick_params(labelsize=design.FS_TICK)
     twin.tick_params(labelsize=design.FS_TICK)
@@ -661,7 +672,7 @@ def figure_three(rows: list[dict[str, Any]], out: Path) -> list[str]:
         frameon=False,
     )
     ax.set_title(
-        "Absolute scale: representation distance (left) against GED (right).  "
+        "Absolute Scale: Representation Distance (left) Against GED (right).  "
         f"Above n = {EXACT_CEILING} the shaded band is the proven LB/UB bracket.",
         fontsize=design.FS_TITLE,
     )

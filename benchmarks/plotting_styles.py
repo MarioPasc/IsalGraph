@@ -36,6 +36,13 @@ IEEE_COLUMN_GAP_INCHES = _viz_style.IEEE_COLUMN_GAP_INCHES  # Gap between column
 IEEE_TEXT_WIDTH_INCHES = _viz_style.IEEE_TEXT_WIDTH_INCHES  # Full print area (178 mm)
 IEEE_TEXT_HEIGHT_INCHES = _viz_style.IEEE_TEXT_HEIGHT_INCHES  # Full print area (229 mm)
 
+# Text width of the Pattern Recognition manuscript. NOT an IEEE width: the
+# submission is single-column letterpaper with 4.8 cm side margins, which
+# leaves 341.148 pt = 4.7382 in. A paper figure must be RENDERED at this
+# width -- point sizes inside a figure are absolute, so drawing at 7.0 and
+# placing at \textwidth scales every label by 0.674.
+PATREC_TEXT_WIDTH_INCHES = _viz_style.PATREC_TEXT_WIDTH_INCHES
+
 # =============================================================================
 # Main Plot Settings Dictionary
 # =============================================================================
