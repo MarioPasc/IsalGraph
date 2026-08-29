@@ -248,7 +248,67 @@ This is a useful negative: it means WL is the answer, not a way-station.
 - [x] `t06_f2` reference plumbing + the family guard + 15 tests
 - [x] SLURM launcher/worker; repo and exact GED staged on Picasso
 - [x] IsalChem p.7949 fallback: reasoned **do not implement** (track B)
-- [ ] `spectral_esd` measured (probe running against the built matrices)
-- [ ] Campaign submitted on Picasso
-- [ ] Agent branches merged
-- [ ] Results copied back and §5.4 rewrite drafted
+- [x] `spectral_esd` measured — does **not** rescue the spectral family
+- [x] Agent branches verified and merged; suite **2,019 passed / 275 skipped**
+- [x] Campaign submitted on Picasso (`2132238` shards → `2132239` merge)
+- [ ] Campaign completes; results copied back
+- [ ] §5.4 rewrite drafted
+
+### `spectral_esd`, measured
+
+The size-controlled variant works *as a size control* — its size null on LINUX is **0.3078**
+against 0.8296 for the padded normalised spectrum — but the canonical string does not track
+it: arm ρ = 0.1524 there. Across all 15 cells it beats `sparse6_nauty` 15/15 and
+`nauty_graph6` 12/15, but only `agm_cam` 6/15 and `min_dfs` 3/15, which is strictly worse
+than WL. **Adding it changed nothing about the conclusion, and it is reported anyway** —
+that was the condition under which it was added (§5 of the design note).
+
+Running the probe a second time against the *built* production matrices also cross-validates
+track C's independent implementation against the prototype: the WL row is identical
+(15/15, 3/15, 12/15, 15/15), as it must be, since both read the same cached kernel matrix.
+
+### Submission, and one blocker the smoke test caught
+
+A login-node smoke run on `suite1/linux` failed with
+
+```
+FamilyError: c names an undeclared representation 'isalgraph_exhaustive'
+```
+
+`T06_exhaustive/encodings` carries `isalgraph_exhaustive` and `isalgraph_greedy` on top of
+T-06's arms. Under `T06_REFERENCE_ARM=isalgraph_pruned` those two are undeclared, the
+regenerated completion table names them, and `family.validate()` rejects it — **all fifteen
+shards, after a queue wait `sbatch --test-only` was then estimating at ~10 hours.** Fixed by
+pointing `OUT_ROOT` at T-06's own distances and encodings, which is what gate G1 compares
+against anyway. Those two trees (190 + 166 files, 527 MB) were staged to Picasso.
+
+Smoke re-run through the real worker: **green, 49 s**, 72 rows over 6 references. It
+confirmed three gates live before anything queued:
+
+| gate | evidence |
+|---|---|
+| **G1** retained GED column unchanged | `arm/exact ρ = +0.4850` on **1,685** pairs — T-06's published value and pair count exactly |
+| **G4** WL degeneracy is the identity | `wl/wl_subtree ρ = 1.0` exactly |
+| family guard | all **60** structural rows carry `in_family=False`, `row=None`; the 12 GED rows still carry 8 `True` |
+
+And the headline, already visible on LINUX with bootstrap intervals rather than point
+estimates — the excess of the arm's ρ over its own size null:
+
+| reference | arm ρ | size null | **excess [95 % CI]** |
+|---|---:|---:|---|
+| GED exact | +0.4850 | +0.7097 | **−0.2247 [−0.3492, −0.0922]** — significantly *below* |
+| **WL kernel** | +0.4798 | **+0.1609** | **+0.3189 [+0.1699, +0.4454]** — significantly *above* |
+| spectral (norm L) | +0.2384 | +0.8296 | −0.5912 [−0.7004, −0.4645] |
+| spectral (comb L) | +0.6060 | +0.5780 | +0.0280 [−0.1373, +0.1968] |
+| spectral ESD | +0.1524 | +0.3078 | −0.1554 [−0.3146, +0.0058] |
+
+**Campaign**: array `2132238` (15 shards, one per task, 10 h wall, 4 CPU / 32 G, CPU
+partition) → merge `2132239` on a verified `afterok`. The first submission used 8 tasks and a
+20 h wall and sat on `Priority/`; one shard per task with a 10 h wall backfills far better,
+which matters against a 2026-08-31 deadline.
+
+**No distance stage ran.** Every representation distance is T-04a's, read from cache.
+
+Results land at `T28_metrics/families/rho_table.json` on Picasso. Pull them from either
+workstation with `bash slurm/t28_metrics/fetch_results.sh` (`--status` to look without
+fetching); it is safe to run mid-campaign and names the missing shards.
