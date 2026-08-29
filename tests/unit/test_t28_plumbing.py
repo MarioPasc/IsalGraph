@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
@@ -45,7 +44,7 @@ def _arm(name: str, n: int, rng: np.random.Generator) -> t06_f2_inputs.ArmMatric
 
 def test_only_the_ged_references_may_carry_a_confirmatory_cell() -> None:
     """The frozen set is exactly the three GED references, and nothing else."""
-    assert t06_f2.CONFIRMATORY_REFERENCES == frozenset({"exact", "lb", "ub"})
+    assert frozenset({"exact", "lb", "ub"}) == t06_f2.CONFIRMATORY_REFERENCES
     for key in T28_KEYS:
         assert key not in t06_f2.CONFIRMATORY_REFERENCES
 
@@ -110,7 +109,7 @@ def _write_reference(path: Path, matrix: np.ndarray, ids: np.ndarray) -> None:
     )
 
 
-def test_an_unset_root_reproduces_t06_exactly(monkeypatch: Any) -> None:
+def test_an_unset_root_reproduces_t06_exactly(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gate G1: with no tree configured, nothing new is loaded."""
     monkeypatch.setattr(t06_f2_inputs, "T28_REFERENCE_ROOT", "")
     ids = np.array(["g0", "g1", "g2"])
@@ -118,7 +117,7 @@ def test_an_unset_root_reproduces_t06_exactly(monkeypatch: Any) -> None:
 
 
 def test_a_configured_root_is_loaded_and_keyed_by_filename(
-    tmp_path: Path, monkeypatch: Any
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The reference token after the double underscore becomes the key."""
     ids = np.array(["g0", "g1", "g2"])
@@ -133,7 +132,7 @@ def test_a_configured_root_is_loaded_and_keyed_by_filename(
 
 
 def test_an_almost_all_zero_reference_aborts_rather_than_propagating(
-    tmp_path: Path, monkeypatch: Any
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The silent-zero failure shape must abort the campaign, not fill a table.
 
@@ -151,7 +150,9 @@ def test_an_almost_all_zero_reference_aborts_rather_than_propagating(
         t06_f2_inputs._load_t28_references("suite1", "aids", ids)
 
 
-def test_a_legitimate_zero_does_not_trip_the_gate(tmp_path: Path, monkeypatch: Any) -> None:
+def test_a_legitimate_zero_does_not_trip_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Isomorphic graphs give distance 0 and must survive; only 0.99+ aborts."""
     ids = np.array([f"g{i}" for i in range(10)])
     rng = np.random.default_rng(1)
@@ -166,7 +167,7 @@ def test_a_legitimate_zero_does_not_trip_the_gate(tmp_path: Path, monkeypatch: A
     assert loaded["spectral"][0, 1] == 0.0
 
 
-def test_a_non_finite_reference_aborts(tmp_path: Path, monkeypatch: Any) -> None:
+def test_a_non_finite_reference_aborts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``HED`` returns ``inf`` without raising; a reference matrix must not."""
     ids = np.array(["g0", "g1", "g2"])
     matrix = np.array([[0.0, 1.0, np.inf], [1.0, 0.0, 3.0], [np.inf, 3.0, 0.0]])
