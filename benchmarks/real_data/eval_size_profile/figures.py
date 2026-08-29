@@ -476,6 +476,7 @@ def figure_one_single_reference(
     *,
     reference: str,
     ref_label: str,
+    degenerate: str | None = None,
 ) -> list[str]:
     """Figure 1 for a reference that carries no bracket.
 
@@ -497,6 +498,10 @@ def figure_one_single_reference(
         out: Output path without an extension.
         reference: The reference key, e.g. ``wl``.
         ref_label: Human-readable name for the titles, e.g. ``WL kernel``.
+        degenerate: A representation whose own distance **is** this reference, so
+            its rho is exactly 1.0 by construction. It is drawn --- hiding it
+            would be a silent exclusion --- but annotated, because a flat line at
+            1.0 otherwise reads as a competitor that solved the problem.
 
     Returns:
         Paths written.
@@ -549,6 +554,19 @@ def figure_one_single_reference(
                 linewidths=0.85,
                 zorder=rep.zorder + 1,
             )
+    if degenerate is not None and any(p.representation == degenerate for p in low):
+        rep = design.BY_KEY.get(degenerate)
+        name = rep.short if rep is not None else degenerate
+        axis.annotate(
+            f"{name} $\\equiv$ reference:\n$\\rho \\equiv 1$ by construction",
+            xy=(0.97, 0.965),
+            xycoords="axes fraction",
+            ha="right",
+            va="top",
+            fontsize=design.FS_TICK - 0.6,
+            color="0.30",
+            linespacing=1.25,
+        )
     axis.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
     axis.set_title(f"{ref_label}  ($n \\leq {EXACT_CEILING}$)", fontsize=design.FS_TITLE, pad=3)
     design.finish_axes(
@@ -889,6 +907,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="output basename; defaults to fig1_rho_vs_size_<reference>",
     )
+    ap.add_argument(
+        "--degenerate",
+        default=None,
+        help=(
+            "a representation whose distance IS --reference, so its rho is 1.0 "
+            "by construction; drawn but annotated (e.g. wl_subtree under wl)"
+        ),
+    )
     return ap
 
 
@@ -915,7 +941,11 @@ def main(argv: list[str] | None = None) -> int:
         stem = args.stem or f"fig1_rho_vs_size_{args.reference}"
         label = args.reference_label or args.reference
         saved = figure_one_single_reference(
-            points, args.out_dir / stem, reference=args.reference, ref_label=label
+            points,
+            args.out_dir / stem,
+            reference=args.reference,
+            ref_label=label,
+            degenerate=args.degenerate,
         )
         LOGGER.info("%s -> %s", stem, ", ".join(saved))
         LOGGER.info(
