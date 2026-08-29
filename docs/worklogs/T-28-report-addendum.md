@@ -278,7 +278,51 @@ distance matrices in.
       byte-identical, G5 max off-diagonal zero fraction 0.155
 - [x] `_wl_counts` defect found, fixed, and verified against 15/15 cached cells
 - [x] Both figures rendered
-- [ ] **Paired bootstrap over all 11 datasets** — Picasso `2133405`; 2 landed at
-      the time of writing. Until it completes, §3.3 is point estimates and no
-      count there is a significance verdict.
+- [ ] **Paired bootstrap over all 11 datasets** — see §9. **6 of 15 shards
+      landed.** Until the rest do, §3.3 is point estimates and no count there is
+      a significance verdict.
 - [ ] §5.4 rewrite, and the `p = 0.012` correction of §4.1
+
+---
+
+## 9. The campaign, and what it cost to measure
+
+`2132238` (`medium_uma`, 10 h) sat on `Priority/` for six hours with no SLURM
+start estimate, having produced nothing. Measured on this cluster:
+
+| QOS | priority | MaxWall |
+|---|---:|---|
+| `short` | **10000** | 02:00:00 |
+| `medium_uma` | 1000 | 3-00:00:00 |
+| `long_uma` | 500 | 7-00:00:00 |
+
+The site weights QOS at 100000, so the contribution is 100000 under `short`
+against 10000 under `medium_uma`. `2132238` totalled 29,485 with 22 pending jobs
+ahead of it. Resubmitted as **`2133405`** under `short` with a 2 h wall it
+**started within a minute**, all 15 tasks at once.
+
+**6 of 15 completed; 9 hit the 2 h wall.** The shard loop is idempotent — it
+skips any cell whose partial exists — so nothing is recomputed.
+
+| landed | elapsed |
+|---|---|
+| `suite1/linux`, `suite2/linux` | 1 m 09 s, 1 m 35 s |
+| `suite2/protein` | 38 m |
+| `suite2/grec` | 46 m |
+| `suite1/aids` | 60 m |
+| `suite2/aids_graphedx` | 1 h 13 m |
+
+**Sizing the rerun from the timed-out shards rather than from pair counts.** A
+cell is about four comparison groups, and `equal_n` is far cheaper than
+`all_pairs` — on `coil_del`, 349 s against 2806 s for the same group. Within its
+2 h `coil_del` reached 3 of 4 groups and `mutagenicity` 2 of 4, so the heavy
+cells need roughly **3–5 h each**. A pairs-linear extrapolation predicts 27–29 h
+for the same two cells and is wrong, because cost is not linear in pairs across
+the group structure. The held 10 h array is therefore adequate and was released
+rather than resubmitted with a longer wall, which would only have backfilled
+worse.
+
+`2132239` (merge) is left **held** on purpose: its `afterok` cannot be satisfied
+if any shard times out again, and a held job is clearer than
+`DependencyNeverSatisfied`. Submit it by hand once the fifteenth partial lands —
+the merge aborts on an incomplete set, and asserts `N_actual == 79`.
