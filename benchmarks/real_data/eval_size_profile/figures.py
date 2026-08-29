@@ -537,7 +537,11 @@ def figure_one_single_reference(
     plt = _style()
 
     selected = [p for p in points if p.reference == reference]
-    present = tuple(r for r in design.ORDER if any(p.representation == r for p in selected))
+    # FIGURE_ORDER, not ORDER: the GED figures above filter through it, and it is
+    # what excludes the arms design.py marks in_figures=False. Filtering this one
+    # through ORDER would let a reference figure carry an arm its GED sibling
+    # drops, with nothing in either output to say the arm sets differ.
+    present = tuple(r for r in design.FIGURE_ORDER if any(p.representation == r for p in selected))
 
     flags = benjamini_hochberg([p.p_value for p in selected])
     significant = {(p.representation, p.n) for p, f in zip(selected, flags) if f}
@@ -632,7 +636,6 @@ def figure_one_single_reference(
     saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
     return saved
-
 
 
 def figure_two(rows: list[dict[str, Any]], points: list[AggregatePoint], out: Path) -> list[str]:
