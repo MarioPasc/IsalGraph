@@ -868,13 +868,25 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    > across 1,818 joined rows. Fixed at `6b89b4f`; `fig1_rho_vs_size.pdf` must be regenerated
    > **whether or not the WL reference goes in the paper**.
 
-6. **The head-to-head under the structural reference, with its scope in the same sentence.** Paired
-   graph-level bootstrap, 14 of 15 cells: the canonical string beats **both** canonically-labelled
-   nauty serialisations decisively and **in both size bands** — `sparse6_nauty` 14 W / 0 T / 0 L and
-   `nauty_graph6` 12 W / 0 T / 2 L pooled, 10/3/1 and 11/2/1 within-`n`. **AGM CAM only pooled**
+6. **The head-to-head under the structural reference, with both of its scopes in the same sentence.**
+   Paired graph-level bootstrap over 14 of 15 dataset cells: the canonical string beats **both**
+   canonically-labelled nauty serialisations on **every cell** — `sparse6_nauty` 14 W / 0 T / 0 L,
+   `nauty_graph6` 12 W / 0 T / 2 L pooled; 10/3/1 and 11/2/1 within-`n`. **AGM CAM only pooled**
    (8/4/2, and 2/5/7 within-`n`, so most of that margin is size agreement — say so). **min-DFS beats
    it under every reference tested**, GED and structural alike, and that concession goes in the same
-   paragraph rather than a later one. *(T-28)*
+   paragraph rather than a later one.
+
+   > 🔴 **And the nauty result is bounded by size, exactly as H2's is.** The per-stratum sign test
+   > splits at `n = 20`: **at `n ≤ 20` IsalGraph is significantly higher than both** (58 strata
+   > against 31, p = 0.0055 each); **above `n = 20` it is not** — a tie against `nauty_graph6`
+   > (53/57, p = 0.78) and a **significant loss to `sparse6_nauty`** (40/70, p = 0.0054). Write
+   > `n ≤ 20` into the sentence that makes the claim.
+   >
+   > **The two results do not conflict and the reason should be stated once.** The dataset sweep is
+   > weighted by graphs and most graphs sit at small `n`, so it is carried by the same band the sign
+   > test identifies; the per-stratum test weights every stratum equally and the high-`n` strata are
+   > thin. This is also move 9 arriving early — the advantage dissolves at scale because *everything*
+   > does. *(T-28)*
 7. **The model that controls rather than stratifies**: `GED ~ β₁·Lev + β₂·|Δn| + β₃·|Δdensity|`,
    standardised. **β₁ is significant and positive on 19 of 19 identifiable fits — and the size
    coefficient exceeds it on 17 of 19.** Both halves, one sentence. Print a **VIF column**; four fits
@@ -1008,7 +1020,7 @@ before reaching this form. Full derivations: `../tasks/T-06-FRAMING.md`, `../tas
 | C9 | *"Holding the generator fixed and adding structural distortion, the trivial size baseline stays flat at ρ ≈ 0.92 while the canonical string's correlation falls from 0.93 to 0.67."* |
 | C10 | *"No single representation leads on both axes, and the two that lead each axis are undefined on the other."* |
 | **C14** | *"Holding every representation distance fixed and replacing only the reference, the canonical string's correlation exceeds its own node-count baseline on five of the five Suite-1 datasets against a Weisfeiler–Lehman kernel, where it does so on one of five against exact graph edit distance. Its correlation does not rise — on three of the five it falls — and the reference's own size null drops from a median of 0.914 to 0.516. What changes is the baseline, not the representation."* **The last sentence is not optional.** Without it the paragraph reads as a rescue; with it, it is C5 confirmed by a second route and the honest reading of both. *(T-28)* |
-| **C15** | *"Under that reference the canonical string outranks both canonically-labelled nauty serialisations on every dataset measured and in both size bands, and is outranked by the gSpan minimum DFS code under every reference we tested."* **Both halves travel together**; the second clause is the one that makes the first credible |
+| **C15** | 🔴 **CORRECTED 2026-08-30 — the frozen wording said "in both size bands" and that is false.** *"Under that reference the canonical string outranks both canonically-labelled nauty serialisations on every one of the fourteen dataset cells measured, and within equal node counts **at `n ≤ 20`** (58 strata higher against 31 lower, sign test p = 0.0055 against each). **Above `n = 20` the advantage does not hold**: it ties nauty-graph6 (53 against 57, p = 0.78) and is outranked by nauty-sparse6 (40 against 70, p = 0.0054). It is outranked by the gSpan minimum DFS code under every reference we tested."* **The `n ≤ 20` scope is load-bearing and belongs in the same sentence** — this is H2's scoping pattern mirrored, and the same reviewer checks both. The per-dataset verdict and the per-stratum test are **different estimands and do not conflict**: per-dataset aggregation weights by graphs, and most graphs sit at small `n`, so a 14-of-14 dataset sweep is carried by exactly the band where the sign test also finds the advantage |
 
 > ## 🔴 Do not print a cardinal beside a list you will maintain
 >
@@ -1072,6 +1084,8 @@ form"*) and they are not repeated here.
 | 🔴 *"clears the size baseline on 5 of 5 datasets"*, **unscoped** | C14's result is **Suite 1** against the **WL kernel**. It sits one word away from the red line directly above it, which is the same shape and is false. Two scopes, both mandatory, both in the same sentence: **which suite, which reference.** Over all fourteen cells it is 12 of 14, not 5 of 5 |
 | *"IsalGraph approximates graph edit distance after all"*, or any WL result offered as repairing H3 | H3 names **graph edit distance**. Against it the refutation stands with every number intact. The WL measurement changes what the failure is *attributable to*, not whether it happened — and a reviewer who reads it as a rescue will check the ρ column and find it **falls** on three of the five datasets |
 | *"IsalGraph beats its competitors under the WL kernel"* | It beats **three of four** pooled and **two of four** within-`n`. **min-DFS is not beaten under any of the eight references, in either band** — and min-DFS is the competitor R3 named as the most important. The unscoped sentence is the one that gets checked first |
+| 🔴 *"it outranks both nauty serialisations under the WL kernel"*, **without `n ≤ 20`** | **The advantage does not survive above `n = 20`**: a tie against nauty-graph6 and a *significant loss* to nauty-sparse6 by the per-stratum sign test (40/70, p = 0.0054). The 14-of-14 dataset sweep is real and is **carried by the small-`n` band**, because per-dataset aggregation weights by graphs. Quoting the sweep without the size scope is the same error H2's *"most compact"* makes, in the same paper, one subsection apart |
+| 🔴 *"the nauty separation is visible under the WL reference and not under GED"* | **Measured and false.** The split is `n`, not the reference: IsalGraph leads both nauty arms at `n ≤ 20` under **exact GED as well as WL**, and trails at `n > 20` under **wl, lb and ub alike**. Above `n = 20` the nauty margin is in fact *smallest* under WL. The reading is an artefact of comparing Fig. 2(a), which is 52/62 strata above `n = 12`, against (b)'s wide panel, which stops at 12 — **different size ranges, and the shared tick values make that comparison easier to make by accident.** Compare (a) against (b)'s bracket small multiples instead |
 | *"IsalGraph outranks min-DFS under the upper bound within equal `n`"* | The single (reference, view, competitor) cell of 64 in which it leads — 5 W / 3 T / 1 L — and **its own lower bound reverses the verdict on 6 of those 9 cells**. This is C3's bracket trap wearing a different hat, and the paper has already committed to printing both bounds |
 | A win claimed from the spectral λ-distance family | All four variants lose to min-DFS and clear the size null on 0, 2, 0 and 0 of 14. `spectral_esd` is the **least** size-dominated of the eight references and the one the encoding tracks worst — report that, it is the evidence that the WL result is not reference-shopping |
 | *"ρ ≈ 0.93 demonstrates structural fidelity"* | Mostly the size channel. This paper supplies the instrument that refutes it |
