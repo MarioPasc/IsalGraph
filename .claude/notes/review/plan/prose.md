@@ -965,48 +965,67 @@ The longest subsection, and it must be read in this order or it reads as excuse-
        *among canonical codes*). "IsalGraph produces shorter encodings" unqualified is already a red
        line. **Verified, and it is C2.**
 
-    c. ⏳ **The edit path stays in graph space — MEASUREMENT IN FLIGHT, one number per side.**
-       `S2G` is **total over `Σ*`**: every one of the 597,870 strings of length 1–6 decodes, and the
-       interpreter's only guard is a character-set check. So an edited IsalGraph string is still a
-       well-formed program denoting a graph **by construction**, where an edited minimum DFS code
-       generally is not — the DFS ordering constraints (forward edges extend the rightmost path,
-       backward edges point to ancestors, indices introduced consecutively) do not survive an
-       arbitrary edit.
+    c. ✅ **The edit path stays in graph space. VERIFIED, matched protocol — and it must be
+       stated on the right notion or it reverses.**
 
-       **Why this belongs in §5.4 and not the method section**: the subsection's instrument is a
-       Levenshtein distance between codes, and that is a *graph* distance only if the path between
-       two codes consists of graphs. This is the property the correlation analysis presupposes and
-       never checks.
+       §5.4's instrument is a Levenshtein distance between codes. That is a *graph* distance only if
+       the codes along the path between two graphs are themselves graphs. Measured on **23,916 pairs
+       × 5 alignments**, all five Suite-1 cohorts, both representations on the **same pairs** under
+       the **same metric** — `levenshtein` over `Encoding.symbols`, one symbol being one atomic
+       operation, which is what T-04a selected for both and what §5.4 already uses:
 
-       > **The first measurement is withdrawn and is being re-run.** It gave 100 % against 6.7 %,
-       > but the two sides used **different protocols** — IsalGraph on real edit paths, min-DFS on
-       > random single-token perturbations. Numbers from a mismatched protocol are exactly what a
-       > reviewer rechecks, so nothing from it is quotable. The replacement takes **the same graph
-       > pairs**, walks each representation's edit path under **its own frozen distance convention**
-       > (character-level for the instruction string, tuple-level for min-DFS — the conventions §5.4
-       > already uses), and classifies every intermediate under **one validity predicate grounded in
-       > the literature**. One number per representation.
+       | representation | intermediates | **valid** | 95 % CI | whole paths valid |
+       |---|---:|---:|---|---:|
+       | **IsalGraph** | 532,315 | **92.0 %** | [91.9, 92.2] | **80.5 %** |
+       | **gSpan min-DFS** | 246,220 | **52.3 %** | [52.0, 52.5] | 38.5 % |
 
-       > 🔴 **Two things to say qualitatively and NOT to quantify**, both expected rather than
-       > surprising, and both cheap to state without a measurement:
+       Cluster bootstrap over pairs, 2,000 resamples. **Validity** = well-formed in the family's own
+       language **and** denoting a simple, undirected, connected graph with `n ≥ 2` — the cohort's
+       own filter. For min-DFS, well-formedness is membership in the DFS-code language of Yan & Han
+       (*gSpan*, ICDM 2002, doi:`10.1109/ICDM.2002.1184038`, Defs. 4–6); for IsalGraph it is
+       membership in `Σ*`, which is free because `S2G` is **total** — verified exhaustively over all
+       597,870 strings of length 1–6. **That closure gap is the property**: an edited instruction
+       string is still a program; an edited DFS code is generally not a code.
+
+       > 🔴 **SAY WHICH NOTION, IN THE FIRST CLAUSE. On the canonical-code notion we LOSE, in all
+       > five cohorts — IsalGraph 14.1 % against min-DFS 35.5 %.** A reader who takes "stays in graph
+       > space" to mean "stays in *canonical*-code space" finds the opposite of the claim. The two
+       > are in genuine tension and the mechanism is ours: `S2G`'s totality gives every graph a large
+       > `Σ*` preimage, which is exactly what makes well-formedness easy and canonicality rare.
+       > **The claim is about the language, never about the canonical form.**
+
+       > **Three scopes that travel with the number.**
        >
-       > **Some intermediates leave the cohort's class.** A `C`/`c` executed while both pointers sit
-       > on the same node writes a self-loop, so a minority of intermediate graphs are not simple;
-       > the endpoints never are. Name the mechanism, do not print a rate — a rate invites a second
-       > experiment to defend it.
+       > **Cohort.** IsalGraph ranges **81.0 % – 100 %** across the five, tracking `C`/`c` frequency;
+       > min-DFS is flat at 50.5 – 57.2 %. Never quote 92.0 % bare.
        >
-       > **Intermediates are not canonical strings, and neither are min-DFS's.** Neither path stays
-       > inside its canonical subset, which is unsurprising: canonical forms are a sparse subset of
-       > any code space. **The claim is about the language, not the canonical form** — an edited
-       > IsalGraph string remains a valid program, an edited min-DFS code stops being a code.
-       > Claiming the path stays canonical would be false and is the first thing a reviewer tests.
+       > **Every IsalGraph rejection is a self-loop** — 42,409 of 42,409, from a `C`/`c` executed
+       > while both pointers sit on one node. No parse failure and no disconnection, ever. So the
+       > **7.97 %** is the self-loop rate, and printing 92.0 % while withholding it is not coherent:
+       > print both or neither.
        >
-       > Also expected and not worth a number: the path is not monotone in graph size.
+       > **Edit-unit asymmetry, and state it before a reviewer does.** min-DFS's alphabet is the
+       > `O(n²)` index pairs; IsalGraph's is 9 operations at any `n`. One min-DFS edit is therefore a
+       > larger semantic step. This is not a choice made for this experiment — it is the frozen
+       > T-04a convention for both arms, and forcing character-level would instead charge min-DFS
+       > about four edits per tuple. Name the mechanism (position-independent against
+       > position-dependent alphabet) rather than let it be found.
 
-       **The figure is optional against the page budget and the sentence is not.** If drawn: one
-       edit path as a strip, a graph at every step for IsalGraph against a break for min-DFS.
-       `isalgraph.viz` already has the machinery (`instruction_view`, the composite step figures).
-       *(T-28)*
+       **Two numbers that must never appear apart.** Under each backend's own shipped decoder, which
+       ignores the grammar, min-DFS reaches **89.5 %** — and `IsalGraphBackend.decode` copies edges
+       under `u < v`, dropping exactly the self-loops that cause all our rejections, so IsalGraph
+       reaches **100 %**. Grant both or neither; the ordering holds either way (92.0/52.3 or
+       100.0/89.5). **Printing the min-DFS permissive row without ours beside it would be a
+       misrepresentation.**
+
+       **The alignment is not unique and the honest choice cost us.** Sampling uniformly over optimal
+       paths gives min-DFS 52.3 %; the deterministic `rapidfuzz.editops` path gives **39.0 %**, 13
+       points lower. **Using the default would have flattered us by 13 points**, so the sampled
+       figure is the one to report and the fact that it is the less favourable one is worth a clause.
+
+       Path lengths differ (5.4 against 3.0 edits per pair), which runs **against** us — more
+       intermediates, more chances to fail — and the whole-path column agrees regardless.
+       Suite 1 only (`n ≤ 12`); untested at scale. *(T-28)*
 
 **§5.5 The pre-registered confirmatory family** (~0.8 p)
 Reported **exactly as it came out**, including the negative results. `N_actual = 79`, 79 cells
