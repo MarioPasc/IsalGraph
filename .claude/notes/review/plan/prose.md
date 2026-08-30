@@ -965,25 +965,51 @@ The longest subsection, and it must be read in this order or it reads as excuse-
        *among canonical codes*). "IsalGraph produces shorter encodings" unqualified is already a red
        line. **Verified, and it is C2.**
 
-    c. ⏳ **The edit path stays in graph space — NOT YET VERIFIED. Do not draft this.** The
-       hypothesis: `S2G` is total over `Σ*`, so every intermediate string on a Levenshtein path
-       between two IsalGraph strings decodes to a graph, whereas a single edit of a minimum DFS code
-       generally violates the code's ordering constraints and yields a token sequence that is not a
-       DFS code of any graph. If it holds it is the strongest item here, because §5.4's whole
-       instrument presupposes it: **a Levenshtein distance is a graph distance only if the path
-       between two codes consists of graphs.** Three ways it dies and all three are being measured:
-       `S2G` may reject some strings; it may accept them only by returning a degenerate one-node
-       placeholder, which would make the property vacuous; or min-DFS codes may turn out robust to
-       single edits.
+    c. ✅ **The edit path stays in graph space, and the competitor's does not. VERIFIED.**
+       `S2G` is **total over `Σ*`** — every one of the 597,870 strings of length 1–6 decodes, and the
+       only guard in the interpreter is a character-set check. So every intermediate on a Levenshtein
+       path between two IsalGraph strings is a well-formed program denoting a graph, **by
+       construction rather than by luck**. Measured on 366 intermediates from 44 real LINUX pairs:
 
-       > 🔴 **And one sentence that must never be written, whatever comes back:** *"min-DFS has no
-       > decoder"* or *"a minimum DFS code cannot be decoded to a graph."* **Both are false.** A DFS
-       > code lists every edge as `(i, j, l_i, l_e, l_j)` with DFS indices, so the graph is
-       > reconstructible by construction — that is what makes it a canonical form. The claim is about
-       > **single-edit neighbours of a valid code**, never about decodability, and it is being made
-       > against the competitor R3 named as the most important. Getting this wrong is not a scoping
-       > error, it is a factual error about a well-known method.
+       | | IsalGraph intermediates | endpoints (calibration) |
+       |---|---:|---:|
+       | decode to a graph | **366/366 (100 %)** | 89/89 |
+       | connected | **366/366 (100 %)** | 89/89 |
+       | simple **and** connected **and** `n ≥ 2` — the cohort's own class | **345/366 (94.3 %)** | **89/89 (100 %)** |
 
+       Against the same operation on the competitor: **6.7 %** of single-token edits of a minimum DFS
+       code are still a valid DFS code of any graph — 93.3 % are not, verified by round trip
+       (decode → re-encode → compare). **So the comparable statement is 100 % against 6.7 %**: an
+       edited IsalGraph string is always an object of the representation's own language; an edited
+       min-DFS code almost never is.
+
+       **Why this belongs in §5.4 and not in the method section**: the subsection's entire instrument
+       is a Levenshtein distance between codes, and that is a *graph* distance only if the path
+       between two codes consists of graphs. For IsalGraph it does. This is the property the
+       correlation analysis presupposes and never checks.
+
+       > 🔴 **Two concessions that travel with it, both mandatory.**
+       >
+       > **It is 94.3 %, not 100 %, in the cohort's class.** 5.7 % of intermediates carry a
+       > self-loop, which arises when a `C`/`c` executes with both pointers on the same node. The
+       > endpoints are 0 % self-looped, so this is an artifact of the path and not of the encoding.
+       > Write 94.3 %.
+       >
+       > **The intermediates are not canonical strings**, and neither representation's path stays in
+       > its canonical subset: only **5.5 %** of intermediates are the canonical string of the graph
+       > they decode to. The claim is about the *language*, not the canonical form — an edited
+       > IsalGraph string remains a valid program, an edited min-DFS code stops being a code. Claiming
+       > the path stays canonical would be false and is the obvious thing a reviewer would test.
+       >
+       > Also measured, and worth a clause if the figure is drawn: node counts along the path wander
+       > **outside** the endpoints' range on 25.1 % of intermediates, always upward (max 13 against an
+       > endpoint max of 10). The path is not monotone in size.
+
+       **The figure, if it is drawn.** One edit path between two small graphs as a strip: IsalGraph's
+       row shows a drawn graph at every step, min-DFS's shows graphs at the endpoints and a break in
+       between. `isalgraph.viz` already has the machinery (`instruction_view`, the composite step
+       figures), so it is the toolkit's native shape. **Against the page budget this is optional and
+       the sentence is not** — the numbers carry the claim without a float. *(T-28)*
 
 **§5.5 The pre-registered confirmatory family** (~0.8 p)
 Reported **exactly as it came out**, including the negative results. `N_actual = 79`, 79 cells
