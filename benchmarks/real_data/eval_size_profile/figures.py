@@ -28,7 +28,7 @@ from typing import Any, Final
 
 import numpy as np
 from matplotlib.lines import Line2D
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FixedLocator, MaxNLocator, MultipleLocator
 from scipy import stats
 
 from benchmarks.real_data.eval_t06_figures import design
@@ -47,6 +47,15 @@ FDR_Q: Final[float] = design.FDR_Q
 AXES_BOTTOM: Final[float] = 0.135
 LEGEND_Y: Final[float] = 0.055
 
+#: The combined figure hangs its legend higher than the single-panel ones.
+#: They clear one legend row under the x-label; it clears two, and at
+#: :data:`LEGEND_Y` the first row falls a centimetre clear of the label with
+#: nothing between them.
+LEGEND_Y_COMBINED: Final[float] = 0.098
+
+#: Figure fraction between the two combined-figure legend rows.
+LEGEND_ROW_GAP: Final[float] = 0.046
+
 #: Above this many points in one series, draw the interval as a band rather
 #: than as error bars: a picket fence of caps hides the trend it qualifies.
 DENSE_SERIES: Final[int] = 20
@@ -61,6 +70,102 @@ REPRESENTATION_ORDER: Final[tuple[str, ...]] = design.FIGURE_ORDER
 DATASET_MARKERS: Final[tuple[str, ...]] = ("o", "s", "^", "v", "D", "P", "X", "*", "<", ">")
 
 DISPLAY: Final[dict[str, str]] = {r.key: r.short for r in design.REPRESENTATIONS}
+
+# ---------------------------------------------------------------------------
+# Combined-figure x ticks. The halves do not share an x *scale* --- exact GED
+# spans ten strata where the structural reference and the bracket span
+# sixty-two --- so the most a reader can be given is a shared set of tick
+# *values* wherever two panels cover the same range of n.
+#
+# The bracket panels and the structural panel do cover the same range, so they
+# get the identical fixed set below and the eye can carry a value across the
+# rule. The exact-GED panel covers 3-12, where that set has no tick at all, so
+# it is stepped by 1 instead.
+#
+# The two cannot be unioned onto a *linear* structural panel: 3..12 is 12 % of
+# an axis that runs to 76, which at 6.5 pt puts ten labels into roughly 7 mm.
+# They are unioned onto a piecewise one instead --- see STRUCT_ZOOM_FRACTION.
+# ---------------------------------------------------------------------------
+
+#: Shared by panel (a) and the bracket small multiples, which span the same n.
+BRACKET_TICKS: Final[tuple[int, ...]] = (15, 30, 45, 60, 75)
+
+#: Step for the exact-GED panel, whose whole range sits below the first
+#: bracket tick.
+#:
+#: **2, not 1.** The manuscript's text block is 4.72 in (``design.text_width``),
+#: which leaves this panel 1.00 in for ten strata. Measured, a 2-digit label at
+#: 5.7 pt is 0.107 in wide, so step 1 gives a *negative* 0.005 in gap between
+#: "10", "11" and "12" --- it shipped that way for one render. Step 2 lands the
+#: same five values the structural zoom labels, so the two windows now carry an
+#: identical set.
+EXACT_TICK_STEP: Final[int] = 2
+
+# ---------------------------------------------------------------------------
+# The structural panel's piecewise x scale.
+#
+# (a) spans 3-76 where (b)'s wide axes stop at 12, so on a linear (a) the
+# exact-GED window is a 12 % sliver and the eye compares (a)'s *large*-n region
+# against (b)'s small-n one. That misreading is not hypothetical: measured at
+# matched n, IsalGraph leads both nauty arms below the ceiling and trails above
+# it under every reference --- wl, lb and ub alike --- so the split is n, not
+# the yardstick, and a figure that invites the other reading is a figure that
+# will be misquoted. Giving the window real width makes the matched-n
+# comparison the easy one.
+#
+# The cost is that (a)'s x axis is no longer linear, so slopes either side of
+# the knot are not comparable and the panel must say so. The knot is drawn.
+# ---------------------------------------------------------------------------
+
+#: Node count the structural panel's scale breaks at, half a stratum above the
+#: exact-GED ceiling so it falls between n = 12 and n = 13 rather than on a
+#: measured point.
+STRUCT_ZOOM_KNOT: Final[float] = EXACT_CEILING + 0.5
+
+#: Share of the structural panel's width given to ``n <= STRUCT_ZOOM_KNOT``.
+#: Ten strata of sixty-two, so 0.50 is a little over three times their linear
+#: share. Higher squashes the tail, which is where the result lives; the tail
+#: still gets 0.86 in for its 52 strata at this value.
+STRUCT_ZOOM_FRACTION: Final[float] = 0.50
+
+#: Data limits the piecewise map is pinned to. Fixed rather than taken from the
+#: data so the two halves of the scale cannot drift if a stratum is added.
+STRUCT_X_LIMITS: Final[tuple[float, float]] = (2.0, 78.0)
+
+#: Labelled ticks inside the zoomed window --- the same five values the exact
+#: panel labels, so one window reads across the other.
+#:
+#: **Every stratum 3..12 does not fit, and no zoom fraction makes it fit.** The
+#: panel is 1.72 in of a 4.72 in text block; at ``fraction = 0.50`` the zoom is
+#: 0.86 in over 10.5 strata, a pitch of 0.082 in, against the 0.140 in a 2-digit
+#: label needs at 6.5 pt (measured, not estimated from the point size --- the
+#: estimate under-predicts by a third). Step 1 would need ``fraction = 0.86``,
+#: which leaves the 52-stratum tail 0.24 in.
+ZOOM_TICKS: Final[tuple[int, ...]] = (4, 6, 8, 10, 12)
+
+#: Labelled ticks outside it. :data:`BRACKET_TICKS` minus 15.
+#:
+#: **15 cannot be labelled on (a) at any zoom fraction or panel width.** It sits
+#: 2.5 strata past the knot on the compressed side, where the pitch is
+#: ``2.5 (1 - fraction) / (78 - 12.5)`` of the panel --- 0.033 in here against
+#: the 0.140 in needed --- and *widening the zoom moves it closer to 12, not
+#: further*, because it shrinks the compressed side's slope.
+#:
+#: So one of 12 and 15 goes, and it is 15. 12 is the exact-GED ceiling, it is
+#: where the axis breaks, and the caption's argument is phrased as "below the
+#: ceiling / above it"; 15 is an arbitrary grid value the bracket panels carry
+#: anyway, and it keeps a tick mark here without a label.
+STRUCT_TAIL_TICKS: Final[tuple[int, ...]] = (30, 45, 60, 75)
+
+#: Figure fraction the "(b)" panel letter occupies to the left of its axes.
+#: :func:`design.panel_letter` right-aligns at -0.02 axes fraction, so a rule
+#: centred on the raw gap runs into the letter; the rule is centred on the gap
+#: minus this instead.
+PANEL_LETTER_WIDTH: Final[float] = 0.020
+
+#: Legend rows below the combined figure. Each is centred independently, so a
+#: seven-entry legend reads 4 over 3 rather than 4 over 3 hanging left.
+LEGEND_ROWS: Final[int] = 2
 
 
 @dataclass(frozen=True)
@@ -454,8 +559,23 @@ def figure_one(points: list[AggregatePoint], out: Path) -> list[str]:
         linespacing=1.35,
     )
 
+    # 🔴 Two rows, not one row of seven. This is the fix for the placement defect
+    # 05_results.tex:463-470 records as open, and it is the whole fix: measured at
+    # the declared 4.72 in, the one-row legend is 6.83 in wide on its own and hangs
+    # 1.05 in off the left edge, so `bbox_inches="tight"` writes a 6.83 in box and
+    # \includegraphics scales the page copy to 69 %, landing declared 5.5-6.5 pt
+    # labels at 3.8-4.5 pt. The axes span 0.35-4.67 in and the title 2.23 in, both
+    # inside the block -- so the legend is the entire cause. The docstring of
+    # figure_one_single_reference used to say a narrow render "also needs a
+    # shorter title"; measured, the title is innocent.
     handles, labels = left.get_legend_handles_labels()
-    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    design.shared_legend_rows(
+        fig,
+        handles,
+        labels,
+        counts=design.balanced_rows(len(labels), LEGEND_ROWS),
+        y=LEGEND_Y,
+    )
     fig.subplots_adjust(left=0.075, right=0.99, top=0.875, bottom=AXES_BOTTOM)
     saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
@@ -526,11 +646,20 @@ def figure_one_single_reference(
 
             ⚠ Passing a narrower width is NOT sufficient on its own.
             ``save_figure`` writes with ``bbox_inches='tight'``, so the output
-            box is the CONTENT box: at 4.72 in the seven-column legend and the
-            title overflow and the tight box expands back to about 7 in, with
-            nothing in the output to say so. A genuine narrow render also needs
-            a narrower legend and a shorter title, which is a different figure.
-            Measured, not assumed: both renders came back 7.03 in wide.
+            box is the CONTENT box: at 4.72 in the seven-column legend overflows
+            and the tight box expands back out, with nothing in the output to
+            say so. **This function still has that defect.** Measured on the
+            current code, it declares 4.72 in and writes 6.83 in, and the
+            legend alone accounts for all of it --- 6.83 in wide, spanning
+            -1.05 to 5.77 while the axes span 0.35 to 4.67. The title is not
+            the cause; at 2.23 in it sits inside the axes.
+
+            The defect now has a fix, which this function has not adopted:
+            :func:`design.shared_legend_rows` splits the same entries over
+            centred rows, and :func:`figure_one_combined` carries the identical
+            seven labels at 4.72 in and writes 4.77 in. Adopting it here means
+            re-rendering a figure a test pins, so it is a deliberate deferral
+            rather than an oversight.
 
     Returns:
         Paths written.
@@ -631,8 +760,17 @@ def figure_one_single_reference(
     axis.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=12))
     axis.set_ylim(-0.75, 1.05)
 
+    # Two rows, for the reason recorded at figure_one's legend: a one-row
+    # seven-entry legend measures 6.83 in at a declared 4.72 in and drags the
+    # tight bbox out with it. Measured after this change: 4.76 in.
     handles, labels = axis.get_legend_handles_labels()
-    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    design.shared_legend_rows(
+        fig,
+        handles,
+        labels,
+        counts=design.balanced_rows(len(labels), LEGEND_ROWS),
+        y=LEGEND_Y,
+    )
     fig.subplots_adjust(left=0.105, right=0.985, top=0.905, bottom=AXES_BOTTOM + 0.045)
     saved = [str(q) for q in design.save(fig, out)]
     plt.close(fig)
@@ -713,6 +851,59 @@ def _draw_series(
         )
 
 
+def _apply_struct_zoom(ax: Any, fraction: float) -> None:
+    """Put a two-piece linear x scale on the structural panel.
+
+    Both pieces are linear, so a slope is still a slope *within* a piece; only
+    the ratio between the two pieces is manufactured. The map is continuous and
+    strictly increasing at the knot, and extrapolates linearly beyond the
+    limits, which matplotlib requires of a ``function`` scale.
+
+    Args:
+        ax: The structural axes.
+        fraction: Share of the axis width given to ``n <= STRUCT_ZOOM_KNOT``.
+            Must lie strictly inside ``(0, 1)``.
+
+    Raises:
+        ValueError: If *fraction* is not strictly between 0 and 1.
+    """
+    if not 0.0 < fraction < 1.0:
+        raise ValueError(f"fraction must lie in (0, 1), got {fraction}")
+    lo, hi = STRUCT_X_LIMITS
+    knot = STRUCT_ZOOM_KNOT
+    slope_lo = fraction / (knot - lo)
+    slope_hi = (1.0 - fraction) / (hi - knot)
+
+    def forward(x: Any) -> Any:
+        values = np.asarray(x, dtype=float)
+        return np.where(
+            values <= knot,
+            (values - lo) * slope_lo,
+            fraction + (values - knot) * slope_hi,
+        )
+
+    def inverse(y: Any) -> Any:
+        values = np.asarray(y, dtype=float)
+        return np.where(
+            values <= fraction,
+            lo + values / slope_lo,
+            knot + (values - fraction) / slope_hi,
+        )
+
+    ax.set_xscale("function", functions=(forward, inverse))
+    ax.set_xlim(lo, hi)
+    # The break, drawn rather than captioned alone: it is also the node count
+    # above which exact GED stops being computable, so it marks which half of
+    # (b) a given part of (a) is to be read against.
+    ax.axvline(
+        knot,
+        color=design.INK_SEPARATOR,
+        linewidth=0.6,
+        linestyle=(0, (2.5, 1.8)),
+        zorder=1.5,
+    )
+
+
 def figure_one_combined(
     points: list[AggregatePoint],
     out: Path,
@@ -720,6 +911,8 @@ def figure_one_combined(
     reference: str = "wl",
     degenerate: str | None = "wl_subtree",
     width: float | None = None,
+    emphasis: bool = False,
+    struct_zoom: float | None = STRUCT_ZOOM_FRACTION,
 ) -> list[str]:
     """The structural reference beside graph edit distance, in one figure.
 
@@ -753,6 +946,17 @@ def figure_one_combined(
         width: Render width in inches; defaults to the frozen 7.0 in constant.
             See :func:`figure_one_single_reference` for why a narrower value is
             not sufficient on its own.
+        emphasis: Carry :data:`design.PRIMARY_FAMILIES` into the **overlay**
+            bracket panel, so it foregrounds the same arms as (a), the exact
+            panel and the information-content figure. Off, the overlay mutes
+            everything that is not ours, which puts ``min_dfs`` and ``agm_cam``
+            --- canonical codes the claim is scoped against --- behind the
+            serializations they are being compared with. The per-arm small
+            multiples are never muted either way: an arm is the subject of its
+            own panel.
+        struct_zoom: Share of panel (a)'s width given to the exact-GED window,
+            or ``None`` for a linear axis. See :data:`STRUCT_ZOOM_FRACTION` for
+            what the break buys and what it costs.
 
     Returns:
         Paths written.
@@ -799,10 +1003,18 @@ def figure_one_combined(
 
     # Outer split: (a) | rule | (b). The middle column is empty and exists only
     # to hold the gap the rule is drawn down.
-    outer = fig.add_gridspec(1, 3, width_ratios=[1.62, 0.26, 3.00], wspace=0.0)
+    # The middle column was 0.26 and the gap it opened was about 8 mm, of which
+    # the "(b)" letter took the right-hand third: (a), the rule and the letter
+    # all crowded into one band. Widened so each of the three clearances is
+    # legible on its own.
+    # (a) was 1.62 against (b)'s 3.00. The zoom needs the width: ten labelled
+    # strata in half of (a) only clear 6.5 pt once (a) reaches about 2.5 in.
+    outer = fig.add_gridspec(1, 3, width_ratios=[2.15, 0.55, 2.70], wspace=0.0)
     ax_struct = fig.add_subplot(outer[0, 0])
+    # 1.55 was enough for the five ticks MaxNLocator chose. Ten stepped by 1
+    # need the width: at 1.55 the panel prints "10 11 12" as one glyph run.
     inner = outer[0, 2].subgridspec(
-        nrows, 1 + ncols, width_ratios=[1.55, *([1.0] * ncols)], wspace=0.13, hspace=0.30
+        nrows, 1 + ncols, width_ratios=[2.05, *([1.0] * ncols)], wspace=0.13, hspace=0.30
     )
     ax_exact = fig.add_subplot(inner[:, 0], sharey=ax_struct)
 
@@ -842,25 +1054,45 @@ def figure_one_combined(
                 )
                 if not sel:
                     continue
+                # Every family stays primary here so REFERENCE_LINESTYLE, not
+                # SECONDARY_DASH, sets the dash: the LB/UB distinction is the
+                # whole point of these panels and must survive the muting.
                 style = design.line_kwargs(rep, ref, primary=frozenset(design.Family))
                 style["marker"] = "None"
                 style["linewidth"] = (design.LW_REFERENCE if rep.is_ours else 0.95) * scale
-                if key is None and not rep.is_ours:
+                lead = rep.family in design.PRIMARY_FAMILIES or rep.is_ours
+                if key is None and not (lead if emphasis else rep.is_ours):
                     style["alpha"] = 0.55
                 ax.plot([p.n for p in sel], [p.rho for p in sel], **style)
         ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
         ax.set_ylim(-0.75, 1.05)
         ax.grid(True, alpha=design.GRID_ALPHA, linewidth=design.GRID_LW)
         ax.tick_params(labelsize=design.FS_TICK - 1.4, labelleft=False)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=4))
+        ax.xaxis.set_major_locator(FixedLocator(list(BRACKET_TICKS)))
         if index // ncols != nrows - 1:
-            ax.set_xticklabels([])
+            # Not set_xticklabels([]): against a FixedLocator that is a
+            # label-count mismatch, and it silently strips the ticks too.
+            ax.tick_params(labelbottom=False)
 
     for ax in (ax_struct, ax_exact):
         ax.axhline(0.0, color=design.INK_RULE, linewidth=0.6, linestyle=":")
         ax.set_ylim(-0.75, 1.05)
         design.finish_axes(ax)
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=8))
+    # (a) carries the bracket's tick values *and*, inside the zoom, a subset of
+    # the exact panel's, so a reader can read one n off either half against it.
+    # A locator would put a tick at 0, where there is no stratum: the smallest
+    # is n = 3.
+    if struct_zoom is not None:
+        _apply_struct_zoom(ax_struct, struct_zoom)
+        ax_struct.xaxis.set_major_locator(FixedLocator([*ZOOM_TICKS, *STRUCT_TAIL_TICKS]))
+        # 15 gets a mark but no label, so the bracket panels' first tick still
+        # has a position on (a) without colliding with 12.
+        ax_struct.xaxis.set_minor_locator(FixedLocator([BRACKET_TICKS[0]]))
+        ax_struct.tick_params(axis="x", which="minor", length=1.8)
+    else:
+        ax_struct.xaxis.set_major_locator(FixedLocator(list(BRACKET_TICKS)))
+    ax_exact.xaxis.set_major_locator(MultipleLocator(EXACT_TICK_STEP))
+    ax_exact.tick_params(axis="x", labelsize=design.FS_TICK - 0.8)
     # One y scale, one set of tick labels. Without this (b) reprints the same
     # ticks a centimetre from (a)'s and the axis reads as two axes.
     ax_exact.tick_params(labelleft=False)
@@ -869,20 +1101,37 @@ def figure_one_combined(
     design.panel_letter(ax_struct, "a")
     design.panel_letter(ax_exact, "b")
 
-    handles, labels = ax_struct.get_legend_handles_labels()
-    design.shared_legend(fig, handles, labels, ncol=7, y=LEGEND_Y)
+    # Matplotlib hands back handles in the order the artists were added, which
+    # puts every band series before every errorbar series and so scrambles the
+    # registry order. Re-order by FIGURE_ORDER, which also lands the four
+    # foregrounded arms on the first row and the three muted ones on the second.
+    by_label = dict(zip(*ax_struct.get_legend_handles_labels()[::-1]))
+    ordered = [design.BY_KEY[k].short for k in struct_reps if design.BY_KEY[k].short in by_label]
+    design.shared_legend_rows(
+        fig,
+        [by_label[name] for name in ordered],
+        ordered,
+        counts=design.balanced_rows(len(ordered), LEGEND_ROWS),
+        y=LEGEND_Y_COMBINED,
+        row_gap=LEGEND_ROW_GAP,
+    )
     fig.subplots_adjust(left=0.078, right=0.992, top=0.935, bottom=AXES_BOTTOM + 0.045)
     fig.text(
         0.5,
         AXES_BOTTOM - 0.005,
-        "graph size $n$",
+        "Graph Size $n$",
         ha="center",
         va="top",
         fontsize=design.FS_LABEL,
     )
 
     # The rule, drawn after subplots_adjust so it spans the settled axes box.
-    x_rule = 0.5 * (ax_struct.get_position().x1 + fig.axes[1].get_position().x0)
+    # Centred on the gap *minus* the panel letter, so the clearance (a)-to-rule
+    # and the clearance rule-to-"(b)" come out equal rather than the letter
+    # sitting on the rule.
+    x_rule = 0.5 * (
+        ax_struct.get_position().x1 + fig.axes[1].get_position().x0 - PANEL_LETTER_WIDTH
+    )
     top = ax_struct.get_position().y1
     bottom = ax_struct.get_position().y0
     fig.add_artist(
@@ -1182,6 +1431,24 @@ def build_parser() -> argparse.ArgumentParser:
             "--reference; the profile must carry that reference AND exact/lb/ub"
         ),
     )
+    ap.add_argument(
+        "--emphasis",
+        action="store_true",
+        help=(
+            "foreground design.PRIMARY_FAMILIES in the overlay bracket panel, "
+            "matching the information-content figure. Without it that panel "
+            "mutes every arm that is not ours, including the canonical codes"
+        ),
+    )
+    ap.add_argument(
+        "--struct-zoom",
+        type=float,
+        default=STRUCT_ZOOM_FRACTION,
+        help=(
+            "share of panel (a)'s width given to the exact-GED window n <= 12, "
+            "so it can carry the exact panel's ticks. 0 restores a linear axis"
+        ),
+    )
     return ap
 
 
@@ -1225,6 +1492,8 @@ def main(argv: list[str] | None = None) -> int:
             reference=args.reference,
             degenerate=args.degenerate,
             width=args.width,
+            emphasis=args.emphasis,
+            struct_zoom=args.struct_zoom or None,
         )
         LOGGER.info("%s -> %s", stem, ", ".join(saved))
         LOGGER.info(
