@@ -836,6 +836,12 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    | `linux` | 1,685 | 0.4850 | 0.7097 | −0.2247 [−0.3492, −0.0922] | 0.4798 | 0.1609 | **+0.3189 [+0.1699, +0.4454]** |
    | **clears its own size null** | | | | **1 of 5** | | | **5 of 5** |
 
+   ⚠ **This move is carried by the table and by nothing else.** The size null is
+   `ρ(|n_i − n_j|, d_ref)`, which is identically zero inside a stratum `n_i = n_j` — that is
+   precisely why move 5's within-`n` view is the size-controlled one. So **Fig. 2 cannot show this
+   result**, in either panel, and no rebuild of its profile adds the arm. Do not write a sentence
+   that sends the reader to the figure for it.
+
    Note what the ρ column does **not** do: it barely moves, and on three datasets it *falls*. The
    representation did not get better. **The baseline it is being measured against collapsed** — the
    reference's own size null drops from a median of 0.914 to 0.516 — which is precisely what 3
@@ -1226,7 +1232,7 @@ but the artifact is not made.
 | **Tab. 4** | **Datasets** — 10 rows, both suites, label column, discarded side | 4.1 | 1.2 | **BUILD** (`data.md` §1) | **MUST** | AE.1, AE.4b, E1, E6 |
 | Tab. 5 | **Payload bits per stored byte** | 4.4 | 0.3 | `T-06/tab_bit_overhead` | CUT-1 | R3.6a |
 | **Fig. 1** | **Information content** vs `n`, with a coding-overhead inset | 5.2 | 0.8 | `T-06/fig4_information_content` | STRONG | AE.4a, H2 |
-| **Fig. 2** | 🔴 **REPLACED 2026-08-30 — the within-`n` correlation under BOTH references.** **(a)** the WL kernel, one panel, exact at every `n`; a rule; **(b)** the previous figure entire — exact GED at `n ≤ 12` and the bracket small-multiples above. Shared ρ axis, one legend, per-panel `x`. **The reader sees one variable change**, which is the §5.4 move-4 argument made visually and costs no extra float. Rendered 7.03 × 4.48 in against the old 7.03 × 4.38, so the page budget is unchanged | 5.4 | 0.9 | `T-28/fig_rho_vs_size_wl_vs_ged` | STRONG | H3, AE.1, R3.5b |
+| **Fig. 2** | 🔴 **REPLACED 2026-08-30 — the within-`n` correlation under BOTH references.** **(a)** the WL kernel, one panel, exact at every `n`; a rule; **(b)** the previous figure entire — exact GED at `n ≤ 12` and the bracket small-multiples above. Shared ρ axis, one legend, per-panel `x`. **The reader sees one variable change.** Rendered 7.03 × 4.48 in against the old 7.03 × 4.38, so the page budget is unchanged. **Carries moves 5–6 — the within-`n` instrument applied to both references, and the head-to-head under WL where the nauty result is visible.** ⚠ It does **not** carry move 4: the size null is `ρ(\|n_i − n_j\|, d_ref)`, and inside a stratum `n_i = n_j` that argument is identically zero **by construction** — which is exactly why the within-`n` view is the size-controlled one. The null is therefore structurally absent from this figure and from the profile behind it, and no rebuild adds it. **Move 4 is the inline table's job alone** | 5.4 | 0.9 | `T-28/fig_rho_vs_size_wl_vs_ged` | STRONG | H3, AE.1, R3.5b |
 | — | 🔴 **`fig1_rho_vs_size.pdf` must be REGENERATED regardless** — its `wl_subtree` series carries the `_wl_counts` defect (§5.4 move 5). If Fig. 2 stays the GED-only figure, it is still wrong until rebuilt | 5.4 | — | `6b89b4f` | **MUST** | — |
 | **Fig. 3** | **The cost law** — encode time vs \|Aut(G)\| on one ladder, with `n`, `m` and the degree sequence held fixed | 5.3 | 0.7 | `T-13/fig_t13_main` | STRONG | **R3.7d**, H4 |
 | **Alg. 1** | **S2G — the interpreter.** Inlined, not floated (E7) | 3.1 | 0.6 | submitted | STRONG | — |
