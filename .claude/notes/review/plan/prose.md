@@ -806,6 +806,18 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    Suite-1 datasets, worst −0.4597 on AIDS. **No framing repairs this and none is attempted.**
    Over all 25 records: below its own size null on **17**, every one of them significantly, one
    undetermined, seven favouring the string.
+
+   > **Concede it with the competitor columns beside it, because they change what the concession
+   > means.** The baseline is not beating *us*; it is beating the field. Under **exact** GED no
+   > representation clears it on more than **two of five** datasets — IsalGraph 1/5, min-DFS 2/5,
+   > AGM CAM 2/5, nauty-graph6 0/5, nauty-sparse6 0/5 — and under the **proven lower bound** none
+   > clears it on **any of nine**, for all five. Under the upper bound most clear on most. So the
+   > sentence to write is not *"the canonical string fails against graph edit distance"* but
+   > *"correlation with graph edit distance on these benchmarks does not separate the
+   > representations, because the reference does not measure what the comparison needs it to."*
+   > That is C16, it is the honest reading, and it is the one that makes moves 3–4 land instead of
+   > sounding like recovery. **It exonerates no one, ourselves included** — which is exactly why a
+   > reviewer will accept it. *(T-28)*
 2. **Then the bracketed half, which is *undetermined* rather than failed.** On the same pairs the
    verdict inverts across the proven bracket on **7 of 10** datasets — below under LB, clearing under
    UB. **Both bounds printed, always.** The bracket being wide enough to flip a verdict on 21.7 M
@@ -933,6 +945,46 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    is computed under a topology-only cost model on the same stripped graphs. Density is measured and
    is not sufficient either. The real decomposition is size versus structure. *(R1.3a, R1.3b)*
 
+
+11. **What §5.4 can claim for the representation without winning the correlation.** Moves 1–10 settle
+    that graph edit distance does not separate the representations on these cohorts (C16). That
+    leaves the subsection needing a positive statement that does not depend on a correlation
+    ranking, and there are three, in descending order of how well they are established.
+
+    a. **Family, not method (C17).** Under the WL reference all three canonical codes clear their own
+       node-count baseline on 12 of 14 cells and both edge-list serialisations clear it on 1 and 0.
+       Canonical codes carry structure here; serialisations carry size. **Verified.** 🔴 IsalGraph is
+       *not* distinctive within its family — min-DFS clears the same twelve with a marginally larger
+       mean excess — so this is a claim about a class and must read as one.
+
+    b. **Compactness against the same competitor, cross-referenced not restated.** §5.2 already
+       establishes the canonical string is shorter than the gSpan minimum DFS code on **112 of 112**
+       strata above `n ≈ 20`, median **+215 bits**, no losses and no ties. That is a clean sweep over
+       the one competitor §5.4 concedes, and one sentence of cross-reference is the right weight —
+       **restating it here duplicates H2 and drops its two mandatory scopes** (*above* `n ≈ 20`,
+       *among canonical codes*). "IsalGraph produces shorter encodings" unqualified is already a red
+       line. **Verified, and it is C2.**
+
+    c. ⏳ **The edit path stays in graph space — NOT YET VERIFIED. Do not draft this.** The
+       hypothesis: `S2G` is total over `Σ*`, so every intermediate string on a Levenshtein path
+       between two IsalGraph strings decodes to a graph, whereas a single edit of a minimum DFS code
+       generally violates the code's ordering constraints and yields a token sequence that is not a
+       DFS code of any graph. If it holds it is the strongest item here, because §5.4's whole
+       instrument presupposes it: **a Levenshtein distance is a graph distance only if the path
+       between two codes consists of graphs.** Three ways it dies and all three are being measured:
+       `S2G` may reject some strings; it may accept them only by returning a degenerate one-node
+       placeholder, which would make the property vacuous; or min-DFS codes may turn out robust to
+       single edits.
+
+       > 🔴 **And one sentence that must never be written, whatever comes back:** *"min-DFS has no
+       > decoder"* or *"a minimum DFS code cannot be decoded to a graph."* **Both are false.** A DFS
+       > code lists every edge as `(i, j, l_i, l_e, l_j)` with DFS indices, so the graph is
+       > reconstructible by construction — that is what makes it a canonical form. The claim is about
+       > **single-edit neighbours of a valid code**, never about decodability, and it is being made
+       > against the competitor R3 named as the most important. Getting this wrong is not a scoping
+       > error, it is a factual error about a well-known method.
+
+
 **§5.5 The pre-registered confirmatory family** (~0.8 p)
 Reported **exactly as it came out**, including the negative results. `N_actual = 79`, 79 cells
 carrying a p-value, **75 rejected at q = 0.05**.
@@ -1044,6 +1096,8 @@ before reaching this form. Full derivations: `../tasks/T-06-FRAMING.md`, `../tas
 | C8 | *"The canonical string contributes significant incremental information about graph edit distance beyond node-count and density difference — significant on 19 of 19 identifiable fits — but node-count difference carries more weight on 17 of 19."* |
 | C9 | *"Holding the generator fixed and adding structural distortion, the trivial size baseline stays flat at ρ ≈ 0.92 while the canonical string's correlation falls from 0.93 to 0.67."* |
 | C10 | *"No single representation leads on both axes, and the two that lead each axis are undefined on the other."* |
+| **C16** | *"Under exact graph edit distance, no representation tested clears the node-count baseline on more than two of the five Suite-1 datasets, and under the proven lower bound none clears it on any of the nine Suite-2 datasets. Under the upper bound most clear on most. Which representation appears to track graph edit distance is therefore a property of which bound is read, not of the representation."* Measured with paired graph-level intervals: `exact` — IsalGraph 1/5, min-DFS 2/5, AGM CAM 2/5, nauty-graph6 0/5, nauty-sparse6 0/5; `lb` — **0/9 for all five**; `ub` — 5/9, 6/9, 9/9, 6/9, 5/9. **This is the opening move of §5.4** and it is stronger than "the representation fails", because it is a statement about the benchmark that happens to exonerate no one. It is C3 and C5 sharpened by the competitor columns, not a new claim *(T-28)* |
+| **C17** | *"Under the Weisfeiler–Lehman reference the split is between families rather than between methods: all three canonical codes clear their own node-count baseline on twelve of fourteen dataset cells — IsalGraph, the minimum DFS code and AGM CAM alike — while the two canonically-labelled edge-list serialisations clear it on one and zero. Canonical codes carry structure on these cohorts; serialisations carry size."* 🔴 **IsalGraph is NOT distinctive here and the sentence must not imply it is** — min-DFS clears the same twelve cells with a slightly *larger* mean excess (+0.148 against +0.125). The finding is real, it is favourable, and it is about a **class** *(T-28)* |
 | **C14** | *"Holding every representation distance fixed and replacing only the reference, the canonical string's correlation exceeds its own node-count baseline on five of the five Suite-1 datasets against a Weisfeiler–Lehman kernel, where it does so on one of five against exact graph edit distance. Its correlation does not rise — on three of the five it falls — and the reference's own size null drops from a median of 0.914 to 0.516. What changes is the baseline, not the representation."* **The last sentence is not optional.** Without it the paragraph reads as a rescue; with it, it is C5 confirmed by a second route and the honest reading of both. *(T-28)* |
 | **C15** | 🔴 **CORRECTED 2026-08-30 — the frozen wording said "in both size bands" and that is false.** *"Under that reference the canonical string outranks both canonically-labelled nauty serialisations on every one of the fourteen dataset cells measured, and within equal node counts **at `n ≤ 20`** (58 strata higher against 31 lower, sign test p = 0.0055 against each). **Above `n = 20` the advantage does not hold**: it ties nauty-graph6 (53 against 57, p = 0.78) and is outranked by nauty-sparse6 (40 against 70, p = 0.0054). It is outranked by the gSpan minimum DFS code under every reference we tested."* **The `n ≤ 20` scope is load-bearing and belongs in the same sentence** — this is H2's scoping pattern mirrored, and the same reviewer checks both. The per-dataset verdict and the per-stratum test are **different estimands and do not conflict**: per-dataset aggregation weights by graphs, and most graphs sit at small `n`, so a 14-of-14 dataset sweep is carried by exactly the band where the sign test also finds the advantage |
 
