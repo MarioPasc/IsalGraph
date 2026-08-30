@@ -882,6 +882,31 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    > (53/57, p = 0.78) and a **significant loss to `sparse6_nauty`** (40/70, p = 0.0054). Write
    > `n ≤ 20` into the sentence that makes the claim.
    >
+   > **⚠ Two boundaries are in play and they are not the same one.** The sign test above splits at
+   > `n = 20`, the paper's existing scope constant. **Fig. 2(a) breaks at `n = 12`**, the exact-GED
+   > ceiling. Measured at the figure's own break, and this is what a caption may say:
+   >
+   > | | exact | lb | ub | wl |
+   > |---|---|---|---|---|
+   > | `nauty_graph6`, `n ≤ 12` | **higher** 15/5 | **higher** 41/11 | — 24/28 | **higher** 41/17 |
+   > | `nauty_graph6`, `n > 12` | *(none)* | — 76/65 | — 59/82 | — 70/71 |
+   > | `sparse6_nauty`, `n ≤ 12` | **higher** 15/5 | **higher** 37/15 | — 24/28 | **higher** 46/12 |
+   > | `sparse6_nauty`, `n > 12` | *(none)* | **lower** 51/90 | **lower** 38/103 | **lower** 52/89 |
+   >
+   > *(higher/lower = sign test rejects at 0.05; — = does not resolve; exact GED has no strata above
+   > the ceiling by construction.)*
+   >
+   > 🔴 **"Leads both below the ceiling and trails both above it, under every reference" is false on
+   > both halves.** Below it, the **upper bound does not resolve** for either arm. Above it,
+   > `sparse6_nauty` trails under all three but **`nauty_graph6` resolves under none of them**. What
+   > *is* supported, and is the useful sentence: **within each band the references agree with each
+   > other, and the direction changes with `n`** — so the split is a property of size, not of the
+   > yardstick. Say that, and name the arm when claiming a trail above the ceiling.
+   >
+   > Note also that the `n ≤ 20` claim in C15 is carried by its `n ≤ 12` part: in the `13 ≤ n ≤ 20`
+   > band nothing resolves for `nauty_graph6` under any reference, and for `sparse6_nauty` only the
+   > upper bound does, *against* us.
+
    > **The two results do not conflict and the reason should be stated once.** The dataset sweep is
    > weighted by graphs and most graphs sit at small `n`, so it is carried by the same band the sign
    > test identifies; the per-stratum test weights every stratum equally and the high-`n` strata are
