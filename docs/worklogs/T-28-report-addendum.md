@@ -318,25 +318,68 @@ real under `equal_n` — the manuscript currently concedes `agm_cam` as a loss.
 | file | what |
 |---|---|
 | `figures/fig_rho_vs_size_wl.{pdf,png}` | the WL reference alone: one panel, one axis, every arm. No bracket and no regime split, because the WL kernel distance is exact at every size. `wl_subtree` draws flat at ρ ≡ 1 and is annotated as the identity. |
-| `figures/fig_rho_vs_size_wl_vs_ged.{pdf,png}` | **(a)** WL kernel, **(b)** exact GED (n ≤ 12), **(c)** the GED bracket (n > 12). Shared y axis, ticks on (a) only, one legend, one BH correction over all 908 points. |
+| `figures/fig_rho_vs_size_wl_vs_ged.{pdf,png}` | **(a)** the WL kernel; a rule; **(b)** `figure_one` entire — exact GED on the wide axes and the LB/UB bracket as small multiples. Shared ρ axis with one set of tick labels, one legend, two panel letters, no in-axes annotation. (a) carries a **piecewise-linear x axis** breaking at the exact-GED ceiling, so the matched-`n` window is not a twelfth of the panel. |
+| `figures/fig_rho_vs_size_wl_vs_ged_emphasis.{pdf,png}` | the same, with the contrast emphasised. |
+| `figures/fig_rho_vs_size_wl_vs_ged.caption.tex` | the caption. Everything stripped from the canvas lives here. |
 
-Both are 7.03 in wide, matching `fig1_rho_vs_size.pdf` exactly — **and
-inheriting its open placement defect**: rendered 7.03 in into Pattern
-Recognition's 4.72 in text block, declared 5.5–6.5 pt labels reach the page at
-3.7–4.4 pt. `05_results.tex:463–470` records this as unfixed. A `--width` flag
-exists and is **not sufficient alone**: `save_figure` writes with
-`bbox_inches="tight"`, so at 4.72 in the seven-column legend overflows and the
-box expands back to 7.03 in with nothing in the output to say so.
+**Slopes are comparable within a piece of (a) and not across its break**, and the
+caption says so. `--struct-zoom 0` restores the linear axis and round-trips
+exactly, which is the answer if a reviewer objects to a broken axis.
 
-**The x scale is not shared across the three panels and the figure says so.**
-Exact GED spans 10 strata and the other two span 62; a common scale would render
-panel (b) about 0.4 in wide. The y axis *is* genuinely shared. Panels (b) and (c)
-stay separate for the reason `figure_one` splits them — a bracket sharing an axis
-with an exact value invites the reader to read one as the other.
+### 6.1 🔴 The width claim was stale — measure the MediaBox, do not reason from the constant
 
-**Panels (b) and (c) draw `wl_subtree` from the corrected cached matrices**, so
-that series does **not** match `fig1_rho_vs_size.pdf`, which carries the §4
-defect. Every other series matches it exactly.
+This section previously said both figures were 7.03 in and inherited
+`fig1_rho_vs_size.pdf`'s placement defect. That is now true of only one of them.
+`design.text_width()` returns **4.72** (`PATREC_TEXT_WIDTH_INCHES`), not the 7.0
+IEEE constant, so a figure built at the default width is already at the placement
+width. Measured on disk:
+
+| file | measured | placement defect? |
+|---|---|---|
+| `wl/fig_rho_vs_size_wl_vs_ged.pdf` | **4.80 × 4.49 in** | **no** — declared point sizes are within 2 % of printed |
+| `wl/fig_rho_vs_size_wl.pdf` | 7.03 × 3.09 in | **yes** — not re-rendered under the new layout |
+| `ged/fig1_rho_vs_size.pdf` | 7.03 × 4.38 in | **yes** — the published figure, still unfixed |
+
+The combined figure lands 0.08 in over 4.72 rather than springing back to 7.03,
+because its legend now wraps to **two rows** instead of one row of seven. That is
+the mechanism that defeats the trap `05_results.tex:463–470` records: a `--width`
+flag alone is **not** sufficient, because `save_figure` writes with
+`bbox_inches="tight"` and a seven-column legend overflows and drags the box back
+out. **A genuine narrow render also needs a narrower legend**, and the two-row
+legend supplies it — so the trap now has an answer, and the docstring saying it
+does not is itself the next thing to correct.
+
+`ged/fig1_rho_vs_size.pdf` therefore needs regenerating for **two independent
+reasons**: this one, and the `_wl_counts` defect in §4.
+
+### 6.2 What the figure does and does not show
+
+**The two halves do not share an x scale**, and the caption says so. Exact GED
+spans ten strata where the structural reference and the bracket span sixty-two.
+Giving (a) and the bracket panels identical tick *values* makes the shared-scale
+misreading easier, not harder, which is why the caption states that equal ticks
+are not an equal scale.
+
+⚠ **The figure cannot carry the size-null result** (§3.2). The size null is
+`ρ(|n_i − n_j|, d_ref)`, which is identically zero inside a stratum `n_i = n_j` —
+that is exactly why the within-`n` view is the size-controlled one. It is
+structurally absent from this figure and from the profile behind it, and no
+rebuild adds it. The `1 of 5` / `5 of 5` contrast is an `all_pairs` result and
+belongs in the inline table.
+
+🔴 **And do not read a nauty separation off (a) against (b).** Measured, the
+split is `n` and not the reference: IsalGraph is ranked above both nauty
+serialisations below the ceiling under exact GED, the lower bound and WL alike
+(the upper bound not resolving), and below `sparse6_nauty` above the ceiling
+under the lower bound, the upper bound and WL alike. Above `n = 20` the nauty
+margin is in fact *smallest* under WL. Panel (a) is 52 of 62 strata above
+`n = 12` while (b)'s wide axes stop at 12, so comparing them compares different
+size ranges — the matched-`n` counterpart of (a) is (b)'s **bracket small
+multiples**.
+
+**Panels draw `wl_subtree` from the corrected cached matrices**, so that series
+does **not** match `fig1_rho_vs_size.pdf`, which carries the §4 defect. Every
+other series matches it exactly.
 
 ---
 
