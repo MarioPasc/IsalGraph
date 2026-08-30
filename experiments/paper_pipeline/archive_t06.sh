@@ -29,7 +29,12 @@ DATA=${DATA:-/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/data}
 ROOT=${ROOT:-/media/mpascual/Sandisk2TB/research/ISAL/completed/isalgraph/results/reports}
 REPO=${REPO:-/home/mpascual/research/code/IsalGraph-T06}
 T06="$DATA/source/T06"
-OUT="$ROOT/T-06-full-recompute"
+# The report tree was split into ged/ and wl/ on 2026-08-30, because T-28 added a
+# second family of references (WL kernel, four spectral variants) sharing the same
+# representation distances. This script archives the GED half only; the WL half is
+# T-28's and is written by its own campaign. Writing to the old flat $OUT would
+# recreate data/ and figures/ beside the split and leave two copies of fig1.
+OUT="$ROOT/T-06-full-recompute/ged"
 
 cd "$REPO" || exit 1
 mkdir -p "$OUT/data" "$OUT/figures" || exit 1
