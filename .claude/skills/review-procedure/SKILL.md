@@ -231,3 +231,141 @@ question and the pointer, and let the manuscript carry the derivation.
 response letter both. It does not change a claim, a number, a citation or an equation; it
 removes the register that reads as machine-written. Run it last, after the numbers are verified,
 so a rewrite cannot move one.
+
+---
+
+## 7. Handoff — where the revision stands, and what will waste your time
+
+**Written 2026-08-31, at the close of the WL-integration and compression waves.** Everything below
+was measured, not estimated. Re-measure before trusting any number in this section; it is a
+snapshot, and this project has shipped a stale figure before.
+
+### 7.1 State, and the one decision that is not yours
+
+| artifact | pages | gates at close |
+|---|---:|---|
+| `review1/article` | **51** | exit 0 · 0 undefined · 0 float-too-large · 0 overfull > 5 pt · **46 cited** |
+| `review1/supplementary` | **59** | exit 0 · 0 undefined |
+| `review1/response` | **15** | exit 0 · **1** `\pending{}` — the page count, open by decision |
+
+🔴 **51 pages against a hard 35, and compression is exhausted.** Every section measured its own
+claim-free headroom with `\iffalse` or a clean-room rebuild; the total is **~0.3 p**. §1, §2, §6,
+§7, the abstract and the back matter are each **measured page-neutral** — cutting prose there moves
+no page because the section already shares its last page with the next one. **Do not re-derive
+this.** The gap closes in §3, §4 and §5 or it does not close.
+
+`review1/editor_query_DRAFT.md` is drafted, unsent, and **explicitly the authors' decision, not
+ours**. Its page placeholder is now 51. The plan's own rule: *if the ladder runs out, the manuscript
+asks the Area Editor before it drops a demand.* It has run out.
+
+### 7.2 Read these two files before you type a number
+
+- `.claude/notes/2026-08-30-article-wl/VERIFIED-NUMBERS.md` — every WL, spectral, sign-test and
+  edit-path figure **recomputed from the primary artifacts**, with the derivation stated. **Where
+  it disagrees with `prose.md`'s claim register, it wins**, and it records which claims failed.
+- `.claude/notes/2026-08-30-article-wl/CONTRACT.md` — the frozen narrative for the two distance
+  references, the red lines, and the compression directive. Corrected five times in one session;
+  each correction is dated and reasoned in place.
+
+### 7.3 The claim register is not trustworthy on its own
+
+Four frozen claims carrying specific numbers were audited against primary data. **Two were wrong.**
+
+| | verdict |
+|---|---|
+| **C13** | ✅ sound — but it printed `25.5×–108.6×` with no statement of what varied. It is **node count**, n = 6 to n = 10 |
+| **C14** | 🔴 **wrong twice** — two medians on different denominators (write **0.914 → 0.428**, Suite-1 throughout), and its direction claim is only readable where the pair sets match |
+| **C15** | ✅ verified exactly, cell by cell. Write it as frozen |
+| **C17** | 🔴 **counts reproduce from no primary file.** `"+0.148"` and `"one and zero"` exist only in `prose.md`. Rewritten on measured values |
+
+**Recompute any claim-register wording before using it.** The register is a drafting aid, not a
+source.
+
+### 7.4 Four traps that produce true numbers answering the wrong question
+
+The project's own rule — *a ratio ships with its denominator* — was violated four times in one day,
+each time by a different agent, each time with every individual number correct.
+
+1. **Two campaigns, two pair sets.** The exact-GED column comes from the main T-06 campaign and the
+   WL column from T-28. On `aids` and `linux` those are **different pair sets** (131,148 vs 295,296;
+   1,685 vs 3,916), so the *direction* of the reference swap flips depending on which exact-GED
+   measurement you read. The three IAM Letter rows are on identical pair sets. **Read a direction
+   only where the pair sets match, and say so.**
+2. **Point estimate vs paired bootstrap.** `t28_probe_point_estimates.json` is over each cell's own
+   pairs; `t28_bootstrap_verdicts.json` is over the **intersected** set. They coincide only where
+   every arm completes. **Never put both in one table row** — the manuscript shipped that defect.
+3. **Do not derive the size null.** There is an authoritative field: `size_null_rho` in the probe
+   file, `size_null.point` in `ged/data/rho_table.json`. Deriving it as `ρ − excess` mixes the two
+   conventions above and is wrong on `aids` and `linux`.
+4. **Cell counts vs dataset counts.** The WL bootstrap covers **14 cells**, not 14 datasets: four
+   are Suite-1/Suite-2 duplicates and `suite2/mutagenicity` timed out. Distinct datasets = 10, and
+   `wl/REPORT.md` §3.1 quotes medians over **11**. Say *cells*.
+
+### 7.5 Measurement hazards — each one cost an agent real time
+
+- 🔴 **A page count taken after `git restore` of the build artifacts is wrong.** This repo *tracks*
+  `main.pdf`, `main.aux`, `main.log`, `main.fls`, `main.fdb_latexmk`. latexmk reuses the restored
+  fingerprints and stops before convergence — it reported **49 for sources that build to 50**.
+  **Measure only after `latexmk -C && rm -f main.bbl main.blg`.**
+- **The `rtk` proxy truncates `grep -c` output.** It under-reported the bibliography by two entries.
+  Use `/usr/bin/grep` for any count you intend to write down.
+- **`summary_of_changes` must be built with `make`, not bare `latexmk`** — without its `TEXINPUTS`
+  it dies on `preamble.tex` and poisons its own `.fdb_latexmk`, so the next `make` reports
+  "Nothing to do" and exits non-zero on the stale error.
+- **BibTeX does not treat `%` as a comment character.** A literal `@inproceedings` inside a comment
+  breaks the bibliography.
+
+### 7.6 Dead ends — measured, do not retry
+
+- **Caption leading.** Single-spacing captions saves **nothing**. `\usepackage[font={stretch=1}]
+  {caption}` *costs* a page and adds a float overflow by fighting elsarticle's own `\@makecaption`;
+  a hand-patched `\@makecaption` changes the count by zero. Captions are already `\footnotesize`
+  and `\raggedbottom` absorbs the slack.
+- **Body leading is not available at all.** `\documentclass[review,…]` sets `\@blstr{1.5}` and the
+  35-page limit is stated for a *double-spaced* manuscript, so the document is already **below**
+  what the Guide asks. Tightening it breaches the submission format.
+- **The author biographies are not a page source.** `backmatter.tex` carries the corresponding
+  author's own instruction not to cut them, reinstating them is demand E12, and the user declined
+  that cut when offered it. Worth ~1 p; **not available**.
+
+### 7.7 The cross-reference layer is fragile and silent
+
+Nothing here fails a build. All of it fails a reader.
+
+- **`amsthm` shares one counter across §3.** Adding or removing any theorem-like environment
+  renumbers everything after it. The response letter hard-codes those numbers in a macro block
+  (`\thmInvariant`, `\propInvarianceFloor`, …) because **the letter cannot `\ref` into the
+  article**. After any §3 edit, re-derive the block from `main.aux`:
+  `grep -oE '\\newlabel\{[^}]*\}\{\{[^}]*\}' main.aux`.
+- **Same for section numbers.** Inserting §4.3 pushed four subsection macros down by one; all four
+  were stale and none broke a build.
+- **The supplement hard-codes main-text float numbers** for the same reason. Two had rotted: S9's
+  "Table 1" for the instruction set (it is Table 2) and S6's "Table 1" for the dataset grid (it is
+  Table 3). **Sweep for these after adding any float**, and re-derive from `main.aux`.
+- **The body now contains no algorithm float.** All four listings live in S9. `\algGreedy` expands
+  to `S2`, not `1`. Do not send a listing to S7 — `s07_algorithms_complexity.tex:25` explains why.
+
+### 7.8 A float can delete printed text without failing the build
+
+`fig:edit-path` overflowed the text block by 147 pt, and the overflow was **not whitespace**: the
+caption's closing sentence appeared in **no PDF ever built**, while the build exited 0. Detect it
+with `pdftotext main.pdf - | grep <a phrase from the end of the caption>`, and treat any
+`Float too large for page` in `main.log` as a possible text-loss event rather than a layout nit.
+That figure is 215 × 515 pt, a 2.4:1 portrait; at any legible width it is a dedicated page.
+**A wider-aspect re-render is the only real fix and it is a figure-generation task.**
+
+### 7.9 Open items
+
+1. **The page decision** (§7.1). Nothing else should be cut until it is made.
+2. **Bibliography recency.** 46 entries clears EiC.a's floor of 35, but the most recent non-self
+   entry is **2024**, and the EiC attached a delay consequence. Two or three 2025–2026
+   pattern-recognition papers on graph matching or edit distance close both EiC answers. Verify
+   every DOI against Crossref and record what was checked in a comment above the entry — that
+   convention is already in `refs_added.bib`. **Both trees need the entry**: the article and the
+   supplement have separate `refs_added.bib` files.
+3. **Two supplementary promises are unmet**, flagged rather than papered over: `05_results.tex:653`
+   points at Mantel tests printed nowhere, and `05:831` at per-cell *p*-values that are still
+   absent (the enumeration itself landed).
+4. **The `changes`-package blue version has never been produced for this content.** §2.3 fixes what
+   to mark; the wave deliberately added no markup, and a note at the top of the blue version should
+   declare the wholesale-new sections once rather than painting them blue.
