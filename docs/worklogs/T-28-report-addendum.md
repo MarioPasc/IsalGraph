@@ -9,21 +9,6 @@ estimates are labelled as such and are not verdicts.
 
 ---
 
-## 1. What changed, and what did not
-
-**Only the reference.** Every representation distance `d_R` behind every number
-here is the same cached T-04a matrix `REPORT.md` used — read from
-`data/source/T06/distances/`, never recomputed. What moves is `d_ref`: the WL
-subtree kernel distance and four spectral λ-distance variants are added beside
-`exact` / `lb` / `ub`.
-
-That is the ticket's acceptance criterion and it is enforced structurally: the
-two sides of the correlation are stored in separate trees and joined on
-`graph_ids` at analysis time, so a reference swap cannot touch the
-representation side.
-
----
-
 ## 0. 🔴 CORRECTION, 2026-08-30 — the campaign overturns the `min_dfs` claim
 
 The paired bootstrap has landed on **14 of 15 cells** (`suite2/mutagenicity`
@@ -71,6 +56,21 @@ one. Say so plainly in §5.4 rather than let a reviewer recompute it.
 Numbers: `data/t28_bootstrap_verdicts.json`, per cell, both views, all eight
 references. §3.3's point-estimate tables are left standing as what they are;
 where they disagree with this section, **this section is the measurement**.
+
+---
+
+## 1. What changed, and what did not
+
+**Only the reference.** Every representation distance `d_R` behind every number
+here is the same cached T-04a matrix `REPORT.md` used — read from
+`data/source/T06/distances/`, never recomputed. What moves is `d_ref`: the WL
+subtree kernel distance and four spectral λ-distance variants are added beside
+`exact` / `lb` / `ub`.
+
+That is the ticket's acceptance criterion and it is enforced structurally: the
+two sides of the correlation are stored in separate trees and joined on
+`graph_ids` at analysis time, so a reference swap cannot touch the
+representation side.
 
 ---
 
