@@ -149,7 +149,7 @@ backtracking.
 |---|---|---|---|---|
 | **H1** | The canonical string is a complete invariant — `w*_G = w*_H ⟺ G ≅ H` within a directedness class | Theorem (§3.3.3) + collision census over every GED-positive pair | **CONFIRMED.** 0 of 24,764,422 | §5.1 |
 | **H2** | It is compact relative to established reversible serialisations | Per-stratum information content vs 4 competitors, both bit conventions, IUT | **CONFIRMED where scoped, REFUTED where not.** First among canonical codes above n ≈ 20 (112/112 vs min-DFS, +215 bits, advantage *grows* with n); beaten by nauty-sparse6 at scale | §5.2 |
-| **H3** | Its edit distance approximates graph edit distance | ρ vs exact GED (n ≤ 12) and a proven bracket (n ≤ 98); size null; within-`n`; MRM | **REFUTED at scale, and the refutation generalises.** Below its `\|Δn\|` null on 17 of 25 records; above n ≈ 40 no representation tested is distinguishable from ρ = 0 | §5.4 |
+| **H3** | Its edit distance approximates graph edit distance | ρ vs exact GED (n ≤ 12) and a proven bracket (n ≤ 98); size null; within-`n`; MRM; **and the same test against a second, structural reference** | **REFUTED against graph edit distance — and the refutation is substantially a property of the reference.** Below its `\|Δn\|` null on 17 of 25 GED records; above n ≈ 40 no representation tested is distinguishable from ρ = 0. **Against a Weisfeiler–Lehman kernel reference, the same distances on the same pairs clear the same null on 5 of 5 Suite-1 datasets where 1 of 5 clears against exact GED** | §5.4 |
 | **H4** | Canonicalisation cost is governed by graph size | **A controlled ladder experiment** holding `n`, `m` and the degree sequence fixed while \|Aut(G)\| varies, with a search-free null arm; plus the cohort encode census | **REFUTED, and replaced by something better.** \|Aut(G)\| governs the branching at fixed size: ρ = +0.892, 11 of 12 cells, p = 0.0064, null arm flat at 1.0–1.1× | §5.3 |
 
 **Two of four are refuted and the paper is stronger for it.** H4's refutation is *predictive* — a user
@@ -159,6 +159,20 @@ it is the only claim in the paper established by a **controlled experiment** rat
 observational one, which is worth saying in those words. H3's refutation is a statement about the
 field. Say both plainly; neither needs softening, and softening
 either forfeits the credibility that carries H1 and H2.
+
+> **H3 is scoped, not softened, and the distinction is the whole argument.** *"The canonical string
+> does not approximate graph edit distance on these benchmarks"* stays, in those words, with its
+> numbers intact. What is added is the reason, and the reason is testable: §5.4 already argues that
+> the reference is size-dominated (C5), and a claim of that form **predicts** that a reference which
+> is *not* size-dominated will behave differently. It does. Holding every representation distance at
+> its cached value and replacing only `d_ref`, the arm goes from clearing its own `|Δn|` null on 1 of
+> 5 Suite-1 datasets to 5 of 5.
+>
+> This is the difference between *"the encoding failed"* and *"the encoding tracks structure, and
+> graph edit distance on these cohorts mostly does not measure structure"* — and the second is both
+> better for the paper and the one the data supports. It is **not** a rescue of H3 as stated: the
+> hypothesis says *graph edit distance*, and against graph edit distance it is refuted. Write that
+> sentence first and the scoping second, never the other way round.
 
 > **Drafting rule.** Every subsection of §5 opens by naming the hypothesis it answers and closes with
 > one sentence of interpretation. No result is presented without the reader knowing what question it
@@ -801,30 +815,77 @@ The longest subsection, and it must be read in this order or it reads as excuse-
    ground-truth GED, exceeding 0.96 on seven of ten Suite-2 datasets and reaching **0.9971** on
    COIL-DEL. This is a property of the **data**, not of the approximation — exact GED is itself
    ≈ 0.92 size-dominated on IAM Letter. *(AE.1, R3.5b)*
-4. **The correct instrument, which follows from 3 rather than being reached for.** Inside a stratum
-   `n_i = n_j` the size null is identically zero, so raw ρ is the structural signal with the size
-   channel removed **by construction**. **Report both bands in one table**: at `n ≤ 20` against exact
-   GED the instruction string correlates significantly better than nauty-graph6, nauty-sparse6 and
-   the WL kernel (p = 0.041, 0.041, 0.012) and worse than min-DFS and AGM CAM; **above `n = 20` it is
-   at best indistinguishable and under the upper bound significantly worse than all four.** Using an
-   instrument the paper argues for is not cherry-picking; using it only where it helps is.
-5. **The model that controls rather than stratifies**: `GED ~ β₁·Lev + β₂·|Δn| + β₃·|Δdensity|`,
+4. 🔴 **The diagnosis in 3 makes a prediction, and the prediction holds. This is the pivot of the
+   subsection and the strongest object in it.** If the negative result is substantially a property of
+   the *reference*, then a reference that is not size-dominated should let the same distances show
+   structure. That is a falsifiable consequence, not a reframing, and it is tested by changing
+   exactly one thing: **every representation distance is held at its cached value and only `d_ref` is
+   replaced** — by a Weisfeiler–Lehman subtree kernel distance (`h = 2`, unnormalised), which is
+   exact at every size and therefore carries no bracket and no ceiling.
+
+   **The table is the argument: the same five datasets, the same pairs, the same strings, one column
+   changed.** 2,000 graph-level bootstrap replicates; the `exact` half reproduces the §5.4 table
+   above it to four decimals, which is what licenses reading the two halves as one experiment.
+
+   | dataset | pairs | ρ vs exact GED | its size null | excess [95 % CI] | ρ vs WL | its size null | excess [95 % CI] |
+   |---|---:|---:|---:|---|---:|---:|---|
+   | `aids` | 131,148 | 0.3266 | 0.7863 | −0.4597 [−0.4983, −0.4210] | 0.3393 | 0.2272 | **+0.1121 [+0.0593, +0.1668]** |
+   | `iam_letter_high` | 2,118,711 | 0.6660 | 0.9195 | −0.2536 [−0.2691, −0.2387] | 0.5959 | 0.4283 | **+0.1676 [+0.1434, +0.1911]** |
+   | `iam_letter_low` | 695,610 | 0.9278 | 0.9139 | +0.0139 [+0.0057, +0.0235] | 0.7128 | 0.5696 | **+0.1432 [+0.1209, +0.1664]** |
+   | `iam_letter_med` | 784,378 | 0.8833 | 0.9146 | −0.0313 [−0.0438, −0.0190] | 0.7109 | 0.5160 | **+0.1950 [+0.1715, +0.2192]** |
+   | `linux` | 1,685 | 0.4850 | 0.7097 | −0.2247 [−0.3492, −0.0922] | 0.4798 | 0.1609 | **+0.3189 [+0.1699, +0.4454]** |
+   | **clears its own size null** | | | | **1 of 5** | | | **5 of 5** |
+
+   Note what the ρ column does **not** do: it barely moves, and on three datasets it *falls*. The
+   representation did not get better. **The baseline it is being measured against collapsed** — the
+   reference's own size null drops from a median of 0.914 to 0.516 — which is precisely what 3
+   predicts and is the sentence to write. Over all fourteen cells measured the arm clears its null on
+   **6 of 14 against the best available GED reference and 12 of 14 against WL**. *(T-28)*
+
+5. **The correct instrument, which follows from 3 rather than being reached for, and now applies to
+   both references.** Inside a stratum `n_i = n_j` the size null is identically zero, so raw ρ is the
+   structural signal with the size channel removed **by construction**. **Report both bands in one
+   table**: at `n ≤ 20` against exact GED the instruction string correlates significantly better than
+   nauty-graph6 and nauty-sparse6 (p = 0.041, 0.041) and worse than min-DFS and AGM CAM; **above
+   `n = 20` it is at best indistinguishable and under the upper bound significantly worse than all
+   four.** Using an instrument the paper argues for is not cherry-picking; using it only where it
+   helps is — so the WL reference is reported through the same instrument in **Fig. 2(a)**, where the
+   nauty result holds and the AGM CAM result does not.
+
+   > 🔴 **The WL comparison in this list was `p = 0.012` and is withdrawn.** The published figure and
+   > its sign-test row were computed through `size_profile.py::_wl_counts`, which read the stored WL
+   > encoding `h<level>:<colour>:<count>` as whole symbols. A symbol occurs once per sequence, so it
+   > built a **presence indicator rather than a count vector** — 208 tokens with a largest cell of
+   > 1.0, where the frozen encoding campaign fitted 69 colours with counts to 12. Recomputed against
+   > the cached matrices the comparison **inverts**: 1 stratum higher, 18 lower, median Δρ −0.1116,
+   > p = 7.6e-05. **Only the `wl_subtree` arm is affected** — every `levenshtein` arm is byte-identical
+   > across 1,818 joined rows. Fixed at `6b89b4f`; `fig1_rho_vs_size.pdf` must be regenerated
+   > **whether or not the WL reference goes in the paper**.
+
+6. **The head-to-head under the structural reference, with its scope in the same sentence.** Paired
+   graph-level bootstrap, 14 of 15 cells: the canonical string beats **both** canonically-labelled
+   nauty serialisations decisively and **in both size bands** — `sparse6_nauty` 14 W / 0 T / 0 L and
+   `nauty_graph6` 12 W / 0 T / 2 L pooled, 10/3/1 and 11/2/1 within-`n`. **AGM CAM only pooled**
+   (8/4/2, and 2/5/7 within-`n`, so most of that margin is size agreement — say so). **min-DFS beats
+   it under every reference tested**, GED and structural alike, and that concession goes in the same
+   paragraph rather than a later one. *(T-28)*
+7. **The model that controls rather than stratifies**: `GED ~ β₁·Lev + β₂·|Δn| + β₃·|Δdensity|`,
    standardised. **β₁ is significant and positive on 19 of 19 identifiable fits — and the size
    coefficient exceeds it on 17 of 19.** Both halves, one sentence. Print a **VIF column**; four fits
    on two datasets are excluded as unidentifiable and two more because the point estimate falls
    outside its own bootstrap interval under tier-3 subsampling. Say why. **(S6)** *(E10)*
-6. **The control that makes the limitation a *condition* rather than a vague degradation** —
+8. **The control that makes the limitation a *condition* rather than a vague degradation** —
    three inline rows. IAM Letter LOW/MED/HIGH is the same generator at three distortion levels:
    node count barely moves (4.07 → 4.58) while **mean edge count rises 49 %**. The size baseline stays
    **flat at ρ ≈ 0.92** while the string falls from **0.93 to 0.67**; β_lev halves, β_size doubles,
    and both instruments cross at MED. **The representation stops paying its way between LOW and MED
    distortion** — a named condition, not a coincidental size threshold. *(R1.3a, R1.3c)*
-7. **The field-level statement**, which is the contribution: **above `n ≈ 40` not one of the
+9. **The field-level statement**, which is the contribution: **above `n ≈ 40` not one of the
    representations tested — IsalGraph or any competitor — is reliably distinguishable from ρ = 0.**
    Measured on 21.7 M pairs. And it is **not** a compute artefact: removing every censored-touching
    pair *lowers* ρ at both bounds and both size restrictions. Report all three quantities, never the
    delta alone.
-8. **R1.3b answered, and it leads because it is free**: the degradation on AIDS cannot come from
+10. **R1.3b answered, and it leads because it is free**: the degradation on AIDS cannot come from
    discarded labels, because **both sides of the correlation are topology-only** — the reference GED
    is computed under a topology-only cost model on the same stripped graphs. Density is measured and
    is not sufficient either. The real decomposition is size versus structure. *(R1.3a, R1.3b)*
@@ -940,6 +1001,8 @@ before reaching this form. Full derivations: `../tasks/T-06-FRAMING.md`, `../tas
 | C8 | *"The canonical string contributes significant incremental information about graph edit distance beyond node-count and density difference — significant on 19 of 19 identifiable fits — but node-count difference carries more weight on 17 of 19."* |
 | C9 | *"Holding the generator fixed and adding structural distortion, the trivial size baseline stays flat at ρ ≈ 0.92 while the canonical string's correlation falls from 0.93 to 0.67."* |
 | C10 | *"No single representation leads on both axes, and the two that lead each axis are undefined on the other."* |
+| **C14** | *"Holding every representation distance fixed and replacing only the reference, the canonical string's correlation exceeds its own node-count baseline on five of the five Suite-1 datasets against a Weisfeiler–Lehman kernel, where it does so on one of five against exact graph edit distance. Its correlation does not rise — on three of the five it falls — and the reference's own size null drops from a median of 0.914 to 0.516. What changes is the baseline, not the representation."* **The last sentence is not optional.** Without it the paragraph reads as a rescue; with it, it is C5 confirmed by a second route and the honest reading of both. *(T-28)* |
+| **C15** | *"Under that reference the canonical string outranks both canonically-labelled nauty serialisations on every dataset measured and in both size bands, and is outranked by the gSpan minimum DFS code under every reference we tested."* **Both halves travel together**; the second clause is the one that makes the first credible |
 
 > ## 🔴 Do not print a cardinal beside a list you will maintain
 >
@@ -1000,6 +1063,11 @@ form"*) and they are not repeated here.
 | ❌ | Why |
 |---|---|
 | *"clears the size baseline on 5 of 5 Suite-2 datasets"* | True under UB, false under LB — inverts on 7 of 10. The most damaging available sentence |
+| 🔴 *"clears the size baseline on 5 of 5 datasets"*, **unscoped** | C14's result is **Suite 1** against the **WL kernel**. It sits one word away from the red line directly above it, which is the same shape and is false. Two scopes, both mandatory, both in the same sentence: **which suite, which reference.** Over all fourteen cells it is 12 of 14, not 5 of 5 |
+| *"IsalGraph approximates graph edit distance after all"*, or any WL result offered as repairing H3 | H3 names **graph edit distance**. Against it the refutation stands with every number intact. The WL measurement changes what the failure is *attributable to*, not whether it happened — and a reviewer who reads it as a rescue will check the ρ column and find it **falls** on three of the five datasets |
+| *"IsalGraph beats its competitors under the WL kernel"* | It beats **three of four** pooled and **two of four** within-`n`. **min-DFS is not beaten under any of the eight references, in either band** — and min-DFS is the competitor R3 named as the most important. The unscoped sentence is the one that gets checked first |
+| *"IsalGraph outranks min-DFS under the upper bound within equal `n`"* | The single (reference, view, competitor) cell of 64 in which it leads — 5 W / 3 T / 1 L — and **its own lower bound reverses the verdict on 6 of those 9 cells**. This is C3's bracket trap wearing a different hat, and the paper has already committed to printing both bounds |
+| A win claimed from the spectral λ-distance family | All four variants lose to min-DFS and clear the size null on 0, 2, 0 and 0 of 14. `spectral_esd` is the **least** size-dominated of the eight references and the one the encoding tracks worst — report that, it is the evidence that the WL result is not reference-shopping |
 | *"ρ ≈ 0.93 demonstrates structural fidelity"* | Mostly the size channel. This paper supplies the instrument that refutes it |
 | *"competitive with the best representations"* on distance | Best on **none** of 25 records. Not a scoping — a contradiction |
 | *"most compact among representations admitting a metric"* | **False.** True in 0 of 122 strata |
@@ -1158,12 +1226,14 @@ but the artifact is not made.
 | **Tab. 4** | **Datasets** — 10 rows, both suites, label column, discarded side | 4.1 | 1.2 | **BUILD** (`data.md` §1) | **MUST** | AE.1, AE.4b, E1, E6 |
 | Tab. 5 | **Payload bits per stored byte** | 4.4 | 0.3 | `T-06/tab_bit_overhead` | CUT-1 | R3.6a |
 | **Fig. 1** | **Information content** vs `n`, with a coding-overhead inset | 5.2 | 0.8 | `T-06/fig4_information_content` | STRONG | AE.4a, H2 |
-| **Fig. 2** | **The within-`n` correlation** — exact panel at `n ≤ 12`, bracket small-multiples above | 5.4 | 0.9 | `T-06/fig1_rho_vs_size` | STRONG | H3, AE.1, R3.5b |
+| **Fig. 2** | 🔴 **REPLACED 2026-08-30 — the within-`n` correlation under BOTH references.** **(a)** the WL kernel, one panel, exact at every `n`; a rule; **(b)** the previous figure entire — exact GED at `n ≤ 12` and the bracket small-multiples above. Shared ρ axis, one legend, per-panel `x`. **The reader sees one variable change**, which is the §5.4 move-4 argument made visually and costs no extra float. Rendered 7.03 × 4.48 in against the old 7.03 × 4.38, so the page budget is unchanged | 5.4 | 0.9 | `T-28/fig_rho_vs_size_wl_vs_ged` | STRONG | H3, AE.1, R3.5b |
+| — | 🔴 **`fig1_rho_vs_size.pdf` must be REGENERATED regardless** — its `wl_subtree` series carries the `_wl_counts` defect (§5.4 move 5). If Fig. 2 stays the GED-only figure, it is still wrong until rebuilt | 5.4 | — | `6b89b4f` | **MUST** | — |
 | **Fig. 3** | **The cost law** — encode time vs \|Aut(G)\| on one ladder, with `n`, `m` and the degree sequence held fixed | 5.3 | 0.7 | `T-13/fig_t13_main` | STRONG | **R3.7d**, H4 |
 | **Alg. 1** | **S2G — the interpreter.** Inlined, not floated (E7) | 3.1 | 0.6 | submitted | STRONG | — |
 | **Alg. 2** | **Greedy G2S**, with the `C`/`c` guards **and** duplicate checks rewritten to match the implementation | 3.2.2 | 0.9 | submitted, corrected | **MUST** | **R3.4a** |
 | | *floats subtotal* | | **7.4** | | | |
 | — | *(inline, 5 rows)* **per-dataset ρ against exact GED** — dataset, ρ, size null, excess | 5.4 | 0.25 | `rho_table.json` | **MUST** | **R3.5b** |
+| — | 🔴 **NEW *(inline, 6 rows)* — the same five datasets, one column changed.** Pairs, then ρ / size null / excess-with-CI under **exact GED** and again under the **WL kernel**, closing on `1 of 5` against `5 of 5`. **This is §5.4's load-bearing object**: it satisfies R3.5b's per-dataset demand and carries move 4 in one table. The `exact` half reproduces the row above it to four decimals — say so, it is what licenses reading the two halves as one experiment | 5.4 | 0.3 | `T-28/data/t28_bootstrap_verdicts.json` | **MUST** | **R3.5b**, AE.1, H3 |
 | — | *(inline, 3 rows)* the IAM Letter LOW/MED/HIGH control | 5.4 | 0.2 | T-06 | STRONG | R1.3a, R1.3c |
 | — | *(inline, 4 rows)* confirmatory rejections split by row and direction | 5.5 | 0.2 | T-06 | **MUST** | AE.4c |
 | | **Total** | | **8.05** | | | |
