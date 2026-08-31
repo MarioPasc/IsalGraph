@@ -1578,6 +1578,19 @@ E7 measures a document that does not exist.
 
 ### 10.5 Build risks — three are silent-failure traps of one family
 
+0. 🔴 **A `\label` duplicated across the article and the supplement resolves to the wrong float
+   and the build stays clean.** Found 2026-08-31 by the paper-writing session while placing the new
+   correlation table. `tab:representation-headtohead` now exists in **both** documents — the article's
+   §5.4 table and an older compactness+GED float the supplement's `s08` still inputs — so a
+   `\ref{tab:representation-headtohead}` written in `s13` silently pointed at `s08`'s table. **No
+   warning, no undefined reference, exit 0.** `\ref` cannot cross documents, so within the supplement
+   LaTeX resolved it to the nearest definition and was satisfied.
+   **The rule**: a table moved between the two documents keeps its label only if the label is
+   *retired* on the other side. Where a cross-document pointer is genuinely wanted, use `\supp{N}`,
+   which is prose and cannot mis-resolve. Related and louder: `\suppshort` is article-only and
+   **fails** in the supplement, which is the behaviour to prefer — a macro that errors is safer than
+   a label that resolves.
+
 1. 🔴 **`figsize` does not govern the emitted width of a benchmark figure, and every body figure is
    mis-scaled.** Two causes, found 2026-08-26, and the second is the one that matters.
    **(a)** `design.text_width()` returned `IEEE_TEXT_WIDTH_INCHES` = 7.0 — the two-column IEEE print
